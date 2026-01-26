@@ -32,23 +32,30 @@ digraph orchestrate {
     rankdir=TB;
 
     "Parse design doc for phases" [shape=box];
+    "Create worktree + provision statusline" [shape=box];
     "Initialize .tina/supervisor-state.json" [shape=box];
     "More phases?" [shape=diamond];
     "Spawn planner subagent" [shape=box];
     "Wait for plan path" [shape=box];
     "Spawn team-lead-init in tmux" [shape=box];
     "Monitor phase status" [shape=box];
+    "Context threshold?" [shape=diamond];
+    "Create checkpoint-needed" [shape=box];
     "Phase complete?" [shape=diamond];
     "Kill tmux session, next phase" [shape=box];
     "Invoke finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
-    "Parse design doc for phases" -> "Initialize .tina/supervisor-state.json";
+    "Parse design doc for phases" -> "Create worktree + provision statusline";
+    "Create worktree + provision statusline" -> "Initialize .tina/supervisor-state.json";
     "Initialize .tina/supervisor-state.json" -> "More phases?";
     "More phases?" -> "Spawn planner subagent" [label="yes"];
     "Spawn planner subagent" -> "Wait for plan path";
     "Wait for plan path" -> "Spawn team-lead-init in tmux";
     "Spawn team-lead-init in tmux" -> "Monitor phase status";
-    "Monitor phase status" -> "Phase complete?";
+    "Monitor phase status" -> "Context threshold?";
+    "Context threshold?" -> "Create checkpoint-needed" [label="exceeded"];
+    "Context threshold?" -> "Phase complete?" [label="ok"];
+    "Create checkpoint-needed" -> "Phase complete?";
     "Phase complete?" -> "Monitor phase status" [label="no"];
     "Phase complete?" -> "Kill tmux session, next phase" [label="yes"];
     "Kill tmux session, next phase" -> "More phases?";
@@ -67,14 +74,16 @@ digraph orchestrate {
 This phase implements basic orchestration without team-based execution:
 
 1. **Parse design doc** - Count `## Phase N` sections
-2. **Initialize state** - Create `.tina/supervisor-state.json`
-3. **For each phase:**
+2. **Create worktree** - Isolated workspace with statusline for context monitoring
+3. **Initialize state** - Create `.tina/supervisor-state.json` with worktree path
+4. **For each phase:**
    - Spawn `tina:planner` subagent with design doc + phase number
    - Wait for plan path
    - Spawn `tina:team-lead-init` in tmux with plan path
-   - Monitor `.tina/phase-N/status.json` until complete
+   - Monitor `.tina/phase-N/status.json` and context metrics until complete
+   - Create `.tina/checkpoint-needed` if context threshold exceeded
    - Kill tmux session, proceed to next phase
-4. **Completion** - Invoke `tina:finishing-a-development-branch`
+5. **Completion** - Invoke `tina:finishing-a-development-branch` for merge/PR/cleanup
 
 ## Implementation Notes
 
@@ -99,6 +108,148 @@ if [ "$TOTAL_PHASES" -eq 0 ]; then
 fi
 ```
 
+### Step 1b: Create Worktree
+
+Create an isolated workspace so statusline configuration and .tina state are contained within the worktree.
+
+**Why inline instead of using-git-worktrees skill:** The orchestrate skill is fully automated and cannot prompt the user for input. The using-git-worktrees skill is designed for interactive use with user prompts for directory selection and global worktree options. Here we implement worktree creation inline with auto-decisions: always uses `.worktrees`, no global option consideration, no user prompting.
+
+**1. Determine worktree directory:**
+
+```bash
+# Check in priority order
+if [ -d ".worktrees" ]; then
+  WORKTREE_DIR=".worktrees"
+elif [ -d "worktrees" ]; then
+  WORKTREE_DIR="worktrees"
+else
+  WORKTREE_DIR=".worktrees"
+  mkdir -p "$WORKTREE_DIR"
+fi
+```
+
+**2. Verify directory is gitignored:**
+
+```bash
+if ! git check-ignore -q "$WORKTREE_DIR" 2>/dev/null; then
+  echo "$WORKTREE_DIR" >> .gitignore
+  git add .gitignore
+  git commit -m "chore: add $WORKTREE_DIR to gitignore"
+fi
+```
+
+**3. Extract feature name from design doc:**
+
+```bash
+# Extract feature name from design doc filename
+# e.g., 2026-01-26-auth-redesign-design.md -> auth-redesign
+FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
+BRANCH_NAME="tina/$FEATURE_NAME"
+```
+
+**4. Create branch and worktree:**
+
+```bash
+WORKTREE_PATH="$WORKTREE_DIR/$FEATURE_NAME"
+
+# Handle branch name conflicts (append timestamp if exists)
+if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+  BRANCH_NAME="${BRANCH_NAME}-${TIMESTAMP}"
+  echo "Branch already exists, using: $BRANCH_NAME"
+fi
+
+# Handle worktree path conflicts (append timestamp if exists)
+if [ -d "$WORKTREE_PATH" ]; then
+  TIMESTAMP=${TIMESTAMP:-$(date +%Y%m%d-%H%M%S)}
+  WORKTREE_PATH="${WORKTREE_PATH}-${TIMESTAMP}"
+  echo "Worktree path already exists, using: $WORKTREE_PATH"
+fi
+
+# Create worktree with error handling
+if ! git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME"; then
+  echo "Error: Failed to create worktree at $WORKTREE_PATH with branch $BRANCH_NAME"
+  exit 1
+fi
+```
+
+**5. Store paths for subsequent steps:**
+
+```bash
+# These variables are used by all subsequent steps
+echo "WORKTREE_PATH=$WORKTREE_PATH"
+echo "BRANCH_NAME=$BRANCH_NAME"
+```
+
+**6. Run project setup in worktree:**
+
+```bash
+cd "$WORKTREE_PATH"
+
+# Auto-detect and run appropriate setup
+if [ -f package.json ]; then npm install; fi
+if [ -f Cargo.toml ]; then cargo build; fi
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+if [ -f pyproject.toml ]; then poetry install; fi
+if [ -f go.mod ]; then go mod download; fi
+```
+
+**7. Verify clean baseline:**
+
+```bash
+# Run tests to ensure worktree starts clean
+# Use project-appropriate test command
+TEST_PASSED=true
+if [ -f package.json ]; then
+  if ! npm test; then TEST_PASSED=false; fi
+elif [ -f Cargo.toml ]; then
+  if ! cargo test; then TEST_PASSED=false; fi
+elif [ -f pytest.ini ] || [ -f pyproject.toml ] || [ -f setup.py ]; then
+  if ! pytest; then TEST_PASSED=false; fi
+elif [ -f go.mod ]; then
+  if ! go test ./...; then TEST_PASSED=false; fi
+fi
+
+# If tests fail: warn and proceed (automated mode cannot prompt)
+# If tests pass: continue to orchestration
+if [ "$TEST_PASSED" = "false" ]; then
+  echo "Warning: Tests failed in worktree. Proceeding anyway but baseline is not clean."
+fi
+```
+
+**8. Provision statusline for context monitoring:**
+
+```bash
+# Create .claude directory in worktree
+mkdir -p "$WORKTREE_PATH/.claude"
+
+# Write context monitoring script
+cat > "$WORKTREE_PATH/.claude/tina-write-context.sh" << 'SCRIPT'
+#!/bin/bash
+set -e
+TINA_DIR="${PWD}/.tina"
+mkdir -p "$TINA_DIR"
+INPUT=$(cat)
+echo "$INPUT" | jq '{
+  used_pct: (.context_window.used_percentage // 0),
+  tokens: (.context_window.total_input_tokens // 0),
+  max: (.context_window.context_window_size // 200000),
+  timestamp: now | todate
+}' > "$TINA_DIR/context-metrics.json"
+echo "ctx:$(echo "$INPUT" | jq -r '.context_window.used_percentage // 0 | floor')%"
+SCRIPT
+chmod +x "$WORKTREE_PATH/.claude/tina-write-context.sh"
+
+# Write local settings pointing to the script
+cat > "$WORKTREE_PATH/.claude/settings.local.json" << EOF
+{"statusLine": {"type": "command", "command": "$WORKTREE_PATH/.claude/tina-write-context.sh"}}
+EOF
+```
+
+This enables automatic context tracking within the worktree. The statusline script writes `.tina/context-metrics.json` on each status update. The supervisor monitor loop reads this file to decide when to trigger checkpoints.
+
+**Important:** All subsequent steps (Step 2 onwards) execute within this worktree. The `.tina/` directory created in Step 2 will be inside the worktree, keeping orchestration state isolated from the main workspace.
+
 ### Step 2: Initialize or Resume State
 
 **If `.tina/supervisor-state.json` exists:** Resume from saved state
@@ -112,6 +263,17 @@ if [ -f ".tina/supervisor-state.json" ]; then
   # Resume: read current phase
   CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)
   echo "Resuming from phase $CURRENT_PHASE"
+
+  # Read worktree path
+  WORKTREE_PATH=$(jq -r '.worktree_path' .tina/supervisor-state.json)
+  BRANCH_NAME=$(jq -r '.branch_name' .tina/supervisor-state.json)
+
+  # Verify worktree exists
+  if ! git worktree list | grep -q "$WORKTREE_PATH"; then
+    echo "Error: Worktree not found at $WORKTREE_PATH"
+    echo "Cannot resume - worktree may have been removed"
+    exit 1
+  fi
 
   # Check for existing tmux session
   ACTIVE_SESSION=$(jq -r '.active_tmux_session // ""' .tina/supervisor-state.json)
@@ -136,6 +298,8 @@ else
   cat > .tina/supervisor-state.json << EOF
 {
   "design_doc_path": "$DESIGN_DOC",
+  "worktree_path": "$WORKTREE_PATH",
+  "branch_name": "$BRANCH_NAME",
   "total_phases": $TOTAL_PHASES,
   "current_phase": 0,
   "active_tmux_session": null,
@@ -239,7 +403,7 @@ EOF
 ```bash
 SESSION_NAME="tina-phase-$PHASE_NUM"
 tmux new-session -d -s "$SESSION_NAME" \
-  "cd $(pwd) && claude --prompt '/team-lead-init $PLAN_PATH'"
+  "cd $WORKTREE_PATH && claude --prompt '/team-lead-init $PLAN_PATH'"
 
 # Update active session in state
 tmp_file=$(mktemp)
@@ -252,6 +416,19 @@ Poll every 10 seconds until phase completes:
 
 ```bash
 while true; do
+  # Check context metrics and create checkpoint-needed if threshold exceeded
+  if [ -f "$WORKTREE_PATH/.tina/context-metrics.json" ]; then
+    USED_PCT=$(jq -r '.used_pct // 0' "$WORKTREE_PATH/.tina/context-metrics.json")
+    THRESHOLD=${TINA_THRESHOLD:-70}
+
+    if [ "$(echo "$USED_PCT >= $THRESHOLD" | bc)" -eq 1 ]; then
+      if [ ! -f "$WORKTREE_PATH/.tina/checkpoint-needed" ]; then
+        echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": $THRESHOLD}" > "$WORKTREE_PATH/.tina/checkpoint-needed"
+        echo "Context at ${USED_PCT}%, triggering checkpoint"
+      fi
+    fi
+  fi
+
   # Check if tmux session is still alive
   if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     echo "Tmux session $SESSION_NAME died unexpectedly"
@@ -268,7 +445,7 @@ while true; do
     # Attempt recovery via rehydrate
     echo "Attempting recovery..."
     tmux new-session -d -s "$SESSION_NAME" \
-      "cd $(pwd) && claude --prompt '/rehydrate'"
+      "cd $WORKTREE_PATH && claude --prompt '/rehydrate'"
 
     # Track recovery attempt
     RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .tina/supervisor-state.json)
@@ -334,7 +511,7 @@ Within the monitor loop (Step 3e), check for signal file:
 
 ```bash
 # In monitor loop, check for signal file
-if [ -f ".tina/checkpoint-needed" ]; then
+if [ -f "$WORKTREE_PATH/.tina/checkpoint-needed" ]; then
   echo "Checkpoint signal detected"
   # Proceed to checkpoint handling
 fi
@@ -351,7 +528,7 @@ tmux send-keys -t "$SESSION_NAME" "/checkpoint" Enter
 Poll for handoff file update (max 5 minutes):
 
 ```bash
-HANDOFF_FILE=".tina/phase-$PHASE_NUM/handoff.md"
+HANDOFF_FILE="$WORKTREE_PATH/.tina/phase-$PHASE_NUM/handoff.md"
 TIMEOUT=300
 START=$(date +%s)
 
@@ -359,7 +536,7 @@ while true; do
   if [ -f "$HANDOFF_FILE" ]; then
     # Check if modified after checkpoint signal
     HANDOFF_TIME=$(stat -f %m "$HANDOFF_FILE" 2>/dev/null || stat -c %Y "$HANDOFF_FILE")
-    SIGNAL_TIME=$(stat -f %m ".tina/checkpoint-needed" 2>/dev/null || stat -c %Y ".tina/checkpoint-needed")
+    SIGNAL_TIME=$(stat -f %m "$WORKTREE_PATH/.tina/checkpoint-needed" 2>/dev/null || stat -c %Y "$WORKTREE_PATH/.tina/checkpoint-needed")
     if [ "$HANDOFF_TIME" -gt "$SIGNAL_TIME" ]; then
       echo "Handoff written"
       break
@@ -388,7 +565,7 @@ sleep 2
 tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
 
 # Remove checkpoint signal
-rm ".tina/checkpoint-needed"
+rm "$WORKTREE_PATH/.tina/checkpoint-needed"
 ```
 
 **5. Continue monitoring:**
@@ -533,12 +710,19 @@ jq '.status = "complete" | .completed_at = now | .active_tmux_session = null' .t
 
 **4d. Invoke finishing workflow:**
 
-```
-# Use Skill tool to invoke:
-/superpowers:finishing-a-development-branch
+The worktree contains all implementation work. Present options via finishing-a-development-branch skill:
+
+1. **Merge locally:** Merge worktree branch to base, remove worktree
+2. **Create PR:** Push branch, create PR, keep worktree
+3. **Keep as-is:** Leave worktree for manual handling
+4. **Discard:** Remove worktree and branch
+
+```bash
+# Use the finishing skill
+# /tina:finishing-a-development-branch
 ```
 
-This presents the user with options to merge, create PR, or keep the branch.
+The skill handles user choice, worktree cleanup (for options 1, 4), and branch management.
 
 **4e. Report completion:**
 
@@ -584,6 +768,8 @@ tmux send-keys -t <name> "<command>" Enter
 ```json
 {
   "design_doc_path": "docs/plans/2026-01-26-feature-design.md",
+  "worktree_path": ".worktrees/feature",
+  "branch_name": "tina/feature",
   "total_phases": 3,
   "current_phase": 2,
   "active_tmux_session": "tina-phase-2",
@@ -603,6 +789,8 @@ tmux send-keys -t <name> "<command>" Enter
 
 **Field descriptions:**
 - `design_doc_path`: Original design document that started orchestration
+- `worktree_path`: Path to the worktree for this orchestration run
+- `branch_name`: Git branch created for this run
 - `total_phases`: Number of phases parsed from design doc
 - `current_phase`: Last phase that was started (0 = not started)
 - `active_tmux_session`: Currently running tmux session name (null if none)
@@ -620,16 +808,30 @@ tmux send-keys -t <name> "<command>" Enter
 }
 ```
 
+**Context metrics:** `.tina/context-metrics.json` (in worktree)
+```json
+{
+  "used_pct": 45.2,
+  "tokens": 90400,
+  "max": 200000,
+  "timestamp": "2026-01-26T10:15:00Z"
+}
+```
+
+Written by statusline script on each status update. Supervisor reads this to decide checkpoints.
+
 ## Resumption
 
 If supervisor is interrupted (Ctrl+C, crash, terminal closed), re-run with same design doc path:
 
 **State reconstruction:**
-1. Read `.tina/supervisor-state.json` for current phase and active session
-2. Check if `active_tmux_session` still exists via `tmux has-session`
-3. If session exists: reconnect to monitoring loop
-4. If session doesn't exist but phase incomplete: respawn team-lead with `/rehydrate`
-5. If phase complete: proceed to next phase
+1. Read `.tina/supervisor-state.json` for current phase, active session, and worktree path
+2. Verify worktree still exists: `git worktree list | grep "$WORKTREE_PATH"`
+3. If worktree missing: error and exit (cannot resume without worktree)
+4. Check if `active_tmux_session` still exists via `tmux has-session`
+5. If session exists: reconnect to monitoring loop
+6. If session doesn't exist but phase incomplete: respawn team-lead with `/rehydrate`
+7. If phase complete: proceed to next phase
 
 **Resumption scenarios:**
 
@@ -654,16 +856,20 @@ The supervisor automatically detects existing state and resumes appropriately.
 - `tina:planner` - Creates implementation plan for each phase
 - Team-lead in tmux - Executes phase via `team-lead-init`
 
-**Invokes after completion:**
-- `tina:finishing-a-development-branch` - Handles merge/PR workflow
+**Invokes:**
+- `tina:using-git-worktrees` pattern - Worktree creation at start (integrated, not invoked as skill)
+- `tina:finishing-a-development-branch` - Handles merge/PR/cleanup workflow after completion
 
 **State files:**
-- `.tina/supervisor-state.json` - Supervisor resumption state
+- `.tina/supervisor-state.json` - Supervisor resumption state (includes worktree_path)
 - `.tina/phase-N/status.json` - Per-phase execution status
 - `.tina/phase-N/handoff.md` - Context handoff document for checkpoint/rehydrate
+- `.tina/context-metrics.json` - Context window usage from statusline
+- `.tina/checkpoint-needed` - Signal file when threshold exceeded
 
 **Checkpoint cycle:**
-- Statusline script creates `.tina/checkpoint-needed` when context > threshold
+- Statusline script writes `.tina/context-metrics.json` with usage data
+- Supervisor monitor loop reads metrics, creates `.tina/checkpoint-needed` when threshold exceeded
 - Supervisor detects signal, sends `/checkpoint` to team-lead
 - Team-lead runs checkpoint skill, writes handoff, outputs "CHECKPOINT COMPLETE"
 - Supervisor sends `/clear`, then `/rehydrate`
@@ -674,6 +880,7 @@ The supervisor automatically detects existing state and resumes appropriately.
 - `tina:planner` - Creates phase plans from design doc
 - `tina:architect` - Design must be architect-reviewed before orchestration
 - `tina:phase-reviewer` - Called by executing-plans after tasks complete
+- `tina:using-git-worktrees` - Pattern for worktree creation (integrated into Step 1b)
 
 **Phase 2 integrations (now available):**
 - Team-based execution via Teammate tool (workers + reviewers)
