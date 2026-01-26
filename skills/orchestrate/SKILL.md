@@ -836,9 +836,11 @@ The supervisor automatically detects existing state and resumes appropriately.
 - `tina:finishing-a-development-branch` - Handles merge/PR workflow
 
 **State files:**
-- `.tina/supervisor-state.json` - Supervisor resumption state
+- `.tina/supervisor-state.json` - Supervisor resumption state (includes worktree_path)
 - `.tina/phase-N/status.json` - Per-phase execution status
 - `.tina/phase-N/handoff.md` - Context handoff document for checkpoint/rehydrate
+- `.tina/context-metrics.json` - Context window usage from statusline
+- `.tina/checkpoint-needed` - Signal file when threshold exceeded
 
 **Checkpoint cycle:**
 - Statusline script creates `.tina/checkpoint-needed` when context > threshold
