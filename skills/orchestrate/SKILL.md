@@ -141,8 +141,8 @@ fi
 **3. Extract feature name from design doc:**
 
 ```bash
-# Extract feature name from design doc path
-# e.g., docs/plans/2026-01-26-auth-redesign-design.md -> auth-redesign
+# Extract feature name from design doc filename
+# e.g., 2026-01-26-auth-redesign-design.md -> auth-redesign
 FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
 BRANCH_NAME="tina/$FEATURE_NAME"
 ```
