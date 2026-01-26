@@ -103,6 +103,8 @@ fi
 
 Create an isolated workspace so statusline configuration and .tina state are contained within the worktree.
 
+**Why inline instead of using-git-worktrees skill:** The orchestrate skill is fully automated and cannot prompt the user for input. The using-git-worktrees skill is designed for interactive use with user prompts for directory selection and global worktree options. Here we implement worktree creation inline with auto-decisions: always uses `.worktrees`, no global option consideration, no user prompting.
+
 **1. Determine worktree directory:**
 
 ```bash
@@ -140,7 +142,26 @@ BRANCH_NAME="tina/$FEATURE_NAME"
 
 ```bash
 WORKTREE_PATH="$WORKTREE_DIR/$FEATURE_NAME"
-git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME"
+
+# Handle branch name conflicts (append timestamp if exists)
+if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+  BRANCH_NAME="${BRANCH_NAME}-${TIMESTAMP}"
+  echo "Branch already exists, using: $BRANCH_NAME"
+fi
+
+# Handle worktree path conflicts (append timestamp if exists)
+if [ -d "$WORKTREE_PATH" ]; then
+  TIMESTAMP=${TIMESTAMP:-$(date +%Y%m%d-%H%M%S)}
+  WORKTREE_PATH="${WORKTREE_PATH}-${TIMESTAMP}"
+  echo "Worktree path already exists, using: $WORKTREE_PATH"
+fi
+
+# Create worktree with error handling
+if ! git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME"; then
+  echo "Error: Failed to create worktree at $WORKTREE_PATH with branch $BRANCH_NAME"
+  exit 1
+fi
 ```
 
 **5. Store paths for subsequent steps:**
@@ -168,11 +189,23 @@ if [ -f go.mod ]; then go mod download; fi
 
 ```bash
 # Run tests to ensure worktree starts clean
-# Use project-appropriate command
-npm test || cargo test || pytest || go test ./...
+# Use project-appropriate test command
+TEST_PASSED=true
+if [ -f package.json ]; then
+  if ! npm test; then TEST_PASSED=false; fi
+elif [ -f Cargo.toml ]; then
+  if ! cargo test; then TEST_PASSED=false; fi
+elif [ -f pytest.ini ] || [ -f pyproject.toml ] || [ -f setup.py ]; then
+  if ! pytest; then TEST_PASSED=false; fi
+elif [ -f go.mod ]; then
+  if ! go test ./...; then TEST_PASSED=false; fi
+fi
 
 # If tests fail: report and ask whether to proceed
 # If tests pass: continue to orchestration
+if [ "$TEST_PASSED" = "false" ]; then
+  echo "Warning: Tests failed in worktree. Proceeding anyway but baseline is not clean."
+fi
 ```
 
 **Important:** All subsequent steps (Step 2 onwards) execute within this worktree. The `.tina/` directory created in Step 2 will be inside the worktree, keeping orchestration state isolated from the main workspace.
