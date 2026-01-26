@@ -324,6 +324,57 @@ Phase execution complete when:
 - Phase-reviewer approved
 - No unresolved blocked tasks (or blocked tasks documented)
 
+## Resume Mode (--resume flag)
+
+When invoked with `--resume` flag after rehydrate:
+
+### What Changes
+
+- **Skip task extraction:** TaskList already populated from handoff
+- **Skip team spawn:** Team already exists
+- **Restore review tracking:** Read from handoff, skip completed reviews
+
+### Review State Restoration
+
+On resume, check review tracking from handoff:
+
+```json
+{
+  "task-3": {
+    "spec_review": "passed",
+    "quality_review": "pending",
+    "worker": "worker-1"
+  }
+}
+```
+
+For task-3:
+- Don't re-dispatch spec-reviewer (already passed)
+- DO dispatch code-quality-reviewer when worker notifies
+
+### Resuming In-Progress Tasks
+
+For tasks that were `in_progress` at checkpoint:
+
+1. Check if work was committed (git log for task-related commits)
+2. If committed: notify reviewers to continue where they left off
+3. If not committed: worker continues implementation
+
+### Worker Context on Resume
+
+Workers spawned after rehydrate get context:
+```
+"You are worker-1 in phase N execution team. Resuming from checkpoint.
+You were working on Task 3 '[subject]'. Check if your work was committed
+and continue from there."
+```
+
+### Handling Stale State
+
+If handoff is older than 1 hour:
+- Warn: "Handoff is [X] hours old. Proceeding with potentially stale state."
+- Continue anyway (user can manually intervene if needed)
+
 ## Agents
 
 Use the Task tool with these agent types:
