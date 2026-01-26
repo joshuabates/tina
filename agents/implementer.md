@@ -114,6 +114,21 @@ Only mark task `completed` when BOTH reviewers approve:
 ### Shutdown Protocol
 
 When receiving shutdown request via Teammate:
+
+**Standard shutdown:**
 1. Finish current task if possible (< 2 minutes remaining)
 2. Otherwise, leave task in current state
 3. Acknowledge shutdown
+
+**Checkpoint shutdown (message contains "checkpoint"):**
+1. If task in progress with uncommitted work:
+   - Commit WIP: `git commit -m "WIP: [task subject] - checkpoint"`
+   - Note commit SHA in response
+2. Report current state to team-lead:
+   ```
+   Teammate.write({
+     target: "team-lead",
+     value: "Checkpoint acknowledged. Task [ID] state: [in_progress|idle]. WIP commit: [SHA or 'none']. Ready for shutdown."
+   })
+   ```
+3. Wait for final shutdown confirmation

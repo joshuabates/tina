@@ -122,6 +122,20 @@ Teammate.write({
 
 ### Shutdown Protocol
 
+**Standard shutdown:**
 1. Complete any in-progress review (< 2 minutes)
 2. Leave pending reviews for resumption
 3. Acknowledge shutdown
+
+**Checkpoint shutdown (message contains "checkpoint"):**
+1. If review in progress:
+   - Complete if < 2 minutes remaining
+   - Otherwise note current file/line position
+2. Report state to team-lead:
+   ```
+   Teammate.write({
+     target: "team-lead",
+     value: "Checkpoint acknowledged. Review state: [in_progress task ID|idle]. Pending reviews: [count]. Ready for shutdown."
+   })
+   ```
+3. Wait for final shutdown confirmation
