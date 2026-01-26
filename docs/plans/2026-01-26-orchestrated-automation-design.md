@@ -449,3 +449,41 @@ Environment variables for tuning:
 4. Blocked states escalate to human with diagnostic information
 5. All phases complete and finishing-a-development-branch workflow triggers
 6. Existing manual workflows remain functional
+
+## Architectural Context
+
+**Patterns to follow:**
+- Skill invocation structure: `skills/executing-plans/SKILL.md:1-20` (YAML frontmatter + workflow description)
+- Agent definition format: `agents/planner.md:1-15` (YAML frontmatter with name, description, model)
+- Subagent spawning: `skills/writing-plans/SKILL.md:17-24` (Task tool with subagent_type + prompt)
+- Sequential task execution: `skills/executing-plans/SKILL.md:30-100` (dispatch → wait → review → next)
+- Phase counting from design doc: Parse `## Phase N` markdown sections
+- Git operations: `skills/finishing-a-development-branch/SKILL.md:50-80` (verify tests, then action)
+
+**Code to reuse:**
+- `~/.claude/scripts/tina-statusline.sh` - Already writes `.tina/context-metrics.json` and creates `.tina/checkpoint-needed` signal
+- `skills/brainstorming/SKILL.md:41-47` - Pattern for invoking architect skill after design
+- `skills/executing-plans/SKILL.md:70-85` - Phase-reviewer invocation after all tasks complete
+- `skills/finishing-a-development-branch/SKILL.md` - Complete workflow for merge/PR after all phases
+- `agents/planner.md` - Existing phase-aware planner (takes design doc + phase number)
+- `agents/implementer.md` - Worker agent (ask questions before work, self-review after)
+- `agents/phase-reviewer.md` - Existing phase verification (takes design doc + phase + git range)
+
+**Anti-patterns:**
+- Don't parse plan content in supervisor (violates "paths not content" principle) - see `docs/architecture/orchestration-vision.md:82-88`
+- Don't use sequential Task calls when Teammate tool enables parallelism
+- Don't spawn multiple implementers in parallel without coordination - see `skills/executing-plans/SKILL.md:200-210`
+- Don't skip test verification before merge/PR - see `skills/finishing-a-development-branch/SKILL.md:20-35`
+
+**Integration:**
+- Entry: User invokes `/supersonic:orchestrate <design-doc-path>` in their current session
+- Connects to: Spawns planner agents → spawns team-lead in tmux → team-lead uses Teammate tool → invokes finishing-a-development-branch at end
+- State files: All state in `.tina/` directory (already created, contains `context-metrics.json`)
+- Skill registration: Add to `.claude-plugin/plugin.json` keywords and document in README.md
+
+**New patterns this introduces:**
+- Tmux session management for long-running team-leads
+- Checkpoint/rehydrate protocol via slash commands
+- Supervisor polling `.tina/` files instead of reading content
+- Team-based execution via Teammate tool (first use in this codebase)
+- Phase subdirectories in `.tina/phase-N/` for isolation
