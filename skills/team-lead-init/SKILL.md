@@ -13,6 +13,16 @@ Initialize a team-lead session for phase execution. Reads the plan, sets up phas
 
 **Announce at start:** "I'm initializing team-lead for this phase."
 
+## When to Use
+
+- Invoked by `supersonic:orchestrate` supervisor when starting phase execution
+- Never invoke manually - orchestrate manages the lifecycle
+
+## When NOT to Use
+
+- Don't use for manual plan execution (use `supersonic:executing-plans` directly)
+- Don't use outside orchestrated multi-phase workflows
+
 ## Invocation
 
 Called by supervisor when spawning team-lead in tmux:
@@ -42,6 +52,8 @@ digraph team_lead_init {
     "Set status = executing" -> "Invoke executing-plans with plan path";
     "Invoke executing-plans with plan path" -> "Execution complete?";
     "Execution complete?" -> "Set status = complete" [label="yes"];
+    "Execution complete?" -> "Set status = blocked" [label="no"];
+    "Set status = blocked" -> "Wait for shutdown";
     "Set status = complete" -> "Wait for shutdown";
 }
 ```
@@ -93,12 +105,14 @@ Phase 2 will add team-based execution via Teammate tool.
 ## Error Handling
 
 **Plan file not found:**
-- Set status = blocked with reason
-- Exit (supervisor will escalate)
+- Set status = blocked with reason: "Plan file not found: <path>"
+- Exit with code 1
+- Supervisor polls status.json and detects blocked state
 
 **executing-plans fails:**
-- Set status = blocked with reason
-- Exit (supervisor will escalate)
+- Set status = blocked with reason from execution error
+- Exit with code 1
+- Supervisor polls status.json and detects blocked state
 
 ## Integration
 
@@ -106,7 +120,7 @@ Phase 2 will add team-based execution via Teammate tool.
 - `supersonic:orchestrate` - Spawns team-lead-init in tmux for each phase
 
 **Invokes:**
-- `supersonic:executing-plans` - Delegates task execution to this skill
+- `supersonic:executing-plans` - Delegates to executing-plans workflow for task execution
 
 **State files:**
 - `.tina/phase-N/status.json` - Phase execution status
