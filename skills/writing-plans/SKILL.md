@@ -17,7 +17,7 @@ Dispatch the planner subagent:
 
 ```
 Task tool:
-  subagent_type: supersonic:planner
+  subagent_type: tina:planner
   prompt: |
     Design doc: docs/plans/2026-01-24-feature-design.md
     Plan phase: 1
@@ -31,5 +31,5 @@ After planner completes:
 
 **"Plan saved to `<path>`. Ready to execute?"**
 
-- If yes: Use `supersonic:executing-plans`
+- If yes: Use `tina:executing-plans`
 - If multi-phase: Note which phases remain

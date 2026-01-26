@@ -1,4 +1,4 @@
-# Supersonic
+# Tina
 
 Personal skills library for Claude Code, forked from [Superpowers](https://github.com/obra/superpowers).
 
@@ -29,17 +29,17 @@ Personal skills library for Claude Code, forked from [Superpowers](https://githu
 ## Agents
 
 Subagent types for use with the Task tool:
-- **supersonic:implementer** - Implements a single task
-- **supersonic:spec-reviewer** - Verifies implementation matches spec
-- **supersonic:code-quality-reviewer** - Reviews code quality
-- **supersonic:code-reviewer** - Full code review for completed work
+- **tina:implementer** - Implements a single task
+- **tina:spec-reviewer** - Verifies implementation matches spec
+- **tina:code-quality-reviewer** - Reviews code quality
+- **tina:code-reviewer** - Full code review for completed work
 
 ## Commands
 
-- `/supersonic:brainstorm` - Start design refinement
-- `/supersonic:orchestrate` - Start automated pipeline
-- `/supersonic:write-plan` - Create implementation plan
-- `/supersonic:execute-plan` - Execute plan with subagents
+- `/tina:brainstorm` - Start design refinement
+- `/tina:orchestrate` - Start automated pipeline
+- `/tina:write-plan` - Create implementation plan
+- `/tina:execute-plan` - Execute plan with subagents
 
 ## License
 

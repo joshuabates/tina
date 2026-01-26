@@ -17,13 +17,13 @@ Automates the full development pipeline from design document to implementation. 
 
 - You have a complete design document with `## Phase N` sections
 - You want fully automated execution without manual intervention
-- The design has been reviewed by `supersonic:architect`
+- The design has been reviewed by `tina:architect`
 
 ## When NOT to Use
 
 - Design is incomplete or unapproved
 - You want manual control over each phase
-- Single-phase designs (use `supersonic:writing-plans` + `supersonic:executing-plans` directly)
+- Single-phase designs (use `tina:writing-plans` + `tina:executing-plans` directly)
 
 ## The Process
 
@@ -59,7 +59,7 @@ digraph orchestrate {
 ## Invocation
 
 ```
-/supersonic:orchestrate docs/plans/2026-01-26-myfeature-design.md
+/tina:orchestrate docs/plans/2026-01-26-myfeature-design.md
 ```
 
 ## Phase 1 Behavior (Current Implementation)
@@ -69,18 +69,18 @@ This phase implements basic orchestration without team-based execution:
 1. **Parse design doc** - Count `## Phase N` sections
 2. **Initialize state** - Create `.tina/supervisor-state.json`
 3. **For each phase:**
-   - Spawn `supersonic:planner` subagent with design doc + phase number
+   - Spawn `tina:planner` subagent with design doc + phase number
    - Wait for plan path
-   - Spawn `supersonic:team-lead-init` in tmux with plan path
+   - Spawn `tina:team-lead-init` in tmux with plan path
    - Monitor `.tina/phase-N/status.json` until complete
    - Kill tmux session, proceed to next phase
-4. **Completion** - Invoke `supersonic:finishing-a-development-branch`
+4. **Completion** - Invoke `tina:finishing-a-development-branch`
 
 ## Implementation Notes
 
 **Monitoring:** Polls `.tina/phase-N/status.json` every 10 seconds until phase status is "complete" or "blocked".
 
-**Tmux session naming:** Uses pattern `supersonic-phase-N` where N is the phase number.
+**Tmux session naming:** Uses pattern `tina-phase-N` where N is the phase number.
 
 **Cleanup:** Supervisor state and phase directories persist in `.tina/` for resumption. Can be manually removed after successful completion if desired.
 
@@ -152,12 +152,12 @@ fi
 Before starting new phases, clean up any orphaned tmux sessions from previous runs:
 
 ```bash
-# Find all supersonic tmux sessions
-ORPHANED=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^supersonic-phase-' || true)
+# Find all tina tmux sessions
+ORPHANED=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^tina-phase-' || true)
 
 for SESSION in $ORPHANED; do
   # Extract phase number from session name
-  PHASE=$(echo "$SESSION" | sed 's/supersonic-phase-//')
+  PHASE=$(echo "$SESSION" | sed 's/tina-phase-//')
 
   # Check if this session is our active session
   if [ "$SESSION" = "$ACTIVE_SESSION" ]; then
@@ -193,7 +193,7 @@ For each phase from `CURRENT_PHASE + 1` to `TOTAL_PHASES`:
 Use Task tool to spawn planner:
 ```
 # In Claude Code, use Task tool with:
-# subagent_type: "supersonic:planner"
+# subagent_type: "tina:planner"
 # prompt: "Design doc: <path>\nPlan phase: <N>"
 ```
 
@@ -237,7 +237,7 @@ EOF
 **3d. Spawn Team-Lead in Tmux**
 
 ```bash
-SESSION_NAME="supersonic-phase-$PHASE_NUM"
+SESSION_NAME="tina-phase-$PHASE_NUM"
 tmux new-session -d -s "$SESSION_NAME" \
   "cd $(pwd) && claude --prompt '/team-lead-init $PLAN_PATH'"
 
@@ -403,7 +403,7 @@ When a phase enters blocked state, supervisor spawns a helper agent for diagnosi
 
 ```bash
 # Use Task tool to spawn helper agent
-# subagent_type: "supersonic:helper"
+# subagent_type: "tina:helper"
 # prompt: "Diagnose blocked phase: $PHASE_NUM\nReason: $REASON\nPhase dir: .tina/phase-$PHASE_NUM"
 ```
 
@@ -519,7 +519,7 @@ fi
 
 ```bash
 for i in $(seq 1 $TOTAL_PHASES); do
-  SESSION="supersonic-phase-$i"
+  SESSION="tina-phase-$i"
   tmux kill-session -t "$SESSION" 2>/dev/null || true
 done
 ```
@@ -586,7 +586,7 @@ tmux send-keys -t <name> "<command>" Enter
   "design_doc_path": "docs/plans/2026-01-26-feature-design.md",
   "total_phases": 3,
   "current_phase": 2,
-  "active_tmux_session": "supersonic-phase-2",
+  "active_tmux_session": "tina-phase-2",
   "plan_paths": {
     "1": "docs/plans/2026-01-26-feature-phase-1.md",
     "2": "docs/plans/2026-01-26-feature-phase-2.md"
@@ -643,7 +643,7 @@ If supervisor is interrupted (Ctrl+C, crash, terminal closed), re-run with same 
 **Command:**
 ```bash
 # Simply re-run orchestrate with same design doc
-/supersonic:orchestrate docs/plans/2026-01-26-feature-design.md
+/tina:orchestrate docs/plans/2026-01-26-feature-design.md
 ```
 
 The supervisor automatically detects existing state and resumes appropriately.
@@ -651,11 +651,11 @@ The supervisor automatically detects existing state and resumes appropriately.
 ## Integration
 
 **Spawns:**
-- `supersonic:planner` - Creates implementation plan for each phase
+- `tina:planner` - Creates implementation plan for each phase
 - Team-lead in tmux - Executes phase via `team-lead-init`
 
 **Invokes after completion:**
-- `supersonic:finishing-a-development-branch` - Handles merge/PR workflow
+- `tina:finishing-a-development-branch` - Handles merge/PR workflow
 
 **State files:**
 - `.tina/supervisor-state.json` - Supervisor resumption state
@@ -670,10 +670,10 @@ The supervisor automatically detects existing state and resumes appropriately.
 - Team-lead runs rehydrate skill, restores state, resumes execution
 
 **Depends on existing:**
-- `supersonic:executing-plans` - Team-lead delegates to this for task execution
-- `supersonic:planner` - Creates phase plans from design doc
-- `supersonic:architect` - Design must be architect-reviewed before orchestration
-- `supersonic:phase-reviewer` - Called by executing-plans after tasks complete
+- `tina:executing-plans` - Team-lead delegates to this for task execution
+- `tina:planner` - Creates phase plans from design doc
+- `tina:architect` - Design must be architect-reviewed before orchestration
+- `tina:phase-reviewer` - Called by executing-plans after tasks complete
 
 **Phase 2 integrations (now available):**
 - Team-based execution via Teammate tool (workers + reviewers)
@@ -685,7 +685,7 @@ The supervisor automatically detects existing state and resumes appropriately.
 - Statusline context monitoring with automatic checkpoint triggering
 
 **Phase 4 integrations (now available):**
-- Helper agent (`supersonic:helper`) for blocked state diagnosis
+- Helper agent (`tina:helper`) for blocked state diagnosis
 - Planner retry logic (one retry before escalation)
 - Tmux session death detection and recovery
 - Recovery attempt tracking to prevent infinite loops

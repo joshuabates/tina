@@ -15,12 +15,12 @@ Initialize a team-lead session for phase execution. Reads the plan, sets up phas
 
 ## When to Use
 
-- Invoked by `supersonic:orchestrate` supervisor when starting phase execution
+- Invoked by `tina:orchestrate` supervisor when starting phase execution
 - Never invoke manually - orchestrate manages the lifecycle
 
 ## When NOT to Use
 
-- Don't use for manual plan execution (use `supersonic:executing-plans` directly)
+- Don't use for manual plan execution (use `tina:executing-plans` directly)
 - Don't use outside orchestrated multi-phase workflows
 
 ## Invocation
@@ -113,14 +113,14 @@ Teammate.spawnTeam({
 Teammate.spawn({
   team: "phase-N-execution",
   name: "worker-1",
-  agent: "supersonic:implementer",
+  agent: "tina:implementer",
   context: "You are worker-1 in phase N execution team."
 })
 
 Teammate.spawn({
   team: "phase-N-execution",
   name: "worker-2",
-  agent: "supersonic:implementer",
+  agent: "tina:implementer",
   context: "You are worker-2 in phase N execution team."
 })
 ```
@@ -131,14 +131,14 @@ Teammate.spawn({
 Teammate.spawn({
   team: "phase-N-execution",
   name: "spec-reviewer",
-  agent: "supersonic:spec-reviewer",
+  agent: "tina:spec-reviewer",
   context: "You are the spec compliance reviewer for phase N."
 })
 
 Teammate.spawn({
   team: "phase-N-execution",
   name: "code-quality-reviewer",
-  agent: "supersonic:code-quality-reviewer",
+  agent: "tina:code-quality-reviewer",
   context: "You are the code quality reviewer for phase N."
 })
 ```
@@ -146,7 +146,7 @@ Teammate.spawn({
 **Step 4: Invoke executing-plans with team flag**
 
 ```
-/supersonic:executing-plans --team <plan-path>
+/tina:executing-plans --team <plan-path>
 ```
 
 ## Team Shutdown
@@ -250,10 +250,10 @@ Handoff written to .tina/phase-N/handoff.md
 ## Integration
 
 **Invoked by:**
-- `supersonic:orchestrate` - Spawns team-lead-init in tmux for each phase
+- `tina:orchestrate` - Spawns team-lead-init in tmux for each phase
 
 **Invokes:**
-- `supersonic:executing-plans` - Delegates to executing-plans workflow for task execution
+- `tina:executing-plans` - Delegates to executing-plans workflow for task execution
 
 **Responds to:**
 - `/checkpoint` - Invokes checkpoint skill for context management

@@ -40,7 +40,7 @@ Start by understanding the current project context, then ask questions one at a 
 - Commit the design document to git
 
 **Architectural review:**
-- Use supersonic:architect to review the design
+- Use tina:architect to review the design
 - Architect explores codebase, asks questions if unclear, adds Architectural Context section
 - Architect must approve design before proceeding
 - If blocked: address concerns, then re-run architect review

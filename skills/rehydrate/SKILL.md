@@ -90,10 +90,10 @@ Read `.tina/phase-N/handoff.md` and extract:
   "phase": 2,
   "plan_path": "docs/plans/2026-01-26-feature-phase-2.md",
   "team": [
-    { "name": "worker-1", "agent": "supersonic:implementer" },
-    { "name": "worker-2", "agent": "supersonic:implementer" },
-    { "name": "spec-reviewer", "agent": "supersonic:spec-reviewer" },
-    { "name": "code-quality-reviewer", "agent": "supersonic:code-quality-reviewer" }
+    { "name": "worker-1", "agent": "tina:implementer" },
+    { "name": "worker-2", "agent": "tina:implementer" },
+    { "name": "spec-reviewer", "agent": "tina:spec-reviewer" },
+    { "name": "code-quality-reviewer", "agent": "tina:code-quality-reviewer" }
   ],
   "tasks": [
     { "id": "1", "subject": "Implement feature A", "status": "completed", "owner": "worker-1" },
@@ -175,7 +175,7 @@ Pass this to executing-plans via `--resume-state` or write to `.tina/phase-N/rev
 Invoke executing-plans with resume flags:
 
 ```
-/supersonic:executing-plans --team --resume <plan-path>
+/tina:executing-plans --team --resume <plan-path>
 ```
 
 The `--resume` flag tells executing-plans to:
@@ -237,14 +237,14 @@ Supervisor watches for this signal to confirm rehydration succeeded.
 - `Teammate.ping` - Verify teammate alive
 - `TaskCreate` - Recreate tasks from handoff
 - `TaskUpdate` - Restore task status/owner
-- `supersonic:executing-plans` - Resume execution
+- `tina:executing-plans` - Resume execution
 
 **State files:**
 - `.tina/phase-N/handoff.md` - Input: checkpoint state
 - `.tina/phase-N/review-tracking.json` - Output: restored review state
 
 **Paired with:**
-- `supersonic:checkpoint` - Creates the handoff.md this skill reads
+- `tina:checkpoint` - Creates the handoff.md this skill reads
 
 ## Red Flags
 

@@ -50,7 +50,7 @@ Each step is one action (2-5 minutes):
 ```markdown
 # <Feature> Phase N Implementation Plan
 
-> **For Claude:** Use supersonic:executing-plans to implement this plan.
+> **For Claude:** Use tina:executing-plans to implement this plan.
 
 **Goal:** [One sentence]
 

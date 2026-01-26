@@ -111,10 +111,10 @@ Create `.tina/phase-N/handoff.md`:
 Context threshold exceeded
 
 ## Team Composition
-- worker-1: supersonic:implementer
-- worker-2: supersonic:implementer
-- spec-reviewer: supersonic:spec-reviewer
-- code-quality-reviewer: supersonic:code-quality-reviewer
+- worker-1: tina:implementer
+- worker-2: tina:implementer
+- spec-reviewer: tina:spec-reviewer
+- code-quality-reviewer: tina:code-quality-reviewer
 
 ## Task States
 | ID | Subject | Status | Owner |
@@ -185,7 +185,7 @@ Contains everything needed to resume:
 - `.tina/checkpoint-needed` - Signal file (deleted after checkpoint)
 
 **Paired with:**
-- `supersonic:rehydrate` - Reads handoff.md to restore context
+- `tina:rehydrate` - Reads handoff.md to restore context
 
 ## Red Flags
 

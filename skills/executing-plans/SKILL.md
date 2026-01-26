@@ -23,14 +23,14 @@ digraph process {
 
     subgraph cluster_per_task {
         label="Per Task";
-        "Dispatch implementer subagent (supersonic:implementer)" [shape=box];
+        "Dispatch implementer subagent (tina:implementer)" [shape=box];
         "Implementer subagent asks questions?" [shape=diamond];
         "Answer questions, provide context" [shape=box];
         "Implementer subagent implements, tests, commits, self-reviews" [shape=box];
-        "Dispatch spec reviewer subagent (supersonic:spec-reviewer)" [shape=box];
+        "Dispatch spec reviewer subagent (tina:spec-reviewer)" [shape=box];
         "Spec reviewer subagent confirms code matches spec?" [shape=diamond];
         "Implementer subagent fixes spec gaps" [shape=box];
-        "Dispatch code quality reviewer subagent (supersonic:code-quality-reviewer)" [shape=box];
+        "Dispatch code quality reviewer subagent (tina:code-quality-reviewer)" [shape=box];
         "Code quality reviewer subagent approves?" [shape=diamond];
         "Implementer subagent fixes quality issues" [shape=box];
         "Mark task complete in TodoWrite" [shape=box];
@@ -38,7 +38,7 @@ digraph process {
 
     "Read plan, extract all tasks with full text, note context, create TodoWrite" [shape=box];
     "More tasks remain?" [shape=diamond];
-    "Dispatch phase-reviewer (supersonic:phase-reviewer)" [shape=box];
+    "Dispatch phase-reviewer (tina:phase-reviewer)" [shape=box];
     "Phase reviewer approves?" [shape=diamond];
     "Fix phase issues" [shape=box];
     "More phases?" [shape=diamond];
@@ -46,26 +46,26 @@ digraph process {
     "Dispatch final code reviewer subagent for entire implementation" [shape=box];
     "Use superpowers:finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
-    "Read plan, extract all tasks with full text, note context, create TodoWrite" -> "Dispatch implementer subagent (supersonic:implementer)";
-    "Dispatch implementer subagent (supersonic:implementer)" -> "Implementer subagent asks questions?";
+    "Read plan, extract all tasks with full text, note context, create TodoWrite" -> "Dispatch implementer subagent (tina:implementer)";
+    "Dispatch implementer subagent (tina:implementer)" -> "Implementer subagent asks questions?";
     "Implementer subagent asks questions?" -> "Answer questions, provide context" [label="yes"];
-    "Answer questions, provide context" -> "Dispatch implementer subagent (supersonic:implementer)";
+    "Answer questions, provide context" -> "Dispatch implementer subagent (tina:implementer)";
     "Implementer subagent asks questions?" -> "Implementer subagent implements, tests, commits, self-reviews" [label="no"];
-    "Implementer subagent implements, tests, commits, self-reviews" -> "Dispatch spec reviewer subagent (supersonic:spec-reviewer)";
-    "Dispatch spec reviewer subagent (supersonic:spec-reviewer)" -> "Spec reviewer subagent confirms code matches spec?";
+    "Implementer subagent implements, tests, commits, self-reviews" -> "Dispatch spec reviewer subagent (tina:spec-reviewer)";
+    "Dispatch spec reviewer subagent (tina:spec-reviewer)" -> "Spec reviewer subagent confirms code matches spec?";
     "Spec reviewer subagent confirms code matches spec?" -> "Implementer subagent fixes spec gaps" [label="no"];
-    "Implementer subagent fixes spec gaps" -> "Dispatch spec reviewer subagent (supersonic:spec-reviewer)" [label="re-review"];
-    "Spec reviewer subagent confirms code matches spec?" -> "Dispatch code quality reviewer subagent (supersonic:code-quality-reviewer)" [label="yes"];
-    "Dispatch code quality reviewer subagent (supersonic:code-quality-reviewer)" -> "Code quality reviewer subagent approves?";
+    "Implementer subagent fixes spec gaps" -> "Dispatch spec reviewer subagent (tina:spec-reviewer)" [label="re-review"];
+    "Spec reviewer subagent confirms code matches spec?" -> "Dispatch code quality reviewer subagent (tina:code-quality-reviewer)" [label="yes"];
+    "Dispatch code quality reviewer subagent (tina:code-quality-reviewer)" -> "Code quality reviewer subagent approves?";
     "Code quality reviewer subagent approves?" -> "Implementer subagent fixes quality issues" [label="no"];
-    "Implementer subagent fixes quality issues" -> "Dispatch code quality reviewer subagent (supersonic:code-quality-reviewer)" [label="re-review"];
+    "Implementer subagent fixes quality issues" -> "Dispatch code quality reviewer subagent (tina:code-quality-reviewer)" [label="re-review"];
     "Code quality reviewer subagent approves?" -> "Mark task complete in TodoWrite" [label="yes"];
     "Mark task complete in TodoWrite" -> "More tasks remain?";
-    "More tasks remain?" -> "Dispatch implementer subagent (supersonic:implementer)" [label="yes"];
-    "More tasks remain?" -> "Dispatch phase-reviewer (supersonic:phase-reviewer)" [label="no"];
-    "Dispatch phase-reviewer (supersonic:phase-reviewer)" -> "Phase reviewer approves?";
+    "More tasks remain?" -> "Dispatch implementer subagent (tina:implementer)" [label="yes"];
+    "More tasks remain?" -> "Dispatch phase-reviewer (tina:phase-reviewer)" [label="no"];
+    "Dispatch phase-reviewer (tina:phase-reviewer)" -> "Phase reviewer approves?";
     "Phase reviewer approves?" -> "Fix phase issues" [label="no"];
-    "Fix phase issues" -> "Dispatch phase-reviewer (supersonic:phase-reviewer)";
+    "Fix phase issues" -> "Dispatch phase-reviewer (tina:phase-reviewer)";
     "Phase reviewer approves?" -> "More phases?" [label="yes"];
     "More phases?" -> "Dispatch planner for next phase" [label="yes"];
     "More phases?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
@@ -147,25 +147,25 @@ Teammate.spawnTeam({
 Teammate.spawn({
   team: "phase-N-execution",
   name: "worker-1",
-  agent: "supersonic:implementer"
+  agent: "tina:implementer"
 })
 
 Teammate.spawn({
   team: "phase-N-execution",
   name: "worker-2",
-  agent: "supersonic:implementer"
+  agent: "tina:implementer"
 })
 
 Teammate.spawn({
   team: "phase-N-execution",
   name: "spec-reviewer",
-  agent: "supersonic:spec-reviewer"
+  agent: "tina:spec-reviewer"
 })
 
 Teammate.spawn({
   team: "phase-N-execution",
   name: "code-quality-reviewer",
-  agent: "supersonic:code-quality-reviewer"
+  agent: "tina:code-quality-reviewer"
 })
 ```
 
@@ -299,7 +299,7 @@ After all regular tasks complete:
 
 ```
 Task tool:
-  subagent_type: supersonic:phase-reviewer
+  subagent_type: tina:phase-reviewer
   prompt: |
     Design doc: [path]
     Phase completed: [N]
@@ -378,19 +378,19 @@ If handoff is older than 1 hour:
 ## Agents
 
 Use the Task tool with these agent types:
-- `supersonic:implementer` - Implements a single task
-- `supersonic:spec-reviewer` - Verifies implementation matches spec
-- `supersonic:code-quality-reviewer` - Reviews code quality after spec compliance passes
-- `supersonic:phase-reviewer` - Verifies phase follows architecture after all tasks complete
+- `tina:implementer` - Implements a single task
+- `tina:spec-reviewer` - Verifies implementation matches spec
+- `tina:code-quality-reviewer` - Reviews code quality after spec compliance passes
+- `tina:phase-reviewer` - Verifies phase follows architecture after all tasks complete
 
 ## Team Composition (Phase 2+)
 
 When running in team mode (invoked via team-lead), executing-plans uses the Teammate tool:
 
 **Default team:**
-- 2 workers: `supersonic:implementer`
-- 1 spec-reviewer: `supersonic:spec-reviewer`
-- 1 code-quality-reviewer: `supersonic:code-quality-reviewer`
+- 2 workers: `tina:implementer`
+- 1 spec-reviewer: `tina:spec-reviewer`
+- 1 code-quality-reviewer: `tina:code-quality-reviewer`
 
 **Team name:** `phase-N-execution` where N is the phase number
 
@@ -493,7 +493,7 @@ After all tasks in a phase complete, dispatch the phase-reviewer:
 
 ```
 Task tool:
-  subagent_type: supersonic:phase-reviewer
+  subagent_type: tina:phase-reviewer
   prompt: |
     Design doc: docs/plans/2026-01-26-feature-design.md
     Phase completed: 1
