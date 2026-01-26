@@ -105,6 +105,9 @@ fi
 **Otherwise:** Initialize new state
 
 ```bash
+# Initialize session tracking (may be set during resume)
+ACTIVE_SESSION=""
+
 if [ -f ".tina/supervisor-state.json" ]; then
   # Resume: read current phase
   CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)
@@ -143,6 +146,43 @@ EOF
   CURRENT_PHASE=0
 fi
 ```
+
+### Step 2b: Orphaned Session Cleanup
+
+Before starting new phases, clean up any orphaned tmux sessions from previous runs:
+
+```bash
+# Find all supersonic tmux sessions
+ORPHANED=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^supersonic-phase-' || true)
+
+for SESSION in $ORPHANED; do
+  # Extract phase number from session name
+  PHASE=$(echo "$SESSION" | sed 's/supersonic-phase-//')
+
+  # Check if this session is our active session
+  if [ "$SESSION" = "$ACTIVE_SESSION" ]; then
+    echo "Keeping active session: $SESSION"
+    continue
+  fi
+
+  # Check if phase is complete
+  if [ -f ".tina/phase-$PHASE/status.json" ]; then
+    STATUS=$(jq -r '.status' ".tina/phase-$PHASE/status.json")
+    if [ "$STATUS" = "complete" ]; then
+      echo "Cleaning up completed phase session: $SESSION"
+      tmux kill-session -t "$SESSION" 2>/dev/null || true
+      continue
+    fi
+  fi
+
+  # Orphaned session for incomplete phase - ask supervisor how to handle
+  echo "Warning: Found orphaned session $SESSION for incomplete phase $PHASE"
+  echo "Options: kill (discard work) or adopt (reconnect)"
+  # For now, leave it and warn - supervisor can manually handle
+done
+```
+
+**Important:** Only automatically clean up sessions for completed phases. Orphaned sessions for incomplete phases may contain recoverable work.
 
 ### Step 3: Phase Loop
 
@@ -616,9 +656,11 @@ The supervisor automatically detects existing state and resumes appropriately.
 - Read plan content (only track file paths)
 - Parse plan structure (that's team-lead's job)
 - Skip phase completion verification
-- Leave orphaned tmux sessions
+- Leave orphaned tmux sessions (always attempt cleanup)
 
 **Always:**
 - Wait for planner to return path before spawning team-lead
 - Verify phase complete via status.json before proceeding
 - Clean up tmux session after phase completes
+- Run orphaned session cleanup before starting new phases
+- Warn about orphaned sessions for incomplete phases
