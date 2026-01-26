@@ -2,7 +2,7 @@
 
 **Teams Iterating, Not Accumulating**
 
-A development workflow system for Claude Code with an orchestration layer that manages context across multi-phase projects. Based on [Superpowers](https://github.com/anthropics/superpowers) with added automation: TINA spawns workers in isolated tmux sessions, monitors progress, pre-emptively checkpoints to reduce context bloat and save on token count, and recovers from failures.
+A development workflow system for Claude Code with an orchestration layer that manages context across multi-phase projects. Based on [Superpowers](https://github.com/anthropics/superpowers) with added automation: TINA spawns workers in isolated tmux sessions, monitors progress, pre-emptively checkpoints to prevent phase contexts from growing, and recovers from failures.
 
 <p align="center">
   <img src="assets/tina.png" alt="Tina" width="200">
@@ -14,7 +14,7 @@ The Superpowers workflow (brainstorm → design → plan → implement/review) w
 
 TINA's orchestration layer solves this:
 - **Fresh context per phase** - Workers run in tmux with clean context
-- **Pre-emptive checkpoints** - Saves state to reduce context bloat and token cost
+- **Pre-emptive checkpoints** - Saves state within phases to prevent individual phase contexts from growing
 - **Failure recovery** - Detects crashed sessions, diagnoses issues, attempts recovery
 - **Resumable** - Pick up where you left off after interruptions
 
@@ -64,7 +64,7 @@ All phases complete:
 ### Orchestration
 - **orchestrate** - Automated pipeline from design doc to implementation
 - **team-lead-init** - Initializes team-lead in tmux session for phase execution
-- **checkpoint** - Pre-emptively saves state to reduce context bloat and token cost
+- **checkpoint** - Pre-emptively saves phase state to prevent context growth
 - **rehydrate** - Restores state after context clear
 
 ### Design & Planning
@@ -106,16 +106,16 @@ Subagent types for the Task tool:
 
 ## Installation
 
-Install from the Claude Code marketplace:
+First, add the TINA marketplace:
+
+```bash
+claude plugins add-marketplace https://raw.githubusercontent.com/joshuabates/tina/refs/heads/main/marketplace.json
+```
+
+Then install TINA:
 
 ```bash
 claude plugins add tina
-```
-
-Or from local source:
-
-```bash
-claude plugins add /path/to/tina
 ```
 
 Requires:
@@ -123,14 +123,6 @@ Requires:
 - [claude-sneakpeek](https://github.com/mikekelly/claude-sneakpeek) (for automated orchestration mode)
 
 ## Usage
-
-### Quick Start
-
-Start with brainstorming to refine your idea:
-
-```bash
-/tina:brainstorm
-```
 
 ### Commands
 
