@@ -264,6 +264,17 @@ if [ -f ".tina/supervisor-state.json" ]; then
   CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)
   echo "Resuming from phase $CURRENT_PHASE"
 
+  # Read worktree path
+  WORKTREE_PATH=$(jq -r '.worktree_path' .tina/supervisor-state.json)
+  BRANCH_NAME=$(jq -r '.branch_name' .tina/supervisor-state.json)
+
+  # Verify worktree exists
+  if ! git worktree list | grep -q "$WORKTREE_PATH"; then
+    echo "Error: Worktree not found at $WORKTREE_PATH"
+    echo "Cannot resume - worktree may have been removed"
+    exit 1
+  fi
+
   # Check for existing tmux session
   ACTIVE_SESSION=$(jq -r '.active_tmux_session // ""' .tina/supervisor-state.json)
   if [ -n "$ACTIVE_SESSION" ] && tmux has-session -t "$ACTIVE_SESSION" 2>/dev/null; then
@@ -287,6 +298,8 @@ else
   cat > .tina/supervisor-state.json << EOF
 {
   "design_doc_path": "$DESIGN_DOC",
+  "worktree_path": "$WORKTREE_PATH",
+  "branch_name": "$BRANCH_NAME",
   "total_phases": $TOTAL_PHASES,
   "current_phase": 0,
   "active_tmux_session": null,
@@ -812,11 +825,13 @@ Written by statusline script on each status update. Supervisor reads this to dec
 If supervisor is interrupted (Ctrl+C, crash, terminal closed), re-run with same design doc path:
 
 **State reconstruction:**
-1. Read `.tina/supervisor-state.json` for current phase and active session
-2. Check if `active_tmux_session` still exists via `tmux has-session`
-3. If session exists: reconnect to monitoring loop
-4. If session doesn't exist but phase incomplete: respawn team-lead with `/rehydrate`
-5. If phase complete: proceed to next phase
+1. Read `.tina/supervisor-state.json` for current phase, active session, and worktree path
+2. Verify worktree still exists: `git worktree list | grep "$WORKTREE_PATH"`
+3. If worktree missing: error and exit (cannot resume without worktree)
+4. Check if `active_tmux_session` still exists via `tmux has-session`
+5. If session exists: reconnect to monitoring loop
+6. If session doesn't exist but phase incomplete: respawn team-lead with `/rehydrate`
+7. If phase complete: proceed to next phase
 
 **Resumption scenarios:**
 
