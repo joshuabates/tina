@@ -31,9 +31,17 @@ Review the code for:
 - Does it follow existing codebase patterns?
 - Is it consistent with project conventions?
 
+## Issue Severity
+
+- **Critical:** Bugs, security issues, broken functionality
+- **Important:** Architecture problems, poor patterns, test gaps
+- **Minor:** Style inconsistencies, naming, readability
+
+**ALL issues must be fixed.** Severity indicates priority, not whether to fix. Approved = zero open issues.
+
 ## Report Format
 
 Report:
 - **Strengths:** What was done well
-- **Issues:** Categorized as Critical (must fix), Important (should fix), or Minor (nice to fix)
-- **Assessment:** Approved or needs changes
+- **Issues:** Categorized by severity with file:line references
+- **Assessment:** Approved (zero issues) or Needs fixes (issues remain)

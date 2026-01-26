@@ -47,5 +47,7 @@ Read the implementation code and verify:
 ## Report Format
 
 Report one of:
-- Spec compliant (if everything matches after code inspection)
-- Issues found: [list specifically what's missing or extra, with file:line references]
+- **Spec compliant:** Everything matches after code inspection (zero issues)
+- **Issues found:** List specifically what's missing or extra, with file:line references
+
+**ANY issue blocks approval.** No "close enough" - spec compliant means exactly what was asked, nothing more, nothing less.
