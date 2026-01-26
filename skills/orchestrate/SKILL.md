@@ -130,7 +130,7 @@ fi
 
 For each phase from `CURRENT_PHASE + 1` to `TOTAL_PHASES`:
 
-**3a. Spawn Planner**
+**3a. Spawn Planner (with retry)**
 
 Use Task tool to spawn planner:
 ```
@@ -140,6 +140,18 @@ Use Task tool to spawn planner:
 ```
 
 Wait for planner to return plan path (e.g., `docs/plans/2026-01-26-feature-phase-1.md`)
+
+**If planner fails:**
+```bash
+echo "Planner failed for phase $PHASE_NUM, retrying..."
+# Retry once with same prompt
+# If still fails:
+echo "Planner failed twice for phase $PHASE_NUM"
+echo "Error: <planner error output>"
+exit 1
+```
+
+**Important:** Planner failure means the design doc phase section may be malformed or the planner agent is broken. After one retry, escalate to human rather than continuing.
 
 **3b. Update Supervisor State**
 
