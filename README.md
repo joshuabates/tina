@@ -1,12 +1,12 @@
-<p align="center">
-  <img src="assets/tina.png" alt="Tina" width="200">
-</p>
-
 # TINA
 
 **Teams Iterating, Not Accumulating**
 
-A development workflow system for Claude Code with an orchestration layer that manages context across multi-phase projects. Based on [Superpowers](https://github.com/anthropics/superpowers) with added automation: TINA spawns workers in isolated tmux sessions, monitors progress, handles checkpoints when context fills up, and recovers from failures.
+A development workflow system for Claude Code with an orchestration layer that manages context across multi-phase projects. Based on [Superpowers](https://github.com/anthropics/superpowers) with added automation: TINA spawns workers in isolated tmux sessions, monitors progress, pre-emptively checkpoints to reduce context bloat and save on token count, and recovers from failures.
+
+<p align="center">
+  <img src="assets/tina.png" alt="Tina" width="200">
+</p>
 
 ## Why TINA?
 
@@ -14,38 +14,48 @@ The Superpowers workflow (brainstorm → design → plan → implement/review) w
 
 TINA's orchestration layer solves this:
 - **Fresh context per phase** - Workers run in tmux with clean context
-- **Automatic checkpoints** - Saves state when context fills, rehydrates after clearing
+- **Pre-emptive checkpoints** - Saves state to reduce context bloat and token cost
 - **Failure recovery** - Detects crashed sessions, diagnoses issues, attempts recovery
 - **Resumable** - Pick up where you left off after interruptions
 
 ## The Workflow
 
+### Phase 1: Design (Interactive)
 ```
-You ←→ Brainstorming (interactive)
-            ↓
-       Design Doc (saved to disk)
-            ↓
-       Architect Review (validates design)
-            ↓
-  ┌─────────────────────────────────────┐
-  │         Orchestration Layer         │
-  │                                     │
-  │   For each phase:                   │
-  │     1. Planner creates implementation plan
-  │     2. Team-lead spawns in tmux     │
-  │     3. Workers implement + review   │
-  │     4. Phase reviewer validates     │
-  │                                     │
-  │   Context full? → Checkpoint → Clear → Rehydrate
-  │   Worker crashed? → Diagnose → Recover
-  │   All phases done? → Finish workflow │
-  └─────────────────────────────────────┘
-            ↓
-       Merge / PR
+You ←→ /tina:brainstorm
+         One question at a time, refining ideas
+              ↓
+         Design Doc (.md saved to docs/plans/)
+              ↓
+         Architect Review
+         Validates design before implementation
 ```
 
-**Manual mode:** Run each step yourself with individual skills.
-**Automated mode:** Hand off a design doc to `/tina:orchestrate` and let it run.
+### Phase 2: Implementation (Automated)
+```
+/tina:orchestrate docs/plans/your-design.md
+
+For each phase in design doc:
+
+  1. Planner → Implementation plan with tasks
+
+  2. Team-lead spawns in tmux session
+     ├─ Spawns implementer agents for tasks
+     ├─ Each task: implement → spec review → code review
+     ├─ Pre-emptive checkpoints (context management)
+     └─ Crash recovery if workers fail
+
+  3. Phase reviewer validates completed phase
+     Checks against design doc + integration
+
+All phases complete:
+
+  4. /tina:finishing-a-development-branch
+     Choose: merge to main, create PR, or manual finish
+```
+
+**Manual mode:** Run individual skills yourself (`/tina:write-plan`, `/tina:execute-plan`, etc.)
+**Automated mode:** `/tina:orchestrate` runs the full pipeline
 
 > **Note:** Automated mode requires [claude-sneakpeek](https://github.com/mikekelly/claude-sneakpeek) for team-based execution. A non-team mode is planned for the future.
 
@@ -54,7 +64,7 @@ You ←→ Brainstorming (interactive)
 ### Orchestration
 - **orchestrate** - Automated pipeline from design doc to implementation
 - **team-lead-init** - Initializes team-lead in tmux session for phase execution
-- **checkpoint** - Saves state to disk when context fills up
+- **checkpoint** - Pre-emptively saves state to reduce context bloat and token cost
 - **rehydrate** - Restores state after context clear
 
 ### Design & Planning
@@ -94,15 +104,31 @@ Subagent types for the Task tool:
 - **tina:code-reviewer** - Full review for completed work
 - **tina:phase-reviewer** - Validates completed phase against design
 
+## Installation
+
+Install from the Claude Code marketplace:
+
+```bash
+claude plugins add tina
+```
+
+Or from local source:
+
+```bash
+claude plugins add /path/to/tina
+```
+
+Requires:
+- Claude Code CLI
+- [claude-sneakpeek](https://github.com/mikekelly/claude-sneakpeek) (for automated orchestration mode)
+
 ## Usage
 
 ### Quick Start
 
-```bash
-# Install the plugin
-claude plugins add /path/to/tina
+Start with brainstorming to refine your idea:
 
-# Start with brainstorming
+```bash
 /tina:brainstorm
 ```
 
@@ -122,16 +148,6 @@ claude plugins add /path/to/tina
 3. **Orchestrate** - `/tina:orchestrate docs/plans/my-design.md` runs everything else
 
 Or run steps manually if you prefer more control.
-
-## Installation
-
-```bash
-claude plugins add /path/to/tina
-```
-
-Requires:
-- Claude Code CLI
-- [claude-sneakpeek](https://github.com/mikekelly/claude-sneakpeek) (for automated orchestration mode)
 
 ## Credits
 
