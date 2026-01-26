@@ -229,6 +229,101 @@ Teammate.requestShutdown({
 })
 ```
 
+## Team Coordination Logic
+
+### Task Assignment Strategy
+
+Team-lead assigns tasks to workers explicitly:
+
+1. **Initial assignment:** Assign first N tasks to N workers
+2. **Ongoing assignment:** When worker completes task, assign next available
+3. **Priority:** Tasks with no blockedBy first, then by task ID order
+
+```
+# Check for idle workers
+idle_workers = workers where (no task assigned OR assigned task is complete)
+
+# Get available tasks
+available_tasks = tasks where (status = pending AND blockedBy is empty)
+
+# Assign tasks
+for worker in idle_workers:
+  if available_tasks not empty:
+    task = available_tasks.pop()
+    TaskUpdate(taskId=task.id, owner=worker.name, status="in_progress")
+```
+
+### Review Tracking
+
+Team-lead tracks review status per task:
+
+```json
+{
+  "task-1": {
+    "spec_review": "pending|passed|failed",
+    "quality_review": "pending|passed|failed",
+    "worker": "worker-1"
+  }
+}
+```
+
+Task only marked complete when BOTH reviews are "passed".
+
+### Message Handling
+
+Team-lead monitors for specific messages:
+
+**From workers:**
+- `"Idle, no tasks assigned"` → Assign next available task
+- `"Task X blocked on Y"` → Note dependency, assign different task
+
+**From reviewers:**
+- Reviewers communicate directly with workers
+- Team-lead monitors for escalation: `"Review loop exceeded 3 iterations"`
+
+### Infinite Loop Prevention
+
+If task bounces between worker and reviewer 3+ times:
+
+1. Team-lead intervenes
+2. Messages both parties: "Review loop detected. Explain core disagreement."
+3. If unresolvable: Mark task blocked, continue with other tasks
+4. Include blocked task in phase-reviewer context
+
+### Phase Reviewer Integration
+
+After all regular tasks complete:
+
+1. Get git range: first commit of phase → HEAD
+2. Dispatch phase-reviewer (NOT a teammate - use Task tool):
+
+```
+Task tool:
+  subagent_type: supersonic:phase-reviewer
+  prompt: |
+    Design doc: [path]
+    Phase completed: [N]
+    Git range: [base]..[head]
+    Blocked tasks (if any): [list with reasons]
+```
+
+3. If phase-reviewer finds issues:
+   - Create fix tasks from issues
+   - Assign to available workers
+   - Workers implement, notify reviewers
+   - Re-run phase-reviewer after fixes
+
+4. If phase-reviewer rejects 3 times:
+   - Mark phase blocked
+   - Include phase-reviewer feedback in blocked reason
+
+### Completion Criteria
+
+Phase execution complete when:
+- All tasks (including fix tasks) have status = complete
+- Phase-reviewer approved
+- No unresolved blocked tasks (or blocked tasks documented)
+
 ## Agents
 
 Use the Task tool with these agent types:
