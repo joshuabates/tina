@@ -444,7 +444,7 @@ SESSION_NAME="tina-phase-$PHASE_NUM"
 
 # Step 1: Start session with Claude
 tmux new-session -d -s "$SESSION_NAME" \
-  "cd $WORKTREE_PATH && claude --dangerously-skip-permissions"
+  "cd $WORKTREE_PATH && ~/.local/bin/claudesp --dangerously-skip-permissions --model claude-opus-4-5-20251101"
 
 # Step 2: Wait for Claude to initialize, then send the command
 sleep 3
@@ -563,7 +563,7 @@ echo "Attempting recovery..."
 
 # Step 1: Start session with Claude
 tmux new-session -d -s "$SESSION_NAME" \
-  "cd $WORKTREE_PATH && claude --dangerously-skip-permissions"
+  "cd $WORKTREE_PATH && ~/.local/bin/claudesp --dangerously-skip-permissions --model claude-opus-4-5-20251101"
 
 # Step 2: Wait for Claude to initialize, then send the rehydrate command
 sleep 3
