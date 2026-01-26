@@ -7,7 +7,7 @@ description: Use when you have a design document with multiple phases and want f
 
 ## Overview
 
-Automates the full development pipeline from design document to implementation. Spawns planner subagents for each phase, then team-leads in tmux sessions for execution. Monitors progress and handles checkpointing for context management.
+Automates the full development pipeline from design document to implementation. Spawns planner subagents for each phase, then team-leads in tmux sessions for execution. Monitors progress.
 
 **Core principle:** Supervisor maintains zero context about plan content - only tracks file paths, phase numbers, and process state. Fresh context per phase via tmux.
 
@@ -36,7 +36,7 @@ digraph orchestrate {
     "More phases?" [shape=diamond];
     "Spawn planner subagent" [shape=box];
     "Wait for plan path" [shape=box];
-    "Spawn team-lead in tmux" [shape=box];
+    "Spawn team-lead-init in tmux" [shape=box];
     "Monitor phase status" [shape=box];
     "Phase complete?" [shape=diamond];
     "Kill tmux session, next phase" [shape=box];
@@ -46,8 +46,8 @@ digraph orchestrate {
     "Initialize .tina/supervisor-state.json" -> "More phases?";
     "More phases?" -> "Spawn planner subagent" [label="yes"];
     "Spawn planner subagent" -> "Wait for plan path";
-    "Wait for plan path" -> "Spawn team-lead in tmux";
-    "Spawn team-lead in tmux" -> "Monitor phase status";
+    "Wait for plan path" -> "Spawn team-lead-init in tmux";
+    "Spawn team-lead-init in tmux" -> "Monitor phase status";
     "Monitor phase status" -> "Phase complete?";
     "Phase complete?" -> "Monitor phase status" [label="no"];
     "Phase complete?" -> "Kill tmux session, next phase" [label="yes"];
@@ -71,10 +71,18 @@ This phase implements basic orchestration without team-based execution:
 3. **For each phase:**
    - Spawn `supersonic:planner` subagent with design doc + phase number
    - Wait for plan path
-   - Spawn team-lead in tmux with plan path
+   - Spawn `supersonic:team-lead-init` in tmux with plan path
    - Monitor `.tina/phase-N/status.json` until complete
    - Kill tmux session, proceed to next phase
 4. **Completion** - Invoke `supersonic:finishing-a-development-branch`
+
+## Implementation Notes
+
+**Monitoring:** Polls `.tina/phase-N/status.json` every 10 seconds until phase status is "complete" or "blocked".
+
+**Tmux session naming:** Uses pattern `supersonic-phase-N` where N is the phase number.
+
+**Cleanup:** Supervisor state and phase directories persist in `.tina/` for resumption. Can be manually removed after successful completion if desired.
 
 ## State Files
 
@@ -107,6 +115,30 @@ If interrupted, re-run with same design doc path:
 - Detects active tmux sessions
 - Resumes from current phase
 
+## Integration
+
+**Spawns:**
+- `supersonic:planner` - Creates implementation plan for each phase
+- Team-lead in tmux - Executes phase via `team-lead-init`
+
+**Invokes after completion:**
+- `supersonic:finishing-a-development-branch` - Handles merge/PR workflow
+
+**State files:**
+- `.tina/supervisor-state.json` - Supervisor resumption state
+- `.tina/phase-N/status.json` - Per-phase execution status
+
+**Depends on existing:**
+- `supersonic:executing-plans` - Team-lead delegates to this for task execution
+- `supersonic:planner` - Creates phase plans from design doc
+- `supersonic:architect` - Design must be architect-reviewed before orchestration
+- `supersonic:phase-reviewer` - Called by executing-plans after tasks complete
+
+**Future integrations (Phase 2+):**
+- Teammate tool for team-based execution
+- Checkpoint/rehydrate for context management
+- Helper agent for blocked state diagnosis
+
 ## Error Handling
 
 **Design doc has no phases:**
@@ -117,8 +149,7 @@ If interrupted, re-run with same design doc path:
 
 **Team-lead tmux session dies:**
 - Check if phase was complete (proceed if yes)
-- Otherwise attempt resume via `/rehydrate`
-- If resume fails, escalate to user
+- Otherwise escalate to user
 
 ## Red Flags
 
