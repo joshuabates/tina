@@ -201,6 +201,52 @@ See: `skills/checkpoint/SKILL.md` and `skills/rehydrate/SKILL.md`
 - executing-plans handles this (spawns replacement)
 - If team-lead cannot recover: request shutdown, mark blocked
 
+## Escalation Protocol
+
+When team-lead cannot complete a phase, mark it blocked with detailed context:
+
+**When to escalate:**
+- Phase-reviewer rejects implementation 3 times
+- Worker/reviewer unresponsive after retry
+- Unrecoverable error during task execution
+- Cannot spawn team after retry
+
+**How to escalate:**
+
+1. **Update status.json with details:**
+
+```json
+{
+  "status": "blocked",
+  "started_at": "2026-01-26T10:00:00Z",
+  "blocked_at": "2026-01-26T10:30:00Z",
+  "reason": "Phase reviewer rejected 3 times",
+  "context": {
+    "last_rejection": "Test coverage below 80%",
+    "attempts": 3,
+    "tasks_completed": 5,
+    "tasks_remaining": 2
+  }
+}
+```
+
+2. **Ensure handoff.md is current:**
+
+Even when blocked, write handoff with current state so helper agent has context.
+
+3. **Output clear message:**
+
+```
+PHASE BLOCKED: <reason>
+See .tina/phase-N/status.json for details
+Handoff written to .tina/phase-N/handoff.md
+```
+
+**What NOT to do:**
+- Don't silently fail (always update status)
+- Don't retry endlessly (max 3 attempts then escalate)
+- Don't omit context (helper agent needs it)
+
 ## Integration
 
 **Invoked by:**
