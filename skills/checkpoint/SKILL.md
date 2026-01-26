@@ -185,7 +185,7 @@ Contains everything needed to resume:
 - `.tina/checkpoint-needed` - Signal file (deleted after checkpoint)
 
 **Paired with:**
-- `tina-resume` skill - Reads handoff.md to restore context
+- `supersonic:rehydrate` - Reads handoff.md to restore context
 
 ## Red Flags
 
