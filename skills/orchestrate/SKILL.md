@@ -303,8 +303,12 @@ If interrupted, re-run with same design doc path:
 - `supersonic:architect` - Design must be architect-reviewed before orchestration
 - `supersonic:phase-reviewer` - Called by executing-plans after tasks complete
 
-**Future integrations (Phase 2+):**
-- Teammate tool for team-based execution
+**Phase 2 integrations (now available):**
+- Team-based execution via Teammate tool (workers + reviewers)
+- Message-based coordination between teammates
+- Review tracking and loop prevention
+
+**Future integrations (Phase 3+):**
 - Checkpoint/rehydrate for context management
 - Helper agent for blocked state diagnosis
 
