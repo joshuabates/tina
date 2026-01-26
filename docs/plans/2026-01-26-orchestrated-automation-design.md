@@ -492,3 +492,11 @@ Environment variables for tuning:
 - Supervisor polling `.tina/` files instead of reading content
 - Team-based execution via Teammate tool (first use in this codebase)
 - Phase subdirectories in `.tina/phase-N/` for isolation
+
+## Implementation Status
+
+- [x] Phase 1: Foundation
+- [x] Phase 2: Team-Based Execution
+- [ ] Phase 3: Checkpoint/Rehydrate
+- [ ] Phase 4: Multi-Phase & Error Handling
+- [ ] Phase 5: Resumption & Polish
