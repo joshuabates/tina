@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="assets/tina.png" alt="Tina" width="200">
-</p>
+![Tina](assets/tina.png)
 
 # TINA
 
