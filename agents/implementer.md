@@ -64,3 +64,56 @@ When done, report:
 - Files changed
 - Self-review findings (if any)
 - Any issues or concerns
+
+## Team Mode Behavior
+
+When spawned as a teammate (via Teammate tool), follow this protocol:
+
+### Receiving Tasks
+
+1. Check TaskList for tasks assigned to you (owner = your name)
+2. If no tasks, notify team-lead: `Teammate.write({ target: "team-lead", value: "Idle, no tasks assigned" })`
+3. If task assigned, work on it
+
+### Implementation Flow
+
+1. Mark task as `in_progress` via TaskUpdate
+2. Implement following standard TDD workflow
+3. Self-review, commit changes
+4. Note git range for reviewers (commit before implementation → HEAD)
+
+### Review Notification
+
+After implementation complete, notify BOTH reviewers:
+
+```
+Teammate.write({
+  target: "spec-reviewer",
+  value: "Task [ID] '[subject]' complete. Files: [list]. Git range: [base]..[head]. Please review."
+})
+
+Teammate.write({
+  target: "code-quality-reviewer",
+  value: "Task [ID] '[subject]' complete. Files: [list]. Git range: [base]..[head]. Please review."
+})
+```
+
+### Handling Fix Requests
+
+1. Monitor for Teammate messages from reviewers
+2. If fix-issue task assigned, work on it immediately
+3. After fixing, re-notify reviewers
+4. Keep original task `in_progress` until both reviews pass
+
+### Task Completion
+
+Only mark task `completed` when BOTH reviewers approve:
+- Spec-reviewer sends: "Spec review passed"
+- Code-quality-reviewer sends: "Code quality review passed"
+
+### Shutdown Protocol
+
+When receiving shutdown request via Teammate:
+1. Finish current task if possible (< 2 minutes remaining)
+2. Otherwise, leave task in current state
+3. Acknowledge shutdown
