@@ -38,6 +38,11 @@ digraph process {
 
     "Read plan, extract all tasks with full text, note context, create TodoWrite" [shape=box];
     "More tasks remain?" [shape=diamond];
+    "Dispatch phase-reviewer (supersonic:phase-reviewer)" [shape=box];
+    "Phase reviewer approves?" [shape=diamond];
+    "Fix phase issues" [shape=box];
+    "More phases?" [shape=diamond];
+    "Dispatch planner for next phase" [shape=box];
     "Dispatch final code reviewer subagent for entire implementation" [shape=box];
     "Use superpowers:finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
@@ -57,7 +62,14 @@ digraph process {
     "Code quality reviewer subagent approves?" -> "Mark task complete in TodoWrite" [label="yes"];
     "Mark task complete in TodoWrite" -> "More tasks remain?";
     "More tasks remain?" -> "Dispatch implementer subagent (supersonic:implementer)" [label="yes"];
-    "More tasks remain?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
+    "More tasks remain?" -> "Dispatch phase-reviewer (supersonic:phase-reviewer)" [label="no"];
+    "Dispatch phase-reviewer (supersonic:phase-reviewer)" -> "Phase reviewer approves?";
+    "Phase reviewer approves?" -> "Fix phase issues" [label="no"];
+    "Fix phase issues" -> "Dispatch phase-reviewer (supersonic:phase-reviewer)";
+    "Phase reviewer approves?" -> "More phases?" [label="yes"];
+    "More phases?" -> "Dispatch planner for next phase" [label="yes"];
+    "More phases?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
+    "Dispatch planner for next phase" -> "Read plan, extract all tasks with full text, note context, create TodoWrite";
     "Dispatch final code reviewer subagent for entire implementation" -> "Use superpowers:finishing-a-development-branch";
 }
 ```
@@ -68,6 +80,7 @@ Use the Task tool with these agent types:
 - `supersonic:implementer` - Implements a single task
 - `supersonic:spec-reviewer` - Verifies implementation matches spec
 - `supersonic:code-quality-reviewer` - Reviews code quality after spec compliance passes
+- `supersonic:phase-reviewer` - Verifies phase follows architecture after all tasks complete
 
 ## Example Workflow
 
@@ -139,11 +152,40 @@ Code reviewer: ✅ Approved
 ...
 
 [After all tasks]
-[Dispatch final code-reviewer]
+[Dispatch phase-reviewer]
+Phase reviewer:
+  - Pattern conformance: ✅ All patterns followed
+  - Integration: ✅ Data flow verified
+  - Reuse: ✅ Existing utilities used
+  - Status: Approved
+
+[More phases? No - dispatch final code-reviewer]
 Final reviewer: All requirements met, ready to merge
 
 Done!
 ```
+
+## Phase Review
+
+After all tasks in a phase complete, dispatch the phase-reviewer:
+
+```
+Task tool:
+  subagent_type: supersonic:phase-reviewer
+  prompt: |
+    Design doc: docs/plans/2026-01-26-feature-design.md
+    Phase completed: 1
+    Git range: abc1234..def5678
+```
+
+Phase reviewer checks:
+1. **Pattern conformance** - Code follows Architectural Context patterns
+2. **Integration** - Data flow traced from entry to output
+3. **Reuse** - Existing utilities used, no duplication
+
+**If issues found:** Dispatch implementer to fix, then re-dispatch phase-reviewer.
+
+**If approved:** Check if more phases remain. If yes, dispatch planner for next phase.
 
 ## Advantages
 
@@ -176,7 +218,7 @@ Done!
 ## Red Flags
 
 **Never:**
-- Skip reviews (spec compliance OR code quality)
+- Skip reviews (spec compliance OR code quality OR phase review)
 - Proceed with unfixed issues
 - Dispatch multiple implementation subagents in parallel (conflicts)
 - Make subagent read plan file (provide full text instead)
@@ -187,6 +229,8 @@ Done!
 - Let implementer self-review replace actual review (both are needed)
 - **Start code quality review before spec compliance is ✅** (wrong order)
 - Move to next task while either review has open issues
+- **Skip phase review after all tasks complete**
+- **Proceed to next phase with unfixed phase-reviewer issues**
 
 **If subagent asks questions:**
 - Answer clearly and completely
