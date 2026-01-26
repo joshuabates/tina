@@ -180,3 +180,27 @@ While monitoring runs in background, user can:
 - Automatic progression through phases without manual intervention
 - Context management handled proactively
 - Orchestrator stays lean by delegating heavy work to subagents
+
+## Architectural Context
+
+**Patterns to follow:**
+- Subagent spawning: `agents/planner.md` - existing pattern for delegating work to subagents
+- Status file structure: `skills/team-lead-init/SKILL.md:47-70` - status.json format
+- Context metrics: `skills/orchestrate/SKILL.md:220-240` - statusline hook writes context-metrics.json
+
+**Code to reuse:**
+- `skills/orchestrate/SKILL.md:426-435` - existing context threshold check logic (change to delegate to monitor)
+- `skills/checkpoint/SKILL.md` - checkpoint flow when threshold exceeded
+- `skills/rehydrate/SKILL.md` - rehydrate flow after context reset
+
+**Integration points:**
+- Entry: `skills/orchestrate/SKILL.md` Step 3d-3e (replace inline monitoring with background agent)
+- Connects to: team-lead-init (via tmux), checkpoint/rehydrate (via signals)
+
+**Anti-patterns to avoid:**
+- Don't use inline bash sleep loops - see `skills/orchestrate/SKILL.md:424` (current blocking approach)
+- Don't have orchestrator write status.json - that's team-lead's responsibility
+
+**New agent needed:**
+- Create `agents/monitor.md` - haiku agent for phase monitoring
+- Prompt: poll status.json + context-metrics.json, output signals
