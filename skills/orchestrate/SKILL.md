@@ -99,6 +99,84 @@ if [ "$TOTAL_PHASES" -eq 0 ]; then
 fi
 ```
 
+### Step 1b: Create Worktree
+
+Create an isolated workspace so statusline configuration and .tina state are contained within the worktree.
+
+**1. Determine worktree directory:**
+
+```bash
+# Check in priority order
+if [ -d ".worktrees" ]; then
+  WORKTREE_DIR=".worktrees"
+elif [ -d "worktrees" ]; then
+  WORKTREE_DIR="worktrees"
+else
+  WORKTREE_DIR=".worktrees"
+  mkdir -p "$WORKTREE_DIR"
+fi
+```
+
+**2. Verify directory is gitignored:**
+
+```bash
+if ! git check-ignore -q "$WORKTREE_DIR" 2>/dev/null; then
+  echo "$WORKTREE_DIR" >> .gitignore
+  git add .gitignore
+  git commit -m "chore: add $WORKTREE_DIR to gitignore"
+fi
+```
+
+**3. Extract feature name from design doc:**
+
+```bash
+# Extract feature name from design doc path
+# e.g., docs/plans/2026-01-26-auth-redesign-design.md -> auth-redesign
+FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
+BRANCH_NAME="tina/$FEATURE_NAME"
+```
+
+**4. Create branch and worktree:**
+
+```bash
+WORKTREE_PATH="$WORKTREE_DIR/$FEATURE_NAME"
+git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME"
+```
+
+**5. Store paths for subsequent steps:**
+
+```bash
+# These variables are used by all subsequent steps
+echo "WORKTREE_PATH=$WORKTREE_PATH"
+echo "BRANCH_NAME=$BRANCH_NAME"
+```
+
+**6. Run project setup in worktree:**
+
+```bash
+cd "$WORKTREE_PATH"
+
+# Auto-detect and run appropriate setup
+if [ -f package.json ]; then npm install; fi
+if [ -f Cargo.toml ]; then cargo build; fi
+if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+if [ -f pyproject.toml ]; then poetry install; fi
+if [ -f go.mod ]; then go mod download; fi
+```
+
+**7. Verify clean baseline:**
+
+```bash
+# Run tests to ensure worktree starts clean
+# Use project-appropriate command
+npm test || cargo test || pytest || go test ./...
+
+# If tests fail: report and ask whether to proceed
+# If tests pass: continue to orchestration
+```
+
+**Important:** All subsequent steps (Step 2 onwards) execute within this worktree. The `.tina/` directory created in Step 2 will be inside the worktree, keeping orchestration state isolated from the main workspace.
+
 ### Step 2: Initialize or Resume State
 
 **If `.tina/supervisor-state.json` exists:** Resume from saved state
@@ -239,7 +317,7 @@ EOF
 ```bash
 SESSION_NAME="tina-phase-$PHASE_NUM"
 tmux new-session -d -s "$SESSION_NAME" \
-  "cd $(pwd) && claude --prompt '/team-lead-init $PLAN_PATH'"
+  "cd $WORKTREE_PATH && claude --prompt '/team-lead-init $PLAN_PATH'"
 
 # Update active session in state
 tmp_file=$(mktemp)
@@ -268,7 +346,7 @@ while true; do
     # Attempt recovery via rehydrate
     echo "Attempting recovery..."
     tmux new-session -d -s "$SESSION_NAME" \
-      "cd $(pwd) && claude --prompt '/rehydrate'"
+      "cd $WORKTREE_PATH && claude --prompt '/rehydrate'"
 
     # Track recovery attempt
     RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .tina/supervisor-state.json)
