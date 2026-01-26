@@ -173,11 +173,22 @@ git commit -m "feat: add TINA state management utilities"
 **Files:**
 - Create: `skills/orchestrate/SKILL.md`
 
-**Step 1: Write the orchestrate skill skeleton**
+**Step 1: Use writing-skills to create the orchestrate skill**
 
-Create the skill following the existing SKILL.md pattern with YAML frontmatter and overview.
+Invoke the `supersonic:writing-skills` skill to create the orchestrate skill following TDD approach:
 
-```markdown
+```
+Task tool:
+  subagent_type: writing-skills
+  prompt: |
+    Create a new skill: orchestrate
+
+    Purpose: Automates the full development pipeline from design document to implementation. Spawns planner subagents for each phase, then team-leads in tmux sessions for execution.
+
+    The skill should include:
+```
+
+The skill content should be:
 ---
 name: orchestrate
 description: Use when you have a design document with multiple phases and want fully automated execution from design to implementation
@@ -333,9 +344,22 @@ git commit -m "feat: add orchestrate skill skeleton"
 **Files:**
 - Create: `skills/team-lead-init/SKILL.md`
 
-**Step 1: Write the team-lead-init skill**
+**Step 1: Use writing-skills to create the team-lead-init skill**
 
-This skill runs when a team-lead tmux session starts. For Phase 1, it delegates to existing Task-based `executing-plans`.
+Invoke the `supersonic:writing-skills` skill to create the team-lead-init skill following TDD approach:
+
+```
+Task tool:
+  subagent_type: writing-skills
+  prompt: |
+    Create a new skill: team-lead-init
+
+    Purpose: Initialize a team-lead session for phase execution. This skill runs when a team-lead tmux session starts. For Phase 1, it delegates to existing Task-based executing-plans.
+
+    The skill should include:
+```
+
+The skill content should be:
 
 ```markdown
 ---

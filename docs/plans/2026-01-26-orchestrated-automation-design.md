@@ -278,6 +278,8 @@ docs/plans/
 
 ### New Skills
 
+**IMPORTANT:** Use `supersonic:writing-skills` skill for creating all new skills. Follow TDD approach: baseline test → write skill → verify compliance.
+
 **1. `skills/orchestrate`** - Supervisor skill
 - Invoked via `/supersonic:orchestrate <design-doc-path>`
 - Implements supervisor behavior
