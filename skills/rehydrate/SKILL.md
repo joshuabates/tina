@@ -111,28 +111,23 @@ Read `.tina/phase-N/handoff.md` and extract:
 
 Recreate team with exact same composition:
 
-```
-Teammate.spawnTeam({
-  name: "phase-N-execution"
-})
+**Create team:**
+Use Teammate tool with:
+- operation: "spawnTeam"
+- team_name: "phase-N-execution" (use actual phase number from handoff)
+- agent_type: "team-lead"
+- description: "Phase N execution team (resumed from checkpoint)"
 
-# Spawn each team member from handoff
-for member in handoff.team:
-  Teammate.spawn({
-    team: "phase-N-execution",
-    name: member.name,
-    agent: member.agent,
-    context: "Resumed from checkpoint. You are {name} in phase {N}."
-  })
-```
+**Spawn each team member:**
+For each member listed in the handoff's team section:
 
-**Spawn verification:** After spawning, verify all teammates respond:
+Use Task tool to spawn:
+- subagent_type: (e.g., "tina:implementer", "tina:spec-reviewer", "tina:code-quality-reviewer")
+- team_name: "phase-N-execution"
+- name: (member name from handoff, e.g., "worker-1", "spec-reviewer")
+- prompt: "Resumed from checkpoint. You are {name} in phase {N} execution team. Continue work on assigned tasks."
 
-```
-for member in handoff.team:
-  Teammate.ping({ target: member.name })
-  # If no response within 5s, retry spawn once
-```
+**Spawn verification:** After spawning all members, verify they've joined by checking the team config file at `~/.claude/teams/phase-N-execution/config.json`. All spawned members should appear in the members list.
 
 ### Step 4: Recreate Task List
 
@@ -232,12 +227,11 @@ Supervisor watches for this signal to confirm rehydration succeeded.
 - Manual user invocation via `/rehydrate`
 
 **Uses:**
-- `Teammate.spawnTeam` - Create team container
-- `Teammate.spawn` - Spawn individual team members
-- `Teammate.ping` - Verify teammate alive
-- `TaskCreate` - Recreate tasks from handoff
-- `TaskUpdate` - Restore task status/owner
-- `tina:executing-plans` - Resume execution
+- Teammate tool with operation "spawnTeam" - Create team container
+- Task tool with team_name parameter - Spawn individual team members
+- TaskCreate tool - Recreate tasks from handoff
+- TaskUpdate tool - Restore task status/owner
+- tina:executing-plans skill - Resume execution
 
 **State files:**
 - `.tina/phase-N/handoff.md` - Input: checkpoint state

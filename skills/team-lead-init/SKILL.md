@@ -101,47 +101,34 @@ Team-lead spawns the execution team before invoking executing-plans:
 
 **Step 1: Create team**
 
-```
-Teammate.spawnTeam({
-  name: "phase-N-execution"
-})
-```
+Use the Teammate tool with operation "spawnTeam":
+- team_name: "phase-N-execution" (replace N with actual phase number)
+- agent_type: "team-lead"
+- description: "Phase N execution team"
 
 **Step 2: Spawn workers (2 by default)**
 
-```
-Teammate.spawn({
-  team: "phase-N-execution",
-  name: "worker-1",
-  agent: "tina:implementer",
-  context: "You are worker-1 in phase N execution team."
-})
+Use the Task tool to spawn worker agents:
+- subagent_type: "tina:implementer"
+- team_name: "phase-N-execution"
+- name: "worker-1"
+- prompt: "You are worker-1 in phase N execution team. Execute assigned tasks from the plan."
 
-Teammate.spawn({
-  team: "phase-N-execution",
-  name: "worker-2",
-  agent: "tina:implementer",
-  context: "You are worker-2 in phase N execution team."
-})
-```
+Repeat for worker-2.
 
 **Step 3: Spawn dedicated reviewers**
 
-```
-Teammate.spawn({
-  team: "phase-N-execution",
-  name: "spec-reviewer",
-  agent: "tina:spec-reviewer",
-  context: "You are the spec compliance reviewer for phase N."
-})
+Use the Task tool to spawn reviewer agents:
+- subagent_type: "tina:spec-reviewer"
+- team_name: "phase-N-execution"
+- name: "spec-reviewer"
+- prompt: "You are the spec compliance reviewer for phase N. Review implementations against requirements."
 
-Teammate.spawn({
-  team: "phase-N-execution",
-  name: "code-quality-reviewer",
-  agent: "tina:code-quality-reviewer",
-  context: "You are the code quality reviewer for phase N."
-})
-```
+Use the Task tool again for code-quality-reviewer:
+- subagent_type: "tina:code-quality-reviewer"
+- team_name: "phase-N-execution"
+- name: "code-quality-reviewer"
+- prompt: "You are the code quality reviewer for phase N. Review code architecture and patterns."
 
 **Step 4: Invoke executing-plans with team flag**
 
@@ -153,13 +140,12 @@ Teammate.spawn({
 
 After executing-plans completes (all tasks done, phase-reviewer approved):
 
-```
-Teammate.requestShutdown({
-  team: "phase-N-execution"
-})
-```
+Use the Teammate tool with operation "requestShutdown" for each active teammate:
+- For each teammate (worker-1, worker-2, spec-reviewer, code-quality-reviewer)
+- Use target_agent_id with their name
+- reason: "Phase execution complete"
 
-Wait for all teammates to acknowledge, then update status to complete.
+Wait for all teammates to acknowledge shutdown (they will send shutdown approval messages), then update status to complete.
 
 ## Checkpoint Protocol
 

@@ -95,7 +95,7 @@ This phase implements basic orchestration without team-based execution:
 
 ## Implementation Details
 
-**Note:** The variables `$DESIGN_DOC`, `$PHASE_NUM`, and `$PLAN_PATH` are placeholders representing values from the execution context. The tmux invocation `claude --prompt '/team-lead-init $PLAN_PATH'` starts a new Claude CLI session that will execute the team-lead-init skill with the provided plan path argument.
+**Note:** The variables `$DESIGN_DOC`, `$PHASE_NUM`, and `$PLAN_PATH` are placeholders representing values from the execution context. Tmux sessions are created in two steps: first starting a Claude CLI session with `tmux new-session`, then waiting 3 seconds for Claude to initialize before sending the skill invocation command via `tmux send-keys`. This avoids shell escaping issues when passing complex arguments inline and ensures Claude is ready to receive input.
 
 ### Step 1: Parse Design Doc
 
@@ -402,8 +402,14 @@ EOF
 
 ```bash
 SESSION_NAME="tina-phase-$PHASE_NUM"
+
+# Step 1: Start session with Claude
 tmux new-session -d -s "$SESSION_NAME" \
-  "cd $WORKTREE_PATH && claude --prompt '/team-lead-init $PLAN_PATH'"
+  "cd $WORKTREE_PATH && claude --dangerously-skip-permissions"
+
+# Step 2: Wait for Claude to initialize, then send the command
+sleep 3
+tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" Enter
 
 # Update active session in state
 tmp_file=$(mktemp)
@@ -444,8 +450,14 @@ while true; do
 
     # Attempt recovery via rehydrate
     echo "Attempting recovery..."
+
+    # Step 1: Start session with Claude
     tmux new-session -d -s "$SESSION_NAME" \
-      "cd $WORKTREE_PATH && claude --prompt '/rehydrate'"
+      "cd $WORKTREE_PATH && claude --dangerously-skip-permissions"
+
+    # Step 2: Wait for Claude to initialize, then send the rehydrate command
+    sleep 3
+    tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
 
     # Track recovery attempt
     RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .tina/supervisor-state.json)
@@ -759,6 +771,8 @@ tmux kill-session -t <name>
 
 **Send command to session:**
 ```bash
+# Wait for session to initialize before sending keys
+sleep 3
 tmux send-keys -t <name> "<command>" Enter
 ```
 

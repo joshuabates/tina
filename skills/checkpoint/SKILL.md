@@ -54,43 +54,24 @@ digraph checkpoint {
 
 ### Step 1: Request Team Shutdown
 
-```
-Teammate.requestShutdown({
-  team: "phase-N-execution"
-})
-```
+For each active teammate (check team config at ~/.claude/teams/phase-N-execution/config.json to get member names):
+
+Use the Teammate tool with:
+- operation: "requestShutdown"
+- target_agent_id: (teammate name, e.g., "worker-1", "worker-2", "spec-reviewer", "code-quality-reviewer")
+- reason: "Checkpoint triggered - context management"
 
 This signals all teammates to finish current work and exit gracefully.
 
 ### Step 2: Wait for Teammates
 
-Poll teammate status for up to 30 seconds:
+Wait for shutdown approval messages from teammates (up to 30 seconds total).
 
-```bash
-TIMEOUT=30
-ELAPSED=0
-while [ $ELAPSED -lt $TIMEOUT ]; do
-  ACTIVE=$(Teammate.getActiveCount({ team: "phase-N-execution" }))
-  if [ "$ACTIVE" -eq 0 ]; then
-    break
-  fi
-  sleep 2
-  ELAPSED=$((ELAPSED + 2))
-done
-
-# Force terminate any remaining
-if [ "$ACTIVE" -gt 0 ]; then
-  Teammate.forceTerminate({ team: "phase-N-execution" })
-fi
-```
+If any teammates don't respond within 30 seconds, they will time out and the checkpoint can proceed. The checkpoint skill does not have a forceTerminate operation - teammates either approve or timeout.
 
 ### Step 3: Capture Task State
 
-Call `TaskList` to get current task states:
-
-```
-tasks = TaskList()
-```
+Use the TaskList tool to get current task states
 
 Record for each task:
 - ID, subject, status
@@ -176,9 +157,8 @@ Contains everything needed to resume:
 - Manual user invocation via `/checkpoint`
 
 **Uses:**
-- `Teammate.requestShutdown` - Graceful team shutdown
-- `Teammate.forceTerminate` - Timeout fallback
-- `TaskList` - Capture current task states
+- Teammate tool with operation "requestShutdown" - Graceful team shutdown
+- TaskList tool - Capture current task states
 
 **State files:**
 - `.tina/phase-N/handoff.md` - Handoff state for resumption
