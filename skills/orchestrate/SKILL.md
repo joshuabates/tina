@@ -746,6 +746,8 @@ tmux send-keys -t <name> "<command>" Enter
 ```json
 {
   "design_doc_path": "docs/plans/2026-01-26-feature-design.md",
+  "worktree_path": ".worktrees/feature",
+  "branch_name": "tina/feature",
   "total_phases": 3,
   "current_phase": 2,
   "active_tmux_session": "tina-phase-2",
@@ -765,6 +767,8 @@ tmux send-keys -t <name> "<command>" Enter
 
 **Field descriptions:**
 - `design_doc_path`: Original design document that started orchestration
+- `worktree_path`: Path to the worktree for this orchestration run
+- `branch_name`: Git branch created for this run
 - `total_phases`: Number of phases parsed from design doc
 - `current_phase`: Last phase that was started (0 = not started)
 - `active_tmux_session`: Currently running tmux session name (null if none)
@@ -781,6 +785,18 @@ tmux send-keys -t <name> "<command>" Enter
   "started_at": "2026-01-26T10:00:00Z"
 }
 ```
+
+**Context metrics:** `.tina/context-metrics.json` (in worktree)
+```json
+{
+  "used_pct": 45.2,
+  "tokens": 90400,
+  "max": 200000,
+  "timestamp": "2026-01-26T10:15:00Z"
+}
+```
+
+Written by statusline script on each status update. Supervisor reads this to decide checkpoints.
 
 ## Resumption
 
