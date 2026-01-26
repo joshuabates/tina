@@ -518,6 +518,23 @@ Phase reviewer checks:
 - Dispatch fix subagent with specific instructions
 - Don't try to fix manually (context pollution)
 
+**Team Mode Specific - Never:**
+- Spawn multiple teams for the same phase (one team per phase)
+- Let workers assign their own tasks (team-lead assigns explicitly)
+- Skip reviewer notification (both reviewers must be notified)
+- Mark task complete before both reviews pass
+- Let review loops continue indefinitely (cap at 3)
+- Use Task tool for workers/reviewers in team mode (use Teammate tool)
+- Forget to request team shutdown after phase completes
+
+**Team Mode Specific - Always:**
+- Create team BEFORE invoking executing-plans
+- Track review status for each task
+- Wait for BOTH spec and quality reviews
+- Intervene in review loops after 3 iterations
+- Shut down team cleanly before marking phase complete
+- Include blocked task context in phase-reviewer prompt
+
 ## Integration
 
 **Required workflow skills:**
