@@ -118,7 +118,8 @@ else
   "total_phases": $TOTAL_PHASES,
   "current_phase": 0,
   "active_tmux_session": null,
-  "plan_paths": {}
+  "plan_paths": {},
+  "recovery_attempts": {}
 }
 EOF
   CURRENT_PHASE=0
@@ -197,8 +198,8 @@ while true; do
     "blocked")
       REASON=$(jq -r '.reason' ".tina/phase-$PHASE_NUM/status.json")
       echo "Phase $PHASE_NUM blocked: $REASON"
-      # Escalate to user
-      exit 1
+      # Spawn helper agent for diagnosis
+      # (See "Blocked State Handling" section below)
       ;;
     *)
       sleep 10
@@ -290,6 +291,97 @@ rm ".tina/checkpoint-needed"
 **5. Continue monitoring:**
 
 After rehydrate, return to normal phase monitoring loop (Step 3e).
+
+### Blocked State Handling
+
+When a phase enters blocked state, supervisor spawns a helper agent for diagnosis before escalating:
+
+**1. Spawn helper agent:**
+
+```bash
+# Use Task tool to spawn helper agent
+# subagent_type: "supersonic:helper"
+# prompt: "Diagnose blocked phase: $PHASE_NUM\nReason: $REASON\nPhase dir: .tina/phase-$PHASE_NUM"
+```
+
+**2. Wait for diagnostic file:**
+
+Poll for helper's diagnostic output (max 2 minutes):
+
+```bash
+DIAGNOSTIC_FILE=".tina/phase-$PHASE_NUM/diagnostic.json"
+TIMEOUT=120
+START=$(date +%s)
+
+while true; do
+  if [ -f "$DIAGNOSTIC_FILE" ]; then
+    echo "Diagnostic received"
+    break
+  fi
+
+  ELAPSED=$(($(date +%s) - START))
+  if [ "$ELAPSED" -gt "$TIMEOUT" ]; then
+    echo "Diagnostic timeout - escalating to user"
+    exit 1
+  fi
+
+  sleep 5
+done
+```
+
+**3. Read recommendation:**
+
+```bash
+RECOMMENDATION=$(jq -r '.recommendation' "$DIAGNOSTIC_FILE")
+RECOVERY_CMD=$(jq -r '.recovery_command // empty' "$DIAGNOSTIC_FILE")
+```
+
+Helper writes one of:
+- `RECOVERABLE` - Issue can be fixed automatically (includes `recovery_command`)
+- `ESCALATE` - Requires human intervention
+
+**4. Handle recommendation:**
+
+```bash
+case "$RECOMMENDATION" in
+  "RECOVERABLE")
+    # Check if we've already attempted recovery for this phase
+    ALREADY_TRIED=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // false" .tina/supervisor-state.json)
+
+    if [ "$ALREADY_TRIED" = "true" ]; then
+      echo "Recovery already attempted for phase $PHASE_NUM - escalating"
+      exit 1
+    fi
+
+    # Mark recovery attempt
+    tmp_file=$(mktemp)
+    jq ".recovery_attempts[\"$PHASE_NUM\"] = true" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+
+    echo "Attempting recovery via /rehydrate"
+    tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
+
+    # Reset phase status to allow re-monitoring
+    cat > ".tina/phase-$PHASE_NUM/status.json" << EOF
+{
+  "status": "executing",
+  "recovered_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
+
+    # Continue monitoring (return to loop)
+    ;;
+
+  *)
+    # ESCALATE or unknown - requires human
+    echo "Phase $PHASE_NUM requires human intervention"
+    echo "Reason: $REASON"
+    echo "Diagnostic: $(cat $DIAGNOSTIC_FILE)"
+    exit 1
+    ;;
+esac
+```
+
+**Note:** Recovery is only attempted once per phase. If the same phase blocks again after recovery, it immediately escalates to the user.
 
 ### Step 4: Completion
 
