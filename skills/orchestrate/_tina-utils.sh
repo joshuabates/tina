@@ -99,7 +99,7 @@ tina_set_phase_status() {
        '.status = $s | .updated_at = $ts | .reason = $r' "$status_file" > "$tmp_file"
   else
     jq --arg s "$new_status" --arg ts "$timestamp" \
-       '.status = $s | .updated_at = $ts' "$status_file" > "$tmp_file"
+       '.status = $s | .updated_at = $ts | del(.reason)' "$status_file" > "$tmp_file"
   fi
   mv "$tmp_file" "$status_file"
 }
