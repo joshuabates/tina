@@ -220,6 +220,77 @@ tmp_file=$(mktemp)
 jq ".active_tmux_session = null" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
 ```
 
+### Checkpoint Handling
+
+Supervisor monitors for checkpoint signal and coordinates context reset:
+
+**1. Detect checkpoint needed:**
+
+Within the monitor loop (Step 3e), check for signal file:
+
+```bash
+# In monitor loop, check for signal file
+if [ -f ".tina/checkpoint-needed" ]; then
+  echo "Checkpoint signal detected"
+  # Proceed to checkpoint handling
+fi
+```
+
+**2. Send checkpoint command:**
+
+```bash
+tmux send-keys -t "$SESSION_NAME" "/checkpoint" Enter
+```
+
+**3. Wait for handoff:**
+
+Poll for handoff file update (max 5 minutes):
+
+```bash
+HANDOFF_FILE=".tina/phase-$PHASE_NUM/handoff.md"
+TIMEOUT=300
+START=$(date +%s)
+
+while true; do
+  if [ -f "$HANDOFF_FILE" ]; then
+    # Check if modified after checkpoint signal
+    HANDOFF_TIME=$(stat -f %m "$HANDOFF_FILE" 2>/dev/null || stat -c %Y "$HANDOFF_FILE")
+    SIGNAL_TIME=$(stat -f %m ".tina/checkpoint-needed" 2>/dev/null || stat -c %Y ".tina/checkpoint-needed")
+    if [ "$HANDOFF_TIME" -gt "$SIGNAL_TIME" ]; then
+      echo "Handoff written"
+      break
+    fi
+  fi
+
+  ELAPSED=$(($(date +%s) - START))
+  if [ "$ELAPSED" -gt "$TIMEOUT" ]; then
+    echo "Checkpoint timeout - escalating"
+    # Mark phase blocked, escalate to user
+    exit 1
+  fi
+
+  sleep 5
+done
+```
+
+**4. Send clear and rehydrate:**
+
+```bash
+# Clear context
+tmux send-keys -t "$SESSION_NAME" "/clear" Enter
+sleep 2
+
+# Rehydrate from handoff
+tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
+
+# Remove checkpoint signal
+rm ".tina/checkpoint-needed"
+```
+
+**5. Continue monitoring:**
+
+After rehydrate, return to normal phase monitoring loop (Step 3e).
+
 ### Step 4: Completion
 
 After all phases complete, invoke the finishing skill:
@@ -296,6 +367,14 @@ If interrupted, re-run with same design doc path:
 **State files:**
 - `.tina/supervisor-state.json` - Supervisor resumption state
 - `.tina/phase-N/status.json` - Per-phase execution status
+- `.tina/phase-N/handoff.md` - Context handoff document for checkpoint/rehydrate
+
+**Checkpoint cycle:**
+- Statusline script creates `.tina/checkpoint-needed` when context > threshold
+- Supervisor detects signal, sends `/checkpoint` to team-lead
+- Team-lead runs checkpoint skill, writes handoff, outputs "CHECKPOINT COMPLETE"
+- Supervisor sends `/clear`, then `/rehydrate`
+- Team-lead runs rehydrate skill, restores state, resumes execution
 
 **Depends on existing:**
 - `supersonic:executing-plans` - Team-lead delegates to this for task execution
@@ -308,8 +387,11 @@ If interrupted, re-run with same design doc path:
 - Message-based coordination between teammates
 - Review tracking and loop prevention
 
-**Future integrations (Phase 3+):**
-- Checkpoint/rehydrate for context management
+**Phase 3 integrations (now available):**
+- Checkpoint/rehydrate for context management via `.tina/checkpoint-needed` signal
+- Statusline context monitoring with automatic checkpoint triggering
+
+**Future integrations (Phase 4+):**
 - Helper agent for blocked state diagnosis
 
 ## Error Handling
