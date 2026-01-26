@@ -57,7 +57,7 @@ Orchestrator
 
 **settings.local.json for isolation.** Each worktree has its own statusline config. Doesn't affect user's main project or other sessions.
 
-**Worktrees required.** Orchestrated automation always uses git worktrees. This provides the isolation needed for per-session statusline config.
+**One worktree per plan.** Orchestrator creates a single worktree at the start. All phases execute within that worktree. This provides isolation for statusline config without the overhead of per-phase worktrees.
 
 ## Implementation
 
@@ -149,3 +149,29 @@ No migration needed. This is additive:
 2. Context metrics written to .tina/context-metrics.json during execution
 3. Checkpoint triggered automatically when threshold exceeded
 4. Full checkpoint/rehydrate cycle works without user intervention
+
+## Architectural Context
+
+**Patterns to follow:**
+- Worktree creation: `skills/using-git-worktrees/SKILL.md:75-98` (directory selection, gitignore verification)
+- Monitor loop structure: `skills/orchestrate/SKILL.md:249-314` (polling pattern, status checks)
+- Checkpoint signal handling: `skills/orchestrate/SKILL.md:327-396` (detect, send command, wait, clear)
+
+**Code to reuse:**
+- `skills/using-git-worktrees/SKILL.md` - Integrate for worktree creation (currently not used by orchestrate)
+- `skills/checkpoint/SKILL.md` - Team-lead checkpoint protocol (no changes needed)
+- `skills/rehydrate/SKILL.md` - Team-lead rehydration protocol (no changes needed)
+
+**Key integration points:**
+- Entry: `skills/orchestrate/SKILL.md` Step 1 (after parsing design doc, before phase loop)
+- Worktree path: One worktree per plan, all phases execute within it
+- Monitor loop: `skills/orchestrate/SKILL.md:249-314` - Add context metrics check before existing status check
+- Cleanup: Use `skills/finishing-a-development-branch/SKILL.md:136-148` pattern for worktree removal
+
+**Clarifications from review:**
+- One worktree per plan (not per phase) - all phases share the same worktree
+- Orchestrate skill needs to integrate using-git-worktrees (currently runs in main directory)
+
+**Anti-patterns:**
+- Don't create checkpoint-needed from statusline - supervisor owns that decision
+- Don't rely on user ~/.claude/scripts/ - keep everything in worktree
