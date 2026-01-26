@@ -1,4 +1,6 @@
-![Tina](assets/tina.png)
+<p align="center">
+  <img src="assets/tina.png" alt="Tina" width="200">
+</p>
 
 # TINA
 
