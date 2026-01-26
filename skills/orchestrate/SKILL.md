@@ -488,14 +488,73 @@ esac
 
 ### Step 4: Completion
 
-After all phases complete, invoke the finishing skill:
+After all phases complete successfully:
+
+**4a. Verify all phases complete:**
 
 ```bash
-# Use Skill tool to invoke finishing workflow
-# User will be presented with merge/PR options
+ALL_COMPLETE=true
+for i in $(seq 1 $TOTAL_PHASES); do
+  if [ ! -f ".tina/phase-$i/status.json" ]; then
+    echo "Error: Missing status for phase $i"
+    ALL_COMPLETE=false
+    break
+  fi
+
+  STATUS=$(jq -r '.status' ".tina/phase-$i/status.json")
+  if [ "$STATUS" != "complete" ]; then
+    echo "Error: Phase $i not complete (status: $STATUS)"
+    ALL_COMPLETE=false
+    break
+  fi
+done
+
+if [ "$ALL_COMPLETE" != "true" ]; then
+  echo "Cannot proceed to completion - not all phases complete"
+  exit 1
+fi
 ```
 
-Note: The actual invocation happens in the Claude session - this skill documents the orchestration flow. The supervisor will communicate to the user that all phases are complete.
+**4b. Clean up all tmux sessions:**
+
+```bash
+for i in $(seq 1 $TOTAL_PHASES); do
+  SESSION="supersonic-phase-$i"
+  tmux kill-session -t "$SESSION" 2>/dev/null || true
+done
+```
+
+**4c. Update supervisor state:**
+
+```bash
+tmp_file=$(mktemp)
+jq '.status = "complete" | .completed_at = now | .active_tmux_session = null' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+```
+
+**4d. Invoke finishing workflow:**
+
+```
+# Use Skill tool to invoke:
+/superpowers:finishing-a-development-branch
+```
+
+This presents the user with options to merge, create PR, or keep the branch.
+
+**4e. Report completion:**
+
+```
+All phases complete!
+
+Phase summary:
+- Phase 1: [plan path] - complete
+- Phase 2: [plan path] - complete
+...
+
+Total commits: [count]
+Files changed: [count]
+
+Ready for merge/PR workflow.
+```
 
 ### Tmux Commands Reference
 
