@@ -74,6 +74,161 @@ digraph process {
 }
 ```
 
+## Team Mode Process (Phase 2+)
+
+When invoked with `--team` flag or via team-lead-init, uses parallel execution:
+
+```dot
+digraph team_process {
+    rankdir=TB;
+
+    subgraph cluster_init {
+        label="Initialization";
+        "Read plan, extract all tasks" [shape=box];
+        "Create TaskList with all tasks" [shape=box];
+        "Spawn team via Teammate.spawnTeam()" [shape=box];
+        "Spawn workers and reviewers" [shape=box];
+    }
+
+    subgraph cluster_execution {
+        label="Parallel Execution";
+        "Assign available tasks to idle workers" [shape=box];
+        "Worker implements task" [shape=box];
+        "Worker notifies reviewers via Teammate.write()" [shape=box];
+        "Reviewers review in parallel" [shape=box];
+        "Both reviews pass?" [shape=diamond];
+        "Reviewer creates fix-issue task" [shape=box];
+        "Worker fixes and re-notifies" [shape=box];
+        "Mark task complete" [shape=box];
+        "More tasks?" [shape=diamond];
+    }
+
+    subgraph cluster_completion {
+        label="Phase Completion";
+        "Dispatch phase-reviewer" [shape=box];
+        "Phase approved?" [shape=diamond];
+        "Create fix tasks from phase-reviewer" [shape=box];
+        "Request team shutdown" [shape=box];
+        "Report phase complete" [shape=box style=filled fillcolor=lightgreen];
+    }
+
+    "Read plan, extract all tasks" -> "Create TaskList with all tasks";
+    "Create TaskList with all tasks" -> "Spawn team via Teammate.spawnTeam()";
+    "Spawn team via Teammate.spawnTeam()" -> "Spawn workers and reviewers";
+    "Spawn workers and reviewers" -> "Assign available tasks to idle workers";
+    "Assign available tasks to idle workers" -> "Worker implements task";
+    "Worker implements task" -> "Worker notifies reviewers via Teammate.write()";
+    "Worker notifies reviewers via Teammate.write()" -> "Reviewers review in parallel";
+    "Reviewers review in parallel" -> "Both reviews pass?";
+    "Both reviews pass?" -> "Reviewer creates fix-issue task" [label="no"];
+    "Reviewer creates fix-issue task" -> "Worker fixes and re-notifies";
+    "Worker fixes and re-notifies" -> "Reviewers review in parallel";
+    "Both reviews pass?" -> "Mark task complete" [label="yes"];
+    "Mark task complete" -> "More tasks?";
+    "More tasks?" -> "Assign available tasks to idle workers" [label="yes"];
+    "More tasks?" -> "Dispatch phase-reviewer" [label="no"];
+    "Dispatch phase-reviewer" -> "Phase approved?";
+    "Phase approved?" -> "Create fix tasks from phase-reviewer" [label="no"];
+    "Create fix tasks from phase-reviewer" -> "Assign available tasks to idle workers";
+    "Phase approved?" -> "Request team shutdown" [label="yes"];
+    "Request team shutdown" -> "Report phase complete";
+}
+```
+
+### Team Mode Implementation
+
+**1. Initialize Team:**
+
+```
+Teammate.spawnTeam({
+  name: "phase-N-execution"
+})
+
+Teammate.spawn({
+  team: "phase-N-execution",
+  name: "worker-1",
+  agent: "supersonic:implementer"
+})
+
+Teammate.spawn({
+  team: "phase-N-execution",
+  name: "worker-2",
+  agent: "supersonic:implementer"
+})
+
+Teammate.spawn({
+  team: "phase-N-execution",
+  name: "spec-reviewer",
+  agent: "supersonic:spec-reviewer"
+})
+
+Teammate.spawn({
+  team: "phase-N-execution",
+  name: "code-quality-reviewer",
+  agent: "supersonic:code-quality-reviewer"
+})
+```
+
+**2. Task Assignment:**
+
+Team-lead assigns tasks explicitly:
+
+```
+TaskUpdate({
+  taskId: "task-1",
+  owner: "worker-1",
+  status: "in_progress"
+})
+```
+
+**3. Review Notification:**
+
+Worker notifies reviewers after implementation:
+
+```
+Teammate.write({
+  target: "spec-reviewer",
+  value: "Task 1 complete. Files: src/foo.ts. Git range: abc123..def456. Please review against spec."
+})
+
+Teammate.write({
+  target: "code-quality-reviewer",
+  value: "Task 1 complete. Files: src/foo.ts. Git range: abc123..def456. Please review code quality."
+})
+```
+
+**4. Review Response:**
+
+Reviewer creates fix-issue task if problems found:
+
+```
+TaskCreate({
+  subject: "Fix spec issues in Task 1",
+  description: "Issues found:\n- Missing validation\n- Wrong return type",
+  activeForm: "Fixing spec issues"
+})
+
+TaskUpdate({
+  taskId: "fix-task-id",
+  owner: "worker-1"
+})
+
+Teammate.write({
+  target: "worker-1",
+  value: "Spec review failed. Fix-issue task created: fix-task-id. Issues: Missing validation, wrong return type."
+})
+```
+
+**5. Team Shutdown:**
+
+After phase-reviewer approves:
+
+```
+Teammate.requestShutdown({
+  team: "phase-N-execution"
+})
+```
+
 ## Agents
 
 Use the Task tool with these agent types:
