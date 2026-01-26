@@ -39,6 +39,12 @@ Start by understanding the current project context, then ask questions one at a 
 - Use elements-of-style:writing-clearly-and-concisely skill if available
 - Commit the design document to git
 
+**Architectural review:**
+- Use supersonic:architect to review the design
+- Architect explores codebase, asks questions if unclear, adds Architectural Context section
+- Architect must approve design before proceeding
+- If blocked: address concerns, then re-run architect review
+
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"
 - Use superpowers:using-git-worktrees to create isolated workspace
