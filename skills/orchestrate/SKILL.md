@@ -194,6 +194,39 @@ Poll every 10 seconds until phase completes:
 
 ```bash
 while true; do
+  # Check if tmux session is still alive
+  if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    echo "Tmux session $SESSION_NAME died unexpectedly"
+
+    # Check if phase was actually complete
+    if [ -f ".tina/phase-$PHASE_NUM/status.json" ]; then
+      STATUS=$(jq -r '.status' ".tina/phase-$PHASE_NUM/status.json")
+      if [ "$STATUS" = "complete" ]; then
+        echo "Phase $PHASE_NUM was complete, continuing"
+        break
+      fi
+    fi
+
+    # Attempt recovery via rehydrate
+    echo "Attempting recovery..."
+    tmux new-session -d -s "$SESSION_NAME" \
+      "cd $(pwd) && claude --prompt '/rehydrate'"
+
+    # Track recovery attempt
+    RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .tina/supervisor-state.json)
+    RECOVERY_COUNT=$((RECOVERY_COUNT + 1))
+    tmp_file=$(mktemp)
+    jq ".recovery_attempts[\"$PHASE_NUM\"] = $RECOVERY_COUNT" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+
+    if [ "$RECOVERY_COUNT" -gt 1 ]; then
+      echo "Recovery failed twice, escalating"
+      exit 1
+    fi
+
+    sleep 5
+    continue
+  fi
+
   # Check if status file exists
   if [ ! -f ".tina/phase-$PHASE_NUM/status.json" ]; then
     echo "Error: Phase $PHASE_NUM status file not found"
