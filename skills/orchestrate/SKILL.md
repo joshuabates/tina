@@ -84,6 +84,160 @@ This phase implements basic orchestration without team-based execution:
 
 **Cleanup:** Supervisor state and phase directories persist in `.tina/` for resumption. Can be manually removed after successful completion if desired.
 
+## Implementation Details
+
+### Step 1: Parse Design Doc
+
+```bash
+# Count phases
+TOTAL_PHASES=$(grep -c "^## Phase [0-9]" "$DESIGN_DOC")
+if [ "$TOTAL_PHASES" -eq 0 ]; then
+  echo "Error: Design doc must have ## Phase N sections"
+  exit 1
+fi
+```
+
+### Step 2: Initialize or Resume State
+
+**If `.tina/supervisor-state.json` exists:** Resume from saved state
+**Otherwise:** Initialize new state
+
+```bash
+if [ -f ".tina/supervisor-state.json" ]; then
+  # Resume: read current phase
+  CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)
+  echo "Resuming from phase $CURRENT_PHASE"
+else
+  # Initialize: create state file
+  mkdir -p .tina
+  cat > .tina/supervisor-state.json << EOF
+{
+  "design_doc_path": "$DESIGN_DOC",
+  "total_phases": $TOTAL_PHASES,
+  "current_phase": 0,
+  "active_tmux_session": null,
+  "plan_paths": {}
+}
+EOF
+  CURRENT_PHASE=0
+fi
+```
+
+### Step 3: Phase Loop
+
+For each phase from `CURRENT_PHASE + 1` to `TOTAL_PHASES`:
+
+**3a. Spawn Planner**
+
+```
+Task tool:
+  subagent_type: supersonic:planner
+  prompt: |
+    Design doc: $DESIGN_DOC
+    Plan phase: $PHASE_NUM
+```
+
+Wait for planner to return plan path (e.g., `docs/plans/2026-01-26-feature-phase-1.md`)
+
+**3b. Update Supervisor State**
+
+```bash
+# Update current phase and plan path
+jq ".current_phase = $PHASE_NUM | .plan_paths[\"$PHASE_NUM\"] = \"$PLAN_PATH\"" \
+  .tina/supervisor-state.json > tmp.json && mv tmp.json .tina/supervisor-state.json
+```
+
+**3c. Initialize Phase Directory**
+
+```bash
+mkdir -p ".tina/phase-$PHASE_NUM"
+cat > ".tina/phase-$PHASE_NUM/status.json" << EOF
+{
+  "status": "pending",
+  "started_at": null
+}
+EOF
+```
+
+**3d. Spawn Team-Lead in Tmux**
+
+```bash
+SESSION_NAME="supersonic-phase-$PHASE_NUM"
+tmux new-session -d -s "$SESSION_NAME" \
+  "cd $(pwd) && claude --prompt '/team-lead-init $PLAN_PATH'"
+
+# Update active session in state
+jq ".active_tmux_session = \"$SESSION_NAME\"" \
+  .tina/supervisor-state.json > tmp.json && mv tmp.json .tina/supervisor-state.json
+```
+
+**3e. Monitor Phase Status**
+
+Poll every 10 seconds until phase completes:
+
+```bash
+while true; do
+  STATUS=$(jq -r '.status' ".tina/phase-$PHASE_NUM/status.json")
+
+  case "$STATUS" in
+    "complete")
+      echo "Phase $PHASE_NUM complete"
+      break
+      ;;
+    "blocked")
+      REASON=$(jq -r '.reason' ".tina/phase-$PHASE_NUM/status.json")
+      echo "Phase $PHASE_NUM blocked: $REASON"
+      # Escalate to user
+      exit 1
+      ;;
+    *)
+      sleep 10
+      ;;
+  esac
+done
+```
+
+**3f. Cleanup and Proceed**
+
+```bash
+# Kill tmux session
+tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
+
+# Clear active session in state
+jq ".active_tmux_session = null" \
+  .tina/supervisor-state.json > tmp.json && mv tmp.json .tina/supervisor-state.json
+```
+
+### Step 4: Completion
+
+After all phases complete:
+
+```
+Invoke supersonic:finishing-a-development-branch skill
+```
+
+### Tmux Commands Reference
+
+**Create session:**
+```bash
+tmux new-session -d -s <name> "<command>"
+```
+
+**Check session exists:**
+```bash
+tmux has-session -t <name> 2>/dev/null && echo "exists"
+```
+
+**Kill session:**
+```bash
+tmux kill-session -t <name>
+```
+
+**Send command to session:**
+```bash
+tmux send-keys -t <name> "<command>" Enter
+```
+
 ## State Files
 
 **Supervisor state:** `.tina/supervisor-state.json`
