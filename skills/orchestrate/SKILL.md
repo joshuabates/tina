@@ -117,6 +117,24 @@ This phase implements basic orchestration without team-based execution:
 
 **Cleanup:** Supervisor state and phase directories persist in `.tina/` for resumption. Can be manually removed after successful completion if desired.
 
+## Model Policy
+
+Different agents use different models based on their needs:
+
+| Agent | Model | Rationale |
+|-------|-------|-----------|
+| **Team-lead** (tmux) | opus 4.5 | Coordinates team, needs strong reasoning |
+| **Planner** | opus | Creates detailed implementation plans, needs deep codebase understanding |
+| **Helper** | opus | Diagnoses blocked states, needs analytical reasoning |
+| **Monitor** | haiku | Simple file polling, outputs signals - cheap and fast is sufficient |
+| **Implementer** | inherit (opus) | Writes code, runs in team-lead's tmux session |
+| **Reviewers** | inherit (opus) | Reviews code, runs in team-lead's tmux session |
+
+**Why explicit models matter:**
+- Haiku for monitoring saves cost (runs continuously, does simple work)
+- Opus for planning/diagnosis ensures quality (complex reasoning, runs once per phase)
+- Team members inherit from team-lead session (opus via `--model` flag)
+
 ## Implementation Details
 
 **Note:** The variables `$DESIGN_DOC`, `$PHASE_NUM`, and `$PLAN_PATH` are placeholders representing values from the execution context. Tmux sessions are created in two steps: first starting a Claude CLI session with `tmux new-session`, then waiting 3 seconds for Claude to initialize before sending the skill invocation command via `tmux send-keys`. This avoids shell escaping issues when passing complex arguments inline and ensures Claude is ready to receive input.
@@ -385,6 +403,7 @@ Spawn the planner as an isolated subagent. The planner reads the design doc, exp
 ```
 Task tool parameters:
   subagent_type: "tina:planner"
+  model: "opus"
   prompt: |
     Design doc: $DESIGN_DOC
     Phase: $PHASE_NUM
@@ -740,10 +759,14 @@ When a phase enters blocked state, supervisor spawns a helper agent for diagnosi
 
 **1. Spawn helper agent:**
 
-```bash
-# Use Task tool to spawn helper agent
-# subagent_type: "tina:helper"
-# prompt: "Diagnose blocked phase: $PHASE_NUM\nReason: $REASON\nPhase dir: .tina/phase-$PHASE_NUM"
+```
+Task tool parameters:
+  subagent_type: "tina:helper"
+  model: "opus"
+  prompt: |
+    Diagnose blocked phase: $PHASE_NUM
+    Reason: $REASON
+    Phase dir: .tina/phase-$PHASE_NUM
 ```
 
 **2. Wait for diagnostic file:**
