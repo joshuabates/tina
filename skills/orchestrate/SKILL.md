@@ -590,9 +590,27 @@ tmux send-keys -t <name> "<command>" Enter
   "plan_paths": {
     "1": "docs/plans/2026-01-26-feature-phase-1.md",
     "2": "docs/plans/2026-01-26-feature-phase-2.md"
-  }
+  },
+  "recovery_attempts": {
+    "1": 0,
+    "2": 1
+  },
+  "status": "executing",
+  "started_at": "2026-01-26T10:00:00Z",
+  "completed_at": null
 }
 ```
+
+**Field descriptions:**
+- `design_doc_path`: Original design document that started orchestration
+- `total_phases`: Number of phases parsed from design doc
+- `current_phase`: Last phase that was started (0 = not started)
+- `active_tmux_session`: Currently running tmux session name (null if none)
+- `plan_paths`: Map of phase number to generated plan file path
+- `recovery_attempts`: Map of phase number to recovery attempt count
+- `status`: Overall status (executing, complete, blocked)
+- `started_at`: When orchestration began
+- `completed_at`: When all phases completed (null if not complete)
 
 **Phase status:** `.tina/phase-N/status.json`
 ```json
