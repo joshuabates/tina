@@ -82,6 +82,27 @@ Use the Task tool with these agent types:
 - `supersonic:code-quality-reviewer` - Reviews code quality after spec compliance passes
 - `supersonic:phase-reviewer` - Verifies phase follows architecture after all tasks complete
 
+## Team Composition (Phase 2+)
+
+When running in team mode (invoked via team-lead), executing-plans uses the Teammate tool:
+
+**Default team:**
+- 2 workers: `supersonic:implementer`
+- 1 spec-reviewer: `supersonic:spec-reviewer`
+- 1 code-quality-reviewer: `supersonic:code-quality-reviewer`
+
+**Team name:** `phase-N-execution` where N is the phase number
+
+**Teammate message targets:**
+- `spec-reviewer` - For spec compliance reviews
+- `code-quality-reviewer` - For code quality reviews
+- `worker-1`, `worker-2` - For individual workers
+
+**Message protocol:**
+- Worker → Reviewer: `"Task X complete, please review. Git range: abc..def"`
+- Reviewer → Worker: `"Review passed"` or `"Fix issues: [list]. Assigned fix-issue task."`
+- Worker → Team-lead: `"Idle, no tasks available"`
+
 ## Example Workflow
 
 ```
