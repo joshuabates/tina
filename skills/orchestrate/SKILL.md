@@ -119,21 +119,41 @@ This phase implements basic orchestration without team-based execution:
 
 ## Model Policy
 
-Different agents use different models based on their needs:
+Different agents use different models based on their needs. "Opus" always means Opus 4.5.
 
 | Agent | Model | Rationale |
 |-------|-------|-----------|
-| **Team-lead** (tmux) | opus 4.5 | Coordinates team, needs strong reasoning |
+| **Team-lead** (tmux) | opus | Coordinates team, needs strong reasoning |
 | **Planner** | opus | Creates detailed implementation plans, needs deep codebase understanding |
 | **Helper** | opus | Diagnoses blocked states, needs analytical reasoning |
 | **Monitor** | haiku | Simple file polling, outputs signals - cheap and fast is sufficient |
-| **Implementer** | inherit (opus) | Writes code, runs in team-lead's tmux session |
-| **Reviewers** | inherit (opus) | Reviews code, runs in team-lead's tmux session |
+| **Implementer** | opus (default) | Writes code - see flexibility note below |
+| **Reviewers** | opus (default) | Reviews code - see flexibility note below |
 
-**Why explicit models matter:**
-- Haiku for monitoring saves cost (runs continuously, does simple work)
-- Opus for planning/diagnosis ensures quality (complex reasoning, runs once per phase)
-- Team members inherit from team-lead session (opus via `--model` flag)
+### Implementer/Reviewer Model Flexibility
+
+Implementers and reviewers default to opus, but can use sonnet or haiku for tasks that are:
+- **Simple and mechanical** - clear input/output, no design decisions
+- **Well-specified** - detailed steps with exact code provided in plan
+- **Low risk** - limited opportunity to stray from spec or introduce quality issues
+
+**When to downgrade:**
+- Haiku: Trivial changes (rename, add import, update config value)
+- Sonnet: Straightforward implementation (add simple function, write basic test)
+- Opus: Complex logic, architectural decisions, ambiguous requirements
+
+**How to specify:** The planner can annotate tasks with a recommended model:
+```markdown
+### Task 3: Add config validation
+**Model:** sonnet (straightforward validation logic, clear spec)
+```
+
+If not specified, implementers/reviewers use opus by default.
+
+**Why this flexibility matters:**
+- Opus for complex work ensures quality
+- Sonnet/haiku for simple tasks saves cost without sacrificing correctness
+- Planner (opus) makes the judgment call since it understands task complexity
 
 ## Implementation Details
 

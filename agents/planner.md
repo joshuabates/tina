@@ -74,6 +74,17 @@ Each step is one action (2-5 minutes):
 - Modify: `src/exact/path/to/existing.rs:123-145`
 - Test: `tests/exact/path/to/test.rs`
 
+**Model:** [optional - opus (default), sonnet, or haiku]
+```
+
+**Model selection guidance:**
+- **opus** (default, omit field): Complex logic, architectural decisions, ambiguous requirements
+- **sonnet**: Straightforward implementation with clear spec (add simple function, write basic test)
+- **haiku**: Trivial/mechanical changes (rename, add import, update config value)
+
+Only specify if task is simple enough to use a cheaper model. When in doubt, omit the field (defaults to opus).
+
+```markdown
 **Step 1: Write the failing test**
 
 ```rust
