@@ -45,7 +45,8 @@ tina_set_supervisor_field() {
   local state_file="$tina_dir/supervisor-state.json"
 
   local tmp_file=$(mktemp)
-  jq ".$field = $value" "$state_file" > "$tmp_file"
+  jq --arg f "$field" --argjson v "$value" \
+     '.[$f] = $v' "$state_file" > "$tmp_file"
   mv "$tmp_file" "$state_file"
 }
 
@@ -58,7 +59,8 @@ tina_add_plan_path() {
   local state_file="$tina_dir/supervisor-state.json"
 
   local tmp_file=$(mktemp)
-  jq ".plan_paths[\"$phase_num\"] = \"$plan_path\"" "$state_file" > "$tmp_file"
+  jq --arg pn "$phase_num" --arg pp "$plan_path" \
+     '.plan_paths[$pn] = $pp' "$state_file" > "$tmp_file"
   mv "$tmp_file" "$state_file"
 }
 
@@ -84,7 +86,7 @@ EOF
 # Usage: tina_set_phase_status <phase_num> <status> [reason]
 tina_set_phase_status() {
   local phase_num="$1"
-  local status="$2"
+  local new_status="$2"
   local reason="${3:-}"
   local phase_dir="${PWD}/.tina/phase-$phase_num"
   local status_file="$phase_dir/status.json"
@@ -93,9 +95,11 @@ tina_set_phase_status() {
   local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
   if [ -n "$reason" ]; then
-    jq ".status = \"$status\" | .updated_at = \"$timestamp\" | .reason = \"$reason\"" "$status_file" > "$tmp_file"
+    jq --arg s "$new_status" --arg r "$reason" --arg ts "$timestamp" \
+       '.status = $s | .updated_at = $ts | .reason = $r' "$status_file" > "$tmp_file"
   else
-    jq ".status = \"$status\" | .updated_at = \"$timestamp\"" "$status_file" > "$tmp_file"
+    jq --arg s "$new_status" --arg ts "$timestamp" \
+       '.status = $s | .updated_at = $ts' "$status_file" > "$tmp_file"
   fi
   mv "$tmp_file" "$status_file"
 }
