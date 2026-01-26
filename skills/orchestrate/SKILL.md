@@ -201,7 +201,7 @@ elif [ -f go.mod ]; then
   if ! go test ./...; then TEST_PASSED=false; fi
 fi
 
-# If tests fail: report and ask whether to proceed
+# If tests fail: warn and proceed (automated mode cannot prompt)
 # If tests pass: continue to orchestration
 if [ "$TEST_PASSED" = "false" ]; then
   echo "Warning: Tests failed in worktree. Proceeding anyway but baseline is not clean."
