@@ -832,8 +832,9 @@ The supervisor automatically detects existing state and resumes appropriately.
 - `tina:planner` - Creates implementation plan for each phase
 - Team-lead in tmux - Executes phase via `team-lead-init`
 
-**Invokes after completion:**
-- `tina:finishing-a-development-branch` - Handles merge/PR workflow
+**Invokes:**
+- `tina:using-git-worktrees` pattern - Worktree creation at start (integrated, not invoked as skill)
+- `tina:finishing-a-development-branch` - Handles merge/PR/cleanup workflow after completion
 
 **State files:**
 - `.tina/supervisor-state.json` - Supervisor resumption state (includes worktree_path)
@@ -843,7 +844,8 @@ The supervisor automatically detects existing state and resumes appropriately.
 - `.tina/checkpoint-needed` - Signal file when threshold exceeded
 
 **Checkpoint cycle:**
-- Statusline script creates `.tina/checkpoint-needed` when context > threshold
+- Statusline script writes `.tina/context-metrics.json` with usage data
+- Supervisor monitor loop reads metrics, creates `.tina/checkpoint-needed` when threshold exceeded
 - Supervisor detects signal, sends `/checkpoint` to team-lead
 - Team-lead runs checkpoint skill, writes handoff, outputs "CHECKPOINT COMPLETE"
 - Supervisor sends `/clear`, then `/rehydrate`
@@ -854,6 +856,7 @@ The supervisor automatically detects existing state and resumes appropriately.
 - `tina:planner` - Creates phase plans from design doc
 - `tina:architect` - Design must be architect-reviewed before orchestration
 - `tina:phase-reviewer` - Called by executing-plans after tasks complete
+- `tina:using-git-worktrees` - Pattern for worktree creation (integrated into Step 1b)
 
 **Phase 2 integrations (now available):**
 - Team-based execution via Teammate tool (workers + reviewers)
