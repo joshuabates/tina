@@ -384,33 +384,36 @@ docs/plans/
 
 ## Implementation Approach
 
-### Development Order
+## Phase 1: Foundation
 
-**Phase 1: Foundation**
 - Create `.tina/` structure and state management
 - Implement `orchestrate` skill basic loop (no checkpointing yet)
 - Implement `team-lead-init` skill
 - Test: single phase execution without teams (existing Task-based flow)
 
-**Phase 2: Team-Based Execution**
+## Phase 2: Team-Based Execution
+
 - Enhance `executing-plans` to use Teammate tool
 - Implement worker/reviewer message-based coordination
 - Implement phase-reviewer integration
 - Test: single phase with team execution
 
-**Phase 3: Checkpoint/Rehydrate**
+## Phase 3: Checkpoint/Rehydrate
+
 - Implement `checkpoint` skill
 - Implement `rehydrate` skill
 - Integrate with existing statusline monitoring
 - Test: checkpoint mid-phase, verify clean restoration
 
-**Phase 4: Multi-Phase & Error Handling**
+## Phase 4: Multi-Phase & Error Handling
+
 - Implement phase loop in orchestrate
 - Implement helper agent spawning for blocked states
 - Add all error handling and edge cases
 - Test: multi-phase design doc execution
 
-**Phase 5: Resumption & Polish**
+## Phase 5: Resumption & Polish
+
 - Implement supervisor resumption from supervisor-state.json
 - Add orphaned session detection/cleanup
 - Integrate `finishing-a-development-branch` at completion
