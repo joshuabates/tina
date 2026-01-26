@@ -376,16 +376,31 @@ done
 
 For each phase from `CURRENT_PHASE + 1` to `TOTAL_PHASES`:
 
-**3a. Spawn Planner (with retry)**
+**3a. Spawn Planner Subagent**
 
-Use Task tool to spawn planner:
+Spawn the planner as an isolated subagent. The planner reads the design doc, explores the codebase, and writes the plan - all in its own context. The orchestrator only receives the plan path back.
+
+**Why subagent:** Planning requires reading the design doc, exploring code, and writing detailed implementation steps. This work happens in the planner's context, not the orchestrator's. The orchestrator stays lean - it only tracks file paths.
+
 ```
-# In Claude Code, use Task tool with:
-# subagent_type: "tina:planner"
-# prompt: "Design doc: <path>\nPlan phase: <N>"
+Task tool parameters:
+  subagent_type: "tina:planner"
+  prompt: |
+    Design doc: $DESIGN_DOC
+    Phase: $PHASE_NUM
+
+    Create implementation plan for this phase.
+    Return ONLY the plan path when done.
 ```
 
-Wait for planner to return plan path (e.g., `docs/plans/2026-01-26-feature-phase-1.md`)
+**Planner returns:** A single line: `PLAN_PATH: docs/plans/2026-01-26-feature-phase-1.md`
+
+Parse the path from the planner's response:
+```bash
+PLAN_PATH=$(echo "$PLANNER_OUTPUT" | grep "^PLAN_PATH:" | cut -d' ' -f2)
+```
+
+The orchestrator does NOT read the plan content. It passes the path to team-lead-init, which reads and executes the plan in its own tmux session.
 
 **If planner fails:**
 ```bash

@@ -26,11 +26,14 @@ You receive:
 
 ## Report Format
 
-When complete, report:
-- **Plan path:** `docs/plans/2026-01-24-auth-phase-2.md`
-- **Phase planned:** 2 - Core Auth Service
-- **Total phases:** 4
-- **Phases remaining:** 2 (phases 3, 4)
+**Critical:** The orchestrator only needs the plan path. Keep your response minimal to avoid bloating the orchestrator's context.
+
+When complete, output ONLY:
+```
+PLAN_PATH: docs/plans/2026-01-24-auth-phase-2.md
+```
+
+The orchestrator parses this line to get the path. Do not include plan content, summaries, or explanations in your final response - all that work stays in your context, not the orchestrator's.
 
 ## Planning Methodology
 
