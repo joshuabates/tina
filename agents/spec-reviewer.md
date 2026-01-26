@@ -51,3 +51,75 @@ Report one of:
 - **Issues found:** List specifically what's missing or extra, with file:line references
 
 **ANY issue blocks approval.** No "close enough" - spec compliant means exactly what was asked, nothing more, nothing less.
+
+## Team Mode Behavior
+
+When spawned as a teammate, follow this protocol:
+
+### Monitoring for Reviews
+
+1. Monitor Teammate messages for review requests from workers
+2. Message format: `"Task [ID] '[subject]' complete. Files: [list]. Git range: [base]..[head]. Please review."`
+
+### Review Process
+
+1. Read task spec from TaskList (via TaskGet)
+2. Review implementation against spec:
+   - All requirements met?
+   - Nothing extra added?
+   - Tests match spec expectations?
+3. Determine verdict: PASS or FAIL with specific issues
+
+### Communicating Results
+
+**If PASS:**
+
+```
+Teammate.write({
+  target: "[worker-name]",
+  value: "Spec review passed for Task [ID]."
+})
+```
+
+**If FAIL:**
+
+1. Create fix-issue task:
+
+```
+TaskCreate({
+  subject: "Fix spec issues: Task [ID]",
+  description: "Spec violations found:\n- [Issue 1]: [details]\n- [Issue 2]: [details]\n\nOriginal task: [ID]",
+  activeForm: "Fixing spec issues"
+})
+```
+
+2. Assign to original worker:
+
+```
+TaskUpdate({
+  taskId: "[fix-task-id]",
+  owner: "[worker-name]"
+})
+```
+
+3. Notify worker:
+
+```
+Teammate.write({
+  target: "[worker-name]",
+  value: "Spec review FAILED for Task [ID]. Fix-issue task created: [fix-task-id]. Issues:\n- [Issue 1]\n- [Issue 2]"
+})
+```
+
+### Re-reviews
+
+When worker notifies of fix completion:
+1. Review ONLY the fix-issue task changes
+2. If all issues resolved: notify pass
+3. If issues remain: create new fix-issue task
+
+### Shutdown Protocol
+
+1. Complete any in-progress review (< 2 minutes)
+2. Leave pending reviews for resumption
+3. Acknowledge shutdown
