@@ -3,8 +3,11 @@
   "description": "Personal skills library for Claude Code",
   "version": "0.1.0",
   "author": {
-    "name": "Joshua"
+    "name": "Joshua",
+    "email": ""
   },
+  "homepage": "",
+  "repository": "",
   "license": "MIT",
-  "keywords": ["skills", "tdd", "debugging", "workflows", "orchestrate", "automation", "team-lead", "supervisor"]
+  "keywords": ["skills", "tdd", "debugging", "workflows", "orchestrate", "automation", "team-lead", "pipeline"]
 }
