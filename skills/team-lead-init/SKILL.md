@@ -96,9 +96,11 @@ Extract phase number from plan path:
 
 In this phase, team-lead uses the existing Task-based execution flow:
 1. Read plan path
-2. Initialize phase status
-3. Invoke `supersonic:executing-plans` skill directly
+2. Initialize phase status to "executing"
+3. Use Skill tool: `/supersonic:executing-plans <plan-path>`
 4. Mark phase complete when executing-plans finishes
+
+The team-lead session will be in a Claude CLI environment where skill commands are available via slash syntax.
 
 Phase 2 will add team-based execution via Teammate tool.
 

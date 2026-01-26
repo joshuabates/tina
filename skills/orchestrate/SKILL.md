@@ -131,12 +131,11 @@ For each phase from `CURRENT_PHASE + 1` to `TOTAL_PHASES`:
 
 **3a. Spawn Planner**
 
+Use Task tool to spawn planner:
 ```
-Task tool:
-  subagent_type: supersonic:planner
-  prompt: |
-    Design doc: $DESIGN_DOC
-    Plan phase: $PHASE_NUM
+# In Claude Code, use Task tool with:
+# subagent_type: "supersonic:planner"
+# prompt: "Design doc: <path>\nPlan phase: <N>"
 ```
 
 Wait for planner to return plan path (e.g., `docs/plans/2026-01-26-feature-phase-1.md`)
@@ -144,10 +143,12 @@ Wait for planner to return plan path (e.g., `docs/plans/2026-01-26-feature-phase
 **3b. Update Supervisor State**
 
 ```bash
-# Use tina_set_supervisor_field and tina_add_plan_path from _tina-utils.sh, or:
 tmp_file=$(mktemp)
 jq ".current_phase = $PHASE_NUM" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
-# Then use tina_add_plan_path for the plan path
+
+# Add plan path to state
+tmp_file=$(mktemp)
+jq ".plan_paths[\"$PHASE_NUM\"] = \"$PLAN_PATH\"" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
 ```
 
 **3c. Initialize Phase Directory**
@@ -221,11 +222,14 @@ jq ".active_tmux_session = null" .tina/supervisor-state.json > "$tmp_file" && mv
 
 ### Step 4: Completion
 
-After all phases complete:
+After all phases complete, invoke the finishing skill:
 
+```bash
+# Use Skill tool to invoke finishing workflow
+# User will be presented with merge/PR options
 ```
-Invoke supersonic:finishing-a-development-branch skill
-```
+
+Note: The actual invocation happens in the Claude session - this skill documents the orchestration flow. The supervisor will communicate to the user that all phases are complete.
 
 ### Tmux Commands Reference
 
