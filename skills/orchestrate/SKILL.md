@@ -679,14 +679,31 @@ for i in $(seq 1 $TOTAL_PHASES); do
 done
 ```
 
-**4c. Update supervisor state:**
+**4c. Worktree handling:**
+
+Present options to user (via finishing-a-development-branch skill):
+
+1. **Merge locally:** Merge worktree branch to base, remove worktree
+2. **Create PR:** Push branch, create PR, keep worktree until PR merged
+3. **Keep as-is:** Leave worktree for manual handling
+4. **Discard:** Remove worktree and branch
+
+```bash
+# If merge chosen (option 1 or after PR merged):
+git worktree remove "$WORKTREE_PATH"
+git branch -d "$BRANCH_NAME"  # Safe delete (only if merged)
+```
+
+Note: The finishing-a-development-branch skill handles these options. The orchestrator invokes it in step 4e.
+
+**4d. Update supervisor state:**
 
 ```bash
 tmp_file=$(mktemp)
 jq '.status = "complete" | .completed_at = now | .active_tmux_session = null' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
 ```
 
-**4d. Invoke finishing workflow:**
+**4e. Invoke finishing workflow:**
 
 ```
 # Use Skill tool to invoke:
@@ -695,7 +712,7 @@ jq '.status = "complete" | .completed_at = now | .active_tmux_session = null' .t
 
 This presents the user with options to merge, create PR, or keep the branch.
 
-**4e. Report completion:**
+**4f. Report completion:**
 
 ```
 All phases complete!
