@@ -6,6 +6,7 @@ Personal skills library for Claude Code, forked from [Superpowers](https://githu
 
 **Core Workflow**
 - **brainstorming** - Design refinement through questions
+- **orchestrate** - Automated pipeline from design to implementation
 - **writing-plans** - Break work into detailed tasks
 - **executing-plans** - Dispatch subagents per task with two-stage review
 
@@ -36,6 +37,7 @@ Subagent types for use with the Task tool:
 ## Commands
 
 - `/supersonic:brainstorm` - Start design refinement
+- `/supersonic:orchestrate` - Start automated pipeline
 - `/supersonic:write-plan` - Create implementation plan
 - `/supersonic:execute-plan` - Execute plan with subagents
 
