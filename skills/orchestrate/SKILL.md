@@ -74,14 +74,16 @@ digraph orchestrate {
 This phase implements basic orchestration without team-based execution:
 
 1. **Parse design doc** - Count `## Phase N` sections
-2. **Initialize state** - Create `.tina/supervisor-state.json`
-3. **For each phase:**
+2. **Create worktree** - Isolated workspace with statusline for context monitoring
+3. **Initialize state** - Create `.tina/supervisor-state.json` with worktree path
+4. **For each phase:**
    - Spawn `tina:planner` subagent with design doc + phase number
    - Wait for plan path
    - Spawn `tina:team-lead-init` in tmux with plan path
-   - Monitor `.tina/phase-N/status.json` until complete
+   - Monitor `.tina/phase-N/status.json` and context metrics until complete
+   - Create `.tina/checkpoint-needed` if context threshold exceeded
    - Kill tmux session, proceed to next phase
-4. **Completion** - Invoke `tina:finishing-a-development-branch`
+5. **Completion** - Invoke `tina:finishing-a-development-branch` for merge/PR/cleanup
 
 ## Implementation Notes
 
