@@ -31,33 +31,6 @@ Called by supervisor when spawning team-lead in tmux:
 /team-lead-init docs/plans/2026-01-26-feature-phase-1.md
 ```
 
-## The Process
-
-```dot
-digraph team_lead_init {
-    rankdir=TB;
-
-    "Read plan file" [shape=box];
-    "Extract phase number from path" [shape=box];
-    "Initialize .tina/phase-N/status.json" [shape=box];
-    "Set status = executing" [shape=box];
-    "Invoke executing-plans with plan path" [shape=box];
-    "Execution complete?" [shape=diamond];
-    "Set status = complete" [shape=box];
-    "Wait for shutdown" [shape=box];
-
-    "Read plan file" -> "Extract phase number from path";
-    "Extract phase number from path" -> "Initialize .tina/phase-N/status.json";
-    "Initialize .tina/phase-N/status.json" -> "Set status = executing";
-    "Set status = executing" -> "Invoke executing-plans with plan path";
-    "Invoke executing-plans with plan path" -> "Execution complete?";
-    "Execution complete?" -> "Set status = complete" [label="yes"];
-    "Execution complete?" -> "Set status = blocked" [label="no"];
-    "Set status = blocked" -> "Wait for shutdown";
-    "Set status = complete" -> "Wait for shutdown";
-}
-```
-
 ## Phase Number Extraction
 
 Extract phase number from plan path:
@@ -92,29 +65,123 @@ Extract phase number from plan path:
 }
 ```
 
-## Phase 1 Behavior
+## The Process (Phase 2)
 
-In this phase, team-lead uses the existing Task-based execution flow:
-1. Read plan path
-2. Initialize phase status to "executing"
-3. Use Skill tool: `/supersonic:executing-plans <plan-path>`
-4. Mark phase complete when executing-plans finishes
+```dot
+digraph team_lead_init_v2 {
+    rankdir=TB;
 
-The team-lead session will be in a Claude CLI environment where skill commands are available via slash syntax.
+    "Read plan file" [shape=box];
+    "Extract phase number from path" [shape=box];
+    "Initialize .tina/phase-N/status.json" [shape=box];
+    "Set status = executing" [shape=box];
+    "Spawn team via Teammate tool" [shape=box];
+    "Invoke executing-plans --team with plan path" [shape=box];
+    "All tasks complete?" [shape=diamond];
+    "Request team shutdown" [shape=box];
+    "Set status = complete" [shape=box];
+    "Wait for supervisor to kill session" [shape=box];
 
-Phase 2 will add team-based execution via Teammate tool.
+    "Read plan file" -> "Extract phase number from path";
+    "Extract phase number from path" -> "Initialize .tina/phase-N/status.json";
+    "Initialize .tina/phase-N/status.json" -> "Set status = executing";
+    "Set status = executing" -> "Spawn team via Teammate tool";
+    "Spawn team via Teammate tool" -> "Invoke executing-plans --team with plan path";
+    "Invoke executing-plans --team with plan path" -> "All tasks complete?";
+    "All tasks complete?" -> "Request team shutdown" [label="yes"];
+    "All tasks complete?" -> "Set status = blocked" [label="no (error)"];
+    "Request team shutdown" -> "Set status = complete";
+    "Set status = complete" -> "Wait for supervisor to kill session";
+}
+```
+
+## Team Spawning
+
+Team-lead spawns the execution team before invoking executing-plans:
+
+**Step 1: Create team**
+
+```
+Teammate.spawnTeam({
+  name: "phase-N-execution"
+})
+```
+
+**Step 2: Spawn workers (2 by default)**
+
+```
+Teammate.spawn({
+  team: "phase-N-execution",
+  name: "worker-1",
+  agent: "supersonic:implementer",
+  context: "You are worker-1 in phase N execution team."
+})
+
+Teammate.spawn({
+  team: "phase-N-execution",
+  name: "worker-2",
+  agent: "supersonic:implementer",
+  context: "You are worker-2 in phase N execution team."
+})
+```
+
+**Step 3: Spawn dedicated reviewers**
+
+```
+Teammate.spawn({
+  team: "phase-N-execution",
+  name: "spec-reviewer",
+  agent: "supersonic:spec-reviewer",
+  context: "You are the spec compliance reviewer for phase N."
+})
+
+Teammate.spawn({
+  team: "phase-N-execution",
+  name: "code-quality-reviewer",
+  agent: "supersonic:code-quality-reviewer",
+  context: "You are the code quality reviewer for phase N."
+})
+```
+
+**Step 4: Invoke executing-plans with team flag**
+
+```
+/supersonic:executing-plans --team <plan-path>
+```
+
+## Team Shutdown
+
+After executing-plans completes (all tasks done, phase-reviewer approved):
+
+```
+Teammate.requestShutdown({
+  team: "phase-N-execution"
+})
+```
+
+Wait for all teammates to acknowledge, then update status to complete.
 
 ## Error Handling
 
 **Plan file not found:**
 - Set status = blocked with reason: "Plan file not found: <path>"
-- Exit with code 1
-- Supervisor polls status.json and detects blocked state
+- Do NOT spawn team
+- Exit (supervisor will detect blocked status)
+
+**Team spawn fails:**
+- Retry team spawn once
+- If still fails: Set status = blocked with reason: "Failed to spawn team: <error>"
+- Exit
 
 **executing-plans fails:**
+- Team-lead already has team spawned
+- Request team shutdown before marking blocked
 - Set status = blocked with reason from execution error
-- Exit with code 1
-- Supervisor polls status.json and detects blocked state
+- Exit
+
+**Worker/reviewer unresponsive:**
+- executing-plans handles this (spawns replacement)
+- If team-lead cannot recover: request shutdown, mark blocked
 
 ## Integration
 
@@ -126,10 +193,6 @@ Phase 2 will add team-based execution via Teammate tool.
 
 **State files:**
 - `.tina/phase-N/status.json` - Phase execution status
-
-**Future integrations (Phase 2+):**
-- Will spawn team of workers/reviewers via Teammate tool
-- Will handle checkpoint/rehydrate commands
 
 ## Red Flags
 
