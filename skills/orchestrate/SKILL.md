@@ -109,6 +109,24 @@ if [ -f ".tina/supervisor-state.json" ]; then
   # Resume: read current phase
   CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)
   echo "Resuming from phase $CURRENT_PHASE"
+
+  # Check for existing tmux session
+  ACTIVE_SESSION=$(jq -r '.active_tmux_session // ""' .tina/supervisor-state.json)
+  if [ -n "$ACTIVE_SESSION" ] && tmux has-session -t "$ACTIVE_SESSION" 2>/dev/null; then
+    echo "Found active session: $ACTIVE_SESSION"
+    echo "Reconnecting to existing phase execution..."
+    # Skip to monitor loop for current phase
+    SESSION_NAME="$ACTIVE_SESSION"
+    PHASE_NUM=$CURRENT_PHASE
+    # Jump to Step 3e (monitoring)
+  else
+    echo "No active session found, will start fresh from phase $((CURRENT_PHASE + 1))"
+    # Clear stale session reference
+    if [ -n "$ACTIVE_SESSION" ]; then
+      tmp_file=$(mktemp)
+      jq '.active_tmux_session = null' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+    fi
+  fi
 else
   # Initialize: create state file
   mkdir -p .tina
@@ -487,10 +505,31 @@ tmux send-keys -t <name> "<command>" Enter
 
 ## Resumption
 
-If interrupted, re-run with same design doc path:
-- Reads existing supervisor state
-- Detects active tmux sessions
-- Resumes from current phase
+If supervisor is interrupted (Ctrl+C, crash, terminal closed), re-run with same design doc path:
+
+**State reconstruction:**
+1. Read `.tina/supervisor-state.json` for current phase and active session
+2. Check if `active_tmux_session` still exists via `tmux has-session`
+3. If session exists: reconnect to monitoring loop
+4. If session doesn't exist but phase incomplete: respawn team-lead with `/rehydrate`
+5. If phase complete: proceed to next phase
+
+**Resumption scenarios:**
+
+| State | active_tmux_session | phase status | Action |
+|-------|---------------------|--------------|--------|
+| Session alive | exists, running | executing | Reconnect to monitor loop |
+| Session died | exists in state, not running | executing | Respawn with /rehydrate |
+| Phase done | null or stale | complete | Proceed to next phase |
+| Phase blocked | null or stale | blocked | Spawn helper agent |
+
+**Command:**
+```bash
+# Simply re-run orchestrate with same design doc
+/supersonic:orchestrate docs/plans/2026-01-26-feature-design.md
+```
+
+The supervisor automatically detects existing state and resumes appropriately.
 
 ## Integration
 
