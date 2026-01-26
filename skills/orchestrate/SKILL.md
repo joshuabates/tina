@@ -32,23 +32,30 @@ digraph orchestrate {
     rankdir=TB;
 
     "Parse design doc for phases" [shape=box];
+    "Create worktree + provision statusline" [shape=box];
     "Initialize .tina/supervisor-state.json" [shape=box];
     "More phases?" [shape=diamond];
     "Spawn planner subagent" [shape=box];
     "Wait for plan path" [shape=box];
     "Spawn team-lead-init in tmux" [shape=box];
     "Monitor phase status" [shape=box];
+    "Context threshold?" [shape=diamond];
+    "Create checkpoint-needed" [shape=box];
     "Phase complete?" [shape=diamond];
     "Kill tmux session, next phase" [shape=box];
     "Invoke finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
-    "Parse design doc for phases" -> "Initialize .tina/supervisor-state.json";
+    "Parse design doc for phases" -> "Create worktree + provision statusline";
+    "Create worktree + provision statusline" -> "Initialize .tina/supervisor-state.json";
     "Initialize .tina/supervisor-state.json" -> "More phases?";
     "More phases?" -> "Spawn planner subagent" [label="yes"];
     "Spawn planner subagent" -> "Wait for plan path";
     "Wait for plan path" -> "Spawn team-lead-init in tmux";
     "Spawn team-lead-init in tmux" -> "Monitor phase status";
-    "Monitor phase status" -> "Phase complete?";
+    "Monitor phase status" -> "Context threshold?";
+    "Context threshold?" -> "Create checkpoint-needed" [label="exceeded"];
+    "Context threshold?" -> "Phase complete?" [label="ok"];
+    "Create checkpoint-needed" -> "Phase complete?";
     "Phase complete?" -> "Monitor phase status" [label="no"];
     "Phase complete?" -> "Kill tmux session, next phase" [label="yes"];
     "Kill tmux session, next phase" -> "More phases?";
