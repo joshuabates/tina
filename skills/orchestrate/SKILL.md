@@ -208,6 +208,37 @@ if [ "$TEST_PASSED" = "false" ]; then
 fi
 ```
 
+**8. Provision statusline for context monitoring:**
+
+```bash
+# Create .claude directory in worktree
+mkdir -p "$WORKTREE_PATH/.claude"
+
+# Write context monitoring script
+cat > "$WORKTREE_PATH/.claude/tina-write-context.sh" << 'SCRIPT'
+#!/bin/bash
+set -e
+TINA_DIR="${PWD}/.tina"
+mkdir -p "$TINA_DIR"
+INPUT=$(cat)
+echo "$INPUT" | jq '{
+  used_pct: (.context_window.used_percentage // 0),
+  tokens: (.context_window.total_input_tokens // 0),
+  max: (.context_window.context_window_size // 200000),
+  timestamp: now | todate
+}' > "$TINA_DIR/context-metrics.json"
+echo "ctx:$(echo "$INPUT" | jq -r '.context_window.used_percentage // 0 | floor')%"
+SCRIPT
+chmod +x "$WORKTREE_PATH/.claude/tina-write-context.sh"
+
+# Write local settings pointing to the script
+cat > "$WORKTREE_PATH/.claude/settings.local.json" << EOF
+{"statusLine": {"type": "command", "command": "$WORKTREE_PATH/.claude/tina-write-context.sh"}}
+EOF
+```
+
+This enables automatic context tracking within the worktree. The statusline script writes `.tina/context-metrics.json` on each status update. The supervisor monitor loop reads this file to decide when to trigger checkpoints.
+
 **Important:** All subsequent steps (Step 2 onwards) execute within this worktree. The `.tina/` directory created in Step 2 will be inside the worktree, keeping orchestration state isolated from the main workspace.
 
 ### Step 2: Initialize or Resume State
