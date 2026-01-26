@@ -394,6 +394,19 @@ Poll every 10 seconds until phase completes:
 
 ```bash
 while true; do
+  # Check context metrics and create checkpoint-needed if threshold exceeded
+  if [ -f "$WORKTREE_PATH/.tina/context-metrics.json" ]; then
+    USED_PCT=$(jq -r '.used_pct // 0' "$WORKTREE_PATH/.tina/context-metrics.json")
+    THRESHOLD=${TINA_THRESHOLD:-70}
+
+    if [ "$(echo "$USED_PCT >= $THRESHOLD" | bc)" -eq 1 ]; then
+      if [ ! -f "$WORKTREE_PATH/.tina/checkpoint-needed" ]; then
+        echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": $THRESHOLD}" > "$WORKTREE_PATH/.tina/checkpoint-needed"
+        echo "Context at ${USED_PCT}%, triggering checkpoint"
+      fi
+    fi
+  fi
+
   # Check if tmux session is still alive
   if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     echo "Tmux session $SESSION_NAME died unexpectedly"
@@ -476,7 +489,7 @@ Within the monitor loop (Step 3e), check for signal file:
 
 ```bash
 # In monitor loop, check for signal file
-if [ -f ".tina/checkpoint-needed" ]; then
+if [ -f "$WORKTREE_PATH/.tina/checkpoint-needed" ]; then
   echo "Checkpoint signal detected"
   # Proceed to checkpoint handling
 fi
@@ -530,7 +543,7 @@ sleep 2
 tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
 
 # Remove checkpoint signal
-rm ".tina/checkpoint-needed"
+rm "$WORKTREE_PATH/.tina/checkpoint-needed"
 ```
 
 **5. Continue monitoring:**
