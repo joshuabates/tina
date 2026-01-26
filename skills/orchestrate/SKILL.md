@@ -506,7 +506,7 @@ tmux send-keys -t "$SESSION_NAME" "/checkpoint" Enter
 Poll for handoff file update (max 5 minutes):
 
 ```bash
-HANDOFF_FILE=".tina/phase-$PHASE_NUM/handoff.md"
+HANDOFF_FILE="$WORKTREE_PATH/.tina/phase-$PHASE_NUM/handoff.md"
 TIMEOUT=300
 START=$(date +%s)
 
@@ -514,7 +514,7 @@ while true; do
   if [ -f "$HANDOFF_FILE" ]; then
     # Check if modified after checkpoint signal
     HANDOFF_TIME=$(stat -f %m "$HANDOFF_FILE" 2>/dev/null || stat -c %Y "$HANDOFF_FILE")
-    SIGNAL_TIME=$(stat -f %m ".tina/checkpoint-needed" 2>/dev/null || stat -c %Y ".tina/checkpoint-needed")
+    SIGNAL_TIME=$(stat -f %m "$WORKTREE_PATH/.tina/checkpoint-needed" 2>/dev/null || stat -c %Y "$WORKTREE_PATH/.tina/checkpoint-needed")
     if [ "$HANDOFF_TIME" -gt "$SIGNAL_TIME" ]; then
       echo "Handoff written"
       break
