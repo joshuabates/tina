@@ -27,6 +27,28 @@ Automates the full development pipeline from design document to implementation. 
 
 ## The Process
 
+```
+Architecture:
+
+┌─────────────────────┐
+│   Orchestrator      │  ← User's claude-code session, stays responsive
+│   (parent)          │
+└─────────┬───────────┘
+          │ spawns (run_in_background: true)
+          ▼
+┌─────────────────────┐
+│  Monitoring Agent   │  ← Haiku model, polls files every 5 seconds
+│  (background)       │
+└─────────┬───────────┘
+          │ monitors
+          ▼
+┌─────────────────────┐
+│  .tina/phase-N/     │
+│  - status.json      │  ← Phase status, task updates
+│  - context-metrics  │  ← Context usage %
+└─────────────────────┘
+```
+
 ```dot
 digraph orchestrate {
     rankdir=TB;
@@ -38,11 +60,12 @@ digraph orchestrate {
     "Spawn planner subagent" [shape=box];
     "Wait for plan path" [shape=box];
     "Spawn team-lead-init in tmux" [shape=box];
-    "Monitor phase status" [shape=box];
-    "Context threshold?" [shape=diamond];
-    "Create checkpoint-needed" [shape=box];
+    "Spawn background monitor" [shape=box];
+    "Terminal free - await signals" [shape=box style=filled fillcolor=lightyellow];
+    "Signal received?" [shape=diamond];
+    "Handle signal" [shape=box];
     "Phase complete?" [shape=diamond];
-    "Kill tmux session, next phase" [shape=box];
+    "Stop monitor, kill tmux, next phase" [shape=box];
     "Invoke finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
     "Parse design doc for phases" -> "Create worktree + provision statusline";
@@ -51,14 +74,15 @@ digraph orchestrate {
     "More phases?" -> "Spawn planner subagent" [label="yes"];
     "Spawn planner subagent" -> "Wait for plan path";
     "Wait for plan path" -> "Spawn team-lead-init in tmux";
-    "Spawn team-lead-init in tmux" -> "Monitor phase status";
-    "Monitor phase status" -> "Context threshold?";
-    "Context threshold?" -> "Create checkpoint-needed" [label="exceeded"];
-    "Context threshold?" -> "Phase complete?" [label="ok"];
-    "Create checkpoint-needed" -> "Phase complete?";
-    "Phase complete?" -> "Monitor phase status" [label="no"];
-    "Phase complete?" -> "Kill tmux session, next phase" [label="yes"];
-    "Kill tmux session, next phase" -> "More phases?";
+    "Spawn team-lead-init in tmux" -> "Spawn background monitor";
+    "Spawn background monitor" -> "Terminal free - await signals";
+    "Terminal free - await signals" -> "Signal received?";
+    "Signal received?" -> "Terminal free - await signals" [label="no"];
+    "Signal received?" -> "Handle signal" [label="yes"];
+    "Handle signal" -> "Phase complete?";
+    "Phase complete?" -> "Terminal free - await signals" [label="no"];
+    "Phase complete?" -> "Stop monitor, kill tmux, next phase" [label="yes"];
+    "Stop monitor, kill tmux, next phase" -> "More phases?";
     "More phases?" -> "Invoke finishing-a-development-branch" [label="no"];
 }
 ```
@@ -87,7 +111,7 @@ This phase implements basic orchestration without team-based execution:
 
 ## Implementation Notes
 
-**Monitoring:** Polls `.tina/phase-N/status.json` every 10 seconds until phase status is "complete" or "blocked".
+**Monitoring:** Delegated to a background haiku agent (`tina:monitor`) that polls status files every 5 seconds and outputs structured signals. The orchestrator remains responsive to user interaction while monitoring runs in background.
 
 **Tmux session naming:** Uses pattern `tina-phase-N` where N is the phase number.
 
@@ -416,117 +440,228 @@ tmp_file=$(mktemp)
 jq ".active_tmux_session = \"$SESSION_NAME\"" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
 ```
 
-**3e. Monitor Phase Status**
+**3d-2. Spawn Background Monitoring Agent**
 
-Poll every 10 seconds until phase completes:
+Use Task tool to spawn a haiku monitoring agent in the background:
+
+```
+Task tool parameters:
+  subagent_type: "tina:monitor"
+  model: "haiku"
+  run_in_background: true
+  prompt: |
+    Monitor phase execution:
+    - phase_num: $PHASE_NUM
+    - worktree_path: $WORKTREE_PATH
+    - tmux_session: $SESSION_NAME
+    - context_threshold: 50
+```
+
+The Task tool returns an `output_file` path. Store this for signal checking:
 
 ```bash
-while true; do
-  # Check context metrics and create checkpoint-needed if threshold exceeded
-  if [ -f "$WORKTREE_PATH/.tina/context-metrics.json" ]; then
-    USED_PCT=$(jq -r '.used_pct // 0' "$WORKTREE_PATH/.tina/context-metrics.json")
-    THRESHOLD=${TINA_THRESHOLD:-70}
+# Store monitor output file path in supervisor state
+tmp_file=$(mktemp)
+jq ".monitor_output_file = \"$MONITOR_OUTPUT_FILE\"" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+```
 
-    if [ "$(echo "$USED_PCT >= $THRESHOLD" | bc)" -eq 1 ]; then
-      if [ ! -f "$WORKTREE_PATH/.tina/checkpoint-needed" ]; then
-        echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": $THRESHOLD}" > "$WORKTREE_PATH/.tina/checkpoint-needed"
-        echo "Context at ${USED_PCT}%, triggering checkpoint"
-      fi
-    fi
-  fi
+**Terminal is now free** - the orchestrator can respond to user queries while monitoring runs in background.
 
-  # Check if tmux session is still alive
-  if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-    echo "Tmux session $SESSION_NAME died unexpectedly"
+**3e. Monitor Phase Status (Background)**
 
-    # Check if phase was actually complete
-    if [ -f ".tina/phase-$PHASE_NUM/status.json" ]; then
-      STATUS=$(jq -r '.status' ".tina/phase-$PHASE_NUM/status.json")
-      if [ "$STATUS" = "complete" ]; then
-        echo "Phase $PHASE_NUM was complete, continuing"
-        break
-      fi
-    fi
+The monitoring agent runs in background. The orchestrator periodically checks its output for signals.
 
-    # Attempt recovery via rehydrate
-    echo "Attempting recovery..."
+**Checking monitor output:**
 
-    # Step 1: Start session with Claude
-    tmux new-session -d -s "$SESSION_NAME" \
-      "cd $WORKTREE_PATH && claude --dangerously-skip-permissions"
+Read the last few lines of the monitor output file to check for signals:
 
-    # Step 2: Wait for Claude to initialize, then send the rehydrate command
-    sleep 3
-    tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
+```bash
+# Quick check - read last 20 lines of monitor output
+MONITOR_OUTPUT=$(jq -r '.monitor_output_file' .tina/supervisor-state.json)
+tail -20 "$MONITOR_OUTPUT" 2>/dev/null
+```
 
-    # Track recovery attempt
-    RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .tina/supervisor-state.json)
-    RECOVERY_COUNT=$((RECOVERY_COUNT + 1))
-    tmp_file=$(mktemp)
-    jq ".recovery_attempts[\"$PHASE_NUM\"] = $RECOVERY_COUNT" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+**Signal detection and handling:**
 
-    if [ "$RECOVERY_COUNT" -gt 1 ]; then
-      echo "Recovery failed twice, escalating"
-      exit 1
-    fi
+When checking output, look for `[SIGNAL]` lines and handle accordingly:
 
-    sleep 5
-    continue
-  fi
+| Signal | Action |
+|--------|--------|
+| `[SIGNAL] phase_complete phase=N` | Stop monitor, proceed to next phase |
+| `[SIGNAL] phase_blocked phase=N reason="..."` | Stop monitor, spawn helper agent |
+| `[SIGNAL] context_threshold phase=N pct=...` | Trigger checkpoint flow |
+| `[SIGNAL] session_died phase=N` | Attempt recovery via rehydrate |
 
-  # Check if status file exists
-  if [ ! -f ".tina/phase-$PHASE_NUM/status.json" ]; then
-    echo "Error: Phase $PHASE_NUM status file not found"
-    exit 1
-  fi
+**When user asks about progress:**
 
+Read monitor output and report recent `[UPDATE]` lines:
+```bash
+tail -10 "$MONITOR_OUTPUT" | grep "^\[UPDATE\]"
+```
+
+**Handling `phase_complete` signal:**
+
+```bash
+# Stop the monitoring agent
+# Use TaskStop with the monitor's task_id
+
+# Proceed to cleanup (Step 3f)
+```
+
+**Handling `phase_blocked` signal:**
+
+```bash
+# Stop the monitoring agent
+REASON=$(echo "$SIGNAL_LINE" | sed 's/.*reason="\([^"]*\)".*/\1/')
+echo "Phase $PHASE_NUM blocked: $REASON"
+
+# Spawn helper agent for diagnosis
+# (See "Blocked State Handling" section below)
+```
+
+**Handling `context_threshold` signal:**
+
+```bash
+# Create checkpoint-needed signal file
+USED_PCT=$(echo "$SIGNAL_LINE" | sed 's/.*pct=\([0-9.]*\).*/\1/')
+echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": 50}" > "$WORKTREE_PATH/.tina/checkpoint-needed"
+echo "Context at ${USED_PCT}%, triggering checkpoint"
+
+# Proceed to checkpoint handling (see Checkpoint Handling section)
+# Monitor continues running - it doesn't exit on context_threshold
+```
+
+**Handling `session_died` signal:**
+
+```bash
+# Check if phase was actually complete
+if [ -f ".tina/phase-$PHASE_NUM/status.json" ]; then
   STATUS=$(jq -r '.status' ".tina/phase-$PHASE_NUM/status.json")
+  if [ "$STATUS" = "complete" ]; then
+    echo "Phase $PHASE_NUM was complete, continuing"
+    # Proceed to Step 3f
+  fi
+fi
 
-  case "$STATUS" in
-    "complete")
-      echo "Phase $PHASE_NUM complete"
-      break
-      ;;
-    "blocked")
-      REASON=$(jq -r '.reason' ".tina/phase-$PHASE_NUM/status.json")
-      echo "Phase $PHASE_NUM blocked: $REASON"
-      # Spawn helper agent for diagnosis
-      # (See "Blocked State Handling" section below)
-      ;;
-    *)
-      sleep 10
-      ;;
-  esac
-done
+# Attempt recovery via rehydrate
+echo "Attempting recovery..."
 
-# Note: In production, consider adding a timeout mechanism to prevent infinite loops
+# Step 1: Start session with Claude
+tmux new-session -d -s "$SESSION_NAME" \
+  "cd $WORKTREE_PATH && claude --dangerously-skip-permissions"
+
+# Step 2: Wait for Claude to initialize, then send the rehydrate command
+sleep 3
+tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
+
+# Track recovery attempt
+RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .tina/supervisor-state.json)
+RECOVERY_COUNT=$((RECOVERY_COUNT + 1))
+tmp_file=$(mktemp)
+jq ".recovery_attempts[\"$PHASE_NUM\"] = $RECOVERY_COUNT" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+
+if [ "$RECOVERY_COUNT" -gt 1 ]; then
+  echo "Recovery failed twice, escalating"
+  exit 1
+fi
+
+# Respawn monitoring agent for the recovered session
+# (Use Task tool again with same parameters)
+```
+
+**User interaction while monitoring:**
+
+The terminal remains responsive. Users can:
+- Ask about progress (orchestrator reads monitor output)
+- Give new instructions
+- Manually trigger checkpoint via `/tina:checkpoint`
+- Stop orchestration
+
+When user interacts, check monitor output for any pending signals before responding.
+
+### Reading Monitor Output
+
+The orchestrator periodically checks the monitor's output file for signals. This should be done:
+- Every 10 seconds when idle
+- Before responding to user queries
+- After any user interaction
+
+**Check for signals:**
+
+```bash
+MONITOR_OUTPUT=$(jq -r '.monitor_output_file' .tina/supervisor-state.json)
+
+# Read last 50 lines and look for signals
+SIGNALS=$(tail -50 "$MONITOR_OUTPUT" 2>/dev/null | grep "^\[SIGNAL\]" || true)
+
+if [ -n "$SIGNALS" ]; then
+  # Process each signal (most recent last)
+  echo "$SIGNALS" | while read -r SIGNAL_LINE; do
+    case "$SIGNAL_LINE" in
+      *"phase_complete"*)
+        # Handle completion
+        ;;
+      *"phase_blocked"*)
+        # Handle blocked state
+        ;;
+      *"context_threshold"*)
+        # Handle context threshold
+        ;;
+      *"session_died"*)
+        # Handle session death
+        ;;
+    esac
+  done
+fi
+```
+
+**Signal deduplication:**
+
+To avoid processing the same signal twice, track the last processed line number:
+
+```bash
+# Read current line count
+CURRENT_LINES=$(wc -l < "$MONITOR_OUTPUT" 2>/dev/null || echo 0)
+LAST_PROCESSED=$(jq -r '.monitor_last_line // 0' .tina/supervisor-state.json)
+
+if [ "$CURRENT_LINES" -gt "$LAST_PROCESSED" ]; then
+  # Only read new lines
+  NEW_LINES=$((CURRENT_LINES - LAST_PROCESSED))
+  SIGNALS=$(tail -$NEW_LINES "$MONITOR_OUTPUT" | grep "^\[SIGNAL\]" || true)
+
+  # Update last processed
+  tmp_file=$(mktemp)
+  jq ".monitor_last_line = $CURRENT_LINES" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+fi
 ```
 
 **3f. Cleanup and Proceed**
 
 ```bash
+# Stop the background monitoring agent (if still running)
+# Use TaskStop tool with the monitor's task_id
+
 # Kill tmux session (errors suppressed if session already terminated)
 tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
-# Clear active session in state
+# Clear active session and monitor in state
 tmp_file=$(mktemp)
-jq ".active_tmux_session = null" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq ".active_tmux_session = null | .monitor_output_file = null" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
 ```
 
 ### Checkpoint Handling
 
-Supervisor monitors for checkpoint signal and coordinates context reset:
+When the background monitor outputs `[SIGNAL] context_threshold`, the orchestrator coordinates context reset:
 
 **1. Detect checkpoint needed:**
 
-Within the monitor loop (Step 3e), check for signal file:
+The background monitor outputs the signal when context exceeds threshold. The orchestrator creates the signal file:
 
 ```bash
-# In monitor loop, check for signal file
-if [ -f "$WORKTREE_PATH/.tina/checkpoint-needed" ]; then
-  echo "Checkpoint signal detected"
-  # Proceed to checkpoint handling
-fi
+# When [SIGNAL] context_threshold detected in monitor output
+USED_PCT=$(echo "$SIGNAL_LINE" | sed 's/.*pct=\([0-9.]*\).*/\1/')
+echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": 50}" > "$WORKTREE_PATH/.tina/checkpoint-needed"
+echo "Context at ${USED_PCT}%, triggering checkpoint"
 ```
 
 **2. Send checkpoint command:**
@@ -787,6 +922,7 @@ tmux send-keys -t <name> "<command>" Enter
   "total_phases": 3,
   "current_phase": 2,
   "active_tmux_session": "tina-phase-2",
+  "monitor_output_file": "/tmp/claude-task-abc123.out",
   "plan_paths": {
     "1": "docs/plans/2026-01-26-feature-phase-1.md",
     "2": "docs/plans/2026-01-26-feature-phase-2.md"
@@ -808,6 +944,7 @@ tmux send-keys -t <name> "<command>" Enter
 - `total_phases`: Number of phases parsed from design doc
 - `current_phase`: Last phase that was started (0 = not started)
 - `active_tmux_session`: Currently running tmux session name (null if none)
+- `monitor_output_file`: Path to background monitor's output file (for reading signals)
 - `plan_paths`: Map of phase number to generated plan file path
 - `recovery_attempts`: Map of phase number to recovery attempt count
 - `status`: Overall status (executing, complete, blocked)
@@ -868,6 +1005,7 @@ The supervisor automatically detects existing state and resumes appropriately.
 
 **Spawns:**
 - `tina:planner` - Creates implementation plan for each phase
+- `tina:monitor` - Background haiku agent for phase monitoring (run_in_background: true)
 - Team-lead in tmux - Executes phase via `team-lead-init`
 
 **Invokes:**
