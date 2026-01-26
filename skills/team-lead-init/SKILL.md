@@ -161,6 +161,24 @@ Teammate.requestShutdown({
 
 Wait for all teammates to acknowledge, then update status to complete.
 
+## Checkpoint Protocol
+
+Team-lead responds to `/checkpoint` command from supervisor:
+
+1. Supervisor detects context threshold exceeded
+2. Supervisor sends `/checkpoint` via tmux
+3. Team-lead invokes `checkpoint` skill
+4. Checkpoint skill shuts down team, writes handoff
+5. Team-lead outputs "CHECKPOINT COMPLETE"
+6. Supervisor sends `/clear`, then `/rehydrate`
+7. Fresh session invokes `rehydrate` skill
+8. Rehydrate restores team and task state
+9. Execution continues
+
+**Important:** The `/checkpoint` and `/rehydrate` commands are slash commands that invoke the respective skills. Team-lead doesn't implement checkpoint logic directly - it delegates to the skills.
+
+See: `skills/checkpoint/SKILL.md` and `skills/rehydrate/SKILL.md`
+
 ## Error Handling
 
 **Plan file not found:**
@@ -190,6 +208,10 @@ Wait for all teammates to acknowledge, then update status to complete.
 
 **Invokes:**
 - `supersonic:executing-plans` - Delegates to executing-plans workflow for task execution
+
+**Responds to:**
+- `/checkpoint` - Invokes checkpoint skill for context management
+- `/rehydrate` - Invokes rehydrate skill after context reset
 
 **State files:**
 - `.tina/phase-N/status.json` - Phase execution status
