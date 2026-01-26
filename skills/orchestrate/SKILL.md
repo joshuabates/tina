@@ -354,7 +354,7 @@ When a phase enters blocked state, supervisor spawns a helper agent for diagnosi
 Poll for helper's diagnostic output (max 2 minutes):
 
 ```bash
-DIAGNOSTIC_FILE=".tina/phase-$PHASE_NUM/diagnostic.json"
+DIAGNOSTIC_FILE=".tina/phase-$PHASE_NUM/diagnostic.md"
 TIMEOUT=120
 START=$(date +%s)
 
@@ -535,13 +535,34 @@ If interrupted, re-run with same design doc path:
 
 **Design doc has no phases:**
 - Error immediately: "Design doc must have `## Phase N` sections"
+- Exit with error code
 
 **Planner fails:**
-- Retry once, then escalate to user
+- Retry once with same prompt
+- If still fails: output error, exit (human intervention needed)
 
 **Team-lead tmux session dies:**
 - Check if phase was complete (proceed if yes)
-- Otherwise escalate to user
+- Attempt recovery via `/rehydrate` in new session
+- Track recovery attempts in supervisor-state.json
+- If recovery fails twice: escalate to human
+
+**Phase blocked:**
+- Spawn helper agent for diagnosis
+- Helper writes `.tina/phase-N/diagnostic.md`
+- If helper recommends RECOVERABLE: attempt one recovery
+- If helper recommends ESCALATE or recovery fails: escalate to human
+
+**Checkpoint timeout:**
+- Team-lead doesn't write handoff within 5 minutes
+- Force kill tmux session
+- Mark phase as blocked with reason "checkpoint timeout"
+- Spawn helper agent (may be able to diagnose from partial state)
+
+**Recovery tracking:**
+- Supervisor tracks recovery attempts per phase in `recovery_attempts` field
+- Maximum 1 recovery attempt per phase per error type
+- Prevents infinite retry loops
 
 ## Red Flags
 
