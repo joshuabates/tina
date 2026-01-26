@@ -86,6 +86,8 @@ This phase implements basic orchestration without team-based execution:
 
 ## Implementation Details
 
+**Note:** The variables `$DESIGN_DOC`, `$PHASE_NUM`, and `$PLAN_PATH` are placeholders representing values from the execution context. The tmux invocation `claude --prompt '/team-lead-init $PLAN_PATH'` starts a new Claude CLI session that will execute the team-lead-init skill with the provided plan path argument.
+
 ### Step 1: Parse Design Doc
 
 ```bash
@@ -142,9 +144,10 @@ Wait for planner to return plan path (e.g., `docs/plans/2026-01-26-feature-phase
 **3b. Update Supervisor State**
 
 ```bash
-# Update current phase and plan path
-jq ".current_phase = $PHASE_NUM | .plan_paths[\"$PHASE_NUM\"] = \"$PLAN_PATH\"" \
-  .tina/supervisor-state.json > tmp.json && mv tmp.json .tina/supervisor-state.json
+# Use tina_set_supervisor_field and tina_add_plan_path from _tina-utils.sh, or:
+tmp_file=$(mktemp)
+jq ".current_phase = $PHASE_NUM" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+# Then use tina_add_plan_path for the plan path
 ```
 
 **3c. Initialize Phase Directory**
@@ -167,8 +170,8 @@ tmux new-session -d -s "$SESSION_NAME" \
   "cd $(pwd) && claude --prompt '/team-lead-init $PLAN_PATH'"
 
 # Update active session in state
-jq ".active_tmux_session = \"$SESSION_NAME\"" \
-  .tina/supervisor-state.json > tmp.json && mv tmp.json .tina/supervisor-state.json
+tmp_file=$(mktemp)
+jq ".active_tmux_session = \"$SESSION_NAME\"" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
 ```
 
 **3e. Monitor Phase Status**
@@ -177,6 +180,12 @@ Poll every 10 seconds until phase completes:
 
 ```bash
 while true; do
+  # Check if status file exists
+  if [ ! -f ".tina/phase-$PHASE_NUM/status.json" ]; then
+    echo "Error: Phase $PHASE_NUM status file not found"
+    exit 1
+  fi
+
   STATUS=$(jq -r '.status' ".tina/phase-$PHASE_NUM/status.json")
 
   case "$STATUS" in
@@ -195,17 +204,19 @@ while true; do
       ;;
   esac
 done
+
+# Note: In production, consider adding a timeout mechanism to prevent infinite loops
 ```
 
 **3f. Cleanup and Proceed**
 
 ```bash
-# Kill tmux session
+# Kill tmux session (errors suppressed if session already terminated)
 tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
 # Clear active session in state
-jq ".active_tmux_session = null" \
-  .tina/supervisor-state.json > tmp.json && mv tmp.json .tina/supervisor-state.json
+tmp_file=$(mktemp)
+jq ".active_tmux_session = null" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
 ```
 
 ### Step 4: Completion
