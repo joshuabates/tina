@@ -528,8 +528,15 @@ If interrupted, re-run with same design doc path:
 - Checkpoint/rehydrate for context management via `.tina/checkpoint-needed` signal
 - Statusline context monitoring with automatic checkpoint triggering
 
-**Future integrations (Phase 4+):**
-- Helper agent for blocked state diagnosis
+**Phase 4 integrations (now available):**
+- Helper agent (`supersonic:helper`) for blocked state diagnosis
+- Planner retry logic (one retry before escalation)
+- Tmux session death detection and recovery
+- Recovery attempt tracking to prevent infinite loops
+
+**Future integrations (Phase 5):**
+- Supervisor resumption from supervisor-state.json
+- Orphaned session detection and cleanup
 
 ## Error Handling
 
