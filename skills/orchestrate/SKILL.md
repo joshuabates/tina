@@ -371,6 +371,22 @@ else
 EOF
   CURRENT_PHASE=0
 fi
+
+# Initialize cumulative metrics tracking
+if [ ! -f ".tina/cumulative-metrics.json" ]; then
+  cat > .tina/cumulative-metrics.json << EOF
+{
+  "phases_completed": 0,
+  "total_impl_lines": 0,
+  "total_test_lines": 0,
+  "total_expected_impl": 0,
+  "total_expected_test": 0,
+  "cumulative_impl_drift_pct": 0,
+  "cumulative_test_drift_pct": 0,
+  "phase_metrics": {}
+}
+EOF
+fi
 ```
 
 ### Step 2b: Orphaned Session Cleanup
@@ -908,6 +924,64 @@ tina_replan_remaining() {
   # - Original design doc
   # - Phase number to plan
   # - Cumulative metrics file path (for context on what's been achieved)
+}
+```
+
+### Cumulative Metrics Helpers
+
+**Update cumulative metrics after phase completion:**
+
+```bash
+tina_update_cumulative_metrics() {
+  local phase_num="$1"
+  local review_file="$2"
+  local metrics_file="$WORKTREE_PATH/.tina/cumulative-metrics.json"
+
+  # Extract metrics from review file
+  # The review file has a metrics table we need to parse
+  local impl_actual=$(grep "Impl lines" "$review_file" | sed 's/.*| +\([0-9]*\).*/\1/' | head -1)
+  local test_actual=$(grep "Test lines" "$review_file" | sed 's/.*| +\([0-9]*\).*/\1/' | head -1)
+  local impl_expected=$(grep "Impl lines" "$review_file" | sed 's/.*| ~\([0-9]*\).*/\1/' | head -1)
+  local test_expected=$(grep "Test lines" "$review_file" | sed 's/.*| ~\([0-9]*\).*/\1/' | head -1)
+  local drift=$(grep "Metric drift:" "$review_file" | sed 's/.*drift: \([0-9]*\)%.*/\1/' | head -1)
+
+  # Default to 0 if parsing fails
+  impl_actual=${impl_actual:-0}
+  test_actual=${test_actual:-0}
+  impl_expected=${impl_expected:-0}
+  test_expected=${test_expected:-0}
+  drift=${drift:-0}
+
+  # Update cumulative metrics
+  local tmp_file=$(mktemp)
+  jq --arg phase "$phase_num" \
+     --argjson impl "$impl_actual" \
+     --argjson test "$test_actual" \
+     --argjson exp_impl "$impl_expected" \
+     --argjson exp_test "$test_expected" \
+     --argjson drift "$drift" '
+    .phases_completed += 1 |
+    .total_impl_lines += $impl |
+    .total_test_lines += $test |
+    .total_expected_impl += $exp_impl |
+    .total_expected_test += $exp_test |
+    .phase_metrics[$phase] = {impl: $impl, test: $test, drift: $drift} |
+    .cumulative_impl_drift_pct = (if .total_expected_impl > 0 then (((.total_expected_impl - .total_impl_lines) | fabs) / .total_expected_impl * 100 | floor) else 0 end) |
+    .cumulative_test_drift_pct = (if .total_expected_test > 0 then (((.total_expected_test - .total_test_lines) | fabs) / .total_expected_test * 100 | floor) else 0 end)
+  ' "$metrics_file" > "$tmp_file" && mv "$tmp_file" "$metrics_file"
+}
+
+tina_get_cumulative_drift() {
+  local metrics_file="$WORKTREE_PATH/.tina/cumulative-metrics.json"
+  local impl_drift=$(jq -r '.cumulative_impl_drift_pct // 0' "$metrics_file")
+  local test_drift=$(jq -r '.cumulative_test_drift_pct // 0' "$metrics_file")
+
+  # Return the worse of the two
+  if [ "$impl_drift" -gt "$test_drift" ]; then
+    echo "$impl_drift"
+  else
+    echo "$test_drift"
+  fi
 }
 ```
 
