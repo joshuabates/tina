@@ -623,6 +623,86 @@ fi
 # (Use Task tool again with same parameters)
 ```
 
+**3e-2. Consume Phase Reviewer Output**
+
+When phase completes, the executing-plans skill dispatches the phase reviewer. The phase reviewer writes its report to `.tina/phase-N/review.md` and outputs a severity tier.
+
+**Read phase reviewer output:**
+
+```bash
+REVIEW_FILE="$WORKTREE_PATH/.tina/phase-$PHASE_NUM/review.md"
+
+# Wait for review file (max 5 minutes)
+TIMEOUT=300
+START=$(date +%s)
+while [ ! -f "$REVIEW_FILE" ]; do
+  ELAPSED=$(($(date +%s) - START))
+  if [ "$ELAPSED" -gt "$TIMEOUT" ]; then
+    echo "Phase reviewer timeout - escalating"
+    exit 1
+  fi
+  sleep 5
+done
+
+# Extract severity from review
+SEVERITY=$(grep -E "^\*\*Status:\*\*" "$REVIEW_FILE" | sed 's/.*\*\*Status:\*\* //' | tr '[:upper:]' '[:lower:]')
+METRIC_DRIFT=$(grep -E "^\*\*Severity tier:\*\*" "$REVIEW_FILE" | sed 's/.*drift: //' | sed 's/%.*//')
+```
+
+**Handle severity:**
+
+```bash
+case "$SEVERITY" in
+  "pass")
+    echo "Phase $PHASE_NUM passed review"
+    # Update cumulative metrics
+    tina_update_cumulative_metrics "$PHASE_NUM" "$REVIEW_FILE"
+    # Proceed to next phase (existing flow)
+    ;;
+
+  "warning")
+    echo "Phase $PHASE_NUM passed with warnings"
+    # Update cumulative metrics
+    tina_update_cumulative_metrics "$PHASE_NUM" "$REVIEW_FILE"
+
+    # Check cumulative drift
+    CUMULATIVE_DRIFT=$(tina_get_cumulative_drift)
+    if [ "$CUMULATIVE_DRIFT" -gt 50 ]; then
+      echo "Cumulative drift exceeds 50% - triggering reassessment"
+      tina_trigger_reassessment "$PHASE_NUM"
+    else
+      echo "Cumulative drift at ${CUMULATIVE_DRIFT}% - proceeding with caution"
+      # Proceed to next phase
+    fi
+    ;;
+
+  "stop")
+    echo "Phase $PHASE_NUM failed review - halting"
+    # Surface to user with full context
+    cat << EOF
+=== PHASE REVIEW FAILED ===
+Phase: $PHASE_NUM
+Severity: STOP
+
+Review summary:
+$(cat "$REVIEW_FILE")
+
+Action required: Manual intervention needed before continuing.
+Options:
+1. Fix issues and re-run phase
+2. Adjust estimates in remaining phases
+3. Abort orchestration
+EOF
+    exit 1
+    ;;
+
+  *)
+    echo "Unknown severity: $SEVERITY - treating as warning"
+    # Fall through to warning handling
+    ;;
+esac
+```
+
 **User interaction while monitoring:**
 
 The terminal remains responsive. Users can:
@@ -772,6 +852,64 @@ rm "$WORKTREE_PATH/.tina/checkpoint-needed"
 **5. Continue monitoring:**
 
 After rehydrate, return to normal phase monitoring loop (Step 3e).
+
+### Reassessment Handling
+
+When cumulative drift exceeds threshold or a phase returns Warning status, the orchestrator can trigger reassessment.
+
+**Reassessment options:**
+
+1. **Continue with caution** - Log warning, proceed to next phase
+2. **Replan remaining phases** - Spawn planner with updated context
+3. **Escalate to human** - Pause and wait for user decision
+
+**Reassessment logic:**
+
+```bash
+tina_trigger_reassessment() {
+  local phase_num="$1"
+  local cumulative_drift=$(tina_get_cumulative_drift)
+  local remaining_phases=$((TOTAL_PHASES - phase_num))
+
+  echo "=== REASSESSMENT TRIGGERED ==="
+  echo "Completed: $phase_num / $TOTAL_PHASES phases"
+  echo "Cumulative drift: ${cumulative_drift}%"
+  echo "Remaining phases: $remaining_phases"
+
+  # Read cumulative metrics
+  cat "$WORKTREE_PATH/.tina/cumulative-metrics.json" | jq '.'
+
+  # Decision tree
+  if [ "$cumulative_drift" -gt 75 ]; then
+    echo "DECISION: Escalate to human (drift too high)"
+    echo "Recommendation: Consider aborting or major replanning"
+    exit 1
+  elif [ "$remaining_phases" -le 1 ]; then
+    echo "DECISION: Continue (only 1 phase remaining)"
+    echo "Warning: Final phase may not achieve goal"
+    # Proceed
+  else
+    echo "DECISION: Replan remaining phases"
+    # Spawn planner with cumulative context
+    # Planner receives actual metrics to adjust remaining estimates
+    tina_replan_remaining "$phase_num"
+  fi
+}
+
+tina_replan_remaining() {
+  local completed_phase="$1"
+  local next_phase=$((completed_phase + 1))
+
+  echo "Spawning planner with updated context for phase $next_phase"
+
+  # The planner receives cumulative metrics so it can adjust estimates
+  # This is done by including the metrics file path in the planner prompt
+  # Planner prompt includes:
+  # - Original design doc
+  # - Phase number to plan
+  # - Cumulative metrics file path (for context on what's been achieved)
+}
+```
 
 ### Blocked State Handling
 
@@ -1029,6 +1167,24 @@ tmux send-keys -t <name> "<command>" Enter
 
 Written by statusline script on each status update. Supervisor reads this to decide checkpoints.
 
+**Cumulative metrics:** `.tina/cumulative-metrics.json`
+```json
+{
+  "phases_completed": 3,
+  "total_impl_lines": 450,
+  "total_test_lines": 380,
+  "total_expected_impl": 500,
+  "total_expected_test": 600,
+  "cumulative_impl_drift_pct": 10,
+  "cumulative_test_drift_pct": 37,
+  "phase_metrics": {
+    "1": {"impl": 150, "test": 200, "drift": 5},
+    "2": {"impl": 180, "test": 100, "drift": 25},
+    "3": {"impl": 120, "test": 80, "drift": 45}
+  }
+}
+```
+
 ## Resumption
 
 If supervisor is interrupted (Ctrl+C, crash, terminal closed), re-run with same design doc path:
@@ -1113,6 +1269,12 @@ The supervisor automatically detects existing state and resumes appropriately.
 - Completion workflow with finishing-a-development-branch integration
 
 **All planned integrations complete.** The orchestration system is fully functional.
+
+**Metrics tracking:**
+- Phase reviewer writes `.tina/phase-N/review.md` with severity and metrics
+- Orchestrator updates `.tina/cumulative-metrics.json` after each phase
+- Cumulative drift calculated as average of per-phase drifts
+- Threshold: 50% cumulative drift triggers reassessment
 
 ## Error Handling
 
