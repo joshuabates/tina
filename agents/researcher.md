@@ -204,3 +204,15 @@ Teammate.write({
 1. Complete current research if nearly done (< 2 minutes)
 2. Otherwise, report partial findings
 3. Acknowledge shutdown
+
+**Checkpoint shutdown (message contains "checkpoint"):**
+1. Complete current research if nearly done (< 2 minutes)
+2. Otherwise, report partial findings with note of what wasn't searched yet
+3. Report state to team-lead:
+   ```
+   Teammate.write({
+     target: "team-lead",
+     value: "Checkpoint acknowledged. Research state: [in_progress|idle]. Partial results: [summary]. Not yet searched: [remaining areas]. Ready for shutdown."
+   })
+   ```
+4. Wait for final shutdown confirmation
