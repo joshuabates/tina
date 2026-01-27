@@ -106,7 +106,7 @@ git worktree remove .worktrees/planner-subagent && git branch -d feature/planner
 
 # Check what's untracked - THIS CD'S BACK INTO THE WORKTREE
 cd .worktrees/planner-subagent && git status --short
-# → ?? .tina/
+# → ?? .claude/tina/
 
 # Force remove - WHILE SHELL CWD IS INSIDE THE WORKTREE
 git worktree remove --force .worktrees/planner-subagent && git branch -d feature/planner-subagent

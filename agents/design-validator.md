@@ -77,7 +77,7 @@ If the design includes a baseline command in Success Metrics:
 
 **Step 2:** Record the result in the validation report
 
-**Step 3:** Write baseline to `.tina/baseline-metrics.json`:
+**Step 3:** Write baseline to `.claude/tina/baseline-metrics.json`:
 ```json
 {
   "captured_at": "2026-01-27T10:00:00Z",
@@ -149,7 +149,7 @@ Check that the design follows expected structure:
 
 **Command:** `[baseline command]`
 **Result:** [captured value or error message]
-**Saved to:** `.tina/baseline-metrics.json`
+**Saved to:** `.claude/tina/baseline-metrics.json`
 
 ### Document Structure Check
 **Status:** ✅ Pass / ⚠️ Warning / ❌ Stop
@@ -181,7 +181,7 @@ Check that the design follows expected structure:
 - Run baseline command if provided (capture actual metrics)
 - Calculate exact margin when estimates and goal both exist
 - Give specific feedback on what's missing or wrong
-- Write baseline metrics to `.tina/baseline-metrics.json`
+- Write baseline metrics to `.claude/tina/baseline-metrics.json`
 - Output clear severity tier
 
 **DON'T:**

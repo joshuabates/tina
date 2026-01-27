@@ -34,7 +34,7 @@ Follow the worktree creation steps from the skill (Step 1b).
 
 ## STEP 3: Initialize supervisor state
 
-Create `.tina/supervisor-state.json` per the skill.
+Create `.claude/tina/supervisor-state.json` per the skill.
 
 ---
 

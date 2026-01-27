@@ -4,7 +4,7 @@
 
 **Goal:** Implement checkpoint and rehydrate skills that allow team-lead sessions to save state and resume after context reset.
 
-**Architecture:** The `checkpoint` skill coordinates team shutdown and writes handoff state to `.tina/phase-N/handoff.md`. The `rehydrate` skill reads the handoff, respawns the team, restores task state, and resumes execution. The supervisor monitors for `checkpoint-needed` signal (already created by tina-statusline.sh) and sends commands via tmux.
+**Architecture:** The `checkpoint` skill coordinates team shutdown and writes handoff state to `.claude/tina/phase-N/handoff.md`. The `rehydrate` skill reads the handoff, respawns the team, restores task state, and resumes execution. The supervisor monitors for `checkpoint-needed` signal (already created by tina-statusline.sh) and sends commands via tmux.
 
 **Tech Stack:** Markdown skills with YAML frontmatter, TaskList/TaskCreate/TaskUpdate tools, Teammate tool
 
@@ -103,7 +103,7 @@ For tasks `in_progress`, note:
 
 ## Handoff File Format
 
-Write to `.tina/phase-N/handoff.md`:
+Write to `.claude/tina/phase-N/handoff.md`:
 
 ```markdown
 # Phase N Handoff
@@ -254,7 +254,7 @@ digraph rehydrate {
 
 ## Reading Handoff
 
-Read `.tina/phase-N/handoff.md` where N is extracted from supervisor state or plan path.
+Read `.claude/tina/phase-N/handoff.md` where N is extracted from supervisor state or plan path.
 
 Parse:
 - Team composition (how many workers, which reviewers)
@@ -347,7 +347,7 @@ executing-plans will:
 ## Error Handling
 
 **Handoff file not found:**
-- Output error: "No handoff file found at .tina/phase-N/handoff.md"
+- Output error: "No handoff file found at .claude/tina/phase-N/handoff.md"
 - Set phase status to blocked
 - Exit
 
@@ -486,7 +486,7 @@ Supervisor monitors for checkpoint signal and coordinates reset:
 
 ```bash
 # In monitor loop, check for signal file
-if [ -f ".tina/checkpoint-needed" ]; then
+if [ -f ".claude/tina/checkpoint-needed" ]; then
   echo "Checkpoint signal detected"
   # Proceed to checkpoint handling
 fi
@@ -503,7 +503,7 @@ tmux send-keys -t "$SESSION_NAME" "/checkpoint" Enter
 Poll for handoff file update (max 5 minutes):
 
 ```bash
-HANDOFF_FILE=".tina/phase-$PHASE_NUM/handoff.md"
+HANDOFF_FILE=".claude/tina/phase-$PHASE_NUM/handoff.md"
 TIMEOUT=300
 START=$(date +%s)
 
@@ -511,7 +511,7 @@ while true; do
   if [ -f "$HANDOFF_FILE" ]; then
     # Check if modified after checkpoint signal
     HANDOFF_TIME=$(stat -f %m "$HANDOFF_FILE" 2>/dev/null || stat -c %Y "$HANDOFF_FILE")
-    SIGNAL_TIME=$(stat -f %m ".tina/checkpoint-needed" 2>/dev/null || stat -c %Y ".tina/checkpoint-needed")
+    SIGNAL_TIME=$(stat -f %m ".claude/tina/checkpoint-needed" 2>/dev/null || stat -c %Y ".claude/tina/checkpoint-needed")
     if [ "$HANDOFF_TIME" -gt "$SIGNAL_TIME" ]; then
       echo "Handoff written"
       break
@@ -540,7 +540,7 @@ sleep 2
 tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
 
 # Remove checkpoint signal
-rm ".tina/checkpoint-needed"
+rm ".claude/tina/checkpoint-needed"
 ```
 
 **5. Continue monitoring:**
@@ -554,7 +554,7 @@ Update the Integration section to include checkpoint/rehydrate:
 
 ```markdown
 **Checkpoint cycle:**
-- Statusline script creates `.tina/checkpoint-needed` when context > threshold
+- Statusline script creates `.claude/tina/checkpoint-needed` when context > threshold
 - Supervisor detects signal, sends `/checkpoint` to team-lead
 - Team-lead runs checkpoint skill, writes handoff, outputs "CHECKPOINT COMPLETE"
 - Supervisor sends `/clear`, then `/rehydrate`

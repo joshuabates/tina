@@ -99,7 +99,7 @@ If the design includes a baseline command in Success Metrics:
 
 **Step 2:** Record the result in the validation report
 
-**Step 3:** Write baseline to `.tina/baseline-metrics.json`:
+**Step 3:** Write baseline to `.claude/tina/baseline-metrics.json`:
 ```json
 {
   "captured_at": "2026-01-27T10:00:00Z",
@@ -171,7 +171,7 @@ Check that the design follows expected structure:
 
 **Command:** `[baseline command]`
 **Result:** [captured value or error message]
-**Saved to:** `.tina/baseline-metrics.json`
+**Saved to:** `.claude/tina/baseline-metrics.json`
 
 ### Document Structure Check
 **Status:** ✅ Pass / ⚠️ Warning / ❌ Stop
@@ -203,7 +203,7 @@ Check that the design follows expected structure:
 - Run baseline command if provided (capture actual metrics)
 - Calculate exact margin when estimates and goal both exist
 - Give specific feedback on what's missing or wrong
-- Write baseline metrics to `.tina/baseline-metrics.json`
+- Write baseline metrics to `.claude/tina/baseline-metrics.json`
 - Output clear severity tier
 
 **DON'T:**
@@ -260,7 +260,7 @@ if [ "$CURRENT_PHASE" -eq 0 ]; then
   echo "Validating design document..."
 
   # Create validation output directory
-  mkdir -p "$WORKTREE_PATH/.tina/validation"
+  mkdir -p "$WORKTREE_PATH/.claude/tina/validation"
 
   # Spawn design validator
   # Task tool parameters:
@@ -268,7 +268,7 @@ if [ "$CURRENT_PHASE" -eq 0 ]; then
   #   model: "opus"
   #   prompt: |
   #     Design doc: $DESIGN_DOC
-  #     Output file: $WORKTREE_PATH/.tina/validation/design-report.md
+  #     Output file: $WORKTREE_PATH/.claude/tina/validation/design-report.md
   #
   #     Validate this design and write your report to the output file.
   #     Return ONLY: VALIDATION_STATUS: Pass/Warning/Stop
@@ -283,13 +283,13 @@ if [ "$CURRENT_PHASE" -eq 0 ]; then
 
     "Warning")
       echo "Design validated with warnings - proceeding with caution"
-      echo "See: $WORKTREE_PATH/.tina/validation/design-report.md"
+      echo "See: $WORKTREE_PATH/.claude/tina/validation/design-report.md"
       ;;
 
     "Stop")
       echo "Design validation FAILED"
       echo ""
-      cat "$WORKTREE_PATH/.tina/validation/design-report.md"
+      cat "$WORKTREE_PATH/.claude/tina/validation/design-report.md"
       echo ""
       echo "Design must be revised before orchestration can proceed."
       echo "Review the report above and update the design document."
@@ -309,12 +309,12 @@ Find the `digraph orchestrate` diagram in the "## The Process" section. Update i
 
 Find the line:
 ```
-"Initialize .tina/supervisor-state.json" -> "More phases?";
+"Initialize .claude/tina/supervisor-state.json" -> "More phases?";
 ```
 
 Replace it with:
 ```
-"Initialize .tina/supervisor-state.json" -> "Validate design (tina:design-validator)";
+"Initialize .claude/tina/supervisor-state.json" -> "Validate design (tina:design-validator)";
 "Validate design (tina:design-validator)" [shape=box];
 "Design valid?" [shape=diamond];
 "Validate design (tina:design-validator)" -> "Design valid?";
@@ -339,7 +339,7 @@ Find the "## State Files" section. Add the baseline metrics file description aft
 Add:
 ```markdown
 
-**Baseline metrics:** `.tina/baseline-metrics.json`
+**Baseline metrics:** `.claude/tina/baseline-metrics.json`
 ```json
 {
   "captured_at": "2026-01-26T10:00:00Z",
@@ -465,7 +465,7 @@ echo "N/A - qualitative improvement"
 **Progress command:**
 ```bash
 # Check that design validator blocked infeasible designs
-ls -la .tina/validation/design-report.md 2>/dev/null && grep "Status:" .tina/validation/design-report.md
+ls -la .claude/tina/validation/design-report.md 2>/dev/null && grep "Status:" .claude/tina/validation/design-report.md
 ```
 
 **ROI threshold:** N/A (infrastructure work - ROI measured by subsequent project success rates)
@@ -508,7 +508,7 @@ Find the table row for "**Planner**" and add before it:
 
 **Step 2: Add validation state tracking to supervisor state**
 
-Find the "**Supervisor state:** `.tina/supervisor-state.json`" section with the JSON example. Update the JSON to include validation status.
+Find the "**Supervisor state:** `.claude/tina/supervisor-state.json`" section with the JSON example. Update the JSON to include validation status.
 
 Find the `"recovery_attempts": {}` line in the JSON and add after it:
 
@@ -526,7 +526,7 @@ Update the field descriptions section below the JSON. Add:
 
 **Step 3: Update state initialization to include validation fields**
 
-Find the `cat > .tina/supervisor-state.json << EOF` block in Step 2. Add the validation fields to the initial state.
+Find the `cat > .claude/tina/supervisor-state.json << EOF` block in Step 2. Add the validation fields to the initial state.
 
 The JSON should include:
 ```json
@@ -547,22 +547,22 @@ After each status case, add state update:
     "Pass")
       echo "Design validated successfully"
       tmp_file=$(mktemp)
-      jq '.design_validated = true | .validation_status = "pass"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+      jq '.design_validated = true | .validation_status = "pass"' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
       ;;
 
     "Warning")
       echo "Design validated with warnings - proceeding with caution"
-      echo "See: $WORKTREE_PATH/.tina/validation/design-report.md"
+      echo "See: $WORKTREE_PATH/.claude/tina/validation/design-report.md"
       tmp_file=$(mktemp)
-      jq '.design_validated = true | .validation_status = "warning"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+      jq '.design_validated = true | .validation_status = "warning"' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
       ;;
 
     "Stop")
       echo "Design validation FAILED"
       tmp_file=$(mktemp)
-      jq '.design_validated = true | .validation_status = "stop"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+      jq '.design_validated = true | .validation_status = "stop"' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
       echo ""
-      cat "$WORKTREE_PATH/.tina/validation/design-report.md"
+      cat "$WORKTREE_PATH/.claude/tina/validation/design-report.md"
       echo ""
       echo "Design must be revised before orchestration can proceed."
       echo "Review the report above and update the design document."
@@ -574,11 +574,11 @@ After each status case, add state update:
 
 In the "### Step 2: Initialize or Resume State" section, where resumption is handled, add a check for validation status.
 
-After the `CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)` line, add:
+After the `CURRENT_PHASE=$(jq -r '.current_phase' .claude/tina/supervisor-state.json)` line, add:
 
 ```bash
   # Check validation status on resume
-  DESIGN_VALIDATED=$(jq -r '.design_validated // false' .tina/supervisor-state.json)
+  DESIGN_VALIDATED=$(jq -r '.design_validated // false' .claude/tina/supervisor-state.json)
   if [ "$DESIGN_VALIDATED" = "false" ]; then
     echo "Design not validated yet - will validate before proceeding"
     # Validation will run in Step 2c

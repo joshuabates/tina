@@ -2,20 +2,20 @@
 
 > **For Claude:** Use supersonic:executing-plans to implement this plan.
 
-**Goal:** Create foundation for orchestrated automation: `.tina/` state management, `orchestrate` skill basic loop, and `team-lead-init` skill.
+**Goal:** Create foundation for orchestrated automation: `.claude/tina/` state management, `orchestrate` skill basic loop, and `team-lead-init` skill.
 
-**Architecture:** The orchestrate skill runs in user's foreground session and spawns planners as subagents, then team-leads in tmux sessions. State is persisted to `.tina/supervisor-state.json` for resumption. Team-lead-init reads plan and (in this phase) delegates to existing Task-based execution flow - team-based execution comes in Phase 2.
+**Architecture:** The orchestrate skill runs in user's foreground session and spawns planners as subagents, then team-leads in tmux sessions. State is persisted to `.claude/tina/supervisor-state.json` for resumption. Team-lead-init reads plan and (in this phase) delegates to existing Task-based execution flow - team-based execution comes in Phase 2.
 
 **Phase context:** This is Phase 1 of 5. No previous phases. This phase establishes the foundation that all other phases build upon.
 
 ---
 
-### Task 1: Create `.tina/` State Management Utilities
+### Task 1: Create `.claude/tina/` State Management Utilities
 
 **Files:**
 - Create: `skills/orchestrate/_tina-utils.sh`
 
-**Step 1: Write the shell utilities for `.tina/` state management**
+**Step 1: Write the shell utilities for `.claude/tina/` state management**
 
 Create helper script with functions for reading/writing supervisor state, phase status, and checking phase completion.
 
@@ -88,7 +88,7 @@ tina_add_plan_path() {
 # Usage: tina_init_phase <phase_num>
 tina_init_phase() {
   local phase_num="$1"
-  local phase_dir="${PWD}/.tina/phase-$phase_num"
+  local phase_dir="${PWD}/.claude/tina/phase-$phase_num"
 
   mkdir -p "$phase_dir"
 
@@ -108,7 +108,7 @@ tina_set_phase_status() {
   local phase_num="$1"
   local status="$2"
   local reason="${3:-}"
-  local phase_dir="${PWD}/.tina/phase-$phase_num"
+  local phase_dir="${PWD}/.claude/tina/phase-$phase_num"
   local status_file="$phase_dir/status.json"
 
   local tmp_file=$(mktemp)
@@ -126,7 +126,7 @@ tina_set_phase_status() {
 # Usage: tina_get_phase_status <phase_num>
 tina_get_phase_status() {
   local phase_num="$1"
-  local phase_dir="${PWD}/.tina/phase-$phase_num"
+  local phase_dir="${PWD}/.claude/tina/phase-$phase_num"
 
   jq -r '.status // "unknown"' "$phase_dir/status.json"
 }
@@ -143,7 +143,7 @@ tina_is_phase_complete() {
 # Check if supervisor state exists (for resumption)
 # Usage: tina_supervisor_exists
 tina_supervisor_exists() {
-  [ -f "${PWD}/.tina/supervisor-state.json" ]
+  [ -f "${PWD}/.claude/tina/supervisor-state.json" ]
 }
 
 # Count phases in design doc by parsing ## Phase N sections
@@ -223,7 +223,7 @@ digraph orchestrate {
     rankdir=TB;
 
     "Parse design doc for phases" [shape=box];
-    "Initialize .tina/supervisor-state.json" [shape=box];
+    "Initialize .claude/tina/supervisor-state.json" [shape=box];
     "More phases?" [shape=diamond];
     "Spawn planner subagent" [shape=box];
     "Wait for plan path" [shape=box];
@@ -233,8 +233,8 @@ digraph orchestrate {
     "Kill tmux session, next phase" [shape=box];
     "Invoke finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
-    "Parse design doc for phases" -> "Initialize .tina/supervisor-state.json";
-    "Initialize .tina/supervisor-state.json" -> "More phases?";
+    "Parse design doc for phases" -> "Initialize .claude/tina/supervisor-state.json";
+    "Initialize .claude/tina/supervisor-state.json" -> "More phases?";
     "More phases?" -> "Spawn planner subagent" [label="yes"];
     "Spawn planner subagent" -> "Wait for plan path";
     "Wait for plan path" -> "Spawn team-lead in tmux";
@@ -258,18 +258,18 @@ digraph orchestrate {
 This phase implements basic orchestration without team-based execution:
 
 1. **Parse design doc** - Count `## Phase N` sections
-2. **Initialize state** - Create `.tina/supervisor-state.json`
+2. **Initialize state** - Create `.claude/tina/supervisor-state.json`
 3. **For each phase:**
    - Spawn `supersonic:planner` subagent with design doc + phase number
    - Wait for plan path
    - Spawn team-lead in tmux with plan path
-   - Monitor `.tina/phase-N/status.json` until complete
+   - Monitor `.claude/tina/phase-N/status.json` until complete
    - Kill tmux session, proceed to next phase
 4. **Completion** - Invoke `supersonic:finishing-a-development-branch`
 
 ## State Files
 
-**Supervisor state:** `.tina/supervisor-state.json`
+**Supervisor state:** `.claude/tina/supervisor-state.json`
 ```json
 {
   "design_doc_path": "docs/plans/2026-01-26-feature-design.md",
@@ -283,7 +283,7 @@ This phase implements basic orchestration without team-based execution:
 }
 ```
 
-**Phase status:** `.tina/phase-N/status.json`
+**Phase status:** `.claude/tina/phase-N/status.json`
 ```json
 {
   "status": "executing",
@@ -393,7 +393,7 @@ digraph team_lead_init {
 
     "Read plan file" [shape=box];
     "Extract phase number from path" [shape=box];
-    "Initialize .tina/phase-N/status.json" [shape=box];
+    "Initialize .claude/tina/phase-N/status.json" [shape=box];
     "Set status = executing" [shape=box];
     "Invoke executing-plans with plan path" [shape=box];
     "Execution complete?" [shape=diamond];
@@ -401,8 +401,8 @@ digraph team_lead_init {
     "Wait for shutdown" [shape=box];
 
     "Read plan file" -> "Extract phase number from path";
-    "Extract phase number from path" -> "Initialize .tina/phase-N/status.json";
-    "Initialize .tina/phase-N/status.json" -> "Set status = executing";
+    "Extract phase number from path" -> "Initialize .claude/tina/phase-N/status.json";
+    "Initialize .claude/tina/phase-N/status.json" -> "Set status = executing";
     "Set status = executing" -> "Invoke executing-plans with plan path";
     "Invoke executing-plans with plan path" -> "Execution complete?";
     "Execution complete?" -> "Set status = complete" [label="yes"];
@@ -523,18 +523,18 @@ fi
 
 ### Step 2: Initialize or Resume State
 
-**If `.tina/supervisor-state.json` exists:** Resume from saved state
+**If `.claude/tina/supervisor-state.json` exists:** Resume from saved state
 **Otherwise:** Initialize new state
 
 ```bash
-if [ -f ".tina/supervisor-state.json" ]; then
+if [ -f ".claude/tina/supervisor-state.json" ]; then
   # Resume: read current phase
-  CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)
+  CURRENT_PHASE=$(jq -r '.current_phase' .claude/tina/supervisor-state.json)
   echo "Resuming from phase $CURRENT_PHASE"
 else
   # Initialize: create state file
   mkdir -p .tina
-  cat > .tina/supervisor-state.json << EOF
+  cat > .claude/tina/supervisor-state.json << EOF
 {
   "design_doc_path": "$DESIGN_DOC",
   "total_phases": $TOTAL_PHASES,
@@ -568,14 +568,14 @@ Wait for planner to return plan path (e.g., `docs/plans/2026-01-26-feature-phase
 ```bash
 # Update current phase and plan path
 jq ".current_phase = $PHASE_NUM | .plan_paths[\"$PHASE_NUM\"] = \"$PLAN_PATH\"" \
-  .tina/supervisor-state.json > tmp.json && mv tmp.json .tina/supervisor-state.json
+  .claude/tina/supervisor-state.json > tmp.json && mv tmp.json .claude/tina/supervisor-state.json
 ```
 
 **3c. Initialize Phase Directory**
 
 ```bash
-mkdir -p ".tina/phase-$PHASE_NUM"
-cat > ".tina/phase-$PHASE_NUM/status.json" << EOF
+mkdir -p ".claude/tina/phase-$PHASE_NUM"
+cat > ".claude/tina/phase-$PHASE_NUM/status.json" << EOF
 {
   "status": "pending",
   "started_at": null
@@ -592,7 +592,7 @@ tmux new-session -d -s "$SESSION_NAME" \
 
 # Update active session in state
 jq ".active_tmux_session = \"$SESSION_NAME\"" \
-  .tina/supervisor-state.json > tmp.json && mv tmp.json .tina/supervisor-state.json
+  .claude/tina/supervisor-state.json > tmp.json && mv tmp.json .claude/tina/supervisor-state.json
 ```
 
 **3e. Monitor Phase Status**
@@ -601,7 +601,7 @@ Poll every 10 seconds until phase completes:
 
 ```bash
 while true; do
-  STATUS=$(jq -r '.status' ".tina/phase-$PHASE_NUM/status.json")
+  STATUS=$(jq -r '.status' ".claude/tina/phase-$PHASE_NUM/status.json")
 
   case "$STATUS" in
     "complete")
@@ -609,7 +609,7 @@ while true; do
       break
       ;;
     "blocked")
-      REASON=$(jq -r '.reason' ".tina/phase-$PHASE_NUM/status.json")
+      REASON=$(jq -r '.reason' ".claude/tina/phase-$PHASE_NUM/status.json")
       echo "Phase $PHASE_NUM blocked: $REASON"
       # Escalate to user
       exit 1
@@ -629,7 +629,7 @@ tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
 # Clear active session in state
 jq ".active_tmux_session = null" \
-  .tina/supervisor-state.json > tmp.json && mv tmp.json .tina/supervisor-state.json
+  .claude/tina/supervisor-state.json > tmp.json && mv tmp.json .claude/tina/supervisor-state.json
 ```
 
 ### Step 4: Completion
@@ -725,7 +725,7 @@ Test the state initialization:
 ```bash
 cd /Users/joshua/Projects/supersonic
 mkdir -p .tina
-cat > .tina/supervisor-state.json << 'EOF'
+cat > .claude/tina/supervisor-state.json << 'EOF'
 {
   "design_doc_path": "docs/plans/test-orchestrate/design.md",
   "total_phases": 1,
@@ -738,14 +738,14 @@ EOF
 
 **Step 4: Verify state file created**
 
-Run: `jq '.' /Users/joshua/Projects/supersonic/.tina/supervisor-state.json`
+Run: `jq '.' /Users/joshua/Projects/supersonic/.claude/tina/supervisor-state.json`
 Expected: Valid JSON output with all fields
 
 **Step 5: Initialize phase directory manually**
 
 ```bash
-mkdir -p /Users/joshua/Projects/supersonic/.tina/phase-1
-cat > /Users/joshua/Projects/supersonic/.tina/phase-1/status.json << 'EOF'
+mkdir -p /Users/joshua/Projects/supersonic/.claude/tina/phase-1
+cat > /Users/joshua/Projects/supersonic/.claude/tina/phase-1/status.json << 'EOF'
 {
   "status": "pending",
   "started_at": null
@@ -755,27 +755,27 @@ EOF
 
 **Step 6: Verify phase status file**
 
-Run: `jq '.' /Users/joshua/Projects/supersonic/.tina/phase-1/status.json`
+Run: `jq '.' /Users/joshua/Projects/supersonic/.claude/tina/phase-1/status.json`
 Expected: Valid JSON with status "pending"
 
 **Step 7: Test status update**
 
 ```bash
 jq '.status = "executing" | .started_at = "2026-01-26T10:00:00Z"' \
-  /Users/joshua/Projects/supersonic/.tina/phase-1/status.json > /tmp/status.json && \
-  mv /tmp/status.json /Users/joshua/Projects/supersonic/.tina/phase-1/status.json
+  /Users/joshua/Projects/supersonic/.claude/tina/phase-1/status.json > /tmp/status.json && \
+  mv /tmp/status.json /Users/joshua/Projects/supersonic/.claude/tina/phase-1/status.json
 ```
 
-Run: `jq '.status' /Users/joshua/Projects/supersonic/.tina/phase-1/status.json`
+Run: `jq '.status' /Users/joshua/Projects/supersonic/.claude/tina/phase-1/status.json`
 Expected: `"executing"`
 
 **Step 8: Clean up test files**
 
 ```bash
 rm -rf /Users/joshua/Projects/supersonic/docs/plans/test-orchestrate
-rm -rf /Users/joshua/Projects/supersonic/.tina/phase-1
+rm -rf /Users/joshua/Projects/supersonic/.claude/tina/phase-1
 # Keep .tina directory but restore original state
-rm /Users/joshua/Projects/supersonic/.tina/supervisor-state.json
+rm /Users/joshua/Projects/supersonic/.claude/tina/supervisor-state.json
 ```
 
 **Step 9: Commit test verification (no files to commit - tests were transient)**
@@ -846,8 +846,8 @@ Add at the end of the skill, before any Red Flags section:
 - `supersonic:finishing-a-development-branch` - Handles merge/PR workflow
 
 **State files:**
-- `.tina/supervisor-state.json` - Supervisor resumption state
-- `.tina/phase-N/status.json` - Per-phase execution status
+- `.claude/tina/supervisor-state.json` - Supervisor resumption state
+- `.claude/tina/phase-N/status.json` - Per-phase execution status
 
 **Depends on existing:**
 - `supersonic:executing-plans` - Team-lead delegates to this for task execution

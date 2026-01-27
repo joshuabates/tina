@@ -23,10 +23,10 @@ Example: `docs/plans/2026-01-26-feature-phase-1.md` → PHASE_NUM = 1
 ## STEP 2: Initialize status file
 
 ```bash
-mkdir -p ".tina/phase-$PHASE_NUM"
+mkdir -p ".claude/tina/phase-$PHASE_NUM"
 ```
 
-Write to `.tina/phase-$PHASE_NUM/status.json`:
+Write to `.claude/tina/phase-$PHASE_NUM/status.json`:
 ```json
 {
   "status": "executing",

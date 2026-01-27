@@ -1,6 +1,6 @@
 ---
 name: checkpoint
-description: Use when context threshold is exceeded and supervisor signals checkpoint needed, or when .tina/checkpoint-needed exists
+description: Use when context threshold is exceeded and supervisor signals checkpoint needed, or when .claude/tina/checkpoint-needed exists
 ---
 
 # Checkpoint
@@ -14,7 +14,7 @@ Coordinates graceful shutdown of a team execution session and captures handoff s
 ## When to Use
 
 - Supervisor detects context threshold exceeded
-- File `.tina/checkpoint-needed` exists
+- File `.claude/tina/checkpoint-needed` exists
 - Manual `/checkpoint` invocation
 
 ## When NOT to Use
@@ -80,7 +80,7 @@ Record for each task:
 
 ### Step 4: Write handoff.md
 
-Create `.tina/phase-N/handoff.md`:
+Create `.claude/tina/phase-N/handoff.md`:
 
 ```markdown
 # Phase N Checkpoint Handoff
@@ -125,7 +125,7 @@ Supervisor watches for this signal to confirm checkpoint succeeded.
 
 ## State Files
 
-**Handoff file:** `.tina/phase-N/handoff.md`
+**Handoff file:** `.claude/tina/phase-N/handoff.md`
 
 Contains everything needed to resume:
 - Team composition (roles and agent types)
@@ -161,8 +161,8 @@ Contains everything needed to resume:
 - TaskList tool - Capture current task states
 
 **State files:**
-- `.tina/phase-N/handoff.md` - Handoff state for resumption
-- `.tina/checkpoint-needed` - Signal file (deleted after checkpoint)
+- `.claude/tina/phase-N/handoff.md` - Handoff state for resumption
+- `.claude/tina/checkpoint-needed` - Signal file (deleted after checkpoint)
 
 **Paired with:**
 - `tina:rehydrate` - Reads handoff.md to restore context
@@ -179,4 +179,4 @@ Contains everything needed to resume:
 - Wait for graceful shutdown before capturing state
 - Include review tracking in handoff
 - Force terminate after timeout (don't hang forever)
-- Delete `.tina/checkpoint-needed` after successful checkpoint
+- Delete `.claude/tina/checkpoint-needed` after successful checkpoint

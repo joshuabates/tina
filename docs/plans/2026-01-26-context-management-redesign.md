@@ -36,7 +36,7 @@ Orchestrator
             │
             └── Claude uses local statusline config
                     │
-                    └── Writes .tina/context-metrics.json
+                    └── Writes .claude/tina/context-metrics.json
                             │
                             └── Supervisor reads, decides checkpoint
 ```
@@ -51,7 +51,7 @@ Orchestrator
 
 ### Key Design Decisions
 
-**Supervisor owns checkpoint decisions.** The statusline just reports data. The supervisor monitor loop reads context-metrics.json and creates .tina/checkpoint-needed when threshold exceeded. This centralizes decision logic.
+**Supervisor owns checkpoint decisions.** The statusline just reports data. The supervisor monitor loop reads context-metrics.json and creates .claude/tina/checkpoint-needed when threshold exceeded. This centralizes decision logic.
 
 **Scripts inline in worktree.** No external dependencies. The orchestrator writes the script directly when setting up the worktree. Self-contained and reproducible.
 
@@ -98,13 +98,13 @@ Add checkpoint detection to the existing monitor loop (Step 3e in orchestrate):
 
 ```bash
 # In monitor loop, check context metrics
-if [ -f ".tina/context-metrics.json" ]; then
-  USED_PCT=$(jq -r '.used_pct // 0' ".tina/context-metrics.json")
+if [ -f ".claude/tina/context-metrics.json" ]; then
+  USED_PCT=$(jq -r '.used_pct // 0' ".claude/tina/context-metrics.json")
   THRESHOLD=${TINA_THRESHOLD:-70}
 
   if [ "$(echo "$USED_PCT >= $THRESHOLD" | bc)" -eq 1 ]; then
-    if [ ! -f ".tina/checkpoint-needed" ]; then
-      echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": $THRESHOLD}" > ".tina/checkpoint-needed"
+    if [ ! -f ".claude/tina/checkpoint-needed" ]; then
+      echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": $THRESHOLD}" > ".claude/tina/checkpoint-needed"
       echo "Context at ${USED_PCT}%, triggering checkpoint"
     fi
   fi
@@ -139,14 +139,14 @@ No migration needed. This is additive:
 
 1. Run orchestrate on a test design doc
 2. Verify worktree has .claude/tina-write-context.sh and settings.local.json
-3. Verify .tina/context-metrics.json is written during team-lead execution
+3. Verify .claude/tina/context-metrics.json is written during team-lead execution
 4. Force low threshold (TINA_THRESHOLD=10), verify checkpoint-needed created
 5. Verify checkpoint/rehydrate cycle completes
 
 ## Success Criteria
 
 1. User can run `/tina:orchestrate <design-doc>` with zero prior configuration
-2. Context metrics written to .tina/context-metrics.json during execution
+2. Context metrics written to .claude/tina/context-metrics.json during execution
 3. Checkpoint triggered automatically when threshold exceeded
 4. Full checkpoint/rehydrate cycle works without user intervention
 

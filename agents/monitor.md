@@ -22,8 +22,8 @@ Poll two files every 5 seconds and output structured signals when events occur.
 
 ### Files to Monitor
 
-1. **Status file:** `{worktree_path}/.tina/phase-{phase_num}/status.json`
-2. **Context metrics:** `{worktree_path}/.tina/context-metrics.json`
+1. **Status file:** `{worktree_path}/.claude/tina/phase-{phase_num}/status.json`
+2. **Context metrics:** `{worktree_path}/.claude/tina/context-metrics.json`
 
 ### Polling Loop
 
@@ -101,8 +101,8 @@ WORKTREE_PATH="$2"
 TMUX_SESSION="$3"
 CONTEXT_THRESHOLD="${4:-50}"
 
-STATUS_FILE="$WORKTREE_PATH/.tina/phase-$PHASE_NUM/status.json"
-METRICS_FILE="$WORKTREE_PATH/.tina/context-metrics.json"
+STATUS_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/status.json"
+METRICS_FILE="$WORKTREE_PATH/.claude/tina/context-metrics.json"
 
 PREV_STATUS=""
 PREV_CONTEXT_BUCKET=0

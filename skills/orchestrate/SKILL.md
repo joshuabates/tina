@@ -43,7 +43,7 @@ Architecture:
           │ monitors
           ▼
 ┌─────────────────────┐
-│  .tina/phase-N/     │
+│  .claude/tina/phase-N/     │
 │  - status.json      │  ← Phase status, task updates
 │  - context-metrics  │  ← Context usage %
 └─────────────────────┘
@@ -55,7 +55,7 @@ digraph orchestrate {
 
     "Parse design doc for phases" [shape=box];
     "Create worktree + provision statusline" [shape=box];
-    "Initialize .tina/supervisor-state.json" [shape=box];
+    "Initialize .claude/tina/supervisor-state.json" [shape=box];
     "More phases?" [shape=diamond];
     "Spawn planner subagent" [shape=box];
     "Wait for plan path" [shape=box];
@@ -69,8 +69,8 @@ digraph orchestrate {
     "Invoke finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
     "Parse design doc for phases" -> "Create worktree + provision statusline";
-    "Create worktree + provision statusline" -> "Initialize .tina/supervisor-state.json";
-    "Initialize .tina/supervisor-state.json" -> "Validate design (tina:design-validator)";
+    "Create worktree + provision statusline" -> "Initialize .claude/tina/supervisor-state.json";
+    "Initialize .claude/tina/supervisor-state.json" -> "Validate design (tina:design-validator)";
     "Validate design (tina:design-validator)" [shape=box];
     "Design valid?" [shape=diamond];
     "Validate design (tina:design-validator)" -> "Design valid?";
@@ -111,13 +111,13 @@ This phase implements basic orchestration without team-based execution:
 
 1. **Parse design doc** - Count `## Phase N` sections
 2. **Create worktree** - Isolated workspace with statusline for context monitoring
-3. **Initialize state** - Create `.tina/supervisor-state.json` with worktree path
+3. **Initialize state** - Create `.claude/tina/supervisor-state.json` with worktree path
 4. **For each phase:**
    - Spawn `tina:planner` subagent with design doc + phase number
    - Wait for plan path
    - Spawn `tina:team-lead-init` in tmux with plan path
-   - Monitor `.tina/phase-N/status.json` and context metrics until complete
-   - Create `.tina/checkpoint-needed` if context threshold exceeded
+   - Monitor `.claude/tina/phase-N/status.json` and context metrics until complete
+   - Create `.claude/tina/checkpoint-needed` if context threshold exceeded
    - Kill tmux session, proceed to next phase
 5. **Completion** - Invoke `tina:finishing-a-development-branch` for merge/PR/cleanup
 
@@ -127,7 +127,7 @@ This phase implements basic orchestration without team-based execution:
 
 **Tmux session naming:** Uses pattern `tina-phase-N` where N is the phase number.
 
-**Cleanup:** Supervisor state and phase directories persist in `.tina/` for resumption. Can be manually removed after successful completion if desired.
+**Cleanup:** Supervisor state and phase directories persist in `.claude/tina/` for resumption. Can be manually removed after successful completion if desired.
 
 ## Model Policy
 
@@ -322,34 +322,34 @@ cat > "$WORKTREE_PATH/.claude/settings.local.json" << EOF
 EOF
 ```
 
-This enables automatic context tracking within the worktree. The statusline script writes `.tina/context-metrics.json` on each status update. The supervisor monitor loop reads this file to decide when to trigger checkpoints.
+This enables automatic context tracking within the worktree. The statusline script writes `.claude/tina/context-metrics.json` on each status update. The supervisor monitor loop reads this file to decide when to trigger checkpoints.
 
-**Important:** All subsequent steps (Step 2 onwards) execute within this worktree. The `.tina/` directory created in Step 2 will be inside the worktree, keeping orchestration state isolated from the main workspace.
+**Important:** All subsequent steps (Step 2 onwards) execute within this worktree. The `.claude/tina/` directory created in Step 2 will be inside the worktree, keeping orchestration state isolated from the main workspace.
 
 ### Step 2: Initialize or Resume State
 
-**If `.tina/supervisor-state.json` exists:** Resume from saved state
+**If `.claude/tina/supervisor-state.json` exists:** Resume from saved state
 **Otherwise:** Initialize new state
 
 ```bash
 # Initialize session tracking (may be set during resume)
 ACTIVE_SESSION=""
 
-if [ -f ".tina/supervisor-state.json" ]; then
+if [ -f ".claude/tina/supervisor-state.json" ]; then
   # Resume: read current phase
-  CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)
+  CURRENT_PHASE=$(jq -r '.current_phase' .claude/tina/supervisor-state.json)
   echo "Resuming from phase $CURRENT_PHASE"
 
   # Check validation status on resume
-  DESIGN_VALIDATED=$(jq -r '.design_validated // false' .tina/supervisor-state.json)
+  DESIGN_VALIDATED=$(jq -r '.design_validated // false' .claude/tina/supervisor-state.json)
   if [ "$DESIGN_VALIDATED" = "false" ]; then
     echo "Design not validated yet - will validate before proceeding"
     # Validation will run in Step 2c
   fi
 
   # Read worktree path
-  WORKTREE_PATH=$(jq -r '.worktree_path' .tina/supervisor-state.json)
-  BRANCH_NAME=$(jq -r '.branch_name' .tina/supervisor-state.json)
+  WORKTREE_PATH=$(jq -r '.worktree_path' .claude/tina/supervisor-state.json)
+  BRANCH_NAME=$(jq -r '.branch_name' .claude/tina/supervisor-state.json)
 
   # Verify worktree exists
   if ! git worktree list | grep -q "$WORKTREE_PATH"; then
@@ -359,7 +359,7 @@ if [ -f ".tina/supervisor-state.json" ]; then
   fi
 
   # Check for existing tmux session
-  ACTIVE_SESSION=$(jq -r '.active_tmux_session // ""' .tina/supervisor-state.json)
+  ACTIVE_SESSION=$(jq -r '.active_tmux_session // ""' .claude/tina/supervisor-state.json)
   if [ -n "$ACTIVE_SESSION" ] && tmux has-session -t "$ACTIVE_SESSION" 2>/dev/null; then
     echo "Found active session: $ACTIVE_SESSION"
     echo "Reconnecting to existing phase execution..."
@@ -372,13 +372,13 @@ if [ -f ".tina/supervisor-state.json" ]; then
     # Clear stale session reference
     if [ -n "$ACTIVE_SESSION" ]; then
       tmp_file=$(mktemp)
-      jq '.active_tmux_session = null' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+      jq '.active_tmux_session = null' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
     fi
   fi
 else
   # Initialize: create state file
   mkdir -p .tina
-  cat > .tina/supervisor-state.json << EOF
+  cat > .claude/tina/supervisor-state.json << EOF
 {
   "design_doc_path": "$DESIGN_DOC",
   "worktree_path": "$WORKTREE_PATH",
@@ -396,8 +396,8 @@ EOF
 fi
 
 # Initialize cumulative metrics tracking
-if [ ! -f ".tina/cumulative-metrics.json" ]; then
-  cat > .tina/cumulative-metrics.json << EOF
+if [ ! -f ".claude/tina/cumulative-metrics.json" ]; then
+  cat > .claude/tina/cumulative-metrics.json << EOF
 {
   "phases_completed": 0,
   "total_impl_lines": 0,
@@ -423,7 +423,7 @@ if [ "$CURRENT_PHASE" -eq 0 ]; then
   echo "Validating design document..."
 
   # Create validation output directory
-  mkdir -p "$WORKTREE_PATH/.tina/validation"
+  mkdir -p "$WORKTREE_PATH/.claude/tina/validation"
 
   # Spawn design validator
   # Task tool parameters:
@@ -431,7 +431,7 @@ if [ "$CURRENT_PHASE" -eq 0 ]; then
   #   model: "opus"
   #   prompt: |
   #     Design doc: $DESIGN_DOC
-  #     Output file: $WORKTREE_PATH/.tina/validation/design-report.md
+  #     Output file: $WORKTREE_PATH/.claude/tina/validation/design-report.md
   #
   #     Validate this design and write your report to the output file.
   #     Return ONLY: VALIDATION_STATUS: Pass/Warning/Stop
@@ -443,22 +443,22 @@ if [ "$CURRENT_PHASE" -eq 0 ]; then
     "Pass")
       echo "Design validated successfully"
       tmp_file=$(mktemp)
-      jq '.design_validated = true | .validation_status = "pass"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+      jq '.design_validated = true | .validation_status = "pass"' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
       ;;
 
     "Warning")
       echo "Design validated with warnings - proceeding with caution"
-      echo "See: $WORKTREE_PATH/.tina/validation/design-report.md"
+      echo "See: $WORKTREE_PATH/.claude/tina/validation/design-report.md"
       tmp_file=$(mktemp)
-      jq '.design_validated = true | .validation_status = "warning"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+      jq '.design_validated = true | .validation_status = "warning"' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
       ;;
 
     "Stop")
       echo "Design validation FAILED"
       tmp_file=$(mktemp)
-      jq '.design_validated = true | .validation_status = "stop"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+      jq '.design_validated = true | .validation_status = "stop"' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
       echo ""
-      cat "$WORKTREE_PATH/.tina/validation/design-report.md"
+      cat "$WORKTREE_PATH/.claude/tina/validation/design-report.md"
       echo ""
       echo "Design must be revised before orchestration can proceed."
       echo "Review the report above and update the design document."
@@ -468,7 +468,7 @@ if [ "$CURRENT_PHASE" -eq 0 ]; then
     *)
       echo "Unknown validation status: $VALIDATION_STATUS - treating as warning"
       tmp_file=$(mktemp)
-      jq '.design_validated = true | .validation_status = "unknown"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+      jq '.design_validated = true | .validation_status = "unknown"' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
       ;;
   esac
 fi
@@ -493,8 +493,8 @@ for SESSION in $ORPHANED; do
   fi
 
   # Check if phase is complete
-  if [ -f ".tina/phase-$PHASE/status.json" ]; then
-    STATUS=$(jq -r '.status' ".tina/phase-$PHASE/status.json")
+  if [ -f ".claude/tina/phase-$PHASE/status.json" ]; then
+    STATUS=$(jq -r '.status' ".claude/tina/phase-$PHASE/status.json")
     if [ "$STATUS" = "complete" ]; then
       echo "Cleaning up completed phase session: $SESSION"
       tmux kill-session -t "$SESSION" 2>/dev/null || true
@@ -558,11 +558,11 @@ exit 1
 
 ```bash
 tmp_file=$(mktemp)
-jq ".current_phase = $PHASE_NUM" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq ".current_phase = $PHASE_NUM" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 
 # Add plan path to state
 tmp_file=$(mktemp)
-jq ".plan_paths[\"$PHASE_NUM\"] = \"$PLAN_PATH\"" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq ".plan_paths[\"$PHASE_NUM\"] = \"$PLAN_PATH\"" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 ```
 
 **3b-2. Validate Plan**
@@ -573,7 +573,7 @@ Before spawning team-lead, validate the plan against the design document.
 echo "Validating plan for phase $PHASE_NUM..."
 
 # Create validation output directory
-mkdir -p "$WORKTREE_PATH/.tina/phase-$PHASE_NUM"
+mkdir -p "$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM"
 
 # Spawn plan validator
 # Task tool parameters:
@@ -583,7 +583,7 @@ mkdir -p "$WORKTREE_PATH/.tina/phase-$PHASE_NUM"
 #     Design doc: $DESIGN_DOC
 #     Plan file: $PLAN_PATH
 #     Phase: $PHASE_NUM
-#     Output file: $WORKTREE_PATH/.tina/phase-$PHASE_NUM/plan-validation.md
+#     Output file: $WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/plan-validation.md
 #
 #     Validate this plan against the design and write your report to the output file.
 #     Return ONLY: VALIDATION_STATUS: Pass/Warning/Stop
@@ -598,13 +598,13 @@ case "$PLAN_VALIDATION_STATUS" in
 
   "Warning")
     echo "Plan validated with warnings for phase $PHASE_NUM - proceeding with caution"
-    echo "See: $WORKTREE_PATH/.tina/phase-$PHASE_NUM/plan-validation.md"
+    echo "See: $WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/plan-validation.md"
     ;;
 
   "Stop")
     echo "Plan validation FAILED for phase $PHASE_NUM"
     echo ""
-    cat "$WORKTREE_PATH/.tina/phase-$PHASE_NUM/plan-validation.md"
+    cat "$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/plan-validation.md"
     echo ""
     echo "Plan must be revised before execution can proceed."
     echo "Options:"
@@ -623,8 +623,8 @@ esac
 **3c. Initialize Phase Directory**
 
 ```bash
-mkdir -p ".tina/phase-$PHASE_NUM"
-cat > ".tina/phase-$PHASE_NUM/status.json" << EOF
+mkdir -p ".claude/tina/phase-$PHASE_NUM"
+cat > ".claude/tina/phase-$PHASE_NUM/status.json" << EOF
 {
   "status": "pending",
   "started_at": null
@@ -647,7 +647,7 @@ tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" Enter
 
 # Update active session in state
 tmp_file=$(mktemp)
-jq ".active_tmux_session = \"$SESSION_NAME\"" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq ".active_tmux_session = \"$SESSION_NAME\"" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 ```
 
 **3d-2. Spawn Background Monitoring Agent**
@@ -672,7 +672,7 @@ The Task tool returns an `output_file` path. Store this for signal checking:
 ```bash
 # Store monitor output file path in supervisor state
 tmp_file=$(mktemp)
-jq ".monitor_output_file = \"$MONITOR_OUTPUT_FILE\"" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq ".monitor_output_file = \"$MONITOR_OUTPUT_FILE\"" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 ```
 
 **Terminal is now free** - the orchestrator can respond to user queries while monitoring runs in background.
@@ -687,7 +687,7 @@ Read the last few lines of the monitor output file to check for signals:
 
 ```bash
 # Quick check - read last 20 lines of monitor output
-MONITOR_OUTPUT=$(jq -r '.monitor_output_file' .tina/supervisor-state.json)
+MONITOR_OUTPUT=$(jq -r '.monitor_output_file' .claude/tina/supervisor-state.json)
 tail -20 "$MONITOR_OUTPUT" 2>/dev/null
 ```
 
@@ -734,7 +734,7 @@ echo "Phase $PHASE_NUM blocked: $REASON"
 ```bash
 # Create checkpoint-needed signal file
 USED_PCT=$(echo "$SIGNAL_LINE" | sed 's/.*pct=\([0-9.]*\).*/\1/')
-echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": 50}" > "$WORKTREE_PATH/.tina/checkpoint-needed"
+echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": 50}" > "$WORKTREE_PATH/.claude/tina/checkpoint-needed"
 echo "Context at ${USED_PCT}%, triggering checkpoint"
 
 # Proceed to checkpoint handling (see Checkpoint Handling section)
@@ -745,8 +745,8 @@ echo "Context at ${USED_PCT}%, triggering checkpoint"
 
 ```bash
 # Check if phase was actually complete
-if [ -f ".tina/phase-$PHASE_NUM/status.json" ]; then
-  STATUS=$(jq -r '.status' ".tina/phase-$PHASE_NUM/status.json")
+if [ -f ".claude/tina/phase-$PHASE_NUM/status.json" ]; then
+  STATUS=$(jq -r '.status' ".claude/tina/phase-$PHASE_NUM/status.json")
   if [ "$STATUS" = "complete" ]; then
     echo "Phase $PHASE_NUM was complete, continuing"
     # Proceed to Step 3f
@@ -765,10 +765,10 @@ sleep 3
 tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
 
 # Track recovery attempt
-RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .tina/supervisor-state.json)
+RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .claude/tina/supervisor-state.json)
 RECOVERY_COUNT=$((RECOVERY_COUNT + 1))
 tmp_file=$(mktemp)
-jq ".recovery_attempts[\"$PHASE_NUM\"] = $RECOVERY_COUNT" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq ".recovery_attempts[\"$PHASE_NUM\"] = $RECOVERY_COUNT" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 
 if [ "$RECOVERY_COUNT" -gt 1 ]; then
   echo "Recovery failed twice, escalating"
@@ -781,12 +781,12 @@ fi
 
 **3e-2. Consume Phase Reviewer Output**
 
-When phase completes, the executing-plans skill dispatches the phase reviewer. The phase reviewer writes its report to `.tina/phase-N/review.md` and outputs a severity tier.
+When phase completes, the executing-plans skill dispatches the phase reviewer. The phase reviewer writes its report to `.claude/tina/phase-N/review.md` and outputs a severity tier.
 
 **Read phase reviewer output:**
 
 ```bash
-REVIEW_FILE="$WORKTREE_PATH/.tina/phase-$PHASE_NUM/review.md"
+REVIEW_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/review.md"
 
 # Wait for review file (max 5 minutes)
 TIMEOUT=300
@@ -879,7 +879,7 @@ The orchestrator periodically checks the monitor's output file for signals. This
 **Check for signals:**
 
 ```bash
-MONITOR_OUTPUT=$(jq -r '.monitor_output_file' .tina/supervisor-state.json)
+MONITOR_OUTPUT=$(jq -r '.monitor_output_file' .claude/tina/supervisor-state.json)
 
 # Read last 50 lines and look for signals
 SIGNALS=$(tail -50 "$MONITOR_OUTPUT" 2>/dev/null | grep "^\[SIGNAL\]" || true)
@@ -912,7 +912,7 @@ To avoid processing the same signal twice, track the last processed line number:
 ```bash
 # Read current line count
 CURRENT_LINES=$(wc -l < "$MONITOR_OUTPUT" 2>/dev/null || echo 0)
-LAST_PROCESSED=$(jq -r '.monitor_last_line // 0' .tina/supervisor-state.json)
+LAST_PROCESSED=$(jq -r '.monitor_last_line // 0' .claude/tina/supervisor-state.json)
 
 if [ "$CURRENT_LINES" -gt "$LAST_PROCESSED" ]; then
   # Only read new lines
@@ -921,7 +921,7 @@ if [ "$CURRENT_LINES" -gt "$LAST_PROCESSED" ]; then
 
   # Update last processed
   tmp_file=$(mktemp)
-  jq ".monitor_last_line = $CURRENT_LINES" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+  jq ".monitor_last_line = $CURRENT_LINES" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 fi
 ```
 
@@ -936,7 +936,7 @@ tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
 # Clear active session and monitor in state
 tmp_file=$(mktemp)
-jq ".active_tmux_session = null | .monitor_output_file = null" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq ".active_tmux_session = null | .monitor_output_file = null" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 ```
 
 ### Checkpoint Handling
@@ -950,7 +950,7 @@ The background monitor outputs the signal when context exceeds threshold. The or
 ```bash
 # When [SIGNAL] context_threshold detected in monitor output
 USED_PCT=$(echo "$SIGNAL_LINE" | sed 's/.*pct=\([0-9.]*\).*/\1/')
-echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": 50}" > "$WORKTREE_PATH/.tina/checkpoint-needed"
+echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": 50}" > "$WORKTREE_PATH/.claude/tina/checkpoint-needed"
 echo "Context at ${USED_PCT}%, triggering checkpoint"
 ```
 
@@ -965,7 +965,7 @@ tmux send-keys -t "$SESSION_NAME" "/checkpoint" Enter
 Poll for handoff file update (max 5 minutes):
 
 ```bash
-HANDOFF_FILE="$WORKTREE_PATH/.tina/phase-$PHASE_NUM/handoff.md"
+HANDOFF_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/handoff.md"
 TIMEOUT=300
 START=$(date +%s)
 
@@ -973,7 +973,7 @@ while true; do
   if [ -f "$HANDOFF_FILE" ]; then
     # Check if modified after checkpoint signal
     HANDOFF_TIME=$(stat -f %m "$HANDOFF_FILE" 2>/dev/null || stat -c %Y "$HANDOFF_FILE")
-    SIGNAL_TIME=$(stat -f %m "$WORKTREE_PATH/.tina/checkpoint-needed" 2>/dev/null || stat -c %Y "$WORKTREE_PATH/.tina/checkpoint-needed")
+    SIGNAL_TIME=$(stat -f %m "$WORKTREE_PATH/.claude/tina/checkpoint-needed" 2>/dev/null || stat -c %Y "$WORKTREE_PATH/.claude/tina/checkpoint-needed")
     if [ "$HANDOFF_TIME" -gt "$SIGNAL_TIME" ]; then
       echo "Handoff written"
       break
@@ -1002,7 +1002,7 @@ sleep 2
 tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
 
 # Remove checkpoint signal
-rm "$WORKTREE_PATH/.tina/checkpoint-needed"
+rm "$WORKTREE_PATH/.claude/tina/checkpoint-needed"
 ```
 
 **5. Continue monitoring:**
@@ -1033,7 +1033,7 @@ tina_trigger_reassessment() {
   echo "Remaining phases: $remaining_phases"
 
   # Read cumulative metrics
-  cat "$WORKTREE_PATH/.tina/cumulative-metrics.json" | jq '.'
+  cat "$WORKTREE_PATH/.claude/tina/cumulative-metrics.json" | jq '.'
 
   # Decision tree
   if [ "$cumulative_drift" -gt 75 ]; then
@@ -1075,7 +1075,7 @@ tina_replan_remaining() {
 tina_update_cumulative_metrics() {
   local phase_num="$1"
   local review_file="$2"
-  local metrics_file="$WORKTREE_PATH/.tina/cumulative-metrics.json"
+  local metrics_file="$WORKTREE_PATH/.claude/tina/cumulative-metrics.json"
 
   # Extract metrics from review file
   # The review file has a metrics table we need to parse
@@ -1112,7 +1112,7 @@ tina_update_cumulative_metrics() {
 }
 
 tina_get_cumulative_drift() {
-  local metrics_file="$WORKTREE_PATH/.tina/cumulative-metrics.json"
+  local metrics_file="$WORKTREE_PATH/.claude/tina/cumulative-metrics.json"
   local impl_drift=$(jq -r '.cumulative_impl_drift_pct // 0' "$metrics_file")
   local test_drift=$(jq -r '.cumulative_test_drift_pct // 0' "$metrics_file")
 
@@ -1138,7 +1138,7 @@ Task tool parameters:
   prompt: |
     Diagnose blocked phase: $PHASE_NUM
     Reason: $REASON
-    Phase dir: .tina/phase-$PHASE_NUM
+    Phase dir: .claude/tina/phase-$PHASE_NUM
 ```
 
 **2. Wait for diagnostic file:**
@@ -1146,7 +1146,7 @@ Task tool parameters:
 Poll for helper's diagnostic output (max 2 minutes):
 
 ```bash
-DIAGNOSTIC_FILE=".tina/phase-$PHASE_NUM/diagnostic.md"
+DIAGNOSTIC_FILE=".claude/tina/phase-$PHASE_NUM/diagnostic.md"
 TIMEOUT=120
 START=$(date +%s)
 
@@ -1183,7 +1183,7 @@ Helper writes one of:
 case "$RECOMMENDATION" in
   "RECOVERABLE")
     # Check if we've already attempted recovery for this phase
-    ALREADY_TRIED=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // false" .tina/supervisor-state.json)
+    ALREADY_TRIED=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // false" .claude/tina/supervisor-state.json)
 
     if [ "$ALREADY_TRIED" = "true" ]; then
       echo "Recovery already attempted for phase $PHASE_NUM - escalating"
@@ -1192,13 +1192,13 @@ case "$RECOMMENDATION" in
 
     # Mark recovery attempt
     tmp_file=$(mktemp)
-    jq ".recovery_attempts[\"$PHASE_NUM\"] = true" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+    jq ".recovery_attempts[\"$PHASE_NUM\"] = true" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 
     echo "Attempting recovery via /rehydrate"
     tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
 
     # Reset phase status to allow re-monitoring
-    cat > ".tina/phase-$PHASE_NUM/status.json" << EOF
+    cat > ".claude/tina/phase-$PHASE_NUM/status.json" << EOF
 {
   "status": "executing",
   "recovered_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -1229,13 +1229,13 @@ After all phases complete successfully:
 ```bash
 ALL_COMPLETE=true
 for i in $(seq 1 $TOTAL_PHASES); do
-  if [ ! -f ".tina/phase-$i/status.json" ]; then
+  if [ ! -f ".claude/tina/phase-$i/status.json" ]; then
     echo "Error: Missing status for phase $i"
     ALL_COMPLETE=false
     break
   fi
 
-  STATUS=$(jq -r '.status' ".tina/phase-$i/status.json")
+  STATUS=$(jq -r '.status' ".claude/tina/phase-$i/status.json")
   if [ "$STATUS" != "complete" ]; then
     echo "Error: Phase $i not complete (status: $STATUS)"
     ALL_COMPLETE=false
@@ -1262,7 +1262,7 @@ done
 
 ```bash
 tmp_file=$(mktemp)
-jq '.status = "complete" | .completed_at = now | .active_tmux_session = null' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq '.status = "complete" | .completed_at = now | .active_tmux_session = null' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 ```
 
 **4d. Invoke finishing workflow:**
@@ -1323,7 +1323,7 @@ tmux send-keys -t <name> "<command>" Enter
 
 ## State Files
 
-**Supervisor state:** `.tina/supervisor-state.json`
+**Supervisor state:** `.claude/tina/supervisor-state.json`
 ```json
 {
   "design_doc_path": "docs/plans/2026-01-26-feature-design.md",
@@ -1365,7 +1365,7 @@ tmux send-keys -t <name> "<command>" Enter
 - `started_at`: When orchestration began
 - `completed_at`: When all phases completed (null if not complete)
 
-**Phase directory:** `.tina/phase-N/`
+**Phase directory:** `.claude/tina/phase-N/`
 
 Contains per-phase state files:
 - `status.json` - Execution status (pending/executing/complete)
@@ -1373,7 +1373,7 @@ Contains per-phase state files:
 - `review.md` - Phase reviewer report (written after execution)
 - `handoff.md` - Context handoff document (for checkpoint/rehydrate)
 
-**Phase status:** `.tina/phase-N/status.json`
+**Phase status:** `.claude/tina/phase-N/status.json`
 ```json
 {
   "status": "executing",
@@ -1381,7 +1381,7 @@ Contains per-phase state files:
 }
 ```
 
-**Context metrics:** `.tina/context-metrics.json` (in worktree)
+**Context metrics:** `.claude/tina/context-metrics.json` (in worktree)
 ```json
 {
   "used_pct": 45.2,
@@ -1393,7 +1393,7 @@ Contains per-phase state files:
 
 Written by statusline script on each status update. Supervisor reads this to decide checkpoints.
 
-**Cumulative metrics:** `.tina/cumulative-metrics.json`
+**Cumulative metrics:** `.claude/tina/cumulative-metrics.json`
 ```json
 {
   "phases_completed": 3,
@@ -1411,7 +1411,7 @@ Written by statusline script on each status update. Supervisor reads this to dec
 }
 ```
 
-**Baseline metrics:** `.tina/baseline-metrics.json`
+**Baseline metrics:** `.claude/tina/baseline-metrics.json`
 ```json
 {
   "captured_at": "2026-01-26T10:00:00Z",
@@ -1425,7 +1425,7 @@ Written by statusline script on each status update. Supervisor reads this to dec
 
 Written by design validator during validation. Used by phase reviewer to compare progress against baseline.
 
-**Plan validation:** `.tina/phase-N/plan-validation.md`
+**Plan validation:** `.claude/tina/phase-N/plan-validation.md`
 
 Written by plan validator before execution of each phase. Contains:
 - Target alignment analysis (design targets vs plan targets)
@@ -1441,7 +1441,7 @@ Used by orchestrator to gate execution. If validation fails (Stop), execution ha
 If supervisor is interrupted (Ctrl+C, crash, terminal closed), re-run with same design doc path:
 
 **State reconstruction:**
-1. Read `.tina/supervisor-state.json` for current phase, active session, and worktree path
+1. Read `.claude/tina/supervisor-state.json` for current phase, active session, and worktree path
 2. Verify worktree still exists: `git worktree list | grep "$WORKTREE_PATH"`
 3. If worktree missing: error and exit (cannot resume without worktree)
 4. Check if `active_tmux_session` still exists via `tmux has-session`
@@ -1480,15 +1480,15 @@ The supervisor automatically detects existing state and resumes appropriately.
 - `tina:finishing-a-development-branch` - Handles merge/PR/cleanup workflow after completion
 
 **State files:**
-- `.tina/supervisor-state.json` - Supervisor resumption state (includes worktree_path)
-- `.tina/phase-N/status.json` - Per-phase execution status
-- `.tina/phase-N/handoff.md` - Context handoff document for checkpoint/rehydrate
-- `.tina/context-metrics.json` - Context window usage from statusline
-- `.tina/checkpoint-needed` - Signal file when threshold exceeded
+- `.claude/tina/supervisor-state.json` - Supervisor resumption state (includes worktree_path)
+- `.claude/tina/phase-N/status.json` - Per-phase execution status
+- `.claude/tina/phase-N/handoff.md` - Context handoff document for checkpoint/rehydrate
+- `.claude/tina/context-metrics.json` - Context window usage from statusline
+- `.claude/tina/checkpoint-needed` - Signal file when threshold exceeded
 
 **Checkpoint cycle:**
-- Statusline script writes `.tina/context-metrics.json` with usage data
-- Supervisor monitor loop reads metrics, creates `.tina/checkpoint-needed` when threshold exceeded
+- Statusline script writes `.claude/tina/context-metrics.json` with usage data
+- Supervisor monitor loop reads metrics, creates `.claude/tina/checkpoint-needed` when threshold exceeded
 - Supervisor detects signal, sends `/checkpoint` to team-lead
 - Team-lead runs checkpoint skill, writes handoff, outputs "CHECKPOINT COMPLETE"
 - Supervisor sends `/clear`, then `/rehydrate`
@@ -1507,7 +1507,7 @@ The supervisor automatically detects existing state and resumes appropriately.
 - Review tracking and loop prevention
 
 **Phase 3 integrations (now available):**
-- Checkpoint/rehydrate for context management via `.tina/checkpoint-needed` signal
+- Checkpoint/rehydrate for context management via `.claude/tina/checkpoint-needed` signal
 - Statusline context monitoring with automatic checkpoint triggering
 
 **Phase 4 integrations (now available):**
@@ -1524,8 +1524,8 @@ The supervisor automatically detects existing state and resumes appropriately.
 **All planned integrations complete.** The orchestration system is fully functional.
 
 **Metrics tracking:**
-- Phase reviewer writes `.tina/phase-N/review.md` with severity and metrics
-- Orchestrator updates `.tina/cumulative-metrics.json` after each phase
+- Phase reviewer writes `.claude/tina/phase-N/review.md` with severity and metrics
+- Orchestrator updates `.claude/tina/cumulative-metrics.json` after each phase
 - Cumulative drift calculated as average of per-phase drifts
 - Threshold: 50% cumulative drift triggers reassessment
 
@@ -1547,7 +1547,7 @@ The supervisor automatically detects existing state and resumes appropriately.
 
 **Phase blocked:**
 - Spawn helper agent for diagnosis
-- Helper writes `.tina/phase-N/diagnostic.md`
+- Helper writes `.claude/tina/phase-N/diagnostic.md`
 - If helper recommends RECOVERABLE: attempt one recovery
 - If helper recommends ESCALATE or recovery fails: escalate to human
 

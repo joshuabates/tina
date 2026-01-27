@@ -63,7 +63,7 @@ You are diagnosing why a phase execution became blocked.
 
 ## Report Format
 
-Write your diagnosis to `.tina/phase-N/diagnostic.md`:
+Write your diagnosis to `.claude/tina/phase-N/diagnostic.md`:
 
 ```markdown
 # Phase N Diagnostic Report
@@ -124,7 +124,7 @@ In `skills/orchestrate/SKILL.md`, find the blocked case in Step 3e (around line 
 
 ```bash
     "blocked")
-      REASON=$(jq -r '.reason' ".tina/phase-$PHASE_NUM/status.json")
+      REASON=$(jq -r '.reason' ".claude/tina/phase-$PHASE_NUM/status.json")
       echo "Phase $PHASE_NUM blocked: $REASON"
       # Escalate to user
       exit 1
@@ -135,7 +135,7 @@ Replace with:
 
 ```bash
     "blocked")
-      REASON=$(jq -r '.reason' ".tina/phase-$PHASE_NUM/status.json")
+      REASON=$(jq -r '.reason' ".claude/tina/phase-$PHASE_NUM/status.json")
       echo "Phase $PHASE_NUM blocked: $REASON"
       # Spawn helper agent for diagnosis
       # (See "Blocked State Handling" section below)
@@ -156,17 +156,17 @@ When phase status is "blocked", spawn helper agent for diagnosis:
 ```
 # Use Task tool with:
 # subagent_type: "supersonic:helper"
-# prompt: "Phase: N\nBlock reason: <reason>\nHandoff path: .tina/phase-N/handoff.md\nStatus path: .tina/phase-N/status.json"
+# prompt: "Phase: N\nBlock reason: <reason>\nHandoff path: .claude/tina/phase-N/handoff.md\nStatus path: .claude/tina/phase-N/status.json"
 ```
 
 **2. Wait for diagnostic:**
 
-Helper writes `.tina/phase-N/diagnostic.md`. Read the recommendation.
+Helper writes `.claude/tina/phase-N/diagnostic.md`. Read the recommendation.
 
 **3. Handle recommendation:**
 
 ```bash
-RECOMMENDATION=$(grep -A1 "^\*\*\[" ".tina/phase-N/diagnostic.md" | head -1)
+RECOMMENDATION=$(grep -A1 "^\*\*\[" ".claude/tina/phase-N/diagnostic.md" | head -1)
 
 if [[ "$RECOMMENDATION" == *"RECOVERABLE"* ]]; then
   echo "Helper recommends recovery. Attempting..."
@@ -176,7 +176,7 @@ if [[ "$RECOMMENDATION" == *"RECOVERABLE"* ]]; then
   # Return to monitor loop
 else
   echo "Helper recommends escalation."
-  echo "See diagnostic: .tina/phase-N/diagnostic.md"
+  echo "See diagnostic: .claude/tina/phase-N/diagnostic.md"
   # Escalate to human
   exit 1
 fi
@@ -191,7 +191,7 @@ Update the supervisor-state.json schema in Step 2 (around line 115-125) to inclu
 
 Find:
 ```bash
-  cat > .tina/supervisor-state.json << EOF
+  cat > .claude/tina/supervisor-state.json << EOF
 {
   "design_doc_path": "$DESIGN_DOC",
   "total_phases": $TOTAL_PHASES,
@@ -204,7 +204,7 @@ EOF
 
 Replace with:
 ```bash
-  cat > .tina/supervisor-state.json << EOF
+  cat > .claude/tina/supervisor-state.json << EOF
 {
   "design_doc_path": "$DESIGN_DOC",
   "total_phases": $TOTAL_PHASES,
@@ -310,8 +310,8 @@ Insert after `while true; do`:
     echo "Tmux session $SESSION_NAME died unexpectedly"
 
     # Check if phase was actually complete
-    if [ -f ".tina/phase-$PHASE_NUM/status.json" ]; then
-      STATUS=$(jq -r '.status' ".tina/phase-$PHASE_NUM/status.json")
+    if [ -f ".claude/tina/phase-$PHASE_NUM/status.json" ]; then
+      STATUS=$(jq -r '.status' ".claude/tina/phase-$PHASE_NUM/status.json")
       if [ "$STATUS" = "complete" ]; then
         echo "Phase $PHASE_NUM was complete, continuing"
         break
@@ -324,10 +324,10 @@ Insert after `while true; do`:
       "cd $(pwd) && claude --prompt '/rehydrate'"
 
     # Track recovery attempt
-    RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .tina/supervisor-state.json)
+    RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .claude/tina/supervisor-state.json)
     RECOVERY_COUNT=$((RECOVERY_COUNT + 1))
     tmp_file=$(mktemp)
-    jq ".recovery_attempts[\"$PHASE_NUM\"] = $RECOVERY_COUNT" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+    jq ".recovery_attempts[\"$PHASE_NUM\"] = $RECOVERY_COUNT" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 
     if [ "$RECOVERY_COUNT" -gt 1 ]; then
       echo "Recovery failed twice, escalating"
@@ -398,8 +398,8 @@ Even when blocked, write handoff with current state so helper agent has context.
 
 ```
 PHASE BLOCKED: <reason>
-See .tina/phase-N/status.json for details
-Handoff written to .tina/phase-N/handoff.md
+See .claude/tina/phase-N/status.json for details
+Handoff written to .claude/tina/phase-N/handoff.md
 ```
 
 **What NOT to do:**
@@ -447,7 +447,7 @@ Find the "## Error Handling" section (around line 397). Replace the entire secti
 
 **Phase blocked:**
 - Spawn helper agent for diagnosis
-- Helper writes `.tina/phase-N/diagnostic.md`
+- Helper writes `.claude/tina/phase-N/diagnostic.md`
 - If helper recommends RECOVERABLE: attempt one recovery
 - If helper recommends ESCALATE or recovery fails: escalate to human
 

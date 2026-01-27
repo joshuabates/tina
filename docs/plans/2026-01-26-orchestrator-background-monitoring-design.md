@@ -24,7 +24,7 @@ Delegate monitoring to a background haiku subagent. The orchestrator spawns it, 
           │ monitors
           ▼
 ┌─────────────────────┐
-│  .tina/phase-N/     │
+│  .claude/tina/phase-N/     │
 │  - status.json      │  ← Phase status, task updates
 │  - context-metrics  │  ← Context usage %
 └─────────────────────┘
@@ -35,8 +35,8 @@ Delegate monitoring to a background haiku subagent. The orchestrator spawns it, 
 ### Responsibilities
 
 **Files monitored:**
-- `.tina/phase-{N}/status.json` - status field, task updates, errors/blockers
-- `.tina/context-metrics.json` - `used_pct` field for context threshold
+- `.claude/tina/phase-{N}/status.json` - status field, task updates, errors/blockers
+- `.claude/tina/context-metrics.json` - `used_pct` field for context threshold
 
 **Polling:** Check both files every 5 seconds, track previous state to detect changes.
 
@@ -139,7 +139,7 @@ While monitoring runs in background, user can:
 **Orchestrator receives signal and:**
 
 1. Sends `/tina:checkpoint` command to team-lead via tmux
-2. Team-lead writes `.tina/phase-N/handoff.md` with current state
+2. Team-lead writes `.claude/tina/phase-N/handoff.md` with current state
 3. Sends `/clear` to team-lead session (resets context)
 4. Sends `/tina:rehydrate` to team-lead
 5. Team-lead restores state from handoff, continues work

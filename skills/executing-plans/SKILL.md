@@ -499,7 +499,7 @@ Task tool:
     Plan file: docs/plans/2026-01-26-feature-phase-1.md
     Phase completed: 1
     Git range: abc1234..def5678
-    Output file: .tina/phase-1/review.md
+    Output file: .claude/tina/phase-1/review.md
 
     Write your review to the output file. Include metrics comparison and severity tier.
 ```

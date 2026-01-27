@@ -295,12 +295,12 @@ Add a new subsection "**3e-2. Consume Phase Reviewer Output**" after the existin
 
 **3e-2. Consume Phase Reviewer Output**
 
-When phase completes, the executing-plans skill dispatches the phase reviewer. The phase reviewer writes its report to `.tina/phase-N/review.md` and outputs a severity tier.
+When phase completes, the executing-plans skill dispatches the phase reviewer. The phase reviewer writes its report to `.claude/tina/phase-N/review.md` and outputs a severity tier.
 
 **Read phase reviewer output:**
 
 ```bash
-REVIEW_FILE="$WORKTREE_PATH/.tina/phase-$PHASE_NUM/review.md"
+REVIEW_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/review.md"
 
 # Wait for review file (max 5 minutes)
 TIMEOUT=300
@@ -382,7 +382,7 @@ Add a new state file description after the existing ones:
 
 ```markdown
 
-**Cumulative metrics:** `.tina/cumulative-metrics.json`
+**Cumulative metrics:** `.claude/tina/cumulative-metrics.json`
 ```json
 {
   "phases_completed": 3,
@@ -431,7 +431,7 @@ tina_trigger_reassessment() {
   echo "Remaining phases: $remaining_phases"
 
   # Read cumulative metrics
-  cat "$WORKTREE_PATH/.tina/cumulative-metrics.json" | jq '.'
+  cat "$WORKTREE_PATH/.claude/tina/cumulative-metrics.json" | jq '.'
 
   # Decision tree
   if [ "$cumulative_drift" -gt 75 ]; then
@@ -473,8 +473,8 @@ Find the "## Integration" section and add reference to metrics tracking:
 ```markdown
 
 **Metrics tracking:**
-- Phase reviewer writes `.tina/phase-N/review.md` with severity and metrics
-- Orchestrator updates `.tina/cumulative-metrics.json` after each phase
+- Phase reviewer writes `.claude/tina/phase-N/review.md` with severity and metrics
+- Orchestrator updates `.claude/tina/cumulative-metrics.json` after each phase
 - Cumulative drift calculated as average of per-phase drifts
 - Threshold: 50% cumulative drift triggers reassessment
 ```
@@ -521,7 +521,7 @@ Task tool:
     Plan file: docs/plans/2026-01-26-feature-phase-1.md
     Phase completed: 1
     Git range: abc1234..def5678
-    Output file: .tina/phase-1/review.md
+    Output file: .claude/tina/phase-1/review.md
 
     Write your review to the output file. Include metrics comparison and severity tier.
 ```
@@ -652,13 +652,13 @@ Read the orchestrator skill and find "### Step 2: Initialize or Resume State".
 
 After the supervisor-state.json initialization, add cumulative metrics initialization:
 
-Find the `cat > .tina/supervisor-state.json` block and add after its `fi`:
+Find the `cat > .claude/tina/supervisor-state.json` block and add after its `fi`:
 
 ```markdown
 
 # Initialize cumulative metrics tracking
-if [ ! -f ".tina/cumulative-metrics.json" ]; then
-  cat > .tina/cumulative-metrics.json << EOF
+if [ ! -f ".claude/tina/cumulative-metrics.json" ]; then
+  cat > .claude/tina/cumulative-metrics.json << EOF
 {
   "phases_completed": 0,
   "total_impl_lines": 0,
@@ -687,7 +687,7 @@ Add after the reassessment handling section:
 tina_update_cumulative_metrics() {
   local phase_num="$1"
   local review_file="$2"
-  local metrics_file="$WORKTREE_PATH/.tina/cumulative-metrics.json"
+  local metrics_file="$WORKTREE_PATH/.claude/tina/cumulative-metrics.json"
 
   # Extract metrics from review file
   # The review file has a metrics table we need to parse
@@ -724,7 +724,7 @@ tina_update_cumulative_metrics() {
 }
 
 tina_get_cumulative_drift() {
-  local metrics_file="$WORKTREE_PATH/.tina/cumulative-metrics.json"
+  local metrics_file="$WORKTREE_PATH/.claude/tina/cumulative-metrics.json"
   local impl_drift=$(jq -r '.cumulative_impl_drift_pct // 0' "$metrics_file")
   local test_drift=$(jq -r '.cumulative_test_drift_pct // 0' "$metrics_file")
 

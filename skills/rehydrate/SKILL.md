@@ -1,6 +1,6 @@
 ---
 name: rehydrate
-description: Use when .tina/phase-N/handoff.md exists after session start or /clear, to restore team state and resume execution
+description: Use when .claude/tina/phase-N/handoff.md exists after session start or /clear, to restore team state and resume execution
 ---
 
 # Rehydrate
@@ -63,19 +63,19 @@ Find most recent handoff file:
 
 ```bash
 # Check for handoff in current phase directory
-ls .tina/phase-*/handoff.md | sort -V | tail -1
+ls .claude/tina/phase-*/handoff.md | sort -V | tail -1
 ```
 
 If no handoff.md found:
 
 ```
 Error: No handoff file found. Cannot rehydrate.
-Check .tina/ for phase directories with handoff.md
+Check .claude/tina/ for phase directories with handoff.md
 ```
 
 ### Step 2: Parse Handoff Content
 
-Read `.tina/phase-N/handoff.md` and extract:
+Read `.claude/tina/phase-N/handoff.md` and extract:
 
 **Required sections:**
 - Phase number (from path)
@@ -163,7 +163,7 @@ Recreate review tracking state for executing-plans:
 }
 ```
 
-Pass this to executing-plans via `--resume-state` or write to `.tina/phase-N/review-tracking.json`.
+Pass this to executing-plans via `--resume-state` or write to `.claude/tina/phase-N/review-tracking.json`.
 
 ### Step 6: Resume Execution
 
@@ -192,15 +192,15 @@ Supervisor watches for this signal to confirm rehydration succeeded.
 ## State Files
 
 **Read:**
-- `.tina/phase-N/handoff.md` - Checkpoint handoff state
+- `.claude/tina/phase-N/handoff.md` - Checkpoint handoff state
 
 **Write:**
-- `.tina/phase-N/review-tracking.json` - Restored review tracking (optional, may pass inline)
+- `.claude/tina/phase-N/review-tracking.json` - Restored review tracking (optional, may pass inline)
 
 ## Error Handling
 
 **Handoff file not found:**
-- Output: `Error: No handoff file found at .tina/phase-N/handoff.md`
+- Output: `Error: No handoff file found at .claude/tina/phase-N/handoff.md`
 - Do NOT attempt to spawn team
 - Exit with error
 
@@ -234,8 +234,8 @@ Supervisor watches for this signal to confirm rehydration succeeded.
 - tina:executing-plans skill - Resume execution
 
 **State files:**
-- `.tina/phase-N/handoff.md` - Input: checkpoint state
-- `.tina/phase-N/review-tracking.json` - Output: restored review state
+- `.claude/tina/phase-N/handoff.md` - Input: checkpoint state
+- `.claude/tina/phase-N/review-tracking.json` - Output: restored review state
 
 **Paired with:**
 - `tina:checkpoint` - Creates the handoff.md this skill reads

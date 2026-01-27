@@ -12,8 +12,8 @@ You are diagnosing why a team-lead is blocked and determining the appropriate re
 You receive:
 - Phase number
 - Block reason (from team-lead's status report)
-- Handoff path (`.tina/phase-N/handoff.md`)
-- Status path (`.tina/phase-N/status.json`)
+- Handoff path (`.claude/tina/phase-N/handoff.md`)
+- Status path (`.claude/tina/phase-N/status.json`)
 
 ## Your Job
 
@@ -59,7 +59,7 @@ Determine which category the issue falls into:
 
 ### 3. Write Diagnosis
 
-Create `.tina/phase-N/diagnostic.md` with your analysis.
+Create `.claude/tina/phase-N/diagnostic.md` with your analysis.
 
 ## Report Format
 

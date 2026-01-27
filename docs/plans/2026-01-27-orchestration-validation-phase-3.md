@@ -331,7 +331,7 @@ Locate the text that ends with:
 ```bash
 # Add plan path to state
 tmp_file=$(mktemp)
-jq ".plan_paths[\"$PHASE_NUM\"] = \"$PLAN_PATH\"" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq ".plan_paths[\"$PHASE_NUM\"] = \"$PLAN_PATH\"" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 ```
 
 After this block, add:
@@ -346,7 +346,7 @@ Before spawning team-lead, validate the plan against the design document.
 echo "Validating plan for phase $PHASE_NUM..."
 
 # Create validation output directory
-mkdir -p "$WORKTREE_PATH/.tina/phase-$PHASE_NUM"
+mkdir -p "$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM"
 
 # Spawn plan validator
 # Task tool parameters:
@@ -356,7 +356,7 @@ mkdir -p "$WORKTREE_PATH/.tina/phase-$PHASE_NUM"
 #     Design doc: $DESIGN_DOC
 #     Plan file: $PLAN_PATH
 #     Phase: $PHASE_NUM
-#     Output file: $WORKTREE_PATH/.tina/phase-$PHASE_NUM/plan-validation.md
+#     Output file: $WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/plan-validation.md
 #
 #     Validate this plan against the design and write your report to the output file.
 #     Return ONLY: VALIDATION_STATUS: Pass/Warning/Stop
@@ -371,13 +371,13 @@ case "$PLAN_VALIDATION_STATUS" in
 
   "Warning")
     echo "Plan validated with warnings for phase $PHASE_NUM - proceeding with caution"
-    echo "See: $WORKTREE_PATH/.tina/phase-$PHASE_NUM/plan-validation.md"
+    echo "See: $WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/plan-validation.md"
     ;;
 
   "Stop")
     echo "Plan validation FAILED for phase $PHASE_NUM"
     echo ""
-    cat "$WORKTREE_PATH/.tina/phase-$PHASE_NUM/plan-validation.md"
+    cat "$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/plan-validation.md"
     echo ""
     echo "Plan must be revised before execution can proceed."
     echo "Options:"
@@ -463,7 +463,7 @@ Add:
 
 ```markdown
 
-**Plan validation:** `.tina/phase-N/plan-validation.md`
+**Plan validation:** `.claude/tina/phase-N/plan-validation.md`
 
 Written by plan validator before execution of each phase. Contains:
 - Target alignment analysis (design targets vs plan targets)
@@ -477,12 +477,12 @@ Used by orchestrator to gate execution. If validation fails (Stop), execution ha
 
 **Step 2: Update phase status file documentation**
 
-Find the "**Phase status:** `.tina/phase-N/status.json`" section. The phase directory now contains both status.json and plan-validation.md. Update the description to mention both files:
+Find the "**Phase status:** `.claude/tina/phase-N/status.json`" section. The phase directory now contains both status.json and plan-validation.md. Update the description to mention both files:
 
 Find the existing Phase status section and update it to clarify the directory structure:
 
 ```markdown
-**Phase directory:** `.tina/phase-N/`
+**Phase directory:** `.claude/tina/phase-N/`
 
 Contains per-phase state files:
 - `status.json` - Execution status (pending/executing/complete)
@@ -490,7 +490,7 @@ Contains per-phase state files:
 - `review.md` - Phase reviewer report (written after execution)
 - `handoff.md` - Context handoff document (for checkpoint/rehydrate)
 
-**Phase status:** `.tina/phase-N/status.json`
+**Phase status:** `.claude/tina/phase-N/status.json`
 ```json
 {
   "status": "executing",
@@ -607,7 +607,7 @@ Key capabilities added:
 3. Plan validator checks estimate plausibility (lines per task, phase size)
 4. Plan validator performs ROI sanity check (for test/coverage work)
 5. Orchestrator gates on plan validation before spawning team-lead
-6. Plan validation report written to .tina/phase-N/plan-validation.md
+6. Plan validation report written to .claude/tina/phase-N/plan-validation.md
 
 Validation framework complete:
 - Phase 1: Runtime validation (phase reviewer + orchestrator feedback)

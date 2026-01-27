@@ -241,7 +241,7 @@ echo "N/A - qualitative improvement"
 **Progress command:**
 ```bash
 # Check that design validator blocked infeasible designs
-ls -la .tina/validation/design-report.md 2>/dev/null && grep "Status:" .tina/validation/design-report.md
+ls -la .claude/tina/validation/design-report.md 2>/dev/null && grep "Status:" .claude/tina/validation/design-report.md
 ```
 
 **ROI threshold:** N/A (infrastructure work - ROI measured by subsequent project success rates)

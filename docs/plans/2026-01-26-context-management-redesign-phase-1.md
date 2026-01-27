@@ -178,7 +178,7 @@ cat > "$WORKTREE_PATH/.claude/settings.local.json" << EOF
 EOF
 ```
 
-This enables automatic context tracking within the worktree. The statusline script writes `.tina/context-metrics.json` on each status update. The supervisor monitor loop reads this file to decide when to trigger checkpoints.
+This enables automatic context tracking within the worktree. The statusline script writes `.claude/tina/context-metrics.json` on each status update. The supervisor monitor loop reads this file to decide when to trigger checkpoints.
 ```
 
 **Step 3: Commit the statusline provisioning**
@@ -215,13 +215,13 @@ Add before the tmux session check:
 ```bash
 while true; do
   # Check context metrics and create checkpoint-needed if threshold exceeded
-  if [ -f "$WORKTREE_PATH/.tina/context-metrics.json" ]; then
-    USED_PCT=$(jq -r '.used_pct // 0' "$WORKTREE_PATH/.tina/context-metrics.json")
+  if [ -f "$WORKTREE_PATH/.claude/tina/context-metrics.json" ]; then
+    USED_PCT=$(jq -r '.used_pct // 0' "$WORKTREE_PATH/.claude/tina/context-metrics.json")
     THRESHOLD=${TINA_THRESHOLD:-70}
 
     if [ "$(echo "$USED_PCT >= $THRESHOLD" | bc)" -eq 1 ]; then
-      if [ ! -f "$WORKTREE_PATH/.tina/checkpoint-needed" ]; then
-        echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": $THRESHOLD}" > "$WORKTREE_PATH/.tina/checkpoint-needed"
+      if [ ! -f "$WORKTREE_PATH/.claude/tina/checkpoint-needed" ]; then
+        echo "{\"triggered_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"context_pct\": $USED_PCT, \"threshold\": $THRESHOLD}" > "$WORKTREE_PATH/.claude/tina/checkpoint-needed"
         echo "Context at ${USED_PCT}%, triggering checkpoint"
       fi
     fi
@@ -236,19 +236,19 @@ Find the existing checkpoint handling section (around line 337):
 ```markdown
 ```bash
 # In monitor loop, check for signal file
-if [ -f ".tina/checkpoint-needed" ]; then
+if [ -f ".claude/tina/checkpoint-needed" ]; then
 ```
 
 Replace with:
 ```markdown
 ```bash
 # In monitor loop, check for signal file
-if [ -f "$WORKTREE_PATH/.tina/checkpoint-needed" ]; then
+if [ -f "$WORKTREE_PATH/.claude/tina/checkpoint-needed" ]; then
 ```
 
 Also update the rm command at the end of checkpoint handling (around line 392):
 ```markdown
-rm "$WORKTREE_PATH/.tina/checkpoint-needed"
+rm "$WORKTREE_PATH/.claude/tina/checkpoint-needed"
 ```
 
 **Step 4: Commit the context threshold check**
@@ -358,7 +358,7 @@ Add to the field descriptions list:
 Add a new section after "**Phase status:**":
 ```markdown
 
-**Context metrics:** `.tina/context-metrics.json` (in worktree)
+**Context metrics:** `.claude/tina/context-metrics.json` (in worktree)
 ```json
 {
   "used_pct": 45.2,
@@ -409,19 +409,19 @@ Replace with:
 Find:
 ```markdown
 **State files:**
-- `.tina/supervisor-state.json` - Supervisor resumption state
-- `.tina/phase-N/status.json` - Per-phase execution status
-- `.tina/phase-N/handoff.md` - Context handoff document for checkpoint/rehydrate
+- `.claude/tina/supervisor-state.json` - Supervisor resumption state
+- `.claude/tina/phase-N/status.json` - Per-phase execution status
+- `.claude/tina/phase-N/handoff.md` - Context handoff document for checkpoint/rehydrate
 ```
 
 Replace with:
 ```markdown
 **State files:**
-- `.tina/supervisor-state.json` - Supervisor resumption state (includes worktree_path)
-- `.tina/phase-N/status.json` - Per-phase execution status
-- `.tina/phase-N/handoff.md` - Context handoff document for checkpoint/rehydrate
-- `.tina/context-metrics.json` - Context usage metrics (written by statusline)
-- `.tina/checkpoint-needed` - Signal file (created by supervisor when threshold exceeded)
+- `.claude/tina/supervisor-state.json` - Supervisor resumption state (includes worktree_path)
+- `.claude/tina/phase-N/status.json` - Per-phase execution status
+- `.claude/tina/phase-N/handoff.md` - Context handoff document for checkpoint/rehydrate
+- `.claude/tina/context-metrics.json` - Context usage metrics (written by statusline)
+- `.claude/tina/checkpoint-needed` - Signal file (created by supervisor when threshold exceeded)
 ```
 
 **Step 4: Update checkpoint cycle description**
@@ -429,14 +429,14 @@ Replace with:
 Find:
 ```markdown
 **Checkpoint cycle:**
-- Statusline script creates `.tina/checkpoint-needed` when context > threshold
+- Statusline script creates `.claude/tina/checkpoint-needed` when context > threshold
 ```
 
 Replace with:
 ```markdown
 **Checkpoint cycle:**
-- Statusline script writes `.tina/context-metrics.json` with usage data
-- Supervisor monitor loop reads metrics, creates `.tina/checkpoint-needed` when threshold exceeded
+- Statusline script writes `.claude/tina/context-metrics.json` with usage data
+- Supervisor monitor loop reads metrics, creates `.claude/tina/checkpoint-needed` when threshold exceeded
 ```
 
 **Step 5: Update the depends on section**
@@ -479,7 +479,7 @@ digraph orchestrate {
     rankdir=TB;
 
     "Parse design doc for phases" [shape=box];
-    "Initialize .tina/supervisor-state.json" [shape=box];
+    "Initialize .claude/tina/supervisor-state.json" [shape=box];
     "More phases?" [shape=diamond];
 ```
 
@@ -491,7 +491,7 @@ digraph orchestrate {
 
     "Parse design doc for phases" [shape=box];
     "Create worktree + provision statusline" [shape=box];
-    "Initialize .tina/supervisor-state.json" [shape=box];
+    "Initialize .claude/tina/supervisor-state.json" [shape=box];
     "More phases?" [shape=diamond];
     "Spawn planner subagent" [shape=box];
     "Wait for plan path" [shape=box];
@@ -504,8 +504,8 @@ digraph orchestrate {
     "Invoke finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
     "Parse design doc for phases" -> "Create worktree + provision statusline";
-    "Create worktree + provision statusline" -> "Initialize .tina/supervisor-state.json";
-    "Initialize .tina/supervisor-state.json" -> "More phases?";
+    "Create worktree + provision statusline" -> "Initialize .claude/tina/supervisor-state.json";
+    "Initialize .claude/tina/supervisor-state.json" -> "More phases?";
     "More phases?" -> "Spawn planner subagent" [label="yes"];
     "Spawn planner subagent" -> "Wait for plan path";
     "Wait for plan path" -> "Spawn team-lead-init in tmux";
@@ -544,13 +544,13 @@ Read `skills/orchestrate/SKILL.md` to find "## Resumption" (around lines 623-649
 Find:
 ```markdown
 **State reconstruction:**
-1. Read `.tina/supervisor-state.json` for current phase and active session
+1. Read `.claude/tina/supervisor-state.json` for current phase and active session
 ```
 
 Replace with:
 ```markdown
 **State reconstruction:**
-1. Read `.tina/supervisor-state.json` for current phase, active session, and worktree path
+1. Read `.claude/tina/supervisor-state.json` for current phase, active session, and worktree path
 2. Verify worktree still exists: `git worktree list | grep "$WORKTREE_PATH"`
 3. If worktree missing: error and exit (cannot resume without worktree)
 ```
@@ -567,16 +567,16 @@ Update the remaining numbered items (shift numbers by 1):
 
 Find in Step 2 "### Step 2: Initialize or Resume State" the resume section:
 ```markdown
-if [ -f ".tina/supervisor-state.json" ]; then
+if [ -f ".claude/tina/supervisor-state.json" ]; then
   # Resume: read current phase
-  CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)
+  CURRENT_PHASE=$(jq -r '.current_phase' .claude/tina/supervisor-state.json)
 ```
 
 Add after reading current phase:
 ```markdown
   # Read worktree path
-  WORKTREE_PATH=$(jq -r '.worktree_path' .tina/supervisor-state.json)
-  BRANCH_NAME=$(jq -r '.branch_name' .tina/supervisor-state.json)
+  WORKTREE_PATH=$(jq -r '.worktree_path' .claude/tina/supervisor-state.json)
+  BRANCH_NAME=$(jq -r '.branch_name' .claude/tina/supervisor-state.json)
 
   # Verify worktree exists
   if ! git worktree list | grep -q "$WORKTREE_PATH"; then
@@ -590,7 +590,7 @@ Add after reading current phase:
 
 Find the state initialization:
 ```markdown
-  cat > .tina/supervisor-state.json << EOF
+  cat > .claude/tina/supervisor-state.json << EOF
 {
   "design_doc_path": "$DESIGN_DOC",
   "total_phases": $TOTAL_PHASES,
@@ -598,7 +598,7 @@ Find the state initialization:
 
 Replace with:
 ```markdown
-  cat > .tina/supervisor-state.json << EOF
+  cat > .claude/tina/supervisor-state.json << EOF
 {
   "design_doc_path": "$DESIGN_DOC",
   "worktree_path": "$WORKTREE_PATH",

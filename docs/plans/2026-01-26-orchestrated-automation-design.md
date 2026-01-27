@@ -10,13 +10,13 @@ Automates the development pipeline from design document to implementation using 
 
 **Supervisor** - Claude Code skill that orchestrates the entire pipeline. Runs in user's foreground session. Maintains zero context about plan content or code - only tracks file paths, phase numbers, and process state. Spawns and monitors team-leads in background tmux sessions.
 
-**Team-Leads** - Claude Code sessions running in detached tmux. Each manages one phase of work. Spawns a team of workers and reviewers using the Teammate tool. Coordinates task execution through enhanced executing-plans skill. Maintains resettable state in `.tina/phase-N/`.
+**Team-Leads** - Claude Code sessions running in detached tmux. Each manages one phase of work. Spawns a team of workers and reviewers using the Teammate tool. Coordinates task execution through enhanced executing-plans skill. Maintains resettable state in `.claude/tina/phase-N/`.
 
 **Workers & Reviewers** - Team members spawned by team-lead. Workers execute implementation tasks, reviewers validate spec compliance and code quality. Communicate via Teammate messages and task list.
 
 ### Key Innovation
 
-Aggressive context management through automatic checkpointing. The statusline script writes context metrics to `.tina/context-metrics.json` and creates `.tina/checkpoint-needed` when thresholds are crossed. Supervisor detects this, sends `/checkpoint` to team-lead via tmux, team-lead coordinates team shutdown and writes state to handoff, then Supervisor clears and rehydrates the session with `/rehydrate`.
+Aggressive context management through automatic checkpointing. The statusline script writes context metrics to `.claude/tina/context-metrics.json` and creates `.claude/tina/checkpoint-needed` when thresholds are crossed. Supervisor detects this, sends `/checkpoint` to team-lead via tmux, team-lead coordinates team shutdown and writes state to handoff, then Supervisor clears and rehydrates the session with `/rehydrate`.
 
 ### Flow
 
@@ -46,7 +46,7 @@ Trigger finishing-a-development-branch workflow
 ### Initialization
 
 1. Read design doc to count phases (parse `## Phase N` sections)
-2. Create `.tina/supervisor-state.json` with: design doc path, total phases, current phase = 0, active tmux sessions = []
+2. Create `.claude/tina/supervisor-state.json` with: design doc path, total phases, current phase = 0, active tmux sessions = []
 3. If resuming (state file exists), reconstruct from existing state + active tmux sessions
 
 ### Phase Loop
@@ -65,14 +65,14 @@ For each phase N (1 to total):
 
 **4. Monitor Loop**
 Poll every 5-10 seconds:
-- Read `.tina/context-metrics.json` to check context usage
-- Check for `.tina/checkpoint-needed` signal file
-- Read `.tina/phase-N/status.json` for completion/blocked status
+- Read `.claude/tina/context-metrics.json` to check context usage
+- Check for `.claude/tina/checkpoint-needed` signal file
+- Read `.claude/tina/phase-N/status.json` for completion/blocked status
 
 **5. Handle Checkpoint**
 If checkpoint-needed exists:
 - Send: `tmux send-keys -t supersonic-phase-N "/checkpoint" Enter`
-- Wait for handoff written (`.tina/phase-N/handoff.md` exists/updated)
+- Wait for handoff written (`.claude/tina/phase-N/handoff.md` exists/updated)
 - Send: `tmux send-keys -t supersonic-phase-N "/clear" Enter`
 - Send: `tmux send-keys -t supersonic-phase-N "/rehydrate" Enter`
 - Delete checkpoint-needed signal file
@@ -80,7 +80,7 @@ If checkpoint-needed exists:
 **6. Handle Blocked**
 If status.json shows `{status: "blocked", reason: "..."}`:
 - Spawn helper agent (Task tool, specialized debugging agent) with context: phase N, blocker reason, handoff path
-- Helper writes diagnostic report to `.tina/phase-N/diagnostic.md`
+- Helper writes diagnostic report to `.claude/tina/phase-N/diagnostic.md`
 - If helper can't resolve: escalate to human with diagnostic report
 
 **7. Phase Complete**
@@ -107,7 +107,7 @@ If Supervisor interrupted (Ctrl+C, crash):
 `/team-lead-init <plan-path>` skill:
 
 1. Read plan file to understand: tasks, dependencies, team composition recommendations
-2. Create `.tina/phase-N/status.json` with `{status: "executing", started_at: timestamp}`
+2. Create `.claude/tina/phase-N/status.json` with `{status: "executing", started_at: timestamp}`
 3. Present team composition recommendations, decide final team structure
 4. Invoke enhanced `executing-plans` skill with plan path + team composition
 
@@ -135,7 +135,7 @@ Watch for:
 **5. Phase Review**
 When all tasks completed AND all review tasks completed:
 - Invoke `supersonic:phase-reviewer` agent with design doc path, phase number, git range
-- If approved: write `.tina/phase-N/status.json`: `{status: "complete", phase_review: "passed"}`
+- If approved: write `.claude/tina/phase-N/status.json`: `{status: "complete", phase_review: "passed"}`
 - If issues found: create fix tasks, assign to workers, re-review after fixes
 - If rejected 3 times: mark blocked, escalate to human
 
@@ -148,7 +148,7 @@ Team-lead session waits for shutdown after phase complete
 
 1. Request shutdown of all teammates (workers + reviewers) via Teammate tool `requestShutdown`
 2. Wait for all teammates to approve shutdown and exit
-3. Write `.tina/phase-N/handoff.md` containing:
+3. Write `.claude/tina/phase-N/handoff.md` containing:
    - Current task list state (what's done, what remains)
    - Team composition used
    - Any blockers or notes for resumption
@@ -158,7 +158,7 @@ Team-lead session waits for shutdown after phase complete
 
 `/rehydrate` skill:
 
-1. Read `.tina/phase-N/handoff.md`
+1. Read `.claude/tina/phase-N/handoff.md`
 2. Read original plan file
 3. Respawn team with same composition
 4. Restore task list state
@@ -207,7 +207,7 @@ Workers notify both reviewers simultaneously. Task only marked `completed` when 
 ### Directory Layout
 
 ```
-.tina/
+.claude/tina/
 ├── supervisor-state.json          # Supervisor resumption state
 ├── context-metrics.json           # Written by statusline script
 ├── checkpoint-needed              # Signal file for checkpointing
@@ -231,7 +231,7 @@ docs/plans/
 
 ### Key File Formats
 
-**`.tina/supervisor-state.json`:**
+**`.claude/tina/supervisor-state.json`:**
 ```json
 {
   "design_doc_path": "docs/plans/2026-01-26-myfeature/design.md",
@@ -245,7 +245,7 @@ docs/plans/
 }
 ```
 
-**`.tina/phase-N/status.json`:**
+**`.claude/tina/phase-N/status.json`:**
 ```json
 {
   "status": "executing",
@@ -255,7 +255,7 @@ docs/plans/
 }
 ```
 
-**`.tina/phase-N/handoff.md`:**
+**`.claude/tina/phase-N/handoff.md`:**
 ```markdown
 # Phase N Handoff
 
@@ -386,7 +386,7 @@ docs/plans/
 
 ## Phase 1: Foundation
 
-- Create `.tina/` structure and state management
+- Create `.claude/tina/` structure and state management
 - Implement `orchestrate` skill basic loop (no checkpointing yet)
 - Implement `team-lead-init` skill
 - Test: single phase execution without teams (existing Task-based flow)
@@ -466,7 +466,7 @@ Environment variables for tuning:
 - Git operations: `skills/finishing-a-development-branch/SKILL.md:50-80` (verify tests, then action)
 
 **Code to reuse:**
-- `~/.claude/scripts/tina-statusline.sh` - Already writes `.tina/context-metrics.json` and creates `.tina/checkpoint-needed` signal
+- `~/.claude/scripts/tina-statusline.sh` - Already writes `.claude/tina/context-metrics.json` and creates `.claude/tina/checkpoint-needed` signal
 - `skills/brainstorming/SKILL.md:41-47` - Pattern for invoking architect skill after design
 - `skills/executing-plans/SKILL.md:70-85` - Phase-reviewer invocation after all tasks complete
 - `skills/finishing-a-development-branch/SKILL.md` - Complete workflow for merge/PR after all phases
@@ -483,15 +483,15 @@ Environment variables for tuning:
 **Integration:**
 - Entry: User invokes `/supersonic:orchestrate <design-doc-path>` in their current session
 - Connects to: Spawns planner agents → spawns team-lead in tmux → team-lead uses Teammate tool → invokes finishing-a-development-branch at end
-- State files: All state in `.tina/` directory (already created, contains `context-metrics.json`)
+- State files: All state in `.claude/tina/` directory (already created, contains `context-metrics.json`)
 - Skill registration: Add to `.claude-plugin/plugin.json` keywords and document in README.md
 
 **New patterns this introduces:**
 - Tmux session management for long-running team-leads
 - Checkpoint/rehydrate protocol via slash commands
-- Supervisor polling `.tina/` files instead of reading content
+- Supervisor polling `.claude/tina/` files instead of reading content
 - Team-based execution via Teammate tool (first use in this codebase)
-- Phase subdirectories in `.tina/phase-N/` for isolation
+- Phase subdirectories in `.claude/tina/phase-N/` for isolation
 
 ## Implementation Status
 

@@ -73,7 +73,7 @@ digraph team_lead_init_v2 {
 
     "Read plan file" [shape=box];
     "Extract phase number from path" [shape=box];
-    "Initialize .tina/phase-N/status.json" [shape=box];
+    "Initialize .claude/tina/phase-N/status.json" [shape=box];
     "Set status = executing" [shape=box];
     "Spawn team via Teammate tool" [shape=box];
     "Invoke executing-plans --team with plan path" [shape=box];
@@ -83,8 +83,8 @@ digraph team_lead_init_v2 {
     "Wait for supervisor to kill session" [shape=box];
 
     "Read plan file" -> "Extract phase number from path";
-    "Extract phase number from path" -> "Initialize .tina/phase-N/status.json";
-    "Initialize .tina/phase-N/status.json" -> "Set status = executing";
+    "Extract phase number from path" -> "Initialize .claude/tina/phase-N/status.json";
+    "Initialize .claude/tina/phase-N/status.json" -> "Set status = executing";
     "Set status = executing" -> "Spawn team via Teammate tool";
     "Spawn team via Teammate tool" -> "Invoke executing-plans --team with plan path";
     "Invoke executing-plans --team with plan path" -> "All tasks complete?";
@@ -224,8 +224,8 @@ Even when blocked, write handoff with current state so helper agent has context.
 
 ```
 PHASE BLOCKED: <reason>
-See .tina/phase-N/status.json for details
-Handoff written to .tina/phase-N/handoff.md
+See .claude/tina/phase-N/status.json for details
+Handoff written to .claude/tina/phase-N/handoff.md
 ```
 
 **What NOT to do:**
@@ -246,7 +246,7 @@ Handoff written to .tina/phase-N/handoff.md
 - `/rehydrate` - Invokes rehydrate skill after context reset
 
 **State files:**
-- `.tina/phase-N/status.json` - Phase execution status
+- `.claude/tina/phase-N/status.json` - Phase execution status
 
 ## Red Flags
 

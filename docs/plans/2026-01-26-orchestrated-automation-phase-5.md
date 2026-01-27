@@ -25,7 +25,7 @@ After the `echo "Resuming from phase $CURRENT_PHASE"` line, add:
 
 ```markdown
   # Check for existing tmux session
-  ACTIVE_SESSION=$(jq -r '.active_tmux_session // ""' .tina/supervisor-state.json)
+  ACTIVE_SESSION=$(jq -r '.active_tmux_session // ""' .claude/tina/supervisor-state.json)
   if [ -n "$ACTIVE_SESSION" ] && tmux has-session -t "$ACTIVE_SESSION" 2>/dev/null; then
     echo "Found active session: $ACTIVE_SESSION"
     echo "Reconnecting to existing phase execution..."
@@ -38,7 +38,7 @@ After the `echo "Resuming from phase $CURRENT_PHASE"` line, add:
     # Clear stale session reference
     if [ -n "$ACTIVE_SESSION" ]; then
       tmp_file=$(mktemp)
-      jq '.active_tmux_session = null' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+      jq '.active_tmux_session = null' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
     fi
   fi
 ```
@@ -53,7 +53,7 @@ Find the "## Resumption" section (around line 488). Replace the existing content
 If supervisor is interrupted (Ctrl+C, crash, terminal closed), re-run with same design doc path:
 
 **State reconstruction:**
-1. Read `.tina/supervisor-state.json` for current phase and active session
+1. Read `.claude/tina/supervisor-state.json` for current phase and active session
 2. Check if `active_tmux_session` still exists via `tmux has-session`
 3. If session exists: reconnect to monitoring loop
 4. If session doesn't exist but phase incomplete: respawn team-lead with `/rehydrate`
@@ -117,8 +117,8 @@ for SESSION in $ORPHANED; do
   fi
 
   # Check if phase is complete
-  if [ -f ".tina/phase-$PHASE/status.json" ]; then
-    STATUS=$(jq -r '.status' ".tina/phase-$PHASE/status.json")
+  if [ -f ".claude/tina/phase-$PHASE/status.json" ]; then
+    STATUS=$(jq -r '.status' ".claude/tina/phase-$PHASE/status.json")
     if [ "$STATUS" = "complete" ]; then
       echo "Cleaning up completed phase session: $SESSION"
       tmux kill-session -t "$SESSION" 2>/dev/null || true
@@ -181,13 +181,13 @@ After all phases complete successfully:
 ```bash
 ALL_COMPLETE=true
 for i in $(seq 1 $TOTAL_PHASES); do
-  if [ ! -f ".tina/phase-$i/status.json" ]; then
+  if [ ! -f ".claude/tina/phase-$i/status.json" ]; then
     echo "Error: Missing status for phase $i"
     ALL_COMPLETE=false
     break
   fi
 
-  STATUS=$(jq -r '.status' ".tina/phase-$i/status.json")
+  STATUS=$(jq -r '.status' ".claude/tina/phase-$i/status.json")
   if [ "$STATUS" != "complete" ]; then
     echo "Error: Phase $i not complete (status: $STATUS)"
     ALL_COMPLETE=false
@@ -214,7 +214,7 @@ done
 
 ```bash
 tmp_file=$(mktemp)
-jq '.status = "complete" | .completed_at = now | .active_tmux_session = null' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+jq '.status = "complete" | .completed_at = now | .active_tmux_session = null' .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 ```
 
 **4d. Invoke finishing workflow:**
@@ -266,7 +266,7 @@ Find "## State Files" section (around line 470). Update the supervisor state doc
 ```markdown
 ## State Files
 
-**Supervisor state:** `.tina/supervisor-state.json`
+**Supervisor state:** `.claude/tina/supervisor-state.json`
 ```json
 {
   "design_doc_path": "docs/plans/2026-01-26-feature-design.md",
