@@ -45,6 +45,12 @@ Ask questions one at a time to refine the idea. Once you understand what you're 
 - Architect must approve design before proceeding
 - If blocked: address concerns, then re-run architect review
 
+**Design validation (for orchestrated projects):**
+- If proceeding to orchestrated execution, design validator runs automatically
+- Validator checks: measurable success criteria, estimate feasibility, baseline capture
+- Design must have a `## Success Metrics` section with quantifiable goal
+- If validation fails, revise design before proceeding
+
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"
 - Use superpowers:using-git-worktrees to create isolated workspace
@@ -58,3 +64,4 @@ Ask questions one at a time to refine the idea. Once you understand what you're 
 - **Explore alternatives** - Always propose 2-3 approaches before settling
 - **Incremental validation** - Present design in sections, validate each
 - **Be flexible** - Go back and clarify when something doesn't make sense
+- **Measurable goals required** - Every design must have quantifiable success criteria
