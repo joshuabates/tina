@@ -194,3 +194,39 @@ Not addressed in this design:
 2. No context bleeding between unrelated tasks
 3. Existing orchestration flow continues to work
 4. Phase completion quality maintained (reviews still catch issues)
+
+## Architectural Context
+
+**Patterns to follow:**
+- Team spawning via Task tool: `skills/team-lead-init/SKILL.md:47-75`
+- Agent definition format: `agents/implementer.md` (frontmatter + instructions)
+- Review communication protocol: `agents/spec-reviewer.md:47-80`
+- Shutdown protocol: `agents/implementer.md:58-72`
+
+**Code to reuse:**
+- `skills/executing-plans/SKILL.md` - Core execution flow (modify Team Mode sections)
+- `skills/team-lead-init/SKILL.md` - Team initialization (simplify for mini-teams)
+- `skills/checkpoint/SKILL.md` - Checkpoint protocol (simplify - no team state to capture)
+- `skills/rehydrate/SKILL.md` - Rehydration (simplify - no team state to restore)
+- `agents/implementer.md` - Worker agent (remove team mode behavior section)
+- `agents/spec-reviewer.md` - Spec reviewer (remove team mode behavior section)
+- `agents/code-quality-reviewer.md` - Quality reviewer (remove team mode behavior section)
+
+**Anti-patterns:**
+- Don't spawn workers then assign tasks - spawn worker WITH task context
+- Don't use Teammate.spawnTeam for mini-teams - use Task tool directly per agent
+- Don't track review state in team lead - mini-team handles internally
+
+**Integration:**
+- Entry: `skills/team-lead-init/SKILL.md` spawns mini-teams instead of persistent team
+- Entry: `skills/executing-plans/SKILL.md` Team Mode sections need rewrite
+- Connects to: `agents/planner.md` - needs `review:` field in task format
+- Connects to: `skills/checkpoint/SKILL.md` - simplify (no team members to capture)
+- Connects to: `skills/rehydrate/SKILL.md` - simplify (no team members to restore)
+
+**Key architectural decisions:**
+1. Mini-team members communicate via Teammate messaging (same as current)
+2. Team lead tracks task progress via TaskList (same as current)
+3. Worker spawns with task context in prompt (not via TaskUpdate assignment)
+4. Reviewers spawned alongside worker, receive task ID in spawn prompt
+5. All mini-team members use same team_name for messaging scope
