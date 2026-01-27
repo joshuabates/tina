@@ -49,62 +49,58 @@ Write to `.claude/tina/phase-$PHASE_NUM/status.json`:
 
 ---
 
-## STEP 4: CALL Task tool NOW to spawn workers
+## STEP 4: Create tasks from plan (NO worker spawn yet)
 
-Spawn worker-1:
-```json
-{
-  "subagent_type": "tina:implementer",
-  "team_name": "phase-<N>-execution",
-  "name": "worker-1",
-  "description": "Worker 1 for phase N",
-  "prompt": "You are worker-1. Claim and implement tasks from TaskList. Use TDD."
-}
-```
+Read the plan file and create tasks via TaskCreate for each task in the plan.
 
-Spawn worker-2 with same pattern, name "worker-2".
+Do NOT spawn workers or reviewers yet. The team is just a container at this point.
 
 ---
 
-## STEP 5: CALL Task tool NOW to spawn reviewers
+## STEP 5: Begin task execution loop
 
-Spawn spec-reviewer:
-```json
-{
-  "subagent_type": "tina:spec-reviewer",
-  "team_name": "phase-<N>-execution",
-  "name": "spec-reviewer",
-  "description": "Spec reviewer for phase N",
-  "prompt": "You are spec-reviewer. Review implementations for spec compliance."
-}
-```
+For each task in priority order:
 
-Spawn code-quality-reviewer:
-```json
-{
-  "subagent_type": "tina:code-quality-reviewer",
-  "team_name": "phase-<N>-execution",
-  "name": "code-quality-reviewer",
-  "description": "Code quality reviewer for phase N",
-  "prompt": "You are code-quality-reviewer. Review code architecture and patterns."
-}
-```
+1. **Spawn worker for this task:**
+   ```json
+   {
+     "subagent_type": "tina:implementer",
+     "team_name": "phase-<N>-execution",
+     "name": "worker",
+     "prompt": "Implement task: <task subject>. Use TDD."
+   }
+   ```
+
+2. **Wait for worker to complete implementation**
+
+3. **Spawn reviewers for this task:**
+   - spec-reviewer: Review implementation against spec
+   - code-quality-reviewer: Review code quality
+
+4. **Wait for both reviews to pass**
+
+5. **Shut down worker and reviewers:**
+   ```json
+   {
+     "operation": "requestShutdown",
+     "target_agent_id": "worker",
+     "reason": "Task complete"
+   }
+   ```
+   Repeat for spec-reviewer and code-quality-reviewer.
+
+6. **Mark task complete, loop to next task**
+
+This ephemeral model gives each task a fresh context window.
 
 ---
 
-## STEP 6: Invoke executing-plans with team flag
+## STEP 6: On completion
 
-```
-/tina:executing-plans --team <PLAN_PATH>
-```
-
----
-
-## STEP 7: On completion
-
-1. Request shutdown for all teammates via Teammate tool
-2. Update status.json to "complete"
-3. Wait for supervisor to kill session
+1. All tasks complete (workers/reviewers already shut down per-task)
+2. Optionally clean up team resources: `Teammate { operation: "cleanup" }`
+3. Update status.json to "complete"
+4. Wait for supervisor to kill session
 
 ---
 
@@ -174,101 +170,151 @@ Extract phase number from plan path:
 }
 ```
 
-## The Process (Phase 2)
+## The Process (Ephemeral Model)
 
 ```dot
-digraph team_lead_init_v2 {
+digraph team_lead_init_ephemeral {
     rankdir=TB;
 
     "Read plan file" [shape=box];
     "Extract phase number from path" [shape=box];
-    "Initialize .claude/tina/phase-N/status.json" [shape=box];
-    "Set status = executing" [shape=box];
-    "Spawn team via Teammate tool" [shape=box];
-    "Invoke executing-plans --team with plan path" [shape=box];
-    "All tasks complete?" [shape=diamond];
-    "Request team shutdown" [shape=box];
+    "Initialize status.json" [shape=box];
+    "Create team container" [shape=box];
+    "Create tasks from plan" [shape=box];
+    "More tasks?" [shape=diamond];
+    "Spawn worker for task" [shape=box];
+    "Wait for implementation" [shape=box];
+    "Spawn reviewers" [shape=box];
+    "Wait for reviews" [shape=box];
+    "Shut down worker + reviewers" [shape=box];
+    "Mark task complete" [shape=box];
     "Set status = complete" [shape=box];
-    "Wait for supervisor to kill session" [shape=box];
+    "Wait for supervisor" [shape=box];
 
     "Read plan file" -> "Extract phase number from path";
-    "Extract phase number from path" -> "Initialize .claude/tina/phase-N/status.json";
-    "Initialize .claude/tina/phase-N/status.json" -> "Set status = executing";
-    "Set status = executing" -> "Spawn team via Teammate tool";
-    "Spawn team via Teammate tool" -> "Invoke executing-plans --team with plan path";
-    "Invoke executing-plans --team with plan path" -> "All tasks complete?";
-    "All tasks complete?" -> "Request team shutdown" [label="yes"];
-    "All tasks complete?" -> "Set status = blocked" [label="no (error)"];
-    "Request team shutdown" -> "Set status = complete";
-    "Set status = complete" -> "Wait for supervisor to kill session";
+    "Extract phase number from path" -> "Initialize status.json";
+    "Initialize status.json" -> "Create team container";
+    "Create team container" -> "Create tasks from plan";
+    "Create tasks from plan" -> "More tasks?";
+    "More tasks?" -> "Spawn worker for task" [label="yes"];
+    "More tasks?" -> "Set status = complete" [label="no"];
+    "Spawn worker for task" -> "Wait for implementation";
+    "Wait for implementation" -> "Spawn reviewers";
+    "Spawn reviewers" -> "Wait for reviews";
+    "Wait for reviews" -> "Shut down worker + reviewers";
+    "Shut down worker + reviewers" -> "Mark task complete";
+    "Mark task complete" -> "More tasks?";
+    "Set status = complete" -> "Wait for supervisor";
 }
 ```
 
-## Team Spawning
+## Team Spawning (Ephemeral Model)
 
-Team-lead spawns the execution team before invoking executing-plans:
+Team-lead uses an ephemeral spawning model where workers and reviewers are created per-task, not per-phase.
 
-**Step 1: Create team**
+**Why ephemeral?**
+- Fresh context window for each task (no accumulated context)
+- Cleaner handoffs between tasks
+- Simpler checkpoint/recovery (no team composition to save)
+- Each worker starts with full context budget for their specific task
+
+**Phase initialization (once):**
 
 Use the Teammate tool with operation "spawnTeam":
 - team_name: "phase-N-execution" (replace N with actual phase number)
 - agent_type: "team-lead"
 - description: "Phase N execution team"
 
-**Step 2: Spawn workers (2 by default)**
+This creates the team container. NO workers or reviewers are spawned yet.
 
-Use the Task tool to spawn worker agents:
-- subagent_type: "tina:implementer"
-- team_name: "phase-N-execution"
-- name: "worker-1"
-- prompt: "You are worker-1 in phase N execution team. Execute assigned tasks from the plan."
+**Per-task spawning:**
 
-Repeat for worker-2.
+For each task:
 
-**Step 3: Spawn dedicated reviewers**
+1. Spawn ONE worker for the current task
+2. Wait for implementation
+3. Spawn reviewers (spec-reviewer, code-quality-reviewer)
+4. Wait for reviews to pass
+5. Shut down all three agents
+6. Move to next task
 
-Use the Task tool to spawn reviewer agents:
-- subagent_type: "tina:spec-reviewer"
-- team_name: "phase-N-execution"
-- name: "spec-reviewer"
-- prompt: "You are the spec compliance reviewer for phase N. Review implementations against requirements."
-
-Use the Task tool again for code-quality-reviewer:
-- subagent_type: "tina:code-quality-reviewer"
-- team_name: "phase-N-execution"
-- name: "code-quality-reviewer"
-- prompt: "You are the code quality reviewer for phase N. Review code architecture and patterns."
-
-**Step 4: Invoke executing-plans with team flag**
-
+**Worker spawn:**
+```json
+{
+  "subagent_type": "tina:implementer",
+  "team_name": "phase-N-execution",
+  "name": "worker",
+  "prompt": "Implement task: <task subject and description>. Use TDD."
+}
 ```
-/tina:executing-plans --team <plan-path>
+
+**Reviewer spawns:**
+```json
+{
+  "subagent_type": "tina:spec-reviewer",
+  "team_name": "phase-N-execution",
+  "name": "spec-reviewer",
+  "prompt": "Review implementation for task: <task subject>. Check spec compliance."
+}
+```
+
+```json
+{
+  "subagent_type": "tina:code-quality-reviewer",
+  "team_name": "phase-N-execution",
+  "name": "code-quality-reviewer",
+  "prompt": "Review code quality for task: <task subject>. Check architecture and patterns."
+}
 ```
 
 ## Team Shutdown
 
-After executing-plans completes (all tasks done, phase-reviewer approved):
+With the ephemeral model, shutdown happens at two levels:
 
-Use the Teammate tool with operation "requestShutdown" for each active teammate:
-- For each teammate (worker-1, worker-2, spec-reviewer, code-quality-reviewer)
-- Use target_agent_id with their name
-- reason: "Phase execution complete"
+**Per-task shutdown (after each task completes):**
 
-Wait for all teammates to acknowledge shutdown (they will send shutdown approval messages), then update status to complete.
+After reviews pass for a task, shut down worker and reviewers:
+
+```json
+{
+  "operation": "requestShutdown",
+  "target_agent_id": "worker",
+  "reason": "Task complete"
+}
+```
+
+Repeat for spec-reviewer and code-quality-reviewer.
+
+Wait for shutdown acknowledgment before spawning agents for the next task.
+
+**Phase-end cleanup:**
+
+When all tasks complete:
+- No workers/reviewers to shut down (already cleaned up per-task)
+- Optionally clean up team resources with Teammate `cleanup` operation
+- Update status.json to "complete"
 
 ## Checkpoint Protocol
 
-Team-lead responds to `/checkpoint` command from supervisor:
+With ephemeral spawning, checkpoint is simpler because there's no long-lived team composition to save.
+
+**When checkpoint is triggered:**
 
 1. Supervisor detects context threshold exceeded
 2. Supervisor sends `/checkpoint` via tmux
-3. Team-lead invokes `checkpoint` skill
-4. Checkpoint skill shuts down team, writes handoff
-5. Team-lead outputs "CHECKPOINT COMPLETE"
-6. Supervisor sends `/clear`, then `/rehydrate`
-7. Fresh session invokes `rehydrate` skill
-8. Rehydrate restores team and task state
-9. Execution continues
+3. If worker/reviewers are active for current task, shut them down first
+4. Team-lead invokes `checkpoint` skill
+5. Checkpoint writes handoff (only TaskList state matters, no team composition)
+6. Team-lead outputs "CHECKPOINT COMPLETE"
+7. Supervisor sends `/clear`, then `/rehydrate`
+8. Fresh session invokes `rehydrate` skill
+9. Rehydrate reads TaskList, resumes at current task
+10. Fresh worker/reviewers spawned for resumed task
+
+**Why simpler:**
+- No team composition to save/restore
+- Only task state matters (which tasks complete, which in-progress)
+- Fresh session spawns new ephemeral agents as needed
 
 **Important:** The `/checkpoint` and `/rehydrate` commands are slash commands that invoke the respective skills. Team-lead doesn't implement checkpoint logic directly - it delegates to the skills.
 
@@ -286,15 +332,22 @@ See: `skills/checkpoint/SKILL.md` and `skills/rehydrate/SKILL.md`
 - If still fails: Set status = blocked with reason: "Failed to spawn team: <error>"
 - Exit
 
-**executing-plans fails:**
-- Team-lead already has team spawned
-- Request team shutdown before marking blocked
-- Set status = blocked with reason from execution error
+**Worker fails during task:**
+- Shut down failed worker
+- Retry with fresh worker (one retry)
+- If still fails: Set status = blocked with reason
+- Exit
+
+**Reviewer rejects repeatedly:**
+- After 3 rejections for same task, escalate
+- Shut down active worker/reviewers
+- Set status = blocked with rejection context
 - Exit
 
 **Worker/reviewer unresponsive:**
-- executing-plans handles this (spawns replacement)
-- If team-lead cannot recover: request shutdown, mark blocked
+- Shut down unresponsive agent
+- Spawn replacement (ephemeral model makes this easy)
+- If replacement also fails: Set status = blocked
 
 ## Escalation Protocol
 
@@ -347,8 +400,10 @@ Handoff written to .claude/tina/phase-N/handoff.md
 **Invoked by:**
 - `tina:orchestrate` - Spawns team-lead-init in tmux for each phase
 
-**Invokes:**
-- `tina:executing-plans` - Delegates to executing-plans workflow for task execution
+**Spawns (per-task):**
+- `tina:implementer` - Worker to implement current task
+- `tina:spec-reviewer` - Reviews implementation against spec
+- `tina:code-quality-reviewer` - Reviews code quality
 
 **Responds to:**
 - `/checkpoint` - Invokes checkpoint skill for context management
