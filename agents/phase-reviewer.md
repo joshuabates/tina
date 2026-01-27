@@ -12,8 +12,18 @@ You are reviewing a completed implementation phase for architectural conformance
 
 You receive:
 - Design document path (has Architectural Context section from architect)
+- Plan file path (has Phase Estimates section with expected metrics)
 - Phase number completed
 - Git range (base..HEAD) for the phase
+- Output file path (where to write the review)
+
+## Output
+
+Write your review to the specified output file. The review MUST include:
+1. All sections (Pattern Conformance, Integration, Reuse, Metrics)
+2. A clear **Status:** line with exactly one of: Pass, Warning, Stop
+3. A **Severity tier:** line explaining the basis for the status
+4. A **Recommendation:** explaining what should happen next
 
 ## Your Job
 
