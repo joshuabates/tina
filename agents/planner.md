@@ -84,6 +84,15 @@ Each step is one action (2-5 minutes):
 
 Only specify if task is simple enough to use a cheaper model. When in doubt, omit the field (defaults to opus).
 
+**review:** [optional - full (default), spec-only, or none]
+
+**Review requirements guidance:**
+- **full** (default, omit field): Both spec-reviewer and code-quality-reviewer
+- **spec-only**: Just spec-reviewer (for tasks with clear, unambiguous implementation)
+- **none**: No reviewers (for mechanical tasks like file moves, renames, config updates)
+
+Only specify if task is simple enough to skip code quality review. When in doubt, omit the field (defaults to full).
+
 ```markdown
 **Step 1: Write the failing test**
 
