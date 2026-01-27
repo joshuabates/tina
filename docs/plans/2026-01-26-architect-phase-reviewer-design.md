@@ -136,7 +136,7 @@ After phase tasks complete, dispatch phase reviewer before proceeding to next ph
 
 ## Implementation Notes
 
-- Use `superpowers:writing-skills` skill when creating the architect skill
+- Use `tina:writing-skills` skill when creating the architect skill
 - Use existing agent patterns from `agents/planner.md` for phase reviewer
 - Architect's context section should be clearly marked so phase reviewer can find it
 - Phase reviewer should reference architect's context explicitly in its checks

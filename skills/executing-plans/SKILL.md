@@ -44,7 +44,7 @@ digraph process {
     "More phases?" [shape=diamond];
     "Dispatch planner for next phase" [shape=box];
     "Dispatch final code reviewer subagent for entire implementation" [shape=box];
-    "Use superpowers:finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
+    "Use tina:finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
 
     "Read plan, extract all tasks with full text, note context, create TodoWrite" -> "Dispatch implementer subagent (tina:implementer)";
     "Dispatch implementer subagent (tina:implementer)" -> "Implementer subagent asks questions?";
@@ -70,7 +70,7 @@ digraph process {
     "More phases?" -> "Dispatch planner for next phase" [label="yes"];
     "More phases?" -> "Dispatch final code reviewer subagent for entire implementation" [label="no"];
     "Dispatch planner for next phase" -> "Read plan, extract all tasks with full text, note context, create TodoWrite";
-    "Dispatch final code reviewer subagent for entire implementation" -> "Use superpowers:finishing-a-development-branch";
+    "Dispatch final code reviewer subagent for entire implementation" -> "Use tina:finishing-a-development-branch";
 }
 ```
 
@@ -598,9 +598,9 @@ Phase reviewer checks:
 ## Integration
 
 **Required workflow skills:**
-- **superpowers:writing-plans** - Creates the plan this skill executes
-- **superpowers:requesting-code-review** - Code review template for reviewer subagents
-- **superpowers:finishing-a-development-branch** - Complete development after all tasks
+- **tina:writing-plans** - Creates the plan this skill executes
+- **tina:requesting-code-review** - Code review template for reviewer subagents
+- **tina:finishing-a-development-branch** - Complete development after all tasks
 
 **Subagents should use:**
-- **superpowers:test-driven-development** - Subagents follow TDD for each task
+- **tina:test-driven-development** - Subagents follow TDD for each task

@@ -1,6 +1,6 @@
 # Orchestrated Automation Phase 4: Multi-Phase & Error Handling
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use tina:executing-plans to implement this plan task-by-task.
 
 **Goal:** Add helper agent for blocked state diagnosis and comprehensive error handling throughout the orchestration system.
 

@@ -99,7 +99,7 @@ Document structure:
 
 After presenting findings, ask: "Would you like to design a plan for any of these refactorings?"
 
-If yes, transition to `superpowers:writing-plans` for the selected item(s), or invoke `superpowers:brainstorming` if the refactoring needs more design exploration first.
+If yes, transition to `tina:writing-plans` for the selected item(s), or invoke `tina:brainstorming` if the refactoring needs more design exploration first.
 
 ### Key Principles
 
@@ -228,5 +228,5 @@ Each skill has its own SKILL.md with the full process. The shared pattern is sim
 ### Dependencies
 
 Both skills may invoke:
-- `superpowers:brainstorming` - if design exploration is needed
-- `superpowers:writing-plans` - if implementation planning is needed
+- `tina:brainstorming` - if design exploration is needed
+- `tina:writing-plans` - if implementation planning is needed

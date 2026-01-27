@@ -1,6 +1,6 @@
 # Architect Skill & Phase Reviewer - Phase 2 Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use tina:executing-plans to implement this plan task-by-task.
 
 **Goal:** Create the phase reviewer subagent that verifies completed phases follow architecture and are properly integrated.
 
@@ -202,7 +202,7 @@ Read `skills/executing-plans/SKILL.md` to understand current flow.
 
 **Step 2: Add phase reviewer invocation**
 
-The current flow ends with "Dispatch final code reviewer subagent for entire implementation" then "Use superpowers:finishing-a-development-branch".
+The current flow ends with "Dispatch final code reviewer subagent for entire implementation" then "Use tina:finishing-a-development-branch".
 
 Update to add phase reviewer between task completion and final review:
 

@@ -53,8 +53,8 @@ Ask questions one at a time to refine the idea. Once you understand what you're 
 
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"
-- Use superpowers:using-git-worktrees to create isolated workspace
-- Use superpowers:writing-plans to create detailed implementation plan
+- Use tina:using-git-worktrees to create isolated workspace
+- Use tina:writing-plans to create detailed implementation plan
 
 ## Key Principles
 

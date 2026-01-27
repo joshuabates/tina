@@ -407,8 +407,8 @@ Replace the current "## After the Design" section with:
 
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"
-- Use superpowers:using-git-worktrees to create isolated workspace
-- Use superpowers:writing-plans to create detailed implementation plan
+- Use tina:using-git-worktrees to create isolated workspace
+- Use tina:writing-plans to create detailed implementation plan
 ```
 
 **Step 3: Add Success Metrics guidance to Key Principles**

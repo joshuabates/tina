@@ -1,6 +1,6 @@
 # Investigation Skills Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use tina:executing-plans to implement this plan task-by-task.
 
 **Goal:** Create two new skills (`deep-review` and `analytics`) that apply the brainstorming interaction pattern to code review and data analysis.
 
@@ -139,8 +139,8 @@ Commit the document to git.
 
 After presenting findings, ask: "Would you like to design a plan for any of these refactorings?"
 
-- If design exploration needed → invoke `superpowers:brainstorming`
-- If ready to plan → invoke `superpowers:writing-plans`
+- If design exploration needed → invoke `tina:brainstorming`
+- If ready to plan → invoke `tina:writing-plans`
 
 ## Key Principles
 

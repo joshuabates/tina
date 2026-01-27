@@ -1,6 +1,6 @@
 # Orchestrated Automation Phase 5: Resumption & Polish
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use tina:executing-plans to implement this plan task-by-task.
 
 **Goal:** Complete supervisor resumption from interrupted state, add orphaned session cleanup, and integrate the finishing workflow for completed orchestration.
 
@@ -221,7 +221,7 @@ jq '.status = "complete" | .completed_at = now | .active_tmux_session = null' .c
 
 ```
 # Use Skill tool to invoke:
-/superpowers:finishing-a-development-branch
+/tina:finishing-a-development-branch
 ```
 
 This presents the user with options to merge, create PR, or keep the branch.

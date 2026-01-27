@@ -91,8 +91,8 @@ Commit to git.
 
 **Optional transition:**
 Ask: "Would you like to design a plan for any of these refactorings?"
-- If design needed → `superpowers:brainstorming`
-- If ready to plan → `superpowers:writing-plans`
+- If design needed → `tina:brainstorming`
+- If ready to plan → `tina:writing-plans`
 
 ## Red Flags
 

@@ -1,6 +1,6 @@
 # Architect Skill & Phase Reviewer - Phase 1 Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use tina:executing-plans to implement this plan task-by-task.
 
 **Goal:** Create the architect skill that reviews designs before implementation and adds architectural context.
 
@@ -14,7 +14,7 @@
 
 ### Task 1: Create Architect Skill with Baseline Testing
 
-**REQUIRED SUB-SKILL:** Use superpowers:writing-skills for the TDD approach to skill creation.
+**REQUIRED SUB-SKILL:** Use tina:writing-skills for the TDD approach to skill creation.
 
 **Files:**
 - Create: `skills/architect/SKILL.md`
@@ -221,7 +221,7 @@ Add after the Documentation section:
 
 ```markdown
 **Architectural Review:**
-- After committing design doc, invoke superpowers:architect skill
+- After committing design doc, invoke tina:architect skill
 - Architect reviews design, explores codebase, adds Architectural Context section
 - Architect must approve before proceeding to implementation
 - If architect has concerns, address them before continuing
@@ -234,10 +234,10 @@ Update the "Implementation (if continuing)" section:
 ```markdown
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"
-- **REQUIRED:** Invoke superpowers:architect to review design and add architectural context
+- **REQUIRED:** Invoke tina:architect to review design and add architectural context
 - Architect must approve design before proceeding
-- Use superpowers:using-git-worktrees to create isolated workspace
-- Use superpowers:writing-plans to create detailed implementation plan
+- Use tina:using-git-worktrees to create isolated workspace
+- Use tina:writing-plans to create detailed implementation plan
 ```
 
 **Step 4: Commit the update**

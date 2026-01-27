@@ -1,6 +1,6 @@
 # Orchestrated Automation Phase 3 Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Claude:** REQUIRED SUB-SKILL: Use tina:executing-plans to implement this plan task-by-task.
 
 **Goal:** Implement checkpoint and rehydrate skills that allow team-lead sessions to save state and resume after context reset.
 
