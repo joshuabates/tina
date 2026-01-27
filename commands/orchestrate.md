@@ -24,7 +24,8 @@ Given a design doc path as argument:
 
 ### Step 1: Count phases
 ```bash
-TOTAL_PHASES=$(grep -c "^## Phase [0-9]" "$DESIGN_DOC")
+# Design docs may use ## or ### for phase headings
+TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
 ```
 
 ### Step 2: Create worktree (see skill for details)
@@ -71,4 +72,4 @@ If you find yourself about to:
 
 STOP. You are doing the wrong thing. Delegate to subagents.
 
-Now read the full tina:orchestrate skill and follow it step by step.
+The full skill instructions follow this command. Execute them step by step.

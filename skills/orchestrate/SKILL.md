@@ -162,10 +162,10 @@ If not specified, implementers/reviewers use opus by default.
 ### Step 1: Parse Design Doc
 
 ```bash
-# Count phases
-TOTAL_PHASES=$(grep -c "^## Phase [0-9]" "$DESIGN_DOC")
+# Count phases (supports ## or ### headings)
+TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
 if [ "$TOTAL_PHASES" -eq 0 ]; then
-  echo "Error: Design doc must have ## Phase N sections"
+  echo "Error: Design doc must have ## Phase N or ### Phase N sections"
   exit 1
 fi
 ```
