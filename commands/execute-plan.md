@@ -1,6 +1,5 @@
 ---
 description: Execute plan in batches with review checkpoints
-disable-model-invocation: true
 ---
 
-Invoke the tina:executing-plans skill and follow it exactly as presented to you
+The tina:executing-plans skill instructions follow below. Execute them step by step.

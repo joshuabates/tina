@@ -1,6 +1,5 @@
 ---
 description: Find refactoring opportunities through structured investigation of your own code
-disable-model-invocation: true
 ---
 
-Invoke the tina:deep-review skill and follow it exactly as presented to you
+The tina:deep-review skill instructions follow below. Execute them step by step.

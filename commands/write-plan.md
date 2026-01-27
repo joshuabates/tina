@@ -1,6 +1,5 @@
 ---
 description: Create detailed implementation plan with bite-sized tasks
-disable-model-invocation: true
 ---
 
-Invoke the tina:writing-plans skill and follow it exactly as presented to you
+The tina:writing-plans skill instructions follow below. Execute them step by step.

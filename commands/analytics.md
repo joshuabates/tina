@@ -1,6 +1,5 @@
 ---
 description: Answer questions and discover patterns through hands-on data analysis
-disable-model-invocation: true
 ---
 
-Invoke the tina:analytics skill and follow it exactly as presented to you
+The tina:analytics skill instructions follow below. Execute them step by step.
