@@ -70,7 +70,13 @@ digraph orchestrate {
 
     "Parse design doc for phases" -> "Create worktree + provision statusline";
     "Create worktree + provision statusline" -> "Initialize .tina/supervisor-state.json";
-    "Initialize .tina/supervisor-state.json" -> "More phases?";
+    "Initialize .tina/supervisor-state.json" -> "Validate design (tina:design-validator)";
+    "Validate design (tina:design-validator)" [shape=box];
+    "Design valid?" [shape=diamond];
+    "Validate design (tina:design-validator)" -> "Design valid?";
+    "Design valid?" -> "More phases?" [label="pass/warning"];
+    "Design valid?" -> "Report failure and exit" [label="stop"];
+    "Report failure and exit" [shape=box style=filled fillcolor=lightcoral];
     "More phases?" -> "Spawn planner subagent" [label="yes"];
     "Spawn planner subagent" -> "Wait for plan path";
     "Wait for plan path" -> "Spawn team-lead-init in tmux";
@@ -386,6 +392,60 @@ if [ ! -f ".tina/cumulative-metrics.json" ]; then
   "phase_metrics": {}
 }
 EOF
+fi
+```
+
+### Step 2c: Validate Design
+
+Before starting phases, validate the design document meets requirements for measurable success.
+
+**Skip if resuming:** Only run on fresh orchestration (current_phase == 0).
+
+```bash
+if [ "$CURRENT_PHASE" -eq 0 ]; then
+  echo "Validating design document..."
+
+  # Create validation output directory
+  mkdir -p "$WORKTREE_PATH/.tina/validation"
+
+  # Spawn design validator
+  # Task tool parameters:
+  #   subagent_type: "tina:design-validator"
+  #   model: "opus"
+  #   prompt: |
+  #     Design doc: $DESIGN_DOC
+  #     Output file: $WORKTREE_PATH/.tina/validation/design-report.md
+  #
+  #     Validate this design and write your report to the output file.
+  #     Return ONLY: VALIDATION_STATUS: Pass/Warning/Stop
+
+  # Parse validation status
+  VALIDATION_STATUS=$(echo "$VALIDATOR_OUTPUT" | grep "^VALIDATION_STATUS:" | cut -d' ' -f2)
+
+  case "$VALIDATION_STATUS" in
+    "Pass")
+      echo "Design validated successfully"
+      ;;
+
+    "Warning")
+      echo "Design validated with warnings - proceeding with caution"
+      echo "See: $WORKTREE_PATH/.tina/validation/design-report.md"
+      ;;
+
+    "Stop")
+      echo "Design validation FAILED"
+      echo ""
+      cat "$WORKTREE_PATH/.tina/validation/design-report.md"
+      echo ""
+      echo "Design must be revised before orchestration can proceed."
+      echo "Review the report above and update the design document."
+      exit 1
+      ;;
+
+    *)
+      echo "Unknown validation status: $VALIDATION_STATUS - treating as warning"
+      ;;
+  esac
 fi
 ```
 
@@ -1259,6 +1319,20 @@ Written by statusline script on each status update. Supervisor reads this to dec
 }
 ```
 
+**Baseline metrics:** `.tina/baseline-metrics.json`
+```json
+{
+  "captured_at": "2026-01-26T10:00:00Z",
+  "design_doc": "docs/plans/2026-01-26-feature-design.md",
+  "metrics": {
+    "coverage": "62.5%",
+    "raw_output": "Lines: 62.5% (1250/2000)"
+  }
+}
+```
+
+Written by design validator during validation. Used by phase reviewer to compare progress against baseline.
+
 ## Resumption
 
 If supervisor is interrupted (Ctrl+C, crash, terminal closed), re-run with same design doc path:
@@ -1292,6 +1366,7 @@ The supervisor automatically detects existing state and resumes appropriately.
 ## Integration
 
 **Spawns:**
+- `tina:design-validator` - Validates design before planning (once at start)
 - `tina:planner` - Creates implementation plan for each phase
 - `tina:monitor` - Background haiku agent for phase monitoring (run_in_background: true)
 - Team-lead in tmux - Executes phase via `team-lead-init`
