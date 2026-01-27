@@ -57,7 +57,7 @@ Wait for response. Extract path from `PLAN_PATH: ...` line.
 ### 4b. Run tmux commands NOW:
 
 ```bash
-SESSION_NAME="tina-phase-$PHASE_NUM"
+SESSION_NAME="tina-$FEATURE_NAME-phase-$PHASE_NUM"
 tmux new-session -d -s "$SESSION_NAME" "cd $WORKTREE_PATH && ~/.local/bin/claudesp --dangerously-skip-permissions --model claude-opus-4-5-20251101"
 ```
 
@@ -65,6 +65,12 @@ Wait 3 seconds, then:
 
 ```bash
 tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" C-m
+```
+
+**Print for user:**
+```
+Phase $PHASE_NUM running in tmux session: $SESSION_NAME
+To monitor: tmux attach -t $SESSION_NAME
 ```
 
 ### 4c. CALL Task tool NOW to spawn background monitor:
@@ -75,7 +81,7 @@ tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" C-m
   "model": "haiku",
   "run_in_background": true,
   "description": "Monitor phase N",
-  "prompt": "Monitor phase execution:\n- phase_num: <N>\n- worktree_path: <PATH>\n- tmux_session: tina-phase-<N>\n- context_threshold: 50"
+  "prompt": "Monitor phase execution:\n- phase_num: <N>\n- worktree_path: <PATH>\n- tmux_session: tina-<FEATURE_NAME>-phase-<N>\n- context_threshold: 50"
 }
 ```
 
@@ -218,7 +224,7 @@ This phase implements basic orchestration without team-based execution:
 
 **Monitoring:** Delegated to a background haiku agent (`tina:monitor`) that polls status files every 5 seconds and outputs structured signals. The orchestrator remains responsive to user interaction while monitoring runs in background.
 
-**Tmux session naming:** Uses pattern `tina-phase-N` where N is the phase number.
+**Tmux session naming:** Uses pattern `tina-{feature}-phase-N` where feature is extracted from the design doc filename and N is the phase number. This allows multiple orchestrations to run concurrently.
 
 **Cleanup:** Supervisor state and phase directories persist in `.claude/tina/` for resumption. Can be manually removed after successful completion if desired.
 
@@ -572,12 +578,12 @@ fi
 Before starting new phases, clean up any orphaned tmux sessions from previous runs:
 
 ```bash
-# Find all tina tmux sessions
-ORPHANED=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^tina-phase-' || true)
+# Find tina tmux sessions for THIS feature only
+ORPHANED=$(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep "^tina-$FEATURE_NAME-phase-" || true)
 
 for SESSION in $ORPHANED; do
   # Extract phase number from session name
-  PHASE=$(echo "$SESSION" | sed 's/tina-phase-//')
+  PHASE=$(echo "$SESSION" | sed "s/tina-$FEATURE_NAME-phase-//")
 
   # Check if this session is our active session
   if [ "$SESSION" = "$ACTIVE_SESSION" ]; then
@@ -728,7 +734,7 @@ EOF
 **3d. Spawn Team-Lead in Tmux**
 
 ```bash
-SESSION_NAME="tina-phase-$PHASE_NUM"
+SESSION_NAME="tina-$FEATURE_NAME-phase-$PHASE_NUM"
 
 # Step 1: Start session with Claude
 tmux new-session -d -s "$SESSION_NAME" \
@@ -741,6 +747,12 @@ tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" C-m
 # Update active session in state
 tmp_file=$(mktemp)
 jq ".active_tmux_session = \"$SESSION_NAME\"" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
+```
+
+**Print for user:**
+```
+Phase $PHASE_NUM running in tmux session: $SESSION_NAME
+To monitor: tmux attach -t $SESSION_NAME
 ```
 
 **3d-2. Spawn Background Monitoring Agent**
@@ -1346,7 +1358,7 @@ fi
 
 ```bash
 for i in $(seq 1 $TOTAL_PHASES); do
-  SESSION="tina-phase-$i"
+  SESSION="tina-$FEATURE_NAME-phase-$i"
   tmux kill-session -t "$SESSION" 2>/dev/null || true
 done
 ```
@@ -1424,7 +1436,7 @@ tmux send-keys -t <name> "<command>" C-m
   "branch_name": "tina/feature",
   "total_phases": 3,
   "current_phase": 2,
-  "active_tmux_session": "tina-phase-2",
+  "active_tmux_session": "tina-feature-phase-2",
   "monitor_output_file": "/tmp/claude-task-abc123.out",
   "plan_paths": {
     "1": "docs/plans/2026-01-26-feature-phase-1.md",
