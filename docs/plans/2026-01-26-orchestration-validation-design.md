@@ -187,3 +187,73 @@ The design document specifies which metrics apply and how to measure them.
 - Should cumulative drift thresholds be configurable per project?
 - How does replanning work mechanically? Does planner receive the full phase history?
 - Should there be a "circuit breaker" that stops after N consecutive warnings?
+
+## Architectural Context
+
+**Patterns to follow:**
+
+- Agent definition format: `agents/planner.md`, `agents/phase-reviewer.md`
+- Skill definition format: `skills/orchestrate/SKILL.md`, `skills/architect/SKILL.md`
+- Validation gate pattern: `skills/architect/SKILL.md` (reads doc, explores codebase, adds section, commits, reports approved/blocked)
+- Subagent invocation: `skills/executing-plans/SKILL.md:1-50` (Task tool with subagent_type)
+- Severity-based responses: `skills/orchestrate/SKILL.md` (signal handling with different actions)
+
+**Code to reuse:**
+
+- `agents/phase-reviewer.md` - Extend with metrics collection, keep existing pattern/integration checks
+- `skills/orchestrate/SKILL.md` - Orchestrator feedback loop builds on existing signal handling
+- `agents/planner.md` - Extend output format to include estimates
+
+**Integration points:**
+
+- Design Validator: Insert between architect approval and planner spawn in `skills/orchestrate/SKILL.md`
+- Plan Validator: Insert after planner returns path, before team-lead-init spawn
+- Phase Reviewer: Already called by `skills/executing-plans/SKILL.md` - enhance its responsibilities
+- Orchestrator: Modify signal handling in `skills/orchestrate/SKILL.md` to consume phase reviewer severity
+
+**Anti-patterns:**
+
+- Don't duplicate validation logic - each validator has one job
+- Don't load plan content into orchestrator - pass paths only (see `docs/architecture/orchestration-vision.md`)
+- Don't skip gates - all three validators must run even if previous passed
+
+**File changes required:**
+
+| File | Change Type | Description |
+|------|-------------|-------------|
+| `agents/design-validator.md` | Create | New agent for feasibility/metrics validation |
+| `agents/plan-validator.md` | Create | New agent for plan-design alignment |
+| `agents/phase-reviewer.md` | Modify | Add metrics collection, estimate comparison |
+| `agents/planner.md` | Modify | Add estimate output format |
+| `skills/orchestrate/SKILL.md` | Modify | Add validator gates, feedback loop |
+| `skills/brainstorming/SKILL.md` | Modify | Update to mention design validator after architect |
+
+**Design document format changes:**
+
+Designs must include a new section after the existing content:
+
+```markdown
+## Success Metrics
+
+**Goal:** [Quantifiable target, e.g., "Increase coverage from 60% to 70%"]
+
+**Baseline command:** [Command to measure current state]
+```bash
+cargo llvm-cov --summary-only
+```
+
+**Progress command:** [Command to measure after each phase]
+```bash
+cargo llvm-cov --summary-only
+```
+
+**ROI threshold:** [Minimum acceptable ratio, e.g., "0.3 coverage lines per test line"]
+
+**Phase estimates:**
+| Phase | Expected Gain | Target Files |
+|-------|---------------|--------------|
+| 1 | +2% | services/news.rs, services/alerts.rs |
+| 2 | +3% | market_data/schwab_source.rs |
+```
+
+This section is validated by Design Validator and used by Plan Validator and Phase Reviewer.
