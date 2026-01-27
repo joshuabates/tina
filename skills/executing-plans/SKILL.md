@@ -496,18 +496,27 @@ Task tool:
   subagent_type: tina:phase-reviewer
   prompt: |
     Design doc: docs/plans/2026-01-26-feature-design.md
+    Plan file: docs/plans/2026-01-26-feature-phase-1.md
     Phase completed: 1
     Git range: abc1234..def5678
+    Output file: .tina/phase-1/review.md
+
+    Write your review to the output file. Include metrics comparison and severity tier.
 ```
 
 Phase reviewer checks:
 1. **Pattern conformance** - Code follows Architectural Context patterns
 2. **Integration** - Data flow traced from entry to output
 3. **Reuse** - Existing utilities used, no duplication
+4. **Metrics** - Actual vs expected, drift calculation, severity tier
 
 **If issues found:** Dispatch implementer to fix, then re-dispatch phase-reviewer.
 
-**If approved:** Check if more phases remain. If yes, dispatch planner for next phase.
+**If approved with Warning:** Log metrics, orchestrator may trigger reassessment.
+
+**If approved with Pass:** Orchestrator proceeds to next phase.
+
+**If Stop:** Orchestrator halts and surfaces issue to user.
 
 ## Advantages
 
