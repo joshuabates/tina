@@ -121,6 +121,33 @@ git commit -m "feat: add specific feature"
 ```
 ```
 
+### Phase Estimates Section
+
+Every plan file MUST end with a Phase Estimates section. This enables the phase reviewer to compare actual results against expected outcomes.
+
+```markdown
+## Phase Estimates
+
+| Metric | Expected | Measurement Command |
+|--------|----------|---------------------|
+| Impl lines added | ~150 | `git diff --stat base..HEAD -- '*.rs' '*.ts' '*.py' | tail -1` |
+| Test lines added | ~200 | `git diff --stat base..HEAD -- '*_test.*' '*.test.*' '**/tests/**' | tail -1` |
+| Files touched | 5-7 | `git diff --name-only base..HEAD | wc -l` |
+| [Metric-specific] | [value] | [command to measure] |
+
+**Target files:**
+- `src/path/to/main.rs` - Core implementation
+- `src/path/to/helper.rs` - Supporting functions
+- `tests/path/to/test.rs` - Test coverage
+
+**ROI expectation:** [For test work: coverage lines per test line. For features: scope delivered vs estimated effort. For refactoring: complexity reduction vs churn.]
+```
+
+**Notes:**
+- Include metric-specific rows when the design doc specifies measurable goals (coverage %, performance improvement, etc.)
+- The "base" in git commands refers to the commit before phase work began
+- ROI expectation helps phase reviewer flag low-value work
+
 ## Remember
 
 - Exact file paths always
@@ -129,3 +156,4 @@ git commit -m "feat: add specific feature"
 - Reference relevant skills with @ syntax
 - DRY, YAGNI, TDD, frequent commits
 - Plan ONLY the specified phase
+- Include Phase Estimates section with measurable targets
