@@ -130,6 +130,7 @@ Different agents use different models based on their needs. "Opus" always means 
 | Agent | Model | Rationale |
 |-------|-------|-----------|
 | **Team-lead** (tmux) | opus | Coordinates team, needs strong reasoning |
+| **Design Validator** | opus | Analyzes design feasibility, runs baseline commands - needs reasoning |
 | **Planner** | opus | Creates detailed implementation plans, needs deep codebase understanding |
 | **Helper** | opus | Diagnoses blocked states, needs analytical reasoning |
 | **Monitor** | haiku | Simple file polling, outputs signals - cheap and fast is sufficient |
@@ -332,6 +333,13 @@ if [ -f ".tina/supervisor-state.json" ]; then
   CURRENT_PHASE=$(jq -r '.current_phase' .tina/supervisor-state.json)
   echo "Resuming from phase $CURRENT_PHASE"
 
+  # Check validation status on resume
+  DESIGN_VALIDATED=$(jq -r '.design_validated // false' .tina/supervisor-state.json)
+  if [ "$DESIGN_VALIDATED" = "false" ]; then
+    echo "Design not validated yet - will validate before proceeding"
+    # Validation will run in Step 2c
+  fi
+
   # Read worktree path
   WORKTREE_PATH=$(jq -r '.worktree_path' .tina/supervisor-state.json)
   BRANCH_NAME=$(jq -r '.branch_name' .tina/supervisor-state.json)
@@ -372,7 +380,9 @@ else
   "current_phase": 0,
   "active_tmux_session": null,
   "plan_paths": {},
-  "recovery_attempts": {}
+  "recovery_attempts": {},
+  "design_validated": false,
+  "validation_status": null
 }
 EOF
   CURRENT_PHASE=0
@@ -425,15 +435,21 @@ if [ "$CURRENT_PHASE" -eq 0 ]; then
   case "$VALIDATION_STATUS" in
     "Pass")
       echo "Design validated successfully"
+      tmp_file=$(mktemp)
+      jq '.design_validated = true | .validation_status = "pass"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
       ;;
 
     "Warning")
       echo "Design validated with warnings - proceeding with caution"
       echo "See: $WORKTREE_PATH/.tina/validation/design-report.md"
+      tmp_file=$(mktemp)
+      jq '.design_validated = true | .validation_status = "warning"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
       ;;
 
     "Stop")
       echo "Design validation FAILED"
+      tmp_file=$(mktemp)
+      jq '.design_validated = true | .validation_status = "stop"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
       echo ""
       cat "$WORKTREE_PATH/.tina/validation/design-report.md"
       echo ""
@@ -444,6 +460,8 @@ if [ "$CURRENT_PHASE" -eq 0 ]; then
 
     *)
       echo "Unknown validation status: $VALIDATION_STATUS - treating as warning"
+      tmp_file=$(mktemp)
+      jq '.design_validated = true | .validation_status = "unknown"' .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
       ;;
   esac
 fi
@@ -1261,6 +1279,8 @@ tmux send-keys -t <name> "<command>" Enter
     "1": 0,
     "2": 1
   },
+  "design_validated": false,
+  "validation_status": null,
   "status": "executing",
   "started_at": "2026-01-26T10:00:00Z",
   "completed_at": null
@@ -1277,6 +1297,8 @@ tmux send-keys -t <name> "<command>" Enter
 - `monitor_output_file`: Path to background monitor's output file (for reading signals)
 - `plan_paths`: Map of phase number to generated plan file path
 - `recovery_attempts`: Map of phase number to recovery attempt count
+- `design_validated`: Whether design validation has run (true after Step 2c completes)
+- `validation_status`: Result of design validation (pass/warning/stop, null if not run)
 - `status`: Overall status (executing, complete, blocked)
 - `started_at`: When orchestration began
 - `completed_at`: When all phases completed (null if not complete)
