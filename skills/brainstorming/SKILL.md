@@ -11,14 +11,64 @@ Help turn ideas into fully formed designs and specs through natural collaborativ
 
 Ask questions one at a time to refine the idea. Once you understand what you're building, present the design in small sections (200-300 words), checking after each section whether it looks right so far.
 
+## Research Flow
+
+Integrate codebase exploration to ask better questions from the start.
+
+**When to research:**
+1. **After idea received** - Quick codebase scan for directly related files/patterns
+2. **After concrete mentions** - When an answer mentions specific files, systems, or technologies
+
+**When NOT to research:**
+- User is still clarifying the basic idea (too vague to search)
+- Answer only contains preferences/opinions, nothing concrete
+- Already explored that area in a previous turn
+
+**How to research:**
+
+Spawn researcher subagent:
+```yaml
+Task tool:
+  subagent_type: tina:researcher
+  model: haiku
+  prompt: "Find files related to [topic]. Return relevant file paths and code snippets."
+```
+
+**After receiving results:**
+1. Review the raw findings
+2. Do additional targeted exploration if needed (Read files, Grep patterns)
+3. Synthesize understanding internally
+4. Provide brief summary to user (1-2 sentences): "I looked at your auth system - it uses JWT middleware."
+5. Continue with informed question
+
+**If subagent finds nothing relevant:** Don't mention it, just proceed with the question.
+
+## External Research
+
+Use WebSearch for external research based on session context.
+
+**Do external research when:**
+- Exploring options ("what are my choices for X")
+- Checking if something is supported
+- Comparing approaches
+- Free-form research sessions
+
+**Skip external research when:**
+- Concrete implementation work where approach is decided
+- User has a specific solution in mind ("I want to build X using Y")
+
+Use judgment based on session context.
+
 ## The Process
 
 **Understanding the idea:**
+- Ask what they want to brainstorm (no exploration yet)
+- Once idea is received, follow Research Flow to explore codebase
 - Ask questions one at a time to refine the idea
 - Prefer multiple choice questions when possible, but open-ended is fine too
 - Only one question per message - if a topic needs more exploration, break it into multiple questions
 - Focus on understanding: purpose, constraints, success criteria
-- Explore codebase only when needed to understand constraints or existing patterns
+- After answers mentioning concrete things (files, systems, technologies), follow Research Flow again
 
 **Exploring approaches:**
 - Propose 2-3 different approaches with trade-offs
@@ -59,6 +109,8 @@ Ask questions one at a time to refine the idea. Once you understand what you're 
 ## Key Principles
 
 - **One question at a time** - Don't overwhelm with multiple questions
+- **Research Flow** - Follow Research Flow after idea received and after concrete mentions
+- **Brief summaries** - Keep research summaries to 1-2 sentences ("I looked at X - found Y")
 - **Multiple choice preferred** - Easier to answer than open-ended when possible
 - **YAGNI ruthlessly** - Remove unnecessary features from all designs
 - **Explore alternatives** - Always propose 2-3 approaches before settling
