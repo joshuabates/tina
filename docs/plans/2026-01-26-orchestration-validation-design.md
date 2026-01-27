@@ -175,11 +175,51 @@ The framework is metric-agnostic. Validators check that measurable criteria exis
 
 The design document specifies which metrics apply and how to measure them.
 
-## Implementation Priority
+## Phases
 
-1. **Phase Reviewer + Orchestrator feedback** - Highest immediate value, catches problems during execution
-2. **Design Validator** - Catches fundamentally flawed projects before they start
-3. **Plan Validator** - Catches drift between design and plans
+### Phase 1: Phase Reviewer Enhancement + Orchestrator Feedback
+
+Highest immediate value - catches problems during execution.
+
+**Deliverables:**
+- Enhanced `agents/phase-reviewer.md` with metrics collection and estimate comparison
+- Modified `skills/orchestrate/SKILL.md` with severity-based feedback loop
+- Modified `agents/planner.md` to output estimates per phase
+
+**Scope:**
+- Phase reviewer collects: lines of impl code, lines of test code, metric deltas
+- Phase reviewer compares actuals to estimates, calculates drift %
+- Phase reviewer outputs severity tier (pass/warning/stop)
+- Orchestrator consumes severity and responds (continue/reassess/halt)
+- Orchestrator tracks cumulative metrics across phases
+- Planner outputs estimate section in plan files
+
+### Phase 2: Design Validator
+
+Catches fundamentally flawed projects before they start.
+
+**Deliverables:**
+- New `agents/design-validator.md`
+- Modified `skills/orchestrate/SKILL.md` to call design validator after architect
+- Modified `skills/brainstorming/SKILL.md` to mention design validator step
+
+**Scope:**
+- Design validator checks: measurable criteria exist, estimates sum to goal, baseline captured
+- Outputs severity tier (pass/warning/stop)
+- Orchestrator gates on design validator before proceeding to planning
+
+### Phase 3: Plan Validator
+
+Catches drift between design and plans.
+
+**Deliverables:**
+- New `agents/plan-validator.md`
+- Modified `skills/orchestrate/SKILL.md` to call plan validator after planner
+
+**Scope:**
+- Plan validator checks: target alignment, scope coverage, estimate plausibility, ROI
+- Outputs severity tier (pass/warning/stop)
+- Orchestrator gates on plan validator before proceeding to execution
 
 ## Open Questions
 
