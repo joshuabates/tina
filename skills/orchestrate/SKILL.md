@@ -79,7 +79,13 @@ digraph orchestrate {
     "Report failure and exit" [shape=box style=filled fillcolor=lightcoral];
     "More phases?" -> "Spawn planner subagent" [label="yes"];
     "Spawn planner subagent" -> "Wait for plan path";
-    "Wait for plan path" -> "Spawn team-lead-init in tmux";
+    "Wait for plan path" -> "Validate plan (tina:plan-validator)";
+    "Validate plan (tina:plan-validator)" [shape=box];
+    "Plan valid?" [shape=diamond];
+    "Validate plan (tina:plan-validator)" -> "Plan valid?";
+    "Plan valid?" -> "Spawn team-lead-init in tmux" [label="pass/warning"];
+    "Plan valid?" -> "Report failure, require replanning" [label="stop"];
+    "Report failure, require replanning" [shape=box style=filled fillcolor=lightcoral];
     "Spawn team-lead-init in tmux" -> "Spawn background monitor";
     "Spawn background monitor" -> "Terminal free - await signals";
     "Terminal free - await signals" -> "Signal received?";
@@ -131,6 +137,7 @@ Different agents use different models based on their needs. "Opus" always means 
 |-------|-------|-----------|
 | **Team-lead** (tmux) | opus | Coordinates team, needs strong reasoning |
 | **Design Validator** | opus | Analyzes design feasibility, runs baseline commands - needs reasoning |
+| **Plan Validator** | opus | Cross-references plan with design, checks estimates - needs reasoning |
 | **Planner** | opus | Creates detailed implementation plans, needs deep codebase understanding |
 | **Helper** | opus | Diagnoses blocked states, needs analytical reasoning |
 | **Monitor** | haiku | Simple file polling, outputs signals - cheap and fast is sufficient |
@@ -556,6 +563,61 @@ jq ".current_phase = $PHASE_NUM" .tina/supervisor-state.json > "$tmp_file" && mv
 # Add plan path to state
 tmp_file=$(mktemp)
 jq ".plan_paths[\"$PHASE_NUM\"] = \"$PLAN_PATH\"" .tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .tina/supervisor-state.json
+```
+
+**3b-2. Validate Plan**
+
+Before spawning team-lead, validate the plan against the design document.
+
+```bash
+echo "Validating plan for phase $PHASE_NUM..."
+
+# Create validation output directory
+mkdir -p "$WORKTREE_PATH/.tina/phase-$PHASE_NUM"
+
+# Spawn plan validator
+# Task tool parameters:
+#   subagent_type: "tina:plan-validator"
+#   model: "opus"
+#   prompt: |
+#     Design doc: $DESIGN_DOC
+#     Plan file: $PLAN_PATH
+#     Phase: $PHASE_NUM
+#     Output file: $WORKTREE_PATH/.tina/phase-$PHASE_NUM/plan-validation.md
+#
+#     Validate this plan against the design and write your report to the output file.
+#     Return ONLY: VALIDATION_STATUS: Pass/Warning/Stop
+
+# Parse validation status
+PLAN_VALIDATION_STATUS=$(echo "$VALIDATOR_OUTPUT" | grep "^VALIDATION_STATUS:" | cut -d' ' -f2)
+
+case "$PLAN_VALIDATION_STATUS" in
+  "Pass")
+    echo "Plan validated successfully for phase $PHASE_NUM"
+    ;;
+
+  "Warning")
+    echo "Plan validated with warnings for phase $PHASE_NUM - proceeding with caution"
+    echo "See: $WORKTREE_PATH/.tina/phase-$PHASE_NUM/plan-validation.md"
+    ;;
+
+  "Stop")
+    echo "Plan validation FAILED for phase $PHASE_NUM"
+    echo ""
+    cat "$WORKTREE_PATH/.tina/phase-$PHASE_NUM/plan-validation.md"
+    echo ""
+    echo "Plan must be revised before execution can proceed."
+    echo "Options:"
+    echo "1. Re-run planner with additional guidance"
+    echo "2. Manually edit the plan file"
+    echo "3. Update design document if scope changed"
+    exit 1
+    ;;
+
+  *)
+    echo "Unknown validation status: $PLAN_VALIDATION_STATUS - treating as warning"
+    ;;
+esac
 ```
 
 **3c. Initialize Phase Directory**
@@ -1389,6 +1451,7 @@ The supervisor automatically detects existing state and resumes appropriately.
 
 **Spawns:**
 - `tina:design-validator` - Validates design before planning (once at start)
+- `tina:plan-validator` - Validates plan against design before execution (per phase)
 - `tina:planner` - Creates implementation plan for each phase
 - `tina:monitor` - Background haiku agent for phase monitoring (run_in_background: true)
 - Team-lead in tmux - Executes phase via `team-lead-init`
