@@ -1365,6 +1365,14 @@ tmux send-keys -t <name> "<command>" Enter
 - `started_at`: When orchestration began
 - `completed_at`: When all phases completed (null if not complete)
 
+**Phase directory:** `.tina/phase-N/`
+
+Contains per-phase state files:
+- `status.json` - Execution status (pending/executing/complete)
+- `plan-validation.md` - Plan validator report (written before execution)
+- `review.md` - Phase reviewer report (written after execution)
+- `handoff.md` - Context handoff document (for checkpoint/rehydrate)
+
 **Phase status:** `.tina/phase-N/status.json`
 ```json
 {
@@ -1416,6 +1424,17 @@ Written by statusline script on each status update. Supervisor reads this to dec
 ```
 
 Written by design validator during validation. Used by phase reviewer to compare progress against baseline.
+
+**Plan validation:** `.tina/phase-N/plan-validation.md`
+
+Written by plan validator before execution of each phase. Contains:
+- Target alignment analysis (design targets vs plan targets)
+- Scope coverage verification (deliverables checked)
+- Estimate plausibility assessment
+- ROI check (if applicable)
+- Final severity tier and recommendation
+
+Used by orchestrator to gate execution. If validation fails (Stop), execution halts and user must revise plan or design.
 
 ## Resumption
 
