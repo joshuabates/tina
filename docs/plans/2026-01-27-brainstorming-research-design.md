@@ -115,3 +115,26 @@ Update the brainstorming skill file to:
 - Research summaries are brief (1-2 sentences) and informative
 - No unnecessary research on abstract/preference-only answers
 - External research only happens in exploratory contexts
+
+## Architectural Context
+
+**Patterns to follow:**
+- Subagent delegation: `skills/orchestrate/SKILL.md:95-110` - uses Task tool with `model: "haiku"` for background work
+- Writing-plans delegation: `skills/writing-plans/SKILL.md:15-20` - simple subagent dispatch pattern
+
+**Code to reuse:**
+- `skills/brainstorming/SKILL.md` - existing skill to modify (single file change)
+
+**Integration:**
+- Entry: User invokes `/brainstorming` or skill triggers on creative work
+- Subagents: Task tool with `model: "haiku"` and `subagent_type: "Explore"` for codebase research
+- External: WebSearch/WebFetch for external research (main model, not delegated)
+
+**Anti-patterns:**
+- Don't use Explore agent for raw data fetch - it tries to answer questions, not return raw data
+- Use explicit haiku prompts with "return code/data, don't summarize" instructions instead
+
+**Implementation notes:**
+- Haiku subagents via Task tool with `model: "haiku"`, `subagent_type: "general-purpose"`
+- Prompt must explicitly request curated raw data, not analysis
+- Main model (opus) handles synthesis and user-facing summaries
