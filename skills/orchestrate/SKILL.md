@@ -64,7 +64,7 @@ tmux new-session -d -s "$SESSION_NAME" "cd $WORKTREE_PATH && ~/.local/bin/claude
 Wait 3 seconds, then:
 
 ```bash
-tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" Enter
+tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" C-m
 ```
 
 ### 4c. CALL Task tool NOW to spawn background monitor:
@@ -736,7 +736,7 @@ tmux new-session -d -s "$SESSION_NAME" \
 
 # Step 2: Wait for Claude to initialize, then send the command
 sleep 3
-tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" Enter
+tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" C-m
 
 # Update active session in state
 tmp_file=$(mktemp)
@@ -855,7 +855,7 @@ tmux new-session -d -s "$SESSION_NAME" \
 
 # Step 2: Wait for Claude to initialize, then send the rehydrate command
 sleep 3
-tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
+tmux send-keys -t "$SESSION_NAME" "/rehydrate" C-m
 
 # Track recovery attempt
 RECOVERY_COUNT=$(jq -r ".recovery_attempts[\"$PHASE_NUM\"] // 0" .claude/tina/supervisor-state.json)
@@ -1050,7 +1050,7 @@ echo "Context at ${USED_PCT}%, triggering checkpoint"
 **2. Send checkpoint command:**
 
 ```bash
-tmux send-keys -t "$SESSION_NAME" "/checkpoint" Enter
+tmux send-keys -t "$SESSION_NAME" "/checkpoint" C-m
 ```
 
 **3. Wait for handoff:**
@@ -1088,11 +1088,11 @@ done
 
 ```bash
 # Clear context
-tmux send-keys -t "$SESSION_NAME" "/clear" Enter
+tmux send-keys -t "$SESSION_NAME" "/clear" C-m
 sleep 2
 
 # Rehydrate from handoff
-tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
+tmux send-keys -t "$SESSION_NAME" "/rehydrate" C-m
 
 # Remove checkpoint signal
 rm "$WORKTREE_PATH/.claude/tina/checkpoint-needed"
@@ -1288,7 +1288,7 @@ case "$RECOMMENDATION" in
     jq ".recovery_attempts[\"$PHASE_NUM\"] = true" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 
     echo "Attempting recovery via /rehydrate"
-    tmux send-keys -t "$SESSION_NAME" "/rehydrate" Enter
+    tmux send-keys -t "$SESSION_NAME" "/rehydrate" C-m
 
     # Reset phase status to allow re-monitoring
     cat > ".claude/tina/phase-$PHASE_NUM/status.json" << EOF
@@ -1411,7 +1411,7 @@ tmux kill-session -t <name>
 ```bash
 # Wait for session to initialize before sending keys
 sleep 3
-tmux send-keys -t <name> "<command>" Enter
+tmux send-keys -t <name> "<command>" C-m
 ```
 
 ## State Files
