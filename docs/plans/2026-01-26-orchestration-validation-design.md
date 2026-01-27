@@ -228,6 +228,31 @@ Catches drift between design and plans.
 - How does replanning work mechanically? Does planner receive the full phase history?
 - Should there be a "circuit breaker" that stops after N consecutive warnings?
 
+## Success Metrics
+
+**Goal:** Reduce wasted implementation effort by catching infeasible designs before planning begins. Target: 0 projects proceeding to implementation with mathematically infeasible goals.
+
+**Baseline command:**
+```bash
+# No automated baseline for this meta-goal - tracked by manual review of orchestration outcomes
+echo "N/A - qualitative improvement"
+```
+
+**Progress command:**
+```bash
+# Check that design validator blocked infeasible designs
+ls -la .tina/validation/design-report.md 2>/dev/null && grep "Status:" .tina/validation/design-report.md
+```
+
+**ROI threshold:** N/A (infrastructure work - ROI measured by subsequent project success rates)
+
+**Phase estimates:**
+| Phase | Expected Deliverable | Target Files |
+|-------|---------------------|--------------|
+| 1 | Phase reviewer metrics + orchestrator feedback loop | agents/phase-reviewer.md, skills/orchestrate/SKILL.md, agents/planner.md |
+| 2 | Design validator agent + orchestrator gate | agents/design-validator.md, skills/orchestrate/SKILL.md, skills/brainstorming/SKILL.md |
+| 3 | Plan validator agent + orchestrator gate | agents/plan-validator.md, skills/orchestrate/SKILL.md |
+
 ## Architectural Context
 
 **Patterns to follow:**
