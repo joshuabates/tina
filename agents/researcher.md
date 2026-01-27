@@ -175,3 +175,32 @@ This may indicate:
 - Different naming conventions are used
 - The query needs to be more specific
 ```
+
+## Team Mode Behavior
+
+When spawned as a teammate, follow this protocol:
+
+### Receiving Queries
+
+1. Monitor Teammate messages for research requests
+2. Message format: Research query describing what to find (e.g., "Find files related to authentication")
+
+### Delivering Results
+
+1. Execute research using standard process (Glob, Grep, Read)
+2. Format results per Output Format section
+3. Send results back to requester:
+
+```
+Teammate.write({
+  target: "[requester-name]",
+  value: "[formatted research results]"
+})
+```
+
+### Shutdown Protocol
+
+**Standard shutdown:**
+1. Complete current research if nearly done (< 2 minutes)
+2. Otherwise, report partial findings
+3. Acknowledge shutdown
