@@ -29,16 +29,34 @@ NOT triggered by:
 
 ## Research Implementation
 
-### Subagent Role (haiku)
+### New Agent: `tina:researcher`
 
+Create a dedicated research subagent (`agents/researcher.md`) with these characteristics:
+
+**Model:** haiku (cheap, fast)
+
+**Behavior:**
 - Raw exploration: find files, read contents, search patterns
-- Curate: filter out noise, return what's relevant to the question
+- Curate: filter out noise, return what's relevant to the query
 - Return actual code/data, not summaries
 - No interpretation or recommendations
 
-Example prompts:
-- "Find files related to [idea]. Read the most relevant ones. Return relevant file paths and code snippets."
-- "Find how [concrete thing] works. Return the relevant code, skip boilerplate."
+**Input:** A research query describing what to find
+
+**Output:** Curated raw data - file paths and relevant code snippets
+
+**Example invocation:**
+```
+Task tool:
+  subagent_type: tina:researcher
+  model: haiku
+  prompt: "Find files related to authentication. Return relevant file paths and code snippets."
+```
+
+**Why a dedicated agent:**
+- Reusable by other skills (deep-review, analytics, systematic-debugging)
+- Bakes in "curate, don't summarize" behavior
+- Clearer intent than general-purpose with custom prompts
 
 ### Main Model Role (opus)
 
@@ -102,10 +120,14 @@ Use judgment based on session context.
 
 ## Changes Required
 
-Update the brainstorming skill file to:
-- Add guidance on when to spawn research subagents
-- Add example prompts for subagents (curate, don't summarize)
-- Clarify the curate-not-summarize expectation
+**1. Create researcher agent (`agents/researcher.md`):**
+- Define haiku-based agent for raw codebase exploration
+- Bake in "curate, don't summarize" behavior
+- Document input/output format
+
+**2. Update brainstorming skill (`skills/brainstorming/SKILL.md`):**
+- Add guidance on when to spawn `tina:researcher`
+- Add research flow after idea is received
 - Add guidance on brief summaries to user
 - Document external research triggers
 
@@ -119,22 +141,23 @@ Update the brainstorming skill file to:
 ## Architectural Context
 
 **Patterns to follow:**
-- Subagent delegation: `skills/orchestrate/SKILL.md:95-110` - uses Task tool with `model: "haiku"` for background work
+- Agent definition: `agents/monitor.md` - haiku agent with clear input/output contract
+- Subagent delegation: `skills/orchestrate/SKILL.md:95-110` - uses Task tool with `model: "haiku"`
 - Writing-plans delegation: `skills/writing-plans/SKILL.md:15-20` - simple subagent dispatch pattern
 
 **Code to reuse:**
-- `skills/brainstorming/SKILL.md` - existing skill to modify (single file change)
+- `skills/brainstorming/SKILL.md` - existing skill to modify
+- `agents/monitor.md` - template for haiku agent definition
 
 **Integration:**
 - Entry: User invokes `/brainstorming` or skill triggers on creative work
-- Subagents: Task tool with `model: "haiku"` and `subagent_type: "Explore"` for codebase research
+- Subagents: Task tool with `subagent_type: "tina:researcher"` and `model: "haiku"`
 - External: WebSearch/WebFetch for external research (main model, not delegated)
 
 **Anti-patterns:**
-- Don't use Explore agent for raw data fetch - it tries to answer questions, not return raw data
-- Use explicit haiku prompts with "return code/data, don't summarize" instructions instead
+- Don't use Explore agent for raw data fetch - it analyzes and answers, not returns raw data
 
 **Implementation notes:**
-- Haiku subagents via Task tool with `model: "haiku"`, `subagent_type: "general-purpose"`
-- Prompt must explicitly request curated raw data, not analysis
+- New `agents/researcher.md` defines the research subagent behavior
+- Brainstorming skill invokes via Task tool with `subagent_type: "tina:researcher"`
 - Main model (opus) handles synthesis and user-facing summaries
