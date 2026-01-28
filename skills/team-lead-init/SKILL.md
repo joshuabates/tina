@@ -67,17 +67,19 @@ For each task in priority order:
      "subagent_type": "tina:implementer",
      "team_name": "phase-<N>-execution",
      "name": "worker",
-     "prompt": "Implement task: <task subject>. Use TDD."
+     "prompt": "Implement task: <task subject and description>. Use TDD."
    }
    ```
 
 2. **Wait for worker to complete implementation**
+   Monitor for Teammate messages from worker indicating completion.
 
 3. **Spawn reviewers for this task:**
    - spec-reviewer: Review implementation against spec
    - code-quality-reviewer: Review code quality
 
 4. **Wait for both reviews to pass**
+   Monitor for Teammate messages from spec-reviewer and code-quality-reviewer.
 
 5. **Shut down worker and reviewers:**
    ```json
@@ -87,7 +89,8 @@ For each task in priority order:
      "reason": "Task complete"
    }
    ```
-   Repeat for spec-reviewer and code-quality-reviewer.
+   Repeat for each agent (worker, spec-reviewer, code-quality-reviewer if spawned).
+   Wait for shutdown acknowledgment from each before proceeding.
 
 6. **Mark task complete, loop to next task**
 
@@ -98,7 +101,8 @@ This ephemeral model gives each task a fresh context window.
 ## STEP 6: On completion
 
 1. All tasks complete (workers/reviewers already shut down per-task)
-2. Optionally clean up team resources: `Teammate { operation: "cleanup" }`
+2. Clean up team resources at phase end: `Teammate { operation: "cleanup" }`
+   (Required unless supervisor will reuse the team for another phase)
 3. Update status.json to "complete"
 4. Wait for supervisor to kill session
 
@@ -283,15 +287,14 @@ After reviews pass for a task, shut down worker and reviewers:
 }
 ```
 
-Repeat for spec-reviewer and code-quality-reviewer.
-
-Wait for shutdown acknowledgment before spawning agents for the next task.
+Repeat for each agent (worker, spec-reviewer, code-quality-reviewer if spawned).
+Monitor for Teammate messages confirming shutdown acknowledgment before spawning agents for the next task.
 
 **Phase-end cleanup:**
 
 When all tasks complete:
 - No workers/reviewers to shut down (already cleaned up per-task)
-- Optionally clean up team resources with Teammate `cleanup` operation
+- Clean up team resources with Teammate `cleanup` operation (required unless supervisor will reuse the team)
 - Update status.json to "complete"
 
 ## Checkpoint Protocol
