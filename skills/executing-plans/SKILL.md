@@ -74,31 +74,31 @@ digraph process {
 }
 ```
 
-## Team Mode Process (Phase 2+)
+## Team Mode Process (Ephemeral Model)
 
-When invoked with `--team` flag or via team-lead-init, uses parallel execution:
+When invoked with `--team` flag or via team-lead-init, uses ephemeral per-task execution:
 
 ```dot
 digraph team_process {
     rankdir=TB;
 
     subgraph cluster_init {
-        label="Initialization";
+        label="Phase Initialization";
         "Read plan, extract all tasks" [shape=box];
         "Create TaskList with all tasks" [shape=box];
-        "Spawn team via Teammate.spawnTeam()" [shape=box];
-        "Spawn workers and reviewers" [shape=box];
+        "Create team container (no members yet)" [shape=box];
     }
 
-    subgraph cluster_execution {
-        label="Parallel Execution";
-        "Assign available tasks to idle workers" [shape=box];
+    subgraph cluster_per_task {
+        label="Per-Task Execution (Sequential)";
+        "Get next pending task" [shape=box];
+        "Spawn worker with task context" [shape=box];
         "Worker implements task" [shape=box];
-        "Worker notifies reviewers via Teammate.write()" [shape=box];
-        "Reviewers review in parallel" [shape=box];
+        "Spawn reviewers based on review field" [shape=box];
+        "Reviewers review" [shape=box];
         "Both reviews pass?" [shape=diamond];
-        "Reviewer creates fix-issue task" [shape=box];
-        "Worker fixes and re-notifies" [shape=box];
+        "Worker fixes issues" [shape=box];
+        "Shutdown worker and reviewers" [shape=box];
         "Mark task complete" [shape=box];
         "More tasks?" [shape=diamond];
     }
@@ -108,178 +108,197 @@ digraph team_process {
         "Dispatch phase-reviewer" [shape=box];
         "Phase approved?" [shape=diamond];
         "Create fix tasks from phase-reviewer" [shape=box];
-        "Request team shutdown" [shape=box];
+        "Cleanup team" [shape=box];
         "Report phase complete" [shape=box style=filled fillcolor=lightgreen];
     }
 
     "Read plan, extract all tasks" -> "Create TaskList with all tasks";
-    "Create TaskList with all tasks" -> "Spawn team via Teammate.spawnTeam()";
-    "Spawn team via Teammate.spawnTeam()" -> "Spawn workers and reviewers";
-    "Spawn workers and reviewers" -> "Assign available tasks to idle workers";
-    "Assign available tasks to idle workers" -> "Worker implements task";
-    "Worker implements task" -> "Worker notifies reviewers via Teammate.write()";
-    "Worker notifies reviewers via Teammate.write()" -> "Reviewers review in parallel";
-    "Reviewers review in parallel" -> "Both reviews pass?";
-    "Both reviews pass?" -> "Reviewer creates fix-issue task" [label="no"];
-    "Reviewer creates fix-issue task" -> "Worker fixes and re-notifies";
-    "Worker fixes and re-notifies" -> "Reviewers review in parallel";
-    "Both reviews pass?" -> "Mark task complete" [label="yes"];
+    "Create TaskList with all tasks" -> "Create team container (no members yet)";
+    "Create team container (no members yet)" -> "Get next pending task";
+    "Get next pending task" -> "Spawn worker with task context";
+    "Spawn worker with task context" -> "Worker implements task";
+    "Worker implements task" -> "Spawn reviewers based on review field";
+    "Spawn reviewers based on review field" -> "Reviewers review";
+    "Reviewers review" -> "Both reviews pass?";
+    "Both reviews pass?" -> "Worker fixes issues" [label="no"];
+    "Worker fixes issues" -> "Reviewers review" [label="re-review"];
+    "Both reviews pass?" -> "Shutdown worker and reviewers" [label="yes"];
+    "Shutdown worker and reviewers" -> "Mark task complete";
     "Mark task complete" -> "More tasks?";
-    "More tasks?" -> "Assign available tasks to idle workers" [label="yes"];
+    "More tasks?" -> "Get next pending task" [label="yes"];
     "More tasks?" -> "Dispatch phase-reviewer" [label="no"];
     "Dispatch phase-reviewer" -> "Phase approved?";
     "Phase approved?" -> "Create fix tasks from phase-reviewer" [label="no"];
-    "Create fix tasks from phase-reviewer" -> "Assign available tasks to idle workers";
-    "Phase approved?" -> "Request team shutdown" [label="yes"];
-    "Request team shutdown" -> "Report phase complete";
+    "Create fix tasks from phase-reviewer" -> "Get next pending task";
+    "Phase approved?" -> "Cleanup team" [label="yes"];
+    "Cleanup team" -> "Report phase complete";
 }
 ```
 
-### Team Mode Implementation
+### Ephemeral Team Mode Implementation
 
-**1. Initialize Team:**
+**1. Phase Initialization:**
+
+Create team container and tasks (no members spawned yet):
 
 ```
 Teammate.spawnTeam({
-  name: "phase-N-execution"
+  name: "phase-N-execution",
+  description: "Phase N task execution"
 })
 
-Teammate.spawn({
-  team: "phase-N-execution",
-  name: "worker-1",
+# Create all tasks from plan
+for task in plan.tasks:
+  TaskCreate({
+    subject: task.subject,
+    description: task.full_text + context
+  })
+```
+
+**2. Per-Task Execution:**
+
+For each task, spawn fresh worker with context in prompt:
+
+```
+Task tool:
+  team_name: "phase-N-execution"
+  name: "worker"
   agent: "tina:implementer"
-})
+  prompt: |
+    Task: [full task text]
+    Context: [scene-setting context]
+    Files likely involved: [file list]
+```
 
-Teammate.spawn({
-  team: "phase-N-execution",
-  name: "worker-2",
-  agent: "tina:implementer"
-})
+**3. Spawn Reviewers Based on Review Field:**
 
-Teammate.spawn({
-  team: "phase-N-execution",
-  name: "spec-reviewer",
+After worker completes, spawn reviewers based on task's review requirements:
+
+```
+# If task.review includes "spec" or default:
+Task tool:
+  team_name: "phase-N-execution"
+  name: "spec-reviewer"
   agent: "tina:spec-reviewer"
-})
+  prompt: |
+    Task: [full task text]
+    Git range: abc123..def456
+    Files changed: [list]
 
-Teammate.spawn({
-  team: "phase-N-execution",
-  name: "code-quality-reviewer",
+# If task.review includes "quality" or default:
+Task tool:
+  team_name: "phase-N-execution"
+  name: "code-quality-reviewer"
   agent: "tina:code-quality-reviewer"
-})
+  prompt: |
+    Git range: abc123..def456
+    Files changed: [list]
 ```
 
-**2. Task Assignment:**
+**4. Review Notification:**
 
-Team-lead assigns tasks explicitly:
-
-```
-TaskUpdate({
-  taskId: "task-1",
-  owner: "worker-1",
-  status: "in_progress"
-})
-```
-
-**3. Review Notification:**
-
-Worker notifies reviewers after implementation:
+Worker notifies reviewers via direct message:
 
 ```
 Teammate.write({
   target: "spec-reviewer",
-  value: "Task 1 complete. Files: src/foo.ts. Git range: abc123..def456. Please review against spec."
+  value: "Implementation complete. Files: src/foo.ts. Git range: abc123..def456. Please review."
 })
 
 Teammate.write({
   target: "code-quality-reviewer",
-  value: "Task 1 complete. Files: src/foo.ts. Git range: abc123..def456. Please review code quality."
+  value: "Implementation complete. Files: src/foo.ts. Git range: abc123..def456. Please review."
 })
 ```
 
-**4. Review Response:**
+**5. Review Response:**
 
-Reviewer creates fix-issue task if problems found:
+Reviewer messages worker directly with issues:
 
 ```
-TaskCreate({
-  subject: "Fix spec issues in Task 1",
-  description: "Issues found:\n- Missing validation\n- Wrong return type",
-  activeForm: "Fixing spec issues"
-})
-
-TaskUpdate({
-  taskId: "fix-task-id",
-  owner: "worker-1"
-})
-
 Teammate.write({
-  target: "worker-1",
-  value: "Spec review failed. Fix-issue task created: fix-task-id. Issues: Missing validation, wrong return type."
+  target: "worker",
+  value: "Spec review failed. Issues:\n- Missing validation\n- Wrong return type\nPlease fix and notify when ready."
 })
 ```
 
-**5. Team Shutdown:**
+Worker fixes and re-notifies. Reviewer re-reviews.
 
-After phase-reviewer approves:
+**6. Task Cleanup:**
+
+After both reviews pass, shutdown all task members:
 
 ```
-Teammate.requestShutdown({
-  team: "phase-N-execution"
-})
+Teammate.requestShutdown({ target_agent_id: "worker" })
+Teammate.requestShutdown({ target_agent_id: "spec-reviewer" })
+Teammate.requestShutdown({ target_agent_id: "code-quality-reviewer" })
+
+TaskUpdate({ taskId: task.id, status: "completed" })
 ```
+
+Then proceed to next task with fresh spawns.
 
 ## Team Coordination Logic
 
-### Task Assignment Strategy
+### Task Execution Strategy
 
-Team-lead assigns tasks to workers explicitly:
+Team-lead executes tasks sequentially (one at a time):
 
-1. **Initial assignment:** Assign first N tasks to N workers
-2. **Ongoing assignment:** When worker completes task, assign next available
-3. **Priority:** Tasks with no blockedBy first, then by task ID order
+1. **Get next task:** Find first task with status = pending
+2. **Spawn worker:** Create fresh worker with full task context in prompt
+3. **Worker implements:** Worker follows TDD, commits, self-reviews
+4. **Spawn reviewers:** Based on task's review field (default: both)
+5. **Review cycle:** Worker ↔ Reviewers until both pass
+6. **Cleanup:** Shutdown worker and reviewers, mark task complete
+7. **Loop:** Return to step 1
 
 ```
-# Check for idle workers
-idle_workers = workers where (no task assigned OR assigned task is complete)
+# Sequential task execution
+for task in TaskList where status = pending:
+  # Spawn worker with context (no assignment needed)
+  spawn_worker(task.full_text, task.context)
 
-# Get available tasks
-available_tasks = tasks where (status = pending AND blockedBy is empty)
+  # Wait for implementation
+  wait_for_worker_completion()
 
-# Assign tasks
-for worker in idle_workers:
-  if available_tasks not empty:
-    task = available_tasks.pop()
-    TaskUpdate(taskId=task.id, owner=worker.name, status="in_progress")
+  # Spawn reviewers
+  spawn_reviewers(task.review_type)
+
+  # Review loop until both pass
+  review_loop()
+
+  # Cleanup this task's members
+  shutdown_task_members()
+  mark_complete(task.id)
 ```
 
 ### Review Tracking
 
-Team-lead tracks review status per task:
+Only one task active at a time. State resets per task:
 
 ```json
 {
-  "task-1": {
-    "spec_review": "pending|passed|failed",
-    "quality_review": "pending|passed|failed",
-    "worker": "worker-1"
-  }
+  "current_task": "task-3",
+  "spec_review": "pending|passed|failed",
+  "quality_review": "pending|passed|failed",
+  "review_iterations": 0
 }
 ```
 
-Task only marked complete when BOTH reviews are "passed".
+State is discarded after task completes. Next task starts fresh.
 
 ### Message Handling
 
 Team-lead monitors for specific messages:
 
 **From workers:**
-- `"Idle, no tasks assigned"` → Assign next available task
-- `"Task X blocked on Y"` → Note dependency, assign different task
+- Implementation complete notification → Spawn reviewers
+- `"Task blocked on X"` → Note blocker, skip to next task
 
 **From reviewers:**
-- Reviewers communicate directly with workers
-- Team-lead monitors for escalation: `"Review loop exceeded 3 iterations"`
+- `"Review passed"` → Track as passed, check if both complete
+- `"Issues found: [list]"` → Worker fixes, re-review
+- `"Review loop exceeded 3 iterations"` → Team-lead intervenes
 
 ### Infinite Loop Prevention
 
@@ -309,8 +328,8 @@ Task tool:
 
 3. If phase-reviewer finds issues:
    - Create fix tasks from issues
-   - Assign to available workers
-   - Workers implement, notify reviewers
+   - Execute fix tasks (spawn worker with fix context)
+   - Worker implements, reviewers review
    - Re-run phase-reviewer after fixes
 
 4. If phase-reviewer rejects 3 times:
@@ -330,50 +349,26 @@ When invoked with `--resume` flag after rehydrate:
 
 ### What Changes
 
-- **Skip task extraction:** TaskList already populated from handoff
-- **Skip team spawn:** Team already exists
-- **Restore review tracking:** Read from handoff, skip completed reviews
+- **Skip task creation:** TaskList already exists from previous session
+- **No members to restore:** Ephemeral model means no long-lived members
+- **Continue from first pending:** Find first task with status = pending
 
-### Review State Restoration
+### Resume Process
 
-On resume, check review tracking from handoff:
-
-```json
-{
-  "task-3": {
-    "spec_review": "passed",
-    "quality_review": "pending",
-    "worker": "worker-1"
-  }
-}
+```
+1. Read existing TaskList
+2. Find first task where status = pending
+3. Continue normal per-task execution from that point
 ```
 
-For task-3:
-- Don't re-dispatch spec-reviewer (already passed)
-- DO dispatch code-quality-reviewer when worker notifies
+### Handling In-Progress Tasks
 
-### Resuming In-Progress Tasks
+If a task was `in_progress` at checkpoint:
+- Reset to `pending` (worker was shutdown, work may be incomplete)
+- Fresh worker will check git log for any committed work
+- Worker continues from last committed state
 
-For tasks that were `in_progress` at checkpoint:
-
-1. Check if work was committed (git log for task-related commits)
-2. If committed: notify reviewers to continue where they left off
-3. If not committed: worker continues implementation
-
-### Worker Context on Resume
-
-Workers spawned after rehydrate get context:
-```
-"You are worker-1 in phase N execution team. Resuming from checkpoint.
-You were working on Task 3 '[subject]'. Check if your work was committed
-and continue from there."
-```
-
-### Handling Stale State
-
-If handoff is older than 1 hour:
-- Warn: "Handoff is [X] hours old. Proceeding with potentially stale state."
-- Continue anyway (user can manually intervene if needed)
+No special handling needed - ephemeral model naturally handles resume by starting fresh with each task.
 
 ## Agents
 
@@ -383,26 +378,25 @@ Use the Task tool with these agent types:
 - `tina:code-quality-reviewer` - Reviews code quality after spec compliance passes
 - `tina:phase-reviewer` - Verifies phase follows architecture after all tasks complete
 
-## Team Composition (Phase 2+)
+## Team Composition (Ephemeral Model)
 
-When running in team mode (invoked via team-lead), executing-plans uses the Teammate tool:
+Team is a container created once per phase. Members are spawned per-task:
 
-**Default team:**
-- 2 workers: `tina:implementer`
-- 1 spec-reviewer: `tina:spec-reviewer`
-- 1 code-quality-reviewer: `tina:code-quality-reviewer`
+**Team container:** Created at phase start, holds no permanent members
+
+**Per-task members (spawned fresh each task):**
+- `worker` - `tina:implementer` (spawned with full task context)
+- `spec-reviewer` - `tina:spec-reviewer` (if task needs spec review)
+- `code-quality-reviewer` - `tina:code-quality-reviewer` (if task needs quality review)
 
 **Team name:** `phase-N-execution` where N is the phase number
 
-**Teammate message targets:**
-- `spec-reviewer` - For spec compliance reviews
-- `code-quality-reviewer` - For code quality reviews
-- `worker-1`, `worker-2` - For individual workers
+**Member names reused:** Each task uses same names (`worker`, `spec-reviewer`, `code-quality-reviewer`) but fresh instances
 
 **Message protocol:**
-- Worker → Reviewer: `"Task X complete, please review. Git range: abc..def"`
-- Reviewer → Worker: `"Review passed"` or `"Fix issues: [list]. Assigned fix-issue task."`
-- Worker → Team-lead: `"Idle, no tasks available"`
+- Worker → Reviewer: `"Implementation complete. Files: [list]. Git range: abc..def. Please review."`
+- Reviewer → Worker: `"Review passed"` or `"Issues found: [list]. Please fix and notify."`
+- Team-lead monitors for completion, then shuts down all members
 
 ## Example Workflow
 
@@ -579,21 +573,20 @@ Phase reviewer checks:
 - Don't try to fix manually (context pollution)
 
 **Team Mode Specific - Never:**
-- Spawn multiple teams for the same phase (one team per phase)
-- Let workers assign their own tasks (team-lead assigns explicitly)
-- Skip reviewer notification (both reviewers must be notified)
+- Spawn workers/reviewers at phase start (spawn per-task instead)
+- Keep workers alive between tasks (shutdown after each task)
+- Spawn multiple workers for parallel execution (sequential only)
 - Mark task complete before both reviews pass
 - Let review loops continue indefinitely (cap at 3)
-- Use Task tool for workers/reviewers in team mode (use Teammate tool)
-- Forget to request team shutdown after phase completes
+- Forget to shutdown task members before moving to next task
 
 **Team Mode Specific - Always:**
-- Create team BEFORE invoking executing-plans
-- Track review status for each task
-- Wait for BOTH spec and quality reviews
+- Create team container at phase start (holds no permanent members)
+- Spawn worker with full task context in prompt (no separate assignment)
+- Spawn reviewers after worker completes (based on review field)
+- Shutdown all task members after reviews pass
+- Wait for BOTH spec and quality reviews before shutdown
 - Intervene in review loops after 3 iterations
-- Shut down team cleanly before marking phase complete
-- Include blocked task context in phase-reviewer prompt
 
 ## Integration
 
