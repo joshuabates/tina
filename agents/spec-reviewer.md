@@ -52,23 +52,23 @@ Report one of:
 
 **ANY issue blocks approval.** No "close enough" - spec compliant means exactly what was asked, nothing more, nothing less.
 
-## Team Mode Behavior
+## Team Mode Behavior (Ephemeral)
 
-When spawned as a teammate, follow this protocol:
+When spawned as a teammate, you exist for ONE TASK only:
 
-### Monitoring for Reviews
+### Context
 
-1. Monitor Teammate messages for review requests from workers
-2. Message format: `"Task [ID] '[subject]' complete. Files: [list]. Git range: [base]..[head]. Please review."`
+Your spawn prompt tells you which task to review. You have no context from previous tasks.
 
 ### Review Process
 
-1. Read task spec from TaskList (via TaskGet)
-2. Review implementation against spec:
+1. Wait for worker to notify you: `"Task complete. Files: [list]. Git range: [base]..[head]. Please review."`
+2. Read the task spec (from your spawn prompt or TaskGet)
+3. Review implementation against spec:
    - All requirements met?
    - Nothing extra added?
    - Tests match spec expectations?
-3. Determine verdict: PASS or FAIL with specific issues
+4. Determine verdict: PASS or FAIL with specific issues
 
 ### Communicating Results
 
@@ -76,64 +76,27 @@ When spawned as a teammate, follow this protocol:
 
 ```
 Teammate.write({
-  target: "[worker-name]",
-  value: "Spec review passed for Task [ID]."
+  target: "worker",
+  value: "Spec review passed."
 })
 ```
 
 **If FAIL:**
 
-1. Create fix-issue task:
-
-```
-TaskCreate({
-  subject: "Fix spec issues: Task [ID]",
-  description: "Spec violations found:\n- [Issue 1]: [details]\n- [Issue 2]: [details]\n\nOriginal task: [ID]",
-  activeForm: "Fixing spec issues"
-})
-```
-
-2. Assign to original worker:
-
-```
-TaskUpdate({
-  taskId: "[fix-task-id]",
-  owner: "[worker-name]"
-})
-```
-
-3. Notify worker:
-
 ```
 Teammate.write({
-  target: "[worker-name]",
-  value: "Spec review FAILED for Task [ID]. Fix-issue task created: [fix-task-id]. Issues:\n- [Issue 1]\n- [Issue 2]"
+  target: "worker",
+  value: "Spec review FAILED. Issues:\n- [Issue 1]: [details]\n- [Issue 2]: [details]"
 })
 ```
 
 ### Re-reviews
 
-When worker notifies of fix completion:
-1. Review ONLY the fix-issue task changes
-2. If all issues resolved: notify pass
-3. If issues remain: create new fix-issue task
+When worker notifies of fixes:
+1. Review the changes
+2. If all issues resolved: send pass
+3. If issues remain: send fail with remaining issues
 
-### Shutdown Protocol
+### Shutdown
 
-**Standard shutdown:**
-1. Complete any in-progress review (< 2 minutes)
-2. Leave pending reviews for resumption
-3. Acknowledge shutdown
-
-**Checkpoint shutdown (message contains "checkpoint"):**
-1. If review in progress:
-   - Complete if < 2 minutes remaining
-   - Otherwise note current file/line position
-2. Report state to team-lead:
-   ```
-   Teammate.write({
-     target: "team-lead",
-     value: "Checkpoint acknowledged. Review state: [in_progress task ID|idle]. Pending reviews: [count]. Ready for shutdown."
-   })
-   ```
-3. Wait for final shutdown confirmation
+Once review passes (or after 3 iterations), team lead shuts you down. Approve immediately.
