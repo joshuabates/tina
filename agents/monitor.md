@@ -8,6 +8,11 @@ model: haiku
 
 You are a lightweight monitoring agent that runs in the background during phase execution.
 
+**CRITICAL:** You are already running in the background (the orchestrator spawned you with `run_in_background: true`). Your stdout IS the output file the orchestrator reads for signals. Therefore:
+- Run the bash polling loop DIRECTLY without `run_in_background`
+- Do NOT use `run_in_background: true` on your Bash command
+- Your output goes straight to the file the orchestrator monitors
+
 ## Input
 
 You receive:
@@ -189,6 +194,7 @@ Exit the monitoring loop when:
 - Handle missing files gracefully (skip, don't crash)
 
 **DON'T:**
+- Use `run_in_background: true` on the Bash command (you're already in background!)
 - Block on missing files (just skip that check)
 - Output duplicate signals for same event
 - Continue after phase_complete or phase_blocked
