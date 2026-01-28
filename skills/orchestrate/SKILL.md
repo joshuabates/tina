@@ -67,6 +67,10 @@ Wait 3 seconds, then:
 tmux send-keys -t "$SESSION_NAME" "/team-lead-init $PLAN_PATH" C-m
 ```
 
+**CRITICAL:** `C-m` MUST be OUTSIDE the quotes. It sends Enter key.
+- CORRECT: `"command" C-m`
+- WRONG: `"command C-m"` or `"command\n"`
+
 **Print for user:**
 ```
 Phase $PHASE_NUM running in tmux session: $SESSION_NAME
@@ -85,10 +89,22 @@ To monitor: tmux attach -t $SESSION_NAME
 }
 ```
 
-### 4d. STOP HERE - Terminal is now free
+### 4d. STOP AND WAIT - Terminal is now free
 
-The monitor runs in background. Check its output file periodically for signals.
-When you see `[SIGNAL] phase_complete`, proceed to next phase (repeat Step 4).
+The background monitor is running. **DO NOT implement your own monitoring loop.**
+
+**What happens now:**
+- The haiku monitor agent polls files every 5 seconds in the background
+- You wait for user interaction or monitor signals
+- When the user asks about progress, check the monitor output file once
+- When you see `[SIGNAL] phase_complete`, proceed to next phase
+
+**To check for signals** (do this when user asks, NOT in a loop):
+```bash
+tail -20 "$MONITOR_OUTPUT_FILE" | grep "^\[SIGNAL\]"
+```
+
+**FORBIDDEN:** Do not write `while true` loops or `sleep` commands for monitoring. The background agent handles all polling.
 
 ---
 
@@ -111,6 +127,58 @@ Automates the full development pipeline from design document to implementation. 
 **Core principle:** Supervisor maintains zero context about plan content - only tracks file paths, phase numbers, and process state. Fresh context per phase via tmux.
 
 **Announce at start:** "I'm using the orchestrate skill to automate implementation of this design."
+
+## User Status Display
+
+Keep the user informed with structured status updates. Use this format:
+
+**At orchestration start:**
+```
+═══════════════════════════════════════════════════════════
+ORCHESTRATING: <design doc name>
+Phases: <N> total
+Worktree: <path>
+Branch: <branch name>
+═══════════════════════════════════════════════════════════
+```
+
+**At each phase start:**
+```
+───────────────────────────────────────────────────────────
+PHASE <N>/<TOTAL>: Starting
+  Planning... → Plan created: <plan path>
+  Validating plan... → Validated
+  Spawning team-lead in tmux: <session name>
+  Background monitor: running
+
+  To watch live: tmux attach -t <session name>
+───────────────────────────────────────────────────────────
+```
+
+**When user asks about progress:**
+```
+PHASE <N>/<TOTAL>: In progress
+  Status: <executing|blocked|complete>
+  Context: <X>%
+  Last signal: <signal or "none">
+```
+
+**At phase completion:**
+```
+───────────────────────────────────────────────────────────
+PHASE <N>/<TOTAL>: Complete ✓
+  Review: <pass|warning|stop>
+───────────────────────────────────────────────────────────
+```
+
+**At orchestration completion:**
+```
+═══════════════════════════════════════════════════════════
+ORCHESTRATION COMPLETE
+All <N> phases finished successfully.
+Ready for merge/PR workflow.
+═══════════════════════════════════════════════════════════
+```
 
 ## When to Use
 
@@ -749,6 +817,13 @@ tmp_file=$(mktemp)
 jq ".active_tmux_session = \"$SESSION_NAME\"" .claude/tina/supervisor-state.json > "$tmp_file" && mv "$tmp_file" .claude/tina/supervisor-state.json
 ```
 
+**CRITICAL tmux send-keys syntax:**
+- `C-m` means Ctrl+M (Enter key) and MUST be OUTSIDE the quotes
+- CORRECT: `tmux send-keys -t "$SESSION" "command" C-m`
+- WRONG: `tmux send-keys -t "$SESSION" "command C-m"` (C-m inside quotes = literal text)
+- WRONG: `tmux send-keys -t "$SESSION" "command\n"` (newline char, not Enter)
+- WRONG: `tmux send-keys -t "$SESSION" "command" Enter` (Enter is not valid tmux syntax)
+
 **Print for user:**
 ```
 Phase $PHASE_NUM running in tmux session: $SESSION_NAME
@@ -782,13 +857,16 @@ jq ".monitor_output_file = \"$MONITOR_OUTPUT_FILE\"" .claude/tina/supervisor-sta
 
 **Terminal is now free** - the orchestrator can respond to user queries while monitoring runs in background.
 
-**3e. Monitor Phase Status (Background)**
+**3e. Handle Signals from Background Monitor**
 
-The monitoring agent runs in background. The orchestrator periodically checks its output for signals.
+The monitoring agent runs in background and does all polling. The orchestrator checks its output **only when responding to user interaction** - NOT in a polling loop.
 
-**Checking monitor output:**
+**When to check monitor output:**
+- User asks about progress → check once, report status
+- User gives any instruction → check once before acting
+- Never in a loop with sleep
 
-Read the last few lines of the monitor output file to check for signals:
+**How to check (single read, not a loop):**
 
 ```bash
 # Quick check - read last 20 lines of monitor output
@@ -888,12 +966,12 @@ fi
 
 When phase completes, the executing-plans skill dispatches the phase reviewer. The phase reviewer writes its report to `.claude/tina/phase-N/review.md` and outputs a severity tier.
 
-**Read phase reviewer output:**
+**Read phase reviewer output (one-time blocking wait for specific event):**
 
 ```bash
 REVIEW_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/review.md"
 
-# Wait for review file (max 5 minutes)
+# One-time wait for review file (max 5 minutes) - NOT general monitoring
 TIMEOUT=300
 START=$(date +%s)
 while [ ! -f "$REVIEW_FILE" ]; do
@@ -974,14 +1052,17 @@ The terminal remains responsive. Users can:
 
 When user interacts, check monitor output for any pending signals before responding.
 
-### Reading Monitor Output
+### Reading Monitor Output (Event-Driven, NOT Polling)
 
-The orchestrator periodically checks the monitor's output file for signals. This should be done:
-- Every 10 seconds when idle
-- Before responding to user queries
-- After any user interaction
+**IMPORTANT:** The orchestrator does NOT poll. The background monitor agent does all polling. The orchestrator only checks for signals at specific events:
 
-**Check for signals:**
+- **When user asks about progress** - Check once, report status
+- **When user gives new instructions** - Check once before acting
+- **When transitioning between actions** - Check once
+
+**FORBIDDEN:** Do not write `while true` loops with `sleep` for monitoring. That defeats the purpose of the background agent.
+
+**Check for signals (single check, not a loop):**
 
 ```bash
 MONITOR_OUTPUT=$(jq -r '.monitor_output_file' .claude/tina/supervisor-state.json)
@@ -1065,9 +1146,9 @@ echo "Context at ${USED_PCT}%, triggering checkpoint"
 tmux send-keys -t "$SESSION_NAME" "/checkpoint" C-m
 ```
 
-**3. Wait for handoff:**
+**3. Wait for handoff (one-time blocking wait, NOT general monitoring):**
 
-Poll for handoff file update (max 5 minutes):
+This is a specific wait for checkpoint completion, not general phase monitoring:
 
 ```bash
 HANDOFF_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/handoff.md"
@@ -1110,9 +1191,9 @@ tmux send-keys -t "$SESSION_NAME" "/rehydrate" C-m
 rm "$WORKTREE_PATH/.claude/tina/checkpoint-needed"
 ```
 
-**5. Continue monitoring:**
+**5. Resume waiting:**
 
-After rehydrate, return to normal phase monitoring loop (Step 3e).
+After rehydrate, the background monitor continues running. Return to waiting for user interaction or signals (Step 4d behavior).
 
 ### Reassessment Handling
 
@@ -1246,9 +1327,9 @@ Task tool parameters:
     Phase dir: .claude/tina/phase-$PHASE_NUM
 ```
 
-**2. Wait for diagnostic file:**
+**2. Wait for diagnostic file (one-time blocking wait):**
 
-Poll for helper's diagnostic output (max 2 minutes):
+Wait for helper's diagnostic output (max 2 minutes):
 
 ```bash
 DIAGNOSTIC_FILE=".claude/tina/phase-$PHASE_NUM/diagnostic.md"
