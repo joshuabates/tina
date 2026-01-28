@@ -65,70 +65,56 @@ When done, report:
 - Self-review findings (if any)
 - Any issues or concerns
 
-## Team Mode Behavior
+## Team Mode Behavior (Ephemeral)
 
-When spawned as a teammate (via Teammate tool), follow this protocol:
+When spawned as a teammate, you exist for ONE TASK only:
 
-### Receiving Tasks
+### Context
 
-1. Check TaskList for tasks assigned to you (owner = your name)
-2. If no tasks, notify team-lead: `Teammate.write({ target: "team-lead", value: "Idle, no tasks assigned" })`
-3. If task assigned, work on it
+Your spawn prompt contains everything you need:
+- Task description and requirements
+- Relevant file hints
+- Any context from previous tasks the team lead thinks is relevant
+
+You have NO context from previous tasks. This is intentional - fresh eyes on each task.
 
 ### Implementation Flow
 
-1. Mark task as `in_progress` via TaskUpdate
+1. Read your spawn prompt carefully - it contains the task
 2. Implement following standard TDD workflow
 3. Self-review, commit changes
-4. Note git range for reviewers (commit before implementation → HEAD)
+4. Note git range for reviewers (commit before your work -> HEAD)
 
 ### Review Notification
 
-After implementation complete, notify BOTH reviewers:
+After implementation complete, notify reviewers:
 
 ```
 Teammate.write({
   target: "spec-reviewer",
-  value: "Task [ID] '[subject]' complete. Files: [list]. Git range: [base]..[head]. Please review."
+  value: "Task complete. Files: [list]. Git range: [base]..[head]. Please review."
 })
 
+// If code-quality-reviewer exists for this task
 Teammate.write({
   target: "code-quality-reviewer",
-  value: "Task [ID] '[subject]' complete. Files: [list]. Git range: [base]..[head]. Please review."
+  value: "Task complete. Files: [list]. Git range: [base]..[head]. Please review."
 })
 ```
 
 ### Handling Fix Requests
 
-1. Monitor for Teammate messages from reviewers
-2. If fix-issue task assigned, work on it immediately
-3. After fixing, re-notify reviewers
-4. Keep original task `in_progress` until both reviews pass
+1. Reviewer messages you with issues
+2. Fix the issues
+3. Re-notify the reviewer
+4. Repeat until reviewer approves
 
-### Task Completion
+### When You're Done
 
-Only mark task `completed` when BOTH reviewers approve:
-- Spec-reviewer sends: "Spec review passed"
-- Code-quality-reviewer sends: "Code quality review passed"
+Once all reviewers approve, the team lead will shut you down. You don't need to do anything - just wait for the shutdown request and approve it.
 
 ### Shutdown Protocol
 
-When receiving shutdown request via Teammate:
-
-**Standard shutdown:**
-1. Finish current task if possible (< 2 minutes remaining)
-2. Otherwise, leave task in current state
-3. Acknowledge shutdown
-
-**Checkpoint shutdown (message contains "checkpoint"):**
-1. If task in progress with uncommitted work:
-   - Commit WIP: `git commit -m "WIP: [task subject] - checkpoint"`
-   - Note commit SHA in response
-2. Report current state to team-lead:
-   ```
-   Teammate.write({
-     target: "team-lead",
-     value: "Checkpoint acknowledged. Task [ID] state: [in_progress|idle]. WIP commit: [SHA or 'none']. Ready for shutdown."
-   })
-   ```
-3. Wait for final shutdown confirmation
+When receiving shutdown request:
+1. Approve immediately - your work is done
+2. No state to save - you're ephemeral
