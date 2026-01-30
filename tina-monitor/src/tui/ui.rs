@@ -7,8 +7,10 @@ use ratatui::{
     Frame,
 };
 
-use super::app::App;
+use super::app::{App, ViewState};
 use super::views::orchestration_list::render_orchestration_list;
+use super::views::phase_detail;
+use super::views::task_inspector::render_task_inspector;
 
 /// Render the application UI
 pub fn render(frame: &mut Frame, app: &App) {
@@ -22,7 +24,33 @@ pub fn render(frame: &mut Frame, app: &App) {
         .split(frame.area());
 
     render_header(frame, chunks[0]);
-    render_orchestration_list(frame, chunks[1], app);
+
+    // Render the appropriate view based on current state
+    match &app.view_state {
+        ViewState::OrchestrationList => {
+            render_orchestration_list(frame, chunks[1], app);
+        }
+        ViewState::PhaseDetail { .. } => {
+            phase_detail::render(frame, chunks[1], app);
+        }
+        ViewState::TaskInspector { task_index } => {
+            // First render the PhaseDetail view as background
+            phase_detail::render(frame, chunks[1], app);
+            // Then render the task inspector modal on top
+            if !app.orchestrations.is_empty() {
+                let orchestration = &app.orchestrations[app.selected_index];
+                if *task_index < orchestration.tasks.len() {
+                    let task = &orchestration.tasks[*task_index];
+                    render_task_inspector(frame, task);
+                }
+            }
+        }
+        ViewState::LogViewer { .. } => {
+            // TODO: Implement in Task 6
+            phase_detail::render(frame, chunks[1], app);
+        }
+    }
+
     render_footer(frame, chunks[2]);
 
     if app.show_help {
