@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use super::ui;
 use crate::config::Config;
 use crate::data::discovery::{find_orchestrations, Orchestration};
+use crate::data::types::Team;
 use crate::data::watcher::{FileWatcher, WatchEvent};
 use crate::terminal::{get_handler, TerminalResult};
 
@@ -278,6 +279,51 @@ impl App {
         }
     }
 
+    /// Handle attach action - attach to agent's tmux pane
+    fn handle_attach_tmux(&mut self, agent_index: usize) -> AppResult<()> {
+        if self.orchestrations.is_empty() {
+            return Ok(());
+        }
+
+        let orch = &self.orchestrations[self.selected_index];
+
+        // Load team config to get agent details
+        let team_path = dirs::home_dir()
+            .ok_or("Could not find home directory")?
+            .join(".claude/teams")
+            .join(&orch.team_name)
+            .join("config.json");
+
+        let team: Team = serde_json::from_str(&std::fs::read_to_string(&team_path)?)?;
+
+        // Get the selected agent
+        let agent = team
+            .members
+            .get(agent_index)
+            .ok_or("Agent index out of bounds")?;
+
+        // Get tmux pane ID if available
+        let pane_id = agent.tmux_pane_id.as_deref();
+
+        // Derive session name from team name (convention: tina-{team_name})
+        let session_name = format!("tina-{}", orch.team_name);
+
+        let config = Config::load()?;
+        let handler = get_handler(&config.terminal.handler);
+
+        match handler.attach_tmux(&session_name, pane_id)? {
+            TerminalResult::Success => Ok(()),
+            TerminalResult::ShowCommand { command, description } => {
+                self.view_state = ViewState::CommandModal {
+                    command,
+                    description,
+                    copied: false,
+                };
+                Ok(())
+            }
+        }
+    }
+
     /// Handle key events in CommandModal view
     fn handle_command_modal_key(&mut self, key: KeyEvent) {
         match key.code {
@@ -480,6 +526,9 @@ impl App {
                             agent_index: member_index,
                             scroll_offset: 0,
                         };
+                    }
+                    KeyCode::Char('a') => {
+                        let _ = self.handle_attach_tmux(member_index);
                     }
                     _ => {}
                 }
@@ -1749,12 +1798,73 @@ mod tests {
 
         // Check if copied flag is set (clipboard may not be available in CI)
         match app.view_state {
-            ViewState::CommandModal { copied, .. } => {
+            ViewState::CommandModal { copied: _, .. } => {
                 // If clipboard is available, copied should be true
                 // If not available, it should remain false
                 // We just verify the state is still CommandModal
             }
             _ => panic!("Should remain in CommandModal after copy attempt"),
         }
+    }
+
+    // Phase 5.5: Attach to tmux ('a' key) tests
+
+    #[test]
+    fn test_a_key_on_members_does_not_panic() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::PhaseDetail {
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 2,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should either:
+        // 1. Transition to CommandModal (fallback handler - most likely in tests)
+        // 2. Stay in PhaseDetail if no team config exists
+        // The exact behavior depends on whether team config exists
+        // For unit test purposes, we just verify it doesn't panic
+        assert!(!app.should_quit, "App should not quit on 'a' key");
+    }
+
+    #[test]
+    fn test_a_key_on_tasks_does_nothing() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::PhaseDetail {
+            focus: PaneFocus::Tasks,
+            task_index: 1,
+            member_index: 0,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should remain in PhaseDetail with Tasks focus
+        match app.view_state {
+            ViewState::PhaseDetail { focus, task_index, member_index } => {
+                assert_eq!(focus, PaneFocus::Tasks, "Focus should remain on Tasks");
+                assert_eq!(task_index, 1, "task_index should not change");
+                assert_eq!(member_index, 0, "member_index should not change");
+            }
+            _ => panic!("View state should still be PhaseDetail"),
+        }
+    }
+
+    #[test]
+    fn test_a_key_does_nothing_when_no_orchestrations() {
+        let mut app = App::new_with_orchestrations(vec![]);
+        app.view_state = ViewState::PhaseDetail {
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 0,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should not crash, should remain in PhaseDetail
+        assert!(matches!(app.view_state, ViewState::PhaseDetail { .. }));
     }
 }
