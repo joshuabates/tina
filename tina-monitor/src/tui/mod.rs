@@ -3,7 +3,7 @@
 //! Provides a terminal user interface for monitoring Tina orchestrations.
 
 mod app;
-mod ui;
+pub mod ui;
 pub mod views;
 pub mod widgets;
 

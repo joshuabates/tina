@@ -143,7 +143,8 @@ fn run() -> anyhow::Result<i32> {
             status,
         }) => cli::tasks::list_tasks(&team_name, format.into(), status),
         None => {
-            println!("Use --help for usage information");
+            // No command = launch TUI
+            tina_monitor::tui::run().map_err(|e| anyhow::anyhow!("{}", e))?;
             Ok(0)
         }
     }

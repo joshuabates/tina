@@ -19,6 +19,21 @@ pub struct Orchestration {
     pub tasks: Vec<Task>,
 }
 
+impl Orchestration {
+    /// Count completed tasks
+    pub fn tasks_completed(&self) -> usize {
+        self.tasks
+            .iter()
+            .filter(|t| t.status == TaskStatus::Completed)
+            .count()
+    }
+
+    /// Count total tasks
+    pub fn tasks_total(&self) -> usize {
+        self.tasks.len()
+    }
+}
+
 /// Status of an orchestration
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]

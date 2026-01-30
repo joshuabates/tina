@@ -21,6 +21,7 @@ anyhow = "1"
 thiserror = "1"
 dirs = "5"
 shellexpand = "3"
+notify = "6"
 
 [dev-dependencies]
 tempfile = "3"

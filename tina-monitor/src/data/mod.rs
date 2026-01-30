@@ -5,3 +5,4 @@ pub mod tasks;
 pub mod teams;
 pub mod tina_state;
 pub mod types;
+pub mod watcher;
