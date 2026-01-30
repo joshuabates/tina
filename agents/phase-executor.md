@@ -14,7 +14,6 @@ You receive via spawn prompt:
 - `phase_num`: The phase number (e.g., 1, 2, 3)
 - `worktree_path`: Path to the worktree
 - `plan_path`: Path to the implementation plan
-- `design_doc_path`: Path to the design document
 - `feature_name`: Name of the feature (for tmux session naming)
 
 ## Your Job
