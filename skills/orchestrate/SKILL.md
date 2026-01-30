@@ -1183,6 +1183,41 @@ Use these scenarios to verify recovery and remediation work correctly.
    - After plan-phase-2
 3. Verify: Each resume correctly identifies state and continues
 
+### Manual Testing Checklist
+
+Before using orchestration on real work, verify these behaviors manually:
+
+**Basic Flow:**
+- [ ] Run `/tina:orchestrate docs/plans/test-fixtures/minimal-orchestration-test-design.md`
+- [ ] Verify team created: `ls ~/.claude/teams/` shows orchestration team
+- [ ] Verify tasks created: `TaskList` shows all expected tasks with dependencies
+- [ ] Watch validator spawn and complete
+- [ ] Watch worktree-setup create worktree and install config
+- [ ] Watch planner create phase-1 plan
+- [ ] Watch executor start tmux session
+- [ ] Verify tmux session exists: `tmux list-sessions`
+- [ ] Watch team-lead execute in tmux
+- [ ] Verify reviewer runs and reports pass/gaps
+- [ ] Verify finalize presents options
+
+**Recovery (requires intentional interruption):**
+- [ ] During plan-phase-1: Ctrl+C orchestrator, restart, verify planner respawns
+- [ ] During execute-phase-1: Ctrl+C orchestrator, restart, verify executor resumes
+- [ ] With tmux alive: Kill executor only, verify new executor attaches to existing session
+
+**Remediation (requires design that fails review):**
+- [ ] Create design with unreachable review criteria
+- [ ] Run through execute, observe review fail with gaps
+- [ ] Verify remediation tasks created (plan-1.5, execute-1.5, review-1.5)
+- [ ] Verify dependencies updated correctly
+- [ ] If second remediation needed, verify 1.5.5 created
+- [ ] If third would be needed, verify orchestration exits with error
+
+**Cleanup:**
+- [ ] After testing: `rm -rf ~/.claude/teams/minimal-orchestration-test-orchestration.json`
+- [ ] After testing: `rm -rf ~/.claude/tasks/minimal-orchestration-test-orchestration/`
+- [ ] After testing: `rm -rf .worktrees/minimal-orchestration-test/`
+
 ## Red Flags
 
 **Never:**
