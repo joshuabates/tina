@@ -543,14 +543,31 @@ Then: Mark plan-phase-N as in_progress
 
 When: plan-phase-N complete
 Prerequisites: Need worktree_path (from setup-worktree metadata), plan_path (from plan-phase-N metadata)
+
+Derive phase team name:
+```
+PHASE_TEAM_NAME="${FEATURE_NAME}-phase-${N}"
+```
+
 ```json
 {
   "subagent_type": "tina:phase-executor",
   "team_name": "<TEAM_NAME>",
   "name": "executor-<N>",
-  "prompt": "phase_num: <N>\nworktree_path: <WORKTREE_PATH>\nplan_path: <PLAN_PATH>\nfeature_name: <FEATURE_NAME>\n\nStart team-lead in tmux and monitor until phase completes.\nReport: execute-<N> complete. Git range: <BASE>..<HEAD>"
+  "prompt": "phase_num: <N>\nworktree_path: <WORKTREE_PATH>\nplan_path: <PLAN_PATH>\nfeature_name: <FEATURE_NAME>\nphase_team_name: <PHASE_TEAM_NAME>\n\nStart team-lead in tmux and monitor until phase completes.\nReport: execute-<N> complete. Git range: <BASE>..<HEAD>"
 }
 ```
+
+Store phase team name in task metadata:
+```json
+TaskUpdate {
+  "taskId": "execute-phase-N",
+  "metadata": {
+    "phase_team_name": "<PHASE_TEAM_NAME>"
+  }
+}
+```
+
 Then: Mark execute-phase-N as in_progress
 
 **Phase reviewer spawn:**
