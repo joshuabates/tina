@@ -668,9 +668,65 @@ if message contains "review-N complete (gaps)":
     TaskUpdate: review-phase-N, status: completed
     TaskUpdate: review-phase-N, metadata: { status: "gaps", issues: [...] }
 
-    Create remediation tasks (see Remediation Flow)
-    Spawn planner-N.5
-    Print: "Phase N has gaps. Creating remediation phase N.5..."
+    # Check remediation depth (max 2 remediation cycles)
+    REMEDIATION_DEPTH = count of ".5" in phase number (e.g., "1.5" = 1, "1.5.5" = 2)
+    if REMEDIATION_DEPTH >= 2:
+        Print: "ERROR: Phase N has failed review after 2 remediation attempts"
+        Print: "Manual intervention required. Issues: <issues list>"
+        Exit orchestration
+
+    # Calculate remediation phase number
+    if N is integer:
+        REMEDIATION_PHASE = "${N}.5"
+    else:
+        # Already a remediation phase (e.g., 1.5), add another .5
+        REMEDIATION_PHASE = "${N}.5"
+
+    # Create remediation tasks
+    TaskCreate {
+        "subject": "plan-phase-${REMEDIATION_PHASE}",
+        "description": "Plan remediation for phase ${N} gaps: ${issues_joined_by_comma}",
+        "activeForm": "Planning phase ${REMEDIATION_PHASE} remediation"
+    }
+
+    TaskCreate {
+        "subject": "execute-phase-${REMEDIATION_PHASE}",
+        "description": "Execute remediation plan for phase ${N} gaps",
+        "activeForm": "Executing phase ${REMEDIATION_PHASE} remediation"
+    }
+
+    TaskCreate {
+        "subject": "review-phase-${REMEDIATION_PHASE}",
+        "description": "Review remediation for phase ${N} gaps",
+        "activeForm": "Reviewing phase ${REMEDIATION_PHASE} remediation"
+    }
+
+    # Set up dependencies
+    TaskUpdate: execute-phase-${REMEDIATION_PHASE}, addBlockedBy: [plan-phase-${REMEDIATION_PHASE}]
+    TaskUpdate: review-phase-${REMEDIATION_PHASE}, addBlockedBy: [execute-phase-${REMEDIATION_PHASE}]
+
+    # Find the next main phase (or finalize) and add remediation as blocker
+    NEXT_PHASE = ceiling of N + 1  # e.g., 1.5 -> plan-phase-2, 2 -> plan-phase-3
+    if NEXT_PHASE <= TOTAL_PHASES:
+        TaskUpdate: plan-phase-${NEXT_PHASE}, addBlockedBy: [review-phase-${REMEDIATION_PHASE}]
+    else:
+        TaskUpdate: finalize, addBlockedBy: [review-phase-${REMEDIATION_PHASE}]
+
+    # Store remediation context
+    TaskUpdate: plan-phase-${REMEDIATION_PHASE}, metadata: {
+        "parent_phase": N,
+        "issues": [...],
+        "remediation_depth": REMEDIATION_DEPTH + 1
+    }
+
+    # Spawn remediation planner
+    Spawn phase-planner with:
+        phase_num: ${REMEDIATION_PHASE}
+        design_doc_path: <DESIGN_DOC>
+        remediation_for: phase ${N}
+        issues: <issues list>
+
+    Print: "Phase ${N} has gaps. Creating remediation phase ${REMEDIATION_PHASE}..."
 
 if message contains "error":
     Exit with error
