@@ -185,6 +185,12 @@ while true; do
         fi
     fi
 
+    # Monitoring interval tuning:
+    # - 15 seconds balances responsiveness with resource usage
+    # - Shorter (5s): Faster checkpoint/completion detection, higher CPU for executor
+    # - Longer (30s): Lower overhead, but slower reaction to context threshold
+    # - Observed: Most task completions happen in 1-5 minute chunks. 15s catches
+    #   completion within one poll cycle while keeping executor lightweight.
     sleep 15
 done
 ```
