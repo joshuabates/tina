@@ -637,22 +637,105 @@ Max 1 retry per task before escalating.
 
 ### Remediation Flow
 
-If reviewer finds gaps:
+When a reviewer reports gaps, create a full remediation phase with plan/execute/review cycle.
 
-1. Create remediation tasks:
-   - `plan-phase-N.5`
-   - `execute-phase-N.5`
-   - `review-phase-N.5`
+**Trigger:** Message from reviewer-N containing `review-N complete (gaps): <issues>`
 
-2. Update dependencies:
-   - `review-phase-N.5` blocked by `execute-phase-N.5`
-   - `execute-phase-N.5` blocked by `plan-phase-N.5`
-   - `plan-phase-N.5` blocked by nothing (starts immediately)
-   - `plan-phase-(N+1)` blocked by `review-phase-N.5` (replaces old dependency)
+**Step-by-step remediation creation:**
 
-3. Spawn planner for N.5
+1. **Parse the gaps from reviewer message:**
+```
+issues = parse issues from "review-N complete (gaps): test coverage below 80%, missing error handling"
+# Result: ["test coverage below 80%", "missing error handling"]
+```
 
-Remediation gets full plan/execute/review treatment.
+2. **Create remediation tasks:**
+```json
+TaskCreate {
+  "subject": "plan-phase-<N>.5",
+  "description": "Plan remediation for phase <N> gaps: <issues>",
+  "activeForm": "Planning phase <N>.5 remediation"
+}
+
+TaskCreate {
+  "subject": "execute-phase-<N>.5",
+  "description": "Execute remediation plan for phase <N>",
+  "activeForm": "Executing phase <N>.5 remediation"
+}
+
+TaskCreate {
+  "subject": "review-phase-<N>.5",
+  "description": "Review remediation for phase <N>",
+  "activeForm": "Reviewing phase <N>.5 remediation"
+}
+```
+
+3. **Set up remediation dependencies:**
+```
+# Internal dependencies for remediation phase
+TaskUpdate: execute-phase-N.5, addBlockedBy: [plan-phase-N.5]
+TaskUpdate: review-phase-N.5, addBlockedBy: [execute-phase-N.5]
+
+# Remediation blocks the next phase (or finalize)
+if N < TOTAL_PHASES:
+    # Update plan-phase-(N+1) to depend on remediation review
+    TaskUpdate: plan-phase-(N+1), addBlockedBy: [review-phase-N.5]
+    # Note: plan-phase-(N+1) was blocked by review-phase-N, now also by review-phase-N.5
+else:
+    # Last phase - finalize waits for remediation
+    TaskUpdate: finalize, addBlockedBy: [review-phase-N.5]
+```
+
+4. **Store remediation context in metadata:**
+```json
+TaskUpdate {
+  "taskId": "plan-phase-N.5",
+  "metadata": {
+    "parent_phase": N,
+    "issues": ["test coverage below 80%", "missing error handling"],
+    "original_review_task": "review-phase-N"
+  }
+}
+```
+
+5. **Spawn remediation planner:**
+```json
+{
+  "subagent_type": "tina:phase-planner",
+  "team_name": "<TEAM_NAME>",
+  "name": "planner-<N>.5",
+  "prompt": "phase_num: <N>.5\ndesign_doc_path: <DESIGN_DOC>\nremediation_for: phase <N>\nissues: <issues list>\n\nCreate implementation plan to address these specific gaps.\nReport: plan-phase-<N>.5 complete. PLAN_PATH: <PATH>"
+}
+```
+
+**Remediation planner guidance:**
+
+The planner for remediation phases receives extra context:
+- `remediation_for`: The original phase number
+- `issues`: Specific gaps to address
+
+The plan should:
+- Focus ONLY on the identified gaps
+- Not redo work that passed review
+- Be smaller scope than original phase
+
+**Remediation review:**
+
+The reviewer for N.5 checks ONLY:
+- Were the specific gaps addressed?
+- Did the remediation introduce new issues?
+
+If remediation review also finds gaps, create another remediation (N.5.5). However, after 2 remediation cycles, escalate to user.
+
+**Remediation limit tracking:**
+```json
+TaskUpdate {
+  "taskId": "review-phase-N.5",
+  "metadata": { "remediation_depth": 1 }
+}
+```
+
+If `remediation_depth >= 2` and still finding gaps, exit with error requiring human intervention.
 
 ## Model Policy
 
