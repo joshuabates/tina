@@ -1,8 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::process::ExitCode;
 
-mod cli;
-mod data;
+use tina_monitor::{cli, TaskStatusFilter, TeamFilter};
 
 #[derive(Parser)]
 #[command(name = "tina-monitor")]
@@ -89,19 +88,6 @@ enum CheckCondition {
     Complete,
     Blocked,
     Executing,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum TeamFilter {
-    Orchestration,
-    Phase,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum TaskStatusFilter {
-    Pending,
-    InProgress,
-    Completed,
 }
 
 impl From<OutputFormat> for cli::OutputFormat {
