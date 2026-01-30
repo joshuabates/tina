@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::process::ExitCode;
 
-use tina_monitor::{cli, TaskStatusFilter, TeamFilter};
+use tina_monitor::{cli, config::Config, TaskStatusFilter, TeamFilter};
 
 #[derive(Parser)]
 #[command(name = "tina-monitor")]
@@ -120,6 +120,9 @@ fn main() -> ExitCode {
 }
 
 fn run() -> anyhow::Result<i32> {
+    // Load configuration at startup
+    let _config = Config::load()?;
+
     let cli_args = Cli::parse();
 
     match cli_args.command {

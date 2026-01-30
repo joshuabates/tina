@@ -50,8 +50,11 @@ pub fn find_orchestrations() -> Result<Vec<Orchestration>> {
     let mut orchestrations = Vec::new();
 
     for name in team_names {
-        if let Some(orch) = try_load_orchestration(&name)? {
-            orchestrations.push(orch);
+        // Gracefully skip teams that fail to load (older teams without tina, schema changes, etc.)
+        match try_load_orchestration(&name) {
+            Ok(Some(orch)) => orchestrations.push(orch),
+            Ok(None) => {} // Not an orchestration, skip
+            Err(_) => {}   // Failed to load, skip silently
         }
     }
 

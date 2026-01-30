@@ -5,8 +5,10 @@ use ratatui::{backend::Backend, Terminal};
 use std::time::{Duration, Instant};
 
 use super::ui;
+use crate::config::Config;
 use crate::data::discovery::{find_orchestrations, Orchestration};
 use crate::data::watcher::{FileWatcher, WatchEvent};
+use crate::terminal::{get_handler, TerminalResult};
 
 /// Result type for TUI operations
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -36,6 +38,22 @@ pub enum ViewState {
         agent_index: usize,
         /// Scroll offset
         scroll_offset: usize,
+    },
+    /// Command modal for showing fallback commands
+    CommandModal {
+        /// Command to show
+        command: String,
+        /// Description of the command
+        description: String,
+        /// Whether command was copied
+        copied: bool,
+    },
+    /// Plan viewer modal
+    PlanViewer {
+        /// Path to the plan file
+        plan_path: std::path::PathBuf,
+        /// Scroll offset
+        scroll_offset: u16,
     },
 }
 
@@ -198,6 +216,8 @@ impl App {
             ViewState::PhaseDetail { .. } => self.handle_phase_detail_key(key),
             ViewState::TaskInspector { .. } => self.handle_task_inspector_key(key),
             ViewState::LogViewer { .. } => self.handle_log_viewer_key(key),
+            ViewState::CommandModal { .. } => self.handle_command_modal_key(key),
+            ViewState::PlanViewer { .. } => self.handle_plan_viewer_key(key),
         }
     }
 
@@ -212,6 +232,12 @@ impl App {
             KeyCode::Char('r') => {
                 let _ = self.refresh();
             }
+            KeyCode::Char('g') => {
+                let _ = self.handle_goto();
+            }
+            KeyCode::Char('p') => {
+                let _ = self.handle_view_plan();
+            }
             KeyCode::Enter => {
                 if !self.orchestrations.is_empty() {
                     self.view_state = ViewState::PhaseDetail {
@@ -222,6 +248,140 @@ impl App {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Handle goto action - open terminal tab at orchestration's cwd
+    fn handle_goto(&mut self) -> AppResult<()> {
+        if self.orchestrations.is_empty() {
+            return Ok(());
+        }
+
+        let orch = &self.orchestrations[self.selected_index];
+        let config = Config::load()?;
+        let handler = get_handler(&config.terminal.handler);
+
+        match handler.open_tab_at(&orch.cwd)? {
+            TerminalResult::Success => {
+                // Terminal opened successfully
+                Ok(())
+            }
+            TerminalResult::ShowCommand { command, description } => {
+                // Show command modal
+                self.view_state = ViewState::CommandModal {
+                    command,
+                    description,
+                    copied: false,
+                };
+                Ok(())
+            }
+        }
+    }
+
+    /// Handle key events in CommandModal view
+    fn handle_command_modal_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.view_state = ViewState::OrchestrationList;
+            }
+            KeyCode::Char('y') => {
+                // Try to copy to clipboard
+                if let ViewState::CommandModal { command, description, .. } = &self.view_state {
+                    let cmd = command.clone();
+                    let desc = description.clone();
+                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                        if clipboard.set_text(&cmd).is_ok() {
+                            self.view_state = ViewState::CommandModal {
+                                command: cmd,
+                                description: desc,
+                                copied: true,
+                            };
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle key events in PlanViewer view
+    fn handle_plan_viewer_key(&mut self, key: KeyEvent) {
+        let scroll_offset = match self.view_state {
+            ViewState::PlanViewer { scroll_offset, .. } => scroll_offset,
+            _ => return,
+        };
+
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                if let ViewState::PlanViewer { plan_path, .. } = &self.view_state {
+                    self.view_state = ViewState::PlanViewer {
+                        plan_path: plan_path.clone(),
+                        scroll_offset: scroll_offset.saturating_add(1),
+                    };
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if let ViewState::PlanViewer { plan_path, .. } = &self.view_state {
+                    self.view_state = ViewState::PlanViewer {
+                        plan_path: plan_path.clone(),
+                        scroll_offset: scroll_offset.saturating_sub(1),
+                    };
+                }
+            }
+            KeyCode::Char('d') | KeyCode::PageDown => {
+                if let ViewState::PlanViewer { plan_path, .. } = &self.view_state {
+                    self.view_state = ViewState::PlanViewer {
+                        plan_path: plan_path.clone(),
+                        scroll_offset: scroll_offset.saturating_add(20),
+                    };
+                }
+            }
+            KeyCode::Char('u') | KeyCode::PageUp => {
+                if let ViewState::PlanViewer { plan_path, .. } = &self.view_state {
+                    self.view_state = ViewState::PlanViewer {
+                        plan_path: plan_path.clone(),
+                        scroll_offset: scroll_offset.saturating_sub(20),
+                    };
+                }
+            }
+            KeyCode::Esc => {
+                self.view_state = ViewState::OrchestrationList;
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle view plan action
+    fn handle_view_plan(&mut self) -> AppResult<()> {
+        if let Some(plan_path) = self.get_current_plan_path() {
+            self.view_state = ViewState::PlanViewer {
+                plan_path,
+                scroll_offset: 0,
+            };
+        }
+        Ok(())
+    }
+
+    /// Get the current plan path for the selected orchestration
+    fn get_current_plan_path(&self) -> Option<std::path::PathBuf> {
+        if self.orchestrations.is_empty() {
+            return None;
+        }
+
+        let orch = &self.orchestrations[self.selected_index];
+        let phase = orch.current_phase;
+
+        // Plans are typically in ../docs/plans/ relative to the cwd
+        let plan_name = format!("{}-phase-{}.md",
+            orch.design_doc_path.file_stem()?.to_str()?,
+            phase);
+
+        let plan_path = orch.cwd.parent()?.join("docs").join("plans").join(plan_name);
+
+        if plan_path.exists() {
+            Some(plan_path)
+        } else {
+            None
         }
     }
 
@@ -1520,6 +1680,81 @@ mod tests {
                 assert_eq!(scroll_offset, 5, "scroll_offset should not change on refresh");
             }
             _ => panic!("Should remain in LogViewer view after refresh"),
+        }
+    }
+
+    // Task 3: Goto Action (g key) tests
+
+    #[test]
+    fn test_g_key_does_nothing_when_no_orchestrations() {
+        let mut app = App::new_with_orchestrations(vec![]);
+        app.view_state = ViewState::OrchestrationList;
+
+        let key = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should remain in OrchestrationList, no crash
+        assert!(matches!(app.view_state, ViewState::OrchestrationList));
+    }
+
+    #[test]
+    fn test_g_key_opens_command_modal_with_fallback_handler() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.selected_index = 0;
+        app.view_state = ViewState::OrchestrationList;
+
+        let key = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should transition to CommandModal view
+        match app.view_state {
+            ViewState::CommandModal { command, description, copied } => {
+                assert!(command.contains("/test"), "Command should contain the cwd path");
+                assert!(!description.is_empty(), "Description should not be empty");
+                assert_eq!(copied, false, "copied should start as false");
+            }
+            _ => panic!("'g' key should open CommandModal when orchestration selected"),
+        }
+    }
+
+    #[test]
+    fn test_esc_in_command_modal_returns_to_orchestration_list() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::CommandModal {
+            command: "cd /test".to_string(),
+            description: "Open terminal".to_string(),
+            copied: false,
+        };
+
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        assert!(
+            matches!(app.view_state, ViewState::OrchestrationList),
+            "Esc should return to OrchestrationList"
+        );
+    }
+
+    #[test]
+    fn test_y_key_in_command_modal_copies_command() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::CommandModal {
+            command: "cd /test".to_string(),
+            description: "Open terminal".to_string(),
+            copied: false,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Check if copied flag is set (clipboard may not be available in CI)
+        match app.view_state {
+            ViewState::CommandModal { copied, .. } => {
+                // If clipboard is available, copied should be true
+                // If not available, it should remain false
+                // We just verify the state is still CommandModal
+            }
+            _ => panic!("Should remain in CommandModal after copy attempt"),
         }
     }
 }

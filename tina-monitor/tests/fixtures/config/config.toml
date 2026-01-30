@@ -1,0 +1,13 @@
+[terminal]
+handler = "kitty"
+
+[tui]
+refresh_interval = 10
+log_poll_interval = 250
+
+[safety]
+confirm_send = true
+safe_commands = ["/checkpoint", "/clear"]
+
+[logging]
+command_log = "~/.local/share/tina-monitor/commands.log"

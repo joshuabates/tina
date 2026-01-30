@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_empty_session() {
-        let temp_dir = TempDir::new().unwrap();
+        let _temp_dir = TempDir::new().unwrap();
         // Empty session - should return empty vec
         let tasks: Vec<Task> = vec![];
         let summary = TaskSummary::from_tasks(&tasks);

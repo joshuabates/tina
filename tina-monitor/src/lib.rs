@@ -5,7 +5,9 @@
 use clap::ValueEnum;
 
 pub mod cli;
+pub mod config;
 pub mod data;
+pub mod terminal;
 pub mod tmux;
 pub mod tui;
 

@@ -21,6 +21,8 @@ pub fn render_help(frame: &mut Frame) {
         ]),
         Line::from("  j / k / Down / Up    Navigate up/down"),
         Line::from("  Enter                Expand orchestration details"),
+        Line::from("  g                    Open terminal at worktree (goto)"),
+        Line::from("  p                    View current phase plan"),
         Line::from("  r                    Refresh data"),
         Line::from(""),
         Line::from(vec![
@@ -31,6 +33,7 @@ pub fn render_help(frame: &mut Frame) {
         Line::from("  j / k                Navigate within focused pane"),
         Line::from("  Enter                Open task inspector (when task focused)"),
         Line::from("  l                    View agent logs (when member focused)"),
+        Line::from("  a                    Attach to agent's tmux pane (when member focused)"),
         Line::from("  Esc                  Return to orchestration list"),
         Line::from(""),
         Line::from(vec![

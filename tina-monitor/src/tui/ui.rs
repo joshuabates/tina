@@ -52,6 +52,23 @@ pub fn render(frame: &mut Frame, app: &App) {
             // Then render the log viewer modal on top
             log_viewer::render(app, frame);
         }
+        ViewState::CommandModal { .. } => {
+            // First render the OrchestrationList view as background
+            render_orchestration_list(frame, chunks[1], app);
+            // Then render the command modal on top
+            super::views::command_modal::render(app, frame);
+        }
+        ViewState::PlanViewer { plan_path, scroll_offset } => {
+            // First render the OrchestrationList view as background
+            render_orchestration_list(frame, chunks[1], app);
+            // Then render the plan viewer modal on top
+            if let Ok(mut viewer) = super::views::plan_viewer::PlanViewer::new(plan_path.clone()) {
+                viewer.scroll = *scroll_offset;
+                let area = centered_rect(85, 85, frame.area());
+                frame.render_widget(ratatui::widgets::Clear, area);
+                viewer.render(frame, area);
+            }
+        }
     }
 
     render_footer(frame, chunks[2], app);
@@ -70,15 +87,38 @@ fn render_header(frame: &mut Frame, area: Rect) {
 
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     let footer_text = match &app.view_state {
-        ViewState::OrchestrationList => " j/k:nav  Enter:expand  r:refresh  q:quit  ?:help",
+        ViewState::OrchestrationList => " j/k:nav  Enter:expand  g:goto  p:plan  r:refresh  q:quit  ?:help",
         ViewState::PhaseDetail { .. } => " t:tasks  m:members  Enter:inspect  l:logs  Esc:back  ?:help",
         ViewState::TaskInspector { .. } => " Esc:back  ?:help",
         ViewState::LogViewer { .. } => " j/k:scroll  Esc:back  ?:help",
+        ViewState::CommandModal { .. } => " y:copy  Esc:close  ?:help",
+        ViewState::PlanViewer { .. } => " j/k:scroll  Esc:close  ?:help",
     };
 
     let footer = Paragraph::new(footer_text)
         .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(footer, area);
+}
+
+/// Calculate a centered rectangle with given percentage dimensions
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }
 
 #[cfg(test)]
