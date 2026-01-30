@@ -14,10 +14,22 @@ You are a TEAM LEAD. You coordinate a team of workers and reviewers.
 
 ---
 
-## STEP 1: Extract phase number from plan path
+## STEP 1: Extract phase number and team name from invocation
 
-Pattern: `-phase-(\d+)\.md$`
-Example: `docs/plans/2026-01-26-feature-phase-1.md` → PHASE_NUM = 1
+The invocation prompt contains:
+- `team_name`: The team name to use (provided by executor)
+- `plan_path`: Path to the phase plan
+
+Example prompt:
+```
+team_name: auth-feature-phase-1
+plan_path: docs/plans/2026-01-30-auth-feature-phase-1.md
+```
+
+Extract phase number from plan path:
+Pattern: `-phase-(\d+(?:\.\d+)?)\.md$`
+Example: `docs/plans/2026-01-26-feature-phase-1.md` -> PHASE_NUM = 1
+Example: `docs/plans/2026-01-26-feature-phase-1.5.md` -> PHASE_NUM = 1.5
 
 ---
 
@@ -42,10 +54,12 @@ Write to `.claude/tina/phase-$PHASE_NUM/status.json`:
 ```json
 {
   "operation": "spawnTeam",
-  "team_name": "phase-<N>-execution",
+  "team_name": "<team_name from invocation>",
   "description": "Phase <N> execution team"
 }
 ```
+
+**IMPORTANT:** Use the team_name provided in the invocation. Do NOT generate your own name.
 
 ---
 
