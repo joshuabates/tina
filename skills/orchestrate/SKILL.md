@@ -27,7 +27,27 @@ You are a TEAM LEAD coordinating TEAMMATES. Do not do the work yourself - spawn 
 DESIGN_DOC="<path from invocation>"
 TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
 FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
+TEAM_NAME="${FEATURE_NAME}-orchestration"
 ```
+
+---
+
+## STEP 1b: Check for existing orchestration (RESUME DETECTION)
+
+Before creating a new team, check if one already exists for this design doc:
+
+```bash
+TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}.json"
+if [ -f "$TEAM_CONFIG" ]; then
+    echo "Found existing orchestration team: $TEAM_NAME"
+    # SKIP TO STEP 5b (Resume Logic) below
+fi
+```
+
+If team exists, DO NOT create new team or tasks. Instead:
+1. Skip to STEP 5b: Resume Logic
+2. Read existing task list
+3. Find current state and resume
 
 ---
 
@@ -97,6 +117,47 @@ Use Task tool:
   "prompt": "Design doc: <DESIGN_DOC>\nOutput file: .claude/tina/validation/design-report.md\n\nValidate this design and write your report. Return ONLY: VALIDATION_STATUS: Pass/Warning/Stop"
 }
 ```
+
+---
+
+## STEP 5b: Resume Logic (when existing team found)
+
+When team already exists, resume from current state:
+
+**Step 5b.1: Read task list**
+```
+TaskList
+```
+
+**Step 5b.2: Categorize tasks**
+```
+COMPLETED_TASKS = tasks where status == "completed"
+IN_PROGRESS_TASKS = tasks where status == "in_progress"
+PENDING_UNBLOCKED = tasks where status == "pending" AND all blockedBy are completed
+```
+
+**Step 5b.3: Determine action based on state**
+
+| State | Action |
+|-------|--------|
+| Has in_progress task | Respawn teammate for that task |
+| No in_progress, has pending unblocked | Spawn teammate for first unblocked |
+| All tasks complete | Report completion, exit |
+
+**Step 5b.4: Respawn teammate for in_progress task**
+
+For each task type, spawn the appropriate teammate:
+- `validate-design` in_progress → spawn design-validator
+- `setup-worktree` in_progress → spawn worktree-setup
+- `plan-phase-N` in_progress → spawn phase-planner
+- `execute-phase-N` in_progress → spawn phase-executor
+- `review-phase-N` in_progress → spawn phase-reviewer
+
+Use TaskGet to retrieve any metadata needed from completed tasks (worktree_path, plan_path, etc.)
+
+**Step 5b.5: Continue to STEP 5 (Event loop)**
+
+After spawning the resumed teammate, continue with normal event loop processing.
 
 ---
 
