@@ -1037,6 +1037,58 @@ To minimize recovery needs:
 - TaskCreate, TaskUpdate, TaskList, TaskGet - Task management
 - Teammate tool - Team creation and messaging
 
+## Test Scenarios
+
+Use these scenarios to verify recovery and remediation work correctly.
+
+### Scenario 1: Orchestrator Crash and Resume
+
+1. Start orchestration: `/tina:orchestrate design.md`
+2. Wait until `plan-phase-1` is in_progress
+3. Kill the orchestrator session (Ctrl+C or close terminal)
+4. Restart: `/tina:orchestrate design.md`
+5. Expected: Orchestrator finds existing team, sees plan-phase-1 in_progress, respawns planner-1
+6. Verify: Orchestration continues from where it left off
+
+### Scenario 2: Executor Crash with Tmux Alive
+
+1. Start orchestration until `execute-phase-1` is in_progress
+2. Kill the executor teammate (not the tmux session)
+3. Orchestrator should timeout waiting for message
+4. Orchestrator respawns executor-1
+5. Expected: New executor finds existing tmux session, skips creation, resumes monitoring
+6. Verify: Phase completes normally
+
+### Scenario 3: Single Remediation Cycle
+
+1. Create a design that will fail review (e.g., no tests requirement)
+2. Run orchestration through execute-phase-1
+3. Reviewer reports gaps: `review-1 complete (gaps): missing unit tests`
+4. Expected: Orchestrator creates plan-phase-1.5, execute-phase-1.5, review-phase-1.5
+5. Expected: Dependencies updated so plan-phase-2 blocked by review-phase-1.5
+6. Verify: Remediation phase executes and review passes
+
+### Scenario 4: Remediation Limit Hit
+
+1. Create a design that will always fail review
+2. Run orchestration until review-1 fails
+3. Let remediation 1.5 run, review-1.5 also fails
+4. Let remediation 1.5.5 run, review-1.5.5 also fails
+5. Expected: Orchestrator exits with "failed after 2 remediation attempts"
+6. Verify: Tasks preserved for inspection, clear error message shown
+
+### Scenario 5: Complete Flow with Recovery
+
+1. Start orchestration for 2-phase design
+2. Crash and resume at each stage:
+   - After validate-design
+   - After setup-worktree
+   - After plan-phase-1
+   - After execute-phase-1
+   - After review-phase-1 (pass)
+   - After plan-phase-2
+3. Verify: Each resume correctly identifies state and continues
+
 ## Red Flags
 
 **Never:**
