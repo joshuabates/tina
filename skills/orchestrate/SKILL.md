@@ -299,35 +299,108 @@ Ready for merge/PR workflow.
 
 ### Task Creation
 
-Create all tasks upfront with proper dependencies:
+Create all tasks upfront with proper dependencies. This is done ONCE at orchestration start.
 
+**Step-by-step task creation:**
+
+1. **Extract design info:**
 ```bash
-# Extract info from design doc
 DESIGN_DOC="$1"
 TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
 FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
-
-# Create team
-# Teammate { operation: "spawnTeam", team_name: "$FEATURE_NAME-orchestration", description: "..." }
-
-# Create tasks
-# TaskCreate: validate-design, description: "Validate design doc at $DESIGN_DOC"
-# TaskCreate: setup-worktree, description: "Create worktree for $FEATURE_NAME"
-
-# Create phase tasks in loop
-for PHASE in $(seq 1 $TOTAL_PHASES); do
-  # TaskCreate: plan-phase-$PHASE
-  # TaskCreate: execute-phase-$PHASE
-  # TaskCreate: review-phase-$PHASE
-done
-
-# TaskCreate: finalize, description: "Complete orchestration via finishing workflow"
-
-# Set dependencies
-# TaskUpdate: setup-worktree, addBlockedBy: [validate-design]
-# TaskUpdate: plan-phase-1, addBlockedBy: [setup-worktree]
-# etc.
+TEAM_NAME="${FEATURE_NAME}-orchestration"
 ```
+
+2. **Create the team:**
+```json
+{
+  "operation": "spawnTeam",
+  "team_name": "<TEAM_NAME>",
+  "description": "Orchestrating <FEATURE_NAME> from <DESIGN_DOC>"
+}
+```
+
+3. **Create validate-design task:**
+```json
+TaskCreate {
+  "subject": "validate-design",
+  "description": "Validate design document at <DESIGN_DOC>. Run baseline commands if specified in Success Metrics section.",
+  "activeForm": "Validating design document"
+}
+```
+
+4. **Create setup-worktree task:**
+```json
+TaskCreate {
+  "subject": "setup-worktree",
+  "description": "Create isolated worktree for <FEATURE_NAME>. Provision statusline config and install dependencies.",
+  "activeForm": "Setting up worktree"
+}
+```
+
+5. **Create phase tasks (for each phase 1 to N):**
+```json
+TaskCreate {
+  "subject": "plan-phase-<N>",
+  "description": "Create implementation plan for phase <N> of <FEATURE_NAME>.",
+  "activeForm": "Planning phase <N>"
+}
+
+TaskCreate {
+  "subject": "execute-phase-<N>",
+  "description": "Execute phase <N> by starting team-lead in tmux with the plan.",
+  "activeForm": "Executing phase <N>"
+}
+
+TaskCreate {
+  "subject": "review-phase-<N>",
+  "description": "Review completed phase <N> implementation against design requirements.",
+  "activeForm": "Reviewing phase <N>"
+}
+```
+
+6. **Create finalize task:**
+```json
+TaskCreate {
+  "subject": "finalize",
+  "description": "Complete orchestration by presenting merge/PR/cleanup options.",
+  "activeForm": "Finalizing orchestration"
+}
+```
+
+7. **Set up dependencies (all at once after task creation):**
+
+```
+TaskUpdate: { taskId: "setup-worktree", addBlockedBy: ["validate-design"] }
+TaskUpdate: { taskId: "plan-phase-1", addBlockedBy: ["setup-worktree"] }
+TaskUpdate: { taskId: "execute-phase-1", addBlockedBy: ["plan-phase-1"] }
+TaskUpdate: { taskId: "review-phase-1", addBlockedBy: ["execute-phase-1"] }
+
+# For phase 2 onwards:
+TaskUpdate: { taskId: "plan-phase-2", addBlockedBy: ["review-phase-1"] }
+TaskUpdate: { taskId: "execute-phase-2", addBlockedBy: ["plan-phase-2"] }
+TaskUpdate: { taskId: "review-phase-2", addBlockedBy: ["execute-phase-2"] }
+# ... continue for all phases
+
+TaskUpdate: { taskId: "finalize", addBlockedBy: ["review-phase-<TOTAL_PHASES>"] }
+```
+
+**Why create all tasks upfront:**
+- Dependencies are explicit and visible
+- TaskList shows full orchestration scope
+- Recovery is simple: read task list, find incomplete tasks
+- No hidden state to track
+
+**Task metadata storage:**
+When teammates complete, store results in task metadata:
+```json
+TaskUpdate {
+  "taskId": "setup-worktree",
+  "metadata": { "worktree_path": "/path/to/worktree", "branch": "tina/feature" }
+}
+```
+
+Later tasks can read this metadata to get paths they need.
 
 ### Spawning Teammates
 
