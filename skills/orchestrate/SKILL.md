@@ -1231,3 +1231,129 @@ Before using orchestration on real work, verify these behaviors manually:
 - Store data in task metadata, not separate files
 - Spawn teammates as tasks become unblocked
 - Handle all teammate message types
+
+## Troubleshooting
+
+Common issues and their resolutions:
+
+### No message from teammate
+
+**Symptom:** Orchestrator waits but teammate never responds.
+
+**Possible causes:**
+1. Teammate crashed during execution
+2. Teammate is stuck in infinite loop
+3. Teammate completed but message delivery failed
+
+**Resolution:**
+1. Check if teammate is still running: look for active claude processes
+2. Check task metadata for any partial updates
+3. If teammate dead: mark task as pending, re-run orchestrate to respawn
+4. If teammate stuck: kill the process, mark task pending, re-run
+
+### Team already exists error
+
+**Symptom:** `spawnTeam` fails saying team already exists.
+
+**Possible causes:**
+1. Previous orchestration for same design doc exists
+2. Incomplete cleanup from failed run
+
+**Resolution:**
+1. If resuming: skip team creation, go to STEP 5b (Resume Logic)
+2. If starting fresh: clean up first:
+   ```bash
+   rm -rf ~/.claude/teams/<team-name>.json
+   rm -rf ~/.claude/tasks/<team-name>/
+   ```
+
+### Tasks stuck in pending (none unblocked)
+
+**Symptom:** `TaskList` shows all tasks pending but none have empty `blockedBy`.
+
+**Possible causes:**
+1. Circular dependency (bug in task creation)
+2. Blocker task completed but not marked complete
+3. Missing task in dependency chain
+
+**Resolution:**
+1. Run `TaskList` and examine dependencies
+2. Find tasks that should be complete but aren't
+3. Manually mark them: `TaskUpdate { taskId: "X", status: "completed" }`
+4. Or fix circular dependency by removing blocker: `TaskUpdate { taskId: "X", blockedBy: [] }`
+
+### Tmux session exists but executor doesn't see it
+
+**Symptom:** `tmux list-sessions` shows session, but executor creates new one.
+
+**Possible causes:**
+1. Session name mismatch (typo in feature name)
+2. Executor checking wrong session name pattern
+
+**Resolution:**
+1. Check actual session name: `tmux list-sessions`
+2. Verify feature name derivation matches
+3. If mismatch: kill orphan session, let executor create correct one
+
+### Remediation keeps failing
+
+**Symptom:** Remediation phases (1.5, 1.5.5) created but still failing.
+
+**Possible causes:**
+1. Fundamental design flaw
+2. Reviewer has unreachable standards
+3. Issues not actually fixable within scope
+
+**Resolution:**
+1. After 2 remediation cycles, orchestrator exits automatically
+2. Read the review files to understand root cause
+3. Either:
+   - Fix design and restart
+   - Adjust reviewer criteria
+   - Accept current state and skip review: `TaskUpdate { taskId: "review-N", status: "completed", metadata: { manual_pass: true } }`
+
+### Worktree path not found in metadata
+
+**Symptom:** Executor or reviewer fails because worktree_path is missing.
+
+**Possible causes:**
+1. Worktree-setup task completed but didn't store metadata
+2. Metadata storage failed
+
+**Resolution:**
+1. Check worktree exists: `ls .worktrees/`
+2. Manually add metadata:
+   ```
+   TaskUpdate { taskId: "setup-worktree", metadata: { worktree_path: ".worktrees/feature" } }
+   ```
+
+### Git range invalid or missing
+
+**Symptom:** Phase reviewer fails to analyze changes, git diff errors.
+
+**Possible causes:**
+1. Executor didn't capture commit range
+2. No commits were made during phase
+3. Range syntax wrong
+
+**Resolution:**
+1. In worktree, check git log: `git log --oneline -10`
+2. Identify correct range (first phase commit to HEAD)
+3. Manually update metadata:
+   ```
+   TaskUpdate { taskId: "execute-phase-N", metadata: { git_range: "abc123..def456" } }
+   ```
+
+### Teammate spawns but immediately exits
+
+**Symptom:** Task tool returns but no work done, no error message.
+
+**Possible causes:**
+1. Teammate prompt missing required info
+2. Agent definition has error
+3. Permissions issue
+
+**Resolution:**
+1. Check the agent definition file exists and is valid
+2. Verify prompt includes all required fields (phase_num, paths, etc.)
+3. Try spawning manually with verbose output to see error
