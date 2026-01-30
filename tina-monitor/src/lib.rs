@@ -6,6 +6,7 @@ use clap::ValueEnum;
 
 pub mod cli;
 pub mod data;
+pub mod tmux;
 pub mod tui;
 
 /// Filter for task status in task listings
