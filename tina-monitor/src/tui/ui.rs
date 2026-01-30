@@ -11,6 +11,7 @@ use super::app::{App, ViewState};
 use super::views::orchestration_list::render_orchestration_list;
 use super::views::phase_detail;
 use super::views::task_inspector::render_task_inspector;
+use super::views::log_viewer;
 
 /// Render the application UI
 pub fn render(frame: &mut Frame, app: &App) {
@@ -46,12 +47,14 @@ pub fn render(frame: &mut Frame, app: &App) {
             }
         }
         ViewState::LogViewer { .. } => {
-            // TODO: Implement in Task 6
+            // First render the PhaseDetail view as background
             phase_detail::render(frame, chunks[1], app);
+            // Then render the log viewer modal on top
+            log_viewer::render(app, frame);
         }
     }
 
-    render_footer(frame, chunks[2]);
+    render_footer(frame, chunks[2], app);
 
     if app.show_help {
         super::views::help::render_help(frame);
@@ -65,8 +68,15 @@ fn render_header(frame: &mut Frame, area: Rect) {
     frame.render_widget(header, area);
 }
 
-fn render_footer(frame: &mut Frame, area: Rect) {
-    let footer = Paragraph::new(" j/k:nav  r:refresh  q:quit  ?:help")
+fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
+    let footer_text = match &app.view_state {
+        ViewState::OrchestrationList => " j/k:nav  Enter:expand  r:refresh  q:quit  ?:help",
+        ViewState::PhaseDetail { .. } => " t:tasks  m:members  Enter:inspect  l:logs  Esc:back  ?:help",
+        ViewState::TaskInspector { .. } => " Esc:back  ?:help",
+        ViewState::LogViewer { .. } => " j/k:scroll  Esc:back  ?:help",
+    };
+
+    let footer = Paragraph::new(footer_text)
         .style(Style::default().fg(Color::DarkGray));
     frame.render_widget(footer, area);
 }
@@ -190,5 +200,191 @@ mod tests {
 
         let result = terminal.draw(|frame| render(frame, &app));
         assert!(result.is_ok(), "Render should work with help modal hidden");
+    }
+
+    // Task 10: Tests for view state rendering
+
+    #[test]
+    fn test_render_orchestration_list_view() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::OrchestrationList;
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "OrchestrationList view should render without panic");
+    }
+
+    #[test]
+    fn test_render_phase_detail_view() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::PhaseDetail {
+            focus: crate::tui::app::PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+        };
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "PhaseDetail view should render without panic");
+    }
+
+    #[test]
+    fn test_render_task_inspector_modal() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::TaskInspector {
+            task_index: 0,
+        };
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "TaskInspector modal should render without panic");
+    }
+
+    #[test]
+    fn test_render_log_viewer_modal() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::LogViewer {
+            agent_index: 0,
+            scroll_offset: 0,
+        };
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "LogViewer modal should render without panic");
+    }
+
+    #[test]
+    fn test_help_modal_renders_on_top_of_orchestration_list() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::OrchestrationList;
+        app.show_help = true;
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "Help modal should render on top of OrchestrationList");
+    }
+
+    #[test]
+    fn test_help_modal_renders_on_top_of_phase_detail() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::PhaseDetail {
+            focus: crate::tui::app::PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+        };
+        app.show_help = true;
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "Help modal should render on top of PhaseDetail");
+    }
+
+    #[test]
+    fn test_help_modal_renders_on_top_of_task_inspector() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::TaskInspector {
+            task_index: 0,
+        };
+        app.show_help = true;
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "Help modal should render on top of TaskInspector");
+    }
+
+    #[test]
+    fn test_help_modal_renders_on_top_of_log_viewer() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::LogViewer {
+            agent_index: 0,
+            scroll_offset: 0,
+        };
+        app.show_help = true;
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "Help modal should render on top of LogViewer");
+    }
+
+    #[test]
+    fn test_task_inspector_renders_over_phase_detail_background() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+
+        // Set up TaskInspector view - this should show PhaseDetail as background
+        app.view_state = crate::tui::app::ViewState::TaskInspector {
+            task_index: 0,
+        };
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "TaskInspector should render with PhaseDetail background");
+    }
+
+    #[test]
+    fn test_log_viewer_renders_over_phase_detail_background() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+
+        // Set up LogViewer view - this should show PhaseDetail as background
+        app.view_state = crate::tui::app::ViewState::LogViewer {
+            agent_index: 0,
+            scroll_offset: 0,
+        };
+
+        let result = terminal.draw(|frame| render(frame, &app));
+        assert!(result.is_ok(), "LogViewer should render with PhaseDetail background");
+    }
+
+    #[test]
+    fn test_footer_shows_orchestration_list_hints() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::OrchestrationList;
+
+        terminal.draw(|frame| render(frame, &app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+
+        // Footer should contain orchestration list hints
+        assert!(content.contains("j/k:nav"), "Footer should contain navigation hint");
+        assert!(content.contains("Enter:expand"), "Footer should contain expand hint");
+        assert!(content.contains("r:refresh"), "Footer should contain refresh hint");
+        assert!(content.contains("q:quit"), "Footer should contain quit hint");
+        assert!(content.contains("?:help"), "Footer should contain help hint");
+    }
+
+    #[test]
+    fn test_footer_shows_phase_detail_hints() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+        app.view_state = crate::tui::app::ViewState::PhaseDetail {
+            focus: crate::tui::app::PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+        };
+
+        terminal.draw(|frame| render(frame, &app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+
+        // Footer should contain phase detail hints
+        assert!(content.contains("t:tasks"), "Footer should contain tasks hint");
+        assert!(content.contains("m:members"), "Footer should contain members hint");
+        assert!(content.contains("Enter:inspect"), "Footer should contain inspect hint");
+        assert!(content.contains("l:logs"), "Footer should contain logs hint");
+        assert!(content.contains("Esc:back"), "Footer should contain back hint");
+        assert!(content.contains("?:help"), "Footer should contain help hint");
     }
 }

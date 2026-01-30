@@ -7,7 +7,7 @@ pub mod ui;
 pub mod views;
 pub mod widgets;
 
-pub use app::{App, AppResult};
+pub use app::{App, AppResult, PaneFocus, ViewState};
 
 use std::io;
 

@@ -342,9 +342,53 @@ impl App {
         }
     }
 
-    /// Handle key events in LogViewer view (stub)
-    fn handle_log_viewer_key(&mut self, _key: KeyEvent) {
-        // TODO: Implement in Task 6
+    /// Handle key events in LogViewer view
+    fn handle_log_viewer_key(&mut self, key: KeyEvent) {
+        let (agent_index, scroll_offset) = match self.view_state {
+            ViewState::LogViewer {
+                agent_index,
+                scroll_offset,
+            } => (agent_index, scroll_offset),
+            _ => return,
+        };
+
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.view_state = ViewState::LogViewer {
+                    agent_index,
+                    scroll_offset: scroll_offset + 1,
+                };
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.view_state = ViewState::LogViewer {
+                    agent_index,
+                    scroll_offset: scroll_offset.saturating_sub(1),
+                };
+            }
+            KeyCode::Char('d') | KeyCode::PageDown => {
+                self.view_state = ViewState::LogViewer {
+                    agent_index,
+                    scroll_offset: scroll_offset + 20,
+                };
+            }
+            KeyCode::Char('u') | KeyCode::PageUp => {
+                self.view_state = ViewState::LogViewer {
+                    agent_index,
+                    scroll_offset: scroll_offset.saturating_sub(20),
+                };
+            }
+            KeyCode::Esc => {
+                self.view_state = ViewState::PhaseDetail {
+                    focus: PaneFocus::Members,
+                    task_index: 0,
+                    member_index: agent_index,
+                };
+            }
+            KeyCode::Char('r') => {
+                let _ = self.refresh();
+            }
+            _ => {}
+        }
     }
 
     /// Run the application event loop
@@ -1234,6 +1278,248 @@ mod tests {
                 }
                 _ => panic!("Should remain in TaskInspector view"),
             }
+        }
+    }
+
+    // Task 9: Log Viewer Key Handling tests
+
+    #[test]
+    fn test_j_key_scrolls_down_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 1,
+            scroll_offset: 5,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { agent_index, scroll_offset } => {
+                assert_eq!(agent_index, 1, "agent_index should not change");
+                assert_eq!(scroll_offset, 6, "'j' should scroll down by 1");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_k_key_scrolls_up_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 1,
+            scroll_offset: 5,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { agent_index, scroll_offset } => {
+                assert_eq!(agent_index, 1, "agent_index should not change");
+                assert_eq!(scroll_offset, 4, "'k' should scroll up by 1");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_down_arrow_scrolls_down_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 2,
+            scroll_offset: 10,
+        };
+
+        let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { agent_index, scroll_offset } => {
+                assert_eq!(agent_index, 2, "agent_index should not change");
+                assert_eq!(scroll_offset, 11, "Down arrow should scroll down by 1");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_up_arrow_scrolls_up_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 2,
+            scroll_offset: 10,
+        };
+
+        let key = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { agent_index, scroll_offset } => {
+                assert_eq!(agent_index, 2, "agent_index should not change");
+                assert_eq!(scroll_offset, 9, "Up arrow should scroll up by 1");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_k_key_cannot_go_negative_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 1,
+            scroll_offset: 0,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { scroll_offset, .. } => {
+                assert_eq!(scroll_offset, 0, "'k' should not make scroll_offset negative");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_d_key_pages_down_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 1,
+            scroll_offset: 5,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { agent_index, scroll_offset } => {
+                assert_eq!(agent_index, 1, "agent_index should not change");
+                assert_eq!(scroll_offset, 25, "'d' should page down by 20");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_u_key_pages_up_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 1,
+            scroll_offset: 30,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { agent_index, scroll_offset } => {
+                assert_eq!(agent_index, 1, "agent_index should not change");
+                assert_eq!(scroll_offset, 10, "'u' should page up by 20");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_page_down_key_pages_down_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 1,
+            scroll_offset: 5,
+        };
+
+        let key = KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { agent_index, scroll_offset } => {
+                assert_eq!(agent_index, 1, "agent_index should not change");
+                assert_eq!(scroll_offset, 25, "PageDown should page down by 20");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_page_up_key_pages_up_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 1,
+            scroll_offset: 30,
+        };
+
+        let key = KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { agent_index, scroll_offset } => {
+                assert_eq!(agent_index, 1, "agent_index should not change");
+                assert_eq!(scroll_offset, 10, "PageUp should page up by 20");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_u_key_cannot_go_negative_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 1,
+            scroll_offset: 10,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::LogViewer { scroll_offset, .. } => {
+                assert_eq!(scroll_offset, 0, "'u' should not make scroll_offset negative when paging up from 10");
+            }
+            _ => panic!("Should remain in LogViewer view"),
+        }
+    }
+
+    #[test]
+    fn test_esc_in_log_viewer_returns_to_phase_detail_with_members_focus() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 3,
+            scroll_offset: 15,
+        };
+
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::PhaseDetail { focus, task_index, member_index } => {
+                assert_eq!(focus, PaneFocus::Members, "Esc should return to PhaseDetail with Members focus");
+                assert_eq!(task_index, 0, "task_index should be reset to 0");
+                assert_eq!(member_index, 3, "member_index should be set to the agent_index from LogViewer");
+            }
+            _ => panic!("Esc should return to PhaseDetail view"),
+        }
+    }
+
+    #[test]
+    fn test_r_key_refreshes_in_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 1,
+            scroll_offset: 5,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should remain in LogViewer after refresh
+        match app.view_state {
+            ViewState::LogViewer { agent_index, scroll_offset } => {
+                assert_eq!(agent_index, 1, "agent_index should not change on refresh");
+                assert_eq!(scroll_offset, 5, "scroll_offset should not change on refresh");
+            }
+            _ => panic!("Should remain in LogViewer view after refresh"),
         }
     }
 }

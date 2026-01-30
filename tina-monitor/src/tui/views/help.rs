@@ -17,20 +17,39 @@ pub fn render_help(frame: &mut Frame) {
 
     let help_text = vec![
         Line::from(vec![
-            Span::styled("Navigation", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled("Orchestration List:", Style::default().add_modifier(Modifier::BOLD)),
         ]),
-        Line::from(""),
-        Line::from("  j / Down     Move down"),
-        Line::from("  k / Up       Move up"),
-        Line::from("  Enter        Expand/collapse (future)"),
+        Line::from("  j / k / Down / Up    Navigate up/down"),
+        Line::from("  Enter                Expand orchestration details"),
+        Line::from("  r                    Refresh data"),
         Line::from(""),
         Line::from(vec![
-            Span::styled("Actions", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled("Phase Detail:", Style::default().add_modifier(Modifier::BOLD)),
         ]),
+        Line::from("  t / Left             Focus tasks pane"),
+        Line::from("  m / Right            Focus team members pane"),
+        Line::from("  j / k                Navigate within focused pane"),
+        Line::from("  Enter                Open task inspector (when task focused)"),
+        Line::from("  l                    View agent logs (when member focused)"),
+        Line::from("  Esc                  Return to orchestration list"),
         Line::from(""),
-        Line::from("  r            Refresh data"),
-        Line::from("  ?            Toggle this help"),
-        Line::from("  q / Ctrl+C   Quit"),
+        Line::from(vec![
+            Span::styled("Task Inspector:", Style::default().add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from("  Esc / Enter          Close inspector"),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("Log Viewer:", Style::default().add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from("  j / k                Scroll up/down"),
+        Line::from("  d / u                Page down/up"),
+        Line::from("  Esc                  Close log viewer"),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("Global:", Style::default().add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from("  ?                    Toggle this help"),
+        Line::from("  q / Ctrl+C           Quit"),
     ];
 
     let help = Paragraph::new(help_text)
@@ -141,5 +160,31 @@ mod tests {
 
         let result = terminal.draw(|frame| render_help(frame));
         assert!(result.is_ok(), "Help modal should render on small terminal");
+    }
+
+    #[test]
+    fn test_help_modal_renders_all_sections() {
+        let backend = TestBackend::new(80, 40);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let result = terminal.draw(|frame| render_help(frame));
+        assert!(result.is_ok(), "Help modal should render all sections without panic");
+    }
+
+    #[test]
+    fn test_help_modal_fits_in_reasonable_terminal_sizes() {
+        // Test various common terminal sizes
+        for (width, height) in [(80, 24), (120, 40), (100, 30)] {
+            let backend = TestBackend::new(width, height);
+            let mut terminal = Terminal::new(backend).unwrap();
+
+            let result = terminal.draw(|frame| render_help(frame));
+            assert!(
+                result.is_ok(),
+                "Help modal should fit in terminal of size {}x{}",
+                width,
+                height
+            );
+        }
     }
 }
