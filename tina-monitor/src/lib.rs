@@ -8,6 +8,7 @@ pub mod cli;
 pub mod config;
 pub mod data;
 pub mod git;
+pub mod logging;
 pub mod terminal;
 pub mod tmux;
 pub mod tui;
