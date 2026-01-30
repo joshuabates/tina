@@ -257,15 +257,17 @@ Team-lead uses an ephemeral spawning model where workers and reviewers are creat
 **Phase initialization (once):**
 
 Use the Teammate tool with operation "spawnTeam":
-- team_name: "phase-N-execution" (replace N with actual phase number)
+- team_name: "<team_name from invocation>" (use exactly what was provided)
 - agent_type: "team-lead"
 - description: "Phase N execution team"
 
 This creates the team container. NO workers or reviewers are spawned yet.
 
-**REMOVED: Write team name for executor discovery**
+**Team name coordination:**
 
-Team name file creation is no longer needed. The executor already knows the team name since it provided it in the invocation.
+The team name is provided by the phase executor in the invocation prompt. The executor spawns team-lead-init with a specific team name, then monitors that team using `tina-monitor status team <name>`.
+
+No file-based discovery is needed - the executor knows the team name because it defined it.
 
 **Per-task spawning:**
 
