@@ -462,7 +462,9 @@ Handoff written to .claude/tina/phase-N/handoff.md
 - `/rehydrate` - Invokes rehydrate skill after context reset
 
 **State files:**
-- `.claude/tina/phase-N/status.json` - Phase execution status
+- `.claude/tina/phase-N/status.json` - Phase execution status (fallback for monitoring)
+
+Note: `team-name.txt` is no longer used. Team names are passed explicitly from orchestrator to executor to team-lead.
 
 ## Red Flags
 
