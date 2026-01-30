@@ -1,0 +1,11 @@
+{
+  "id": "3",
+  "subject": "plan-phase-1",
+  "description": "Create implementation plan for phase 1",
+  "activeForm": "Planning phase 1",
+  "status": "in_progress",
+  "owner": "planner-1",
+  "blocks": ["4"],
+  "blockedBy": ["2"],
+  "metadata": {}
+}

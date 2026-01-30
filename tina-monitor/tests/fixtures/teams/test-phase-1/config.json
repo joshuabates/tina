@@ -1,0 +1,28 @@
+{
+  "name": "test-phase-1",
+  "description": "Phase 1 execution team",
+  "createdAt": 1706644900000,
+  "leadAgentId": "team-lead@test-phase-1",
+  "leadSessionId": "session-def",
+  "members": [
+    {
+      "agentId": "team-lead@test-phase-1",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "model": "claude-opus-4-5-20251101",
+      "joinedAt": 1706644900000,
+      "tmuxPaneId": null,
+      "cwd": "/path/to/worktree",
+      "subscriptions": []
+    },
+    {
+      "agentId": "worker@test-phase-1",
+      "name": "worker",
+      "model": "claude-sonnet-4-20251101",
+      "joinedAt": 1706644950000,
+      "tmuxPaneId": "in-process",
+      "cwd": "/path/to/worktree",
+      "subscriptions": []
+    }
+  ]
+}

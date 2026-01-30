@@ -1,0 +1,28 @@
+{
+  "name": "test-orchestration",
+  "description": "Orchestrating test feature from docs/plans/test-design.md",
+  "createdAt": 1706644800000,
+  "leadAgentId": "team-lead@test-orchestration",
+  "leadSessionId": "session-abc",
+  "members": [
+    {
+      "agentId": "team-lead@test-orchestration",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "model": "claude-opus-4-5-20251101",
+      "joinedAt": 1706644800000,
+      "tmuxPaneId": null,
+      "cwd": "FIXTURE_WORKTREE_PATH",
+      "subscriptions": []
+    },
+    {
+      "agentId": "validator@test-orchestration",
+      "name": "validator",
+      "model": "claude-opus-4-5-20251101",
+      "joinedAt": 1706644850000,
+      "tmuxPaneId": "in-process",
+      "cwd": "FIXTURE_WORKTREE_PATH",
+      "subscriptions": []
+    }
+  ]
+}

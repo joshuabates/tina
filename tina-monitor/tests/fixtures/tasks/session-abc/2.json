@@ -1,0 +1,11 @@
+{
+  "id": "2",
+  "subject": "setup-worktree",
+  "description": "Create worktree and provision statusline config",
+  "activeForm": "Setting up worktree",
+  "status": "completed",
+  "owner": "worktree-setup",
+  "blocks": ["3"],
+  "blockedBy": ["1"],
+  "metadata": {"worktree_path": "/path/to/worktree", "branch": "tina/test-feature"}
+}

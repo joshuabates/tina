@@ -1,0 +1,11 @@
+{
+  "id": "1",
+  "subject": "validate-design",
+  "description": "Validate design document",
+  "activeForm": "Validating design document",
+  "status": "completed",
+  "owner": "validator",
+  "blocks": ["2"],
+  "blockedBy": [],
+  "metadata": {"validation_status": "pass"}
+}
