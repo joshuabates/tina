@@ -212,3 +212,40 @@ actual_roi = coverage_lines_added / test_lines_added
 - Skip metrics collection even if estimates are missing (report "no estimates provided")
 - Approve with Stop-level metric drift
 - Ignore ROI for test-heavy work
+
+## Completion Message Format
+
+After writing your review to the output file, send a completion message to the orchestrator.
+
+**Message format for pass:**
+```
+review-N complete (pass)
+```
+
+**Message format for gaps:**
+```
+review-N complete (gaps): issue1, issue2, issue3
+```
+
+The issues list must be:
+- Comma-separated
+- Each issue a short phrase (5-10 words max)
+- Actionable (describes what needs to be fixed, not what's wrong)
+
+**Examples:**
+```
+review-1 complete (gaps): add unit tests for error paths, fix unconnected API handler, update integration test mocks
+```
+
+```
+review-2 complete (pass)
+```
+
+**For remediation phases (N.5, N.5.5):**
+
+Check ONLY the specific issues from the remediation plan:
+- Were all listed issues addressed?
+- Did the fix introduce new issues?
+
+If all original issues addressed and no new issues: `review-N.5 complete (pass)`
+If issues remain or new ones found: `review-N.5 complete (gaps): remaining/new issues`
