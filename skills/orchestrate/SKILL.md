@@ -595,6 +595,24 @@ Then: Mark review-phase-N as in_progress
 7. Check TaskList for newly unblocked tasks
 8. Spawn next teammate
 
+### Task Metadata Convention
+
+Orchestration tasks store metadata for monitoring and recovery:
+
+| Task | Required Metadata |
+|------|-------------------|
+| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"` |
+| `setup-worktree` | `worktree_path`, `branch_name` |
+| `plan-phase-N` | `plan_path` |
+| `execute-phase-N` | `phase_team_name`, `started_at` |
+| `execute-phase-N` (on complete) | `git_range`, `completed_at` |
+| `review-phase-N` | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
+
+The `phase_team_name` field links the orchestrator's task to the phase execution team. This enables:
+- TUI to show nested task progress
+- CLI to query phase status
+- Recovery to find the right team
+
 ### Event Loop
 
 The orchestrator is event-driven: it waits for teammate messages and reacts. No polling.
