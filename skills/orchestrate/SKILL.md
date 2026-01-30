@@ -736,9 +736,9 @@ if message contains "error":
 
 For any error message:
 1. Log the full error
-2. Check if this is first retry
+2. Check if this is first retry (look at task metadata.retry_count)
 3. If first retry: respawn the teammate
-4. If second failure: exit with error, leave tasks for manual inspection
+4. If second failure: graceful exit with cleanup instructions
 
 **Retry tracking:**
 
@@ -751,6 +751,33 @@ TaskUpdate {
 ```
 
 Max 1 retry per task before escalating.
+
+**Graceful exit on failure:**
+
+When orchestration cannot continue (after retries exhausted or remediation limit hit):
+
+```
+Print:
+===============================================================
+ORCHESTRATION FAILED
+Task: <failed task name>
+Error: <error description>
+
+Current state preserved in task list.
+To resume after fixing the issue:
+  /tina:orchestrate <design-doc-path>
+
+To reset and start fresh:
+  rm -rf ~/.claude/teams/${TEAM_NAME}.json
+  rm -rf ~/.claude/tasks/${TEAM_NAME}/
+  /tina:orchestrate <design-doc-path>
+
+To manually inspect state:
+  TaskList
+===============================================================
+```
+
+Do NOT clean up team or tasks automatically - preserve state for debugging.
 
 ### Remediation Flow
 
