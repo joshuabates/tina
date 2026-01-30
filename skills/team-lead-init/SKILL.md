@@ -63,17 +63,9 @@ Write to `.claude/tina/phase-$PHASE_NUM/status.json`:
 
 ---
 
-## STEP 3b: Write team name to file for executor discovery
+## STEP 3b: REMOVED
 
-After team creation succeeds, write the team name to a file that the phase executor can discover:
-
-```bash
-TEAM_NAME="phase-$PHASE_NUM-execution"
-TEAM_NAME_FILE=".claude/tina/phase-$PHASE_NUM/team-name.txt"
-echo "$TEAM_NAME" > "$TEAM_NAME_FILE"
-```
-
-This enables the phase executor (from the orchestrator's team) to monitor the team-lead's task progress.
+Team name file is no longer needed. The executor already knows the team name since it provided it in the invocation.
 
 ---
 
@@ -271,16 +263,9 @@ Use the Teammate tool with operation "spawnTeam":
 
 This creates the team container. NO workers or reviewers are spawned yet.
 
-**Write team name for executor discovery:**
+**REMOVED: Write team name for executor discovery**
 
-After team creation, write the team name to a discoverable file:
-
-```bash
-mkdir -p ".claude/tina/phase-$PHASE_NUM"
-echo "phase-$PHASE_NUM-execution" > ".claude/tina/phase-$PHASE_NUM/team-name.txt"
-```
-
-This file is read by the phase executor to know which team's tasks to monitor.
+Team name file creation is no longer needed. The executor already knows the team name since it provided it in the invocation.
 
 **Per-task spawning:**
 
@@ -476,7 +461,6 @@ Handoff written to .claude/tina/phase-N/handoff.md
 
 **State files:**
 - `.claude/tina/phase-N/status.json` - Phase execution status
-- `.claude/tina/phase-N/team-name.txt` - Team name for executor discovery
 
 ## Red Flags
 
