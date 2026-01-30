@@ -20,9 +20,16 @@ impl TerminalHandler for FallbackHandler {
         })
     }
 
-    fn attach_tmux(&self, session_name: &str, pane_id: Option<&str>) -> anyhow::Result<TerminalResult> {
+    fn attach_tmux(
+        &self,
+        session_name: &str,
+        pane_id: Option<&str>,
+    ) -> anyhow::Result<TerminalResult> {
         let command = if let Some(pane) = pane_id {
-            format!("tmux attach -t {} && tmux select-pane -t {}", session_name, pane)
+            format!(
+                "tmux attach -t {} && tmux select-pane -t {}",
+                session_name, pane
+            )
         } else {
             format!("tmux attach -t {}", session_name)
         };
@@ -33,7 +40,10 @@ impl TerminalHandler for FallbackHandler {
             format!("Attach to tmux session '{}'", session_name)
         };
 
-        Ok(TerminalResult::ShowCommand { command, description })
+        Ok(TerminalResult::ShowCommand {
+            command,
+            description,
+        })
     }
 }
 
@@ -45,7 +55,10 @@ mod tests {
     #[test]
     fn test_fallback_is_always_available() {
         let handler = FallbackHandler;
-        assert!(handler.is_available(), "Fallback handler should always be available");
+        assert!(
+            handler.is_available(),
+            "Fallback handler should always be available"
+        );
     }
 
     #[test]
@@ -58,8 +71,14 @@ mod tests {
         assert!(result.is_ok(), "Expected success");
 
         match result.unwrap() {
-            TerminalResult::ShowCommand { command, description } => {
-                assert!(command.contains("/tmp/test-dir"), "Command should contain the directory path");
+            TerminalResult::ShowCommand {
+                command,
+                description,
+            } => {
+                assert!(
+                    command.contains("/tmp/test-dir"),
+                    "Command should contain the directory path"
+                );
                 assert!(!description.is_empty(), "Description should not be empty");
             }
             TerminalResult::Success => panic!("Expected ShowCommand, got Success"),
@@ -75,8 +94,14 @@ mod tests {
         assert!(result.is_ok(), "Expected success");
 
         match result.unwrap() {
-            TerminalResult::ShowCommand { command, description } => {
-                assert!(command.contains("test-session"), "Command should contain session name");
+            TerminalResult::ShowCommand {
+                command,
+                description,
+            } => {
+                assert!(
+                    command.contains("test-session"),
+                    "Command should contain session name"
+                );
                 assert!(command.contains("%1"), "Command should contain pane ID");
                 assert!(!description.is_empty(), "Description should not be empty");
             }
@@ -93,9 +118,18 @@ mod tests {
         assert!(result.is_ok(), "Expected success");
 
         match result.unwrap() {
-            TerminalResult::ShowCommand { command, description } => {
-                assert!(command.contains("test-session"), "Command should contain session name");
-                assert!(!command.contains("%"), "Command should not contain pane ID placeholder");
+            TerminalResult::ShowCommand {
+                command,
+                description,
+            } => {
+                assert!(
+                    command.contains("test-session"),
+                    "Command should contain session name"
+                );
+                assert!(
+                    !command.contains("%"),
+                    "Command should not contain pane ID placeholder"
+                );
                 assert!(!description.is_empty(), "Description should not be empty");
             }
             TerminalResult::Success => panic!("Expected ShowCommand, got Success"),

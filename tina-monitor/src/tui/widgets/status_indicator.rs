@@ -6,29 +6,19 @@ use crate::data::discovery::OrchestrationStatus;
 /// Render a status indicator span
 pub fn render(status: &OrchestrationStatus) -> Span<'static> {
     match status {
-        OrchestrationStatus::Executing { phase } => {
-            Span::styled(
-                format!("phase {}", phase),
-                Style::default().fg(Color::Green),
-            )
-        }
-        OrchestrationStatus::Blocked { .. } => {
-            Span::styled(
-                "BLOCKED".to_string(),
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            )
-        }
+        OrchestrationStatus::Executing { phase } => Span::styled(
+            format!("phase {}", phase),
+            Style::default().fg(Color::Green),
+        ),
+        OrchestrationStatus::Blocked { .. } => Span::styled(
+            "BLOCKED".to_string(),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
         OrchestrationStatus::Complete => {
-            Span::styled(
-                "complete".to_string(),
-                Style::default().fg(Color::Cyan),
-            )
+            Span::styled("complete".to_string(), Style::default().fg(Color::Cyan))
         }
         OrchestrationStatus::Idle => {
-            Span::styled(
-                "idle".to_string(),
-                Style::default().fg(Color::DarkGray),
-            )
+            Span::styled("idle".to_string(), Style::default().fg(Color::DarkGray))
         }
     }
 }

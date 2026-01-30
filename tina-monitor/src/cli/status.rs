@@ -91,10 +91,7 @@ pub fn status_team(name: &str, format: OutputFormat, check: Option<CheckConditio
     Ok(0)
 }
 
-fn derive_team_status(
-    tasks: &[Task],
-    summary: &tasks::TaskSummary,
-) -> (String, Option<String>) {
+fn derive_team_status(tasks: &[Task], summary: &tasks::TaskSummary) -> (String, Option<String>) {
     if summary.total == 0 {
         return ("idle".to_string(), None);
     }
@@ -187,10 +184,7 @@ pub fn status_orchestration(
             println!("Orchestration: {}", output.title);
             println!("Team: {}", output.team_name);
             println!("CWD: {}", output.cwd);
-            println!(
-                "Phase: {}/{}",
-                output.current_phase, output.total_phases
-            );
+            println!("Phase: {}/{}", output.current_phase, output.total_phases);
             println!("Design Doc: {}", output.design_doc_path);
             if let Some(ctx) = output.context_percent {
                 println!("Context: {}%", ctx);

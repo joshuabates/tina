@@ -47,14 +47,28 @@ pub fn render(frame: &mut Frame, area: Rect, app: &App) {
         .split(chunks[1]);
 
     // Render tasks pane
-    render_tasks_pane(frame, content_chunks[0], orchestration, focus == PaneFocus::Tasks);
+    render_tasks_pane(
+        frame,
+        content_chunks[0],
+        orchestration,
+        focus == PaneFocus::Tasks,
+    );
 
     // Render team pane
-    render_team_pane(frame, content_chunks[1], orchestration, focus == PaneFocus::Members);
+    render_team_pane(
+        frame,
+        content_chunks[1],
+        orchestration,
+        focus == PaneFocus::Members,
+    );
 }
 
 /// Render the header with orchestration title, phase, and status
-fn render_header(frame: &mut Frame, area: Rect, orchestration: &crate::data::discovery::Orchestration) {
+fn render_header(
+    frame: &mut Frame,
+    area: Rect,
+    orchestration: &crate::data::discovery::Orchestration,
+) {
     let title = format!(
         "{} - Phase {}/{}",
         orchestration.title, orchestration.current_phase, orchestration.total_phases
@@ -94,10 +108,10 @@ fn render_tasks_pane(
         .iter()
         .map(|task| {
             let indicator = match task.status {
-                TaskStatus::Completed => "\u{2713}", // ✓
+                TaskStatus::Completed => "\u{2713}",  // ✓
                 TaskStatus::InProgress => "\u{25B6}", // ▶
                 TaskStatus::Pending if !task.blocked_by.is_empty() => "\u{2717}", // ✗
-                TaskStatus::Pending => "\u{25CB}", // ○
+                TaskStatus::Pending => "\u{25CB}",    // ○
             };
 
             let color = match task.status {
@@ -194,7 +208,12 @@ mod tests {
     use ratatui::{backend::TestBackend, Terminal};
     use std::path::PathBuf;
 
-    fn make_test_task(id: &str, subject: &str, status: TaskStatus, blocked_by: Vec<String>) -> Task {
+    fn make_test_task(
+        id: &str,
+        subject: &str,
+        status: TaskStatus,
+        blocked_by: Vec<String>,
+    ) -> Task {
         Task {
             id: id.to_string(),
             subject: subject.to_string(),
@@ -222,7 +241,12 @@ mod tests {
                 make_test_task("1", "Completed task", TaskStatus::Completed, vec![]),
                 make_test_task("2", "In progress task", TaskStatus::InProgress, vec![]),
                 make_test_task("3", "Pending task", TaskStatus::Pending, vec![]),
-                make_test_task("4", "Blocked task", TaskStatus::Pending, vec!["99".to_string()]),
+                make_test_task(
+                    "4",
+                    "Blocked task",
+                    TaskStatus::Pending,
+                    vec!["99".to_string()],
+                ),
             ],
         }
     }
@@ -257,20 +281,38 @@ mod tests {
             member_index: 0,
         };
 
-        terminal.draw(|frame| render(frame, frame.area(), &app)).unwrap();
+        terminal
+            .draw(|frame| render(frame, frame.area(), &app))
+            .unwrap();
         let buffer = terminal.backend().buffer();
 
         // Check for task status indicators in the buffer
-        let buffer_str = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let buffer_str = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
 
         // Should contain checkmark for completed
-        assert!(buffer_str.contains("\u{2713}"), "Should show checkmark for completed task");
+        assert!(
+            buffer_str.contains("\u{2713}"),
+            "Should show checkmark for completed task"
+        );
         // Should contain play symbol for in progress
-        assert!(buffer_str.contains("\u{25B6}"), "Should show play symbol for in progress task");
+        assert!(
+            buffer_str.contains("\u{25B6}"),
+            "Should show play symbol for in progress task"
+        );
         // Should contain circle for pending
-        assert!(buffer_str.contains("\u{25CB}"), "Should show circle for pending task");
+        assert!(
+            buffer_str.contains("\u{25CB}"),
+            "Should show circle for pending task"
+        );
         // Should contain X for blocked
-        assert!(buffer_str.contains("\u{2717}"), "Should show X for blocked task");
+        assert!(
+            buffer_str.contains("\u{2717}"),
+            "Should show X for blocked task"
+        );
     }
 
     #[test]
@@ -286,11 +328,20 @@ mod tests {
             member_index: 0,
         };
 
-        terminal.draw(|frame| render(frame, frame.area(), &app)).unwrap();
+        terminal
+            .draw(|frame| render(frame, frame.area(), &app))
+            .unwrap();
         let buffer = terminal.backend().buffer();
-        let buffer_str = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let buffer_str = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
 
-        assert!(buffer_str.contains("Context: 65%"), "Should display context percentage");
+        assert!(
+            buffer_str.contains("Context: 65%"),
+            "Should display context percentage"
+        );
     }
 
     #[test]
@@ -382,9 +433,15 @@ mod tests {
             member_index: 0,
         };
 
-        terminal.draw(|frame| render(frame, frame.area(), &app)).unwrap();
+        terminal
+            .draw(|frame| render(frame, frame.area(), &app))
+            .unwrap();
         let buffer = terminal.backend().buffer();
-        let buffer_str = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let buffer_str = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
 
         // Should contain progress bar characters (filled blocks █ or empty blocks ░)
         assert!(
@@ -406,12 +463,24 @@ mod tests {
             member_index: 0,
         };
 
-        terminal.draw(|frame| render(frame, frame.area(), &app)).unwrap();
+        terminal
+            .draw(|frame| render(frame, frame.area(), &app))
+            .unwrap();
         let buffer = terminal.backend().buffer();
-        let buffer_str = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let buffer_str = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
 
-        assert!(buffer_str.contains("Test Project"), "Should display orchestration title");
-        assert!(buffer_str.contains("Phase 2/4"), "Should display current phase");
+        assert!(
+            buffer_str.contains("Test Project"),
+            "Should display orchestration title"
+        );
+        assert!(
+            buffer_str.contains("Phase 2/4"),
+            "Should display current phase"
+        );
     }
 
     #[test]
@@ -429,10 +498,19 @@ mod tests {
             member_index: 0,
         };
 
-        terminal.draw(|frame| render(frame, frame.area(), &app)).unwrap();
+        terminal
+            .draw(|frame| render(frame, frame.area(), &app))
+            .unwrap();
         let buffer = terminal.backend().buffer();
-        let buffer_str = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let buffer_str = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
 
-        assert!(buffer_str.contains("Context: --"), "Should display placeholder when no context");
+        assert!(
+            buffer_str.contains("Context: --"),
+            "Should display placeholder when no context"
+        );
     }
 }

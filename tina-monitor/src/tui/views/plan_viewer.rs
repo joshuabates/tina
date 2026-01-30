@@ -53,13 +53,15 @@ impl PlanViewer {
     /// Render the plan viewer
     pub fn render(&self, frame: &mut Frame, area: Rect) {
         // Get filename for title
-        let filename = self.path
+        let filename = self
+            .path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("Unknown");
 
         // Convert content to lines
-        let lines: Vec<Line> = self.content
+        let lines: Vec<Line> = self
+            .content
             .lines()
             .skip(self.scroll as usize)
             .take(area.height.saturating_sub(2) as usize) // Account for borders
@@ -85,13 +87,17 @@ impl PlanViewer {
                 .end_symbol(None);
 
             let mut scrollbar_state = ScrollbarState::new(
-                self.total_lines.saturating_sub(area.height.saturating_sub(2)) as usize
+                self.total_lines
+                    .saturating_sub(area.height.saturating_sub(2)) as usize,
             )
             .position(self.scroll as usize);
 
             frame.render_stateful_widget(
                 scrollbar,
-                area.inner(ratatui::layout::Margin { vertical: 1, horizontal: 0 }),
+                area.inner(ratatui::layout::Margin {
+                    vertical: 1,
+                    horizontal: 0,
+                }),
                 &mut scrollbar_state,
             );
         }
@@ -217,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_plan_viewer_render_does_not_panic() {
-        use ratatui::{backend::TestBackend, Terminal, layout::Rect};
+        use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 
         let mut temp_file = NamedTempFile::new().unwrap();
         write!(temp_file, "# Test Plan\n\nContent here").unwrap();
@@ -242,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_plan_viewer_render_shows_filename_in_title() {
-        use ratatui::{backend::TestBackend, Terminal, layout::Rect};
+        use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 
         let mut temp_file = NamedTempFile::new().unwrap();
         write!(temp_file, "# Test Plan").unwrap();
@@ -255,19 +261,30 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        terminal.draw(|frame| {
-            let area = Rect { x: 0, y: 0, width: 80, height: 24 };
-            viewer.render(frame, area);
-        }).unwrap();
+        terminal
+            .draw(|frame| {
+                let area = Rect {
+                    x: 0,
+                    y: 0,
+                    width: 80,
+                    height: 24,
+                };
+                viewer.render(frame, area);
+            })
+            .unwrap();
 
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
         assert!(content.contains(&filename), "Title should contain filename");
     }
 
     #[test]
     fn test_plan_viewer_render_displays_content() {
-        use ratatui::{backend::TestBackend, Terminal, layout::Rect};
+        use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 
         let mut temp_file = NamedTempFile::new().unwrap();
         write!(temp_file, "Test content line 1\nTest content line 2").unwrap();
@@ -277,14 +294,31 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        terminal.draw(|frame| {
-            let area = Rect { x: 0, y: 0, width: 80, height: 24 };
-            viewer.render(frame, area);
-        }).unwrap();
+        terminal
+            .draw(|frame| {
+                let area = Rect {
+                    x: 0,
+                    y: 0,
+                    width: 80,
+                    height: 24,
+                };
+                viewer.render(frame, area);
+            })
+            .unwrap();
 
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
-        assert!(content.contains("Test content line 1"), "Should display first line");
-        assert!(content.contains("Test content line 2"), "Should display second line");
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        assert!(
+            content.contains("Test content line 1"),
+            "Should display first line"
+        );
+        assert!(
+            content.contains("Test content line 2"),
+            "Should display second line"
+        );
     }
 }

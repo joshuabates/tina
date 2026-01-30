@@ -169,7 +169,9 @@ pub fn render(app: &App, frame: &mut Frame) {
     lines.push(Line::from(""));
     lines.push(Line::from("Feature not yet implemented"));
     lines.push(Line::from(""));
-    lines.push(Line::from("Team loading is required to display agent logs."));
+    lines.push(Line::from(
+        "Team loading is required to display agent logs.",
+    ));
     lines.push(Line::from(""));
     lines.push(Line::from(""));
 
@@ -193,7 +195,12 @@ pub fn render(app: &App, frame: &mut Frame) {
 }
 
 /// Render log viewer with actual pane content
-pub fn render_with_pane(_pane_id: &str, _agent_name: &str, _scroll_offset: usize, _frame: &mut Frame) {
+pub fn render_with_pane(
+    _pane_id: &str,
+    _agent_name: &str,
+    _scroll_offset: usize,
+    _frame: &mut Frame,
+) {
     // Implementation will go here
 }
 
@@ -254,14 +261,33 @@ mod tests {
         assert!(result.is_ok(), "Log viewer should render without panic");
 
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
 
         // Should show placeholder text
-        assert!(content.contains("not yet implemented"), "Should show placeholder text");
-        assert!(content.contains("[j/k]"), "Should show scroll keybinding hints");
-        assert!(content.contains("[f]"), "Should show follow keybinding hint");
-        assert!(content.contains("[a]"), "Should show attach keybinding hint");
-        assert!(content.contains("[ESC]"), "Should show close keybinding hint");
+        assert!(
+            content.contains("not yet implemented"),
+            "Should show placeholder text"
+        );
+        assert!(
+            content.contains("[j/k]"),
+            "Should show scroll keybinding hints"
+        );
+        assert!(
+            content.contains("[f]"),
+            "Should show follow keybinding hint"
+        );
+        assert!(
+            content.contains("[a]"),
+            "Should show attach keybinding hint"
+        );
+        assert!(
+            content.contains("[ESC]"),
+            "Should show close keybinding hint"
+        );
     }
 
     #[test]
@@ -276,8 +302,16 @@ mod tests {
         let result = centered_rect(85, 85, area);
 
         // 85% of 100 = 85, centered means (100 - 85) / 2 = 7.5, rounds to 7 or 8
-        assert!(result.x >= 7 && result.x <= 8, "X position should be around 7-8, got {}", result.x);
-        assert!(result.y >= 7 && result.y <= 8, "Y position should be around 7-8, got {}", result.y);
+        assert!(
+            result.x >= 7 && result.x <= 8,
+            "X position should be around 7-8, got {}",
+            result.x
+        );
+        assert!(
+            result.y >= 7 && result.y <= 8,
+            "Y position should be around 7-8, got {}",
+            result.y
+        );
         assert_eq!(result.width, 85, "Width should be 85");
         assert_eq!(result.height, 85, "Height should be 85");
     }
@@ -292,7 +326,10 @@ mod tests {
         let viewer = LogViewer::new("test-pane".to_string(), "agent-1".to_string());
         assert_eq!(viewer.pane_id, "test-pane");
         assert_eq!(viewer.agent_name, "agent-1");
-        assert!(!viewer.follow_mode, "Should start with follow mode disabled");
+        assert!(
+            !viewer.follow_mode,
+            "Should start with follow mode disabled"
+        );
         assert_eq!(viewer.scroll_offset, 0);
         assert_eq!(viewer.poll_interval, Duration::from_millis(500));
     }
@@ -312,7 +349,11 @@ mod tests {
     #[test]
     fn test_scroll_to_bottom() {
         let mut viewer = LogViewer::new("test-pane".to_string(), "agent-1".to_string());
-        viewer.lines = vec!["line1".to_string(), "line2".to_string(), "line3".to_string()];
+        viewer.lines = vec![
+            "line1".to_string(),
+            "line2".to_string(),
+            "line3".to_string(),
+        ];
 
         viewer.scroll_to_bottom();
         assert!(viewer.follow_mode, "Should enable follow mode");
@@ -350,14 +391,20 @@ mod tests {
         assert!(viewer.follow_mode);
 
         viewer.scroll_up(1);
-        assert!(!viewer.follow_mode, "Scrolling up should disable follow mode");
+        assert!(
+            !viewer.follow_mode,
+            "Scrolling up should disable follow mode"
+        );
     }
 
     #[test]
     fn test_maybe_refresh_returns_false_when_not_needed() {
         let mut viewer = LogViewer::new("test-pane".to_string(), "agent-1".to_string());
         let result = viewer.maybe_refresh();
-        assert!(!result, "Should not need refresh immediately after creation");
+        assert!(
+            !result,
+            "Should not need refresh immediately after creation"
+        );
     }
 
     #[test]
@@ -382,7 +429,11 @@ mod tests {
 
         // After refresh (even if it fails), the structure should be intact
         // This test verifies the refresh logic doesn't panic
-        assert_eq!(viewer.lines.len(), viewer.lines.len(), "Lines should be consistent");
+        assert_eq!(
+            viewer.lines.len(),
+            viewer.lines.len(),
+            "Lines should be consistent"
+        );
 
         // Test that refresh updates last_refresh time
         let _old_time = viewer.last_refresh;
@@ -396,7 +447,11 @@ mod tests {
     fn test_follow_mode_scrolls_to_bottom() {
         // Test that follow mode automatically scrolls to bottom
         let mut viewer = LogViewer::new("test-pane".to_string(), "agent-1".to_string());
-        viewer.lines = vec!["line1".to_string(), "line2".to_string(), "line3".to_string()];
+        viewer.lines = vec![
+            "line1".to_string(),
+            "line2".to_string(),
+            "line3".to_string(),
+        ];
         viewer.follow_mode = true;
         viewer.scroll_offset = 0;
 
@@ -405,20 +460,30 @@ mod tests {
             viewer.scroll_offset = viewer.lines.len();
         }
 
-        assert_eq!(viewer.scroll_offset, 3, "Should scroll to bottom in follow mode");
+        assert_eq!(
+            viewer.scroll_offset, 3,
+            "Should scroll to bottom in follow mode"
+        );
     }
 
     #[test]
     fn test_manual_scroll_disables_follow() {
         // Test that manual scrolling disables follow mode
         let mut viewer = LogViewer::new("test-pane".to_string(), "agent-1".to_string());
-        viewer.lines = vec!["line1".to_string(), "line2".to_string(), "line3".to_string()];
+        viewer.lines = vec![
+            "line1".to_string(),
+            "line2".to_string(),
+            "line3".to_string(),
+        ];
         viewer.follow_mode = true;
         viewer.scroll_offset = 3;
 
         // Scroll up should disable follow
         viewer.scroll_up(1);
-        assert!(!viewer.follow_mode, "Manual scroll should disable follow mode");
+        assert!(
+            !viewer.follow_mode,
+            "Manual scroll should disable follow mode"
+        );
         assert_eq!(viewer.scroll_offset, 2, "Should scroll up by 1");
     }
 }

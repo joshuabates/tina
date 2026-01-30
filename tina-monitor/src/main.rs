@@ -127,12 +127,16 @@ fn run() -> anyhow::Result<i32> {
 
     match cli_args.command {
         Some(Commands::Status { entity }) => match entity {
-            StatusEntity::Team { name, format, check } => {
-                cli::status_team(&name, format.into(), check.map(Into::into))
-            }
-            StatusEntity::Orchestration { name, format, check } => {
-                cli::status_orchestration(&name, format.into(), check.map(Into::into))
-            }
+            StatusEntity::Team {
+                name,
+                format,
+                check,
+            } => cli::status_team(&name, format.into(), check.map(Into::into)),
+            StatusEntity::Orchestration {
+                name,
+                format,
+                check,
+            } => cli::status_orchestration(&name, format.into(), check.map(Into::into)),
             StatusEntity::Task {
                 team_name,
                 task_id,

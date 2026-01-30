@@ -11,7 +11,9 @@ fn test_log_creates_file_if_not_exists() {
     let log_path = temp_dir.path().join("commands.log");
 
     let logger = CommandLogger::new(log_path.clone());
-    logger.log("test-pane", "echo hello").expect("Failed to log command");
+    logger
+        .log("test-pane", "echo hello")
+        .expect("Failed to log command");
 
     assert!(log_path.exists(), "Log file should be created");
 }
@@ -23,14 +25,24 @@ fn test_log_appends_to_existing_file() {
 
     // Create initial log entry
     let logger = CommandLogger::new(log_path.clone());
-    logger.log("pane-1", "first command").expect("Failed to log first command");
+    logger
+        .log("pane-1", "first command")
+        .expect("Failed to log first command");
 
     // Append second log entry
-    logger.log("pane-2", "second command").expect("Failed to log second command");
+    logger
+        .log("pane-2", "second command")
+        .expect("Failed to log second command");
 
     let content = fs::read_to_string(&log_path).expect("Failed to read log file");
-    assert!(content.contains("first command"), "First command should be in log");
-    assert!(content.contains("second command"), "Second command should be in log");
+    assert!(
+        content.contains("first command"),
+        "First command should be in log"
+    );
+    assert!(
+        content.contains("second command"),
+        "Second command should be in log"
+    );
 }
 
 #[test]
@@ -39,20 +51,31 @@ fn test_log_includes_timestamp_target_command() {
     let log_path = temp_dir.path().join("commands.log");
 
     let logger = CommandLogger::new(log_path.clone());
-    logger.log("test-pane", "test command").expect("Failed to log command");
+    logger
+        .log("test-pane", "test command")
+        .expect("Failed to log command");
 
     let content = fs::read_to_string(&log_path).expect("Failed to read log file");
 
     // Log entry should include timestamp (ISO 8601 format with 'T')
     assert!(content.contains("T"), "Log should contain timestamp");
     // RFC 3339 format uses either 'Z' or '+00:00' for UTC
-    assert!(content.contains("Z") || content.contains("+00:00"), "Timestamp should be in UTC format");
+    assert!(
+        content.contains("Z") || content.contains("+00:00"),
+        "Timestamp should be in UTC format"
+    );
 
     // Should include target pane
-    assert!(content.contains("test-pane"), "Log should contain target pane");
+    assert!(
+        content.contains("test-pane"),
+        "Log should contain target pane"
+    );
 
     // Should include command
-    assert!(content.contains("test command"), "Log should contain command text");
+    assert!(
+        content.contains("test command"),
+        "Log should contain command text"
+    );
 }
 
 #[test]
@@ -72,5 +95,8 @@ fn test_expand_path_handles_tilde() {
 
     // We expect this to succeed (expanded path should be writable in home dir)
     // If home directory is not writable, the test will fail, which is acceptable
-    assert!(result.is_ok(), "Should handle tilde expansion without error");
+    assert!(
+        result.is_ok(),
+        "Should handle tilde expansion without error"
+    );
 }

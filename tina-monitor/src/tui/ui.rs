@@ -8,19 +8,19 @@ use ratatui::{
 };
 
 use super::app::{App, ViewState};
+use super::views::log_viewer;
 use super::views::orchestration_list::render_orchestration_list;
 use super::views::phase_detail;
 use super::views::task_inspector::render_task_inspector;
-use super::views::log_viewer;
 
 /// Render the application UI
 pub fn render(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Header
-            Constraint::Min(0),     // Main content
-            Constraint::Length(1),  // Footer
+            Constraint::Length(3), // Header
+            Constraint::Min(0),    // Main content
+            Constraint::Length(1), // Footer
         ])
         .split(frame.area());
 
@@ -58,13 +58,25 @@ pub fn render(frame: &mut Frame, app: &mut App) {
                 log_viewer::render(app, frame);
             }
         }
+        ViewState::SendDialog { .. } => {
+            // First render the PhaseDetail view as background
+            phase_detail::render(frame, chunks[1], app);
+            // Then render the send dialog modal on top
+            if let Some(dialog) = &app.send_dialog {
+                let area = frame.area();
+                super::views::send_dialog::render(dialog, frame, area);
+            }
+        }
         ViewState::CommandModal { .. } => {
             // First render the OrchestrationList view as background
             render_orchestration_list(frame, chunks[1], app);
             // Then render the command modal on top
             super::views::command_modal::render(app, frame);
         }
-        ViewState::PlanViewer { plan_path, scroll_offset } => {
+        ViewState::PlanViewer {
+            plan_path,
+            scroll_offset,
+        } => {
             // First render the OrchestrationList view as background
             render_orchestration_list(frame, chunks[1], app);
             // Then render the plan viewer modal on top
@@ -75,21 +87,38 @@ pub fn render(frame: &mut Frame, app: &mut App) {
                 viewer.render(frame, area);
             }
         }
-        ViewState::CommitsView { worktree_path, range, title } => {
+        ViewState::CommitsView {
+            worktree_path,
+            range,
+            title,
+        } => {
             // First render the PhaseDetail view as background
             phase_detail::render(frame, chunks[1], app);
             // Then render the commits view modal on top
-            if let Ok(mut commits_view) = super::views::commits_view::CommitsView::new(worktree_path, range.clone(), title.clone()) {
+            if let Ok(mut commits_view) = super::views::commits_view::CommitsView::new(
+                worktree_path,
+                range.clone(),
+                title.clone(),
+            ) {
                 let area = centered_rect(85, 85, frame.area());
                 frame.render_widget(ratatui::widgets::Clear, area);
                 commits_view.render(frame, area);
             }
         }
-        ViewState::DiffView { worktree_path, range, title, selected, show_full, scroll } => {
+        ViewState::DiffView {
+            worktree_path,
+            range,
+            title,
+            selected,
+            show_full,
+            scroll,
+        } => {
             // First render the PhaseDetail view as background
             phase_detail::render(frame, chunks[1], app);
             // Then render the diff view modal on top
-            if let Ok(mut diff_view) = super::views::diff_view::DiffView::new(worktree_path, range.clone(), title.clone()) {
+            if let Ok(mut diff_view) =
+                super::views::diff_view::DiffView::new(worktree_path, range.clone(), title.clone())
+            {
                 // Apply state from ViewState
                 diff_view.selected = *selected;
                 diff_view.show_full = *show_full;
@@ -115,7 +144,11 @@ pub fn render(frame: &mut Frame, app: &mut App) {
 
 fn render_header(frame: &mut Frame, area: Rect) {
     let header = Paragraph::new("Orchestrations")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .block(Block::default().borders(Borders::BOTTOM));
     frame.render_widget(header, area);
 }
@@ -123,17 +156,17 @@ fn render_header(frame: &mut Frame, area: Rect) {
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     let footer_text = match &app.view_state {
         ViewState::OrchestrationList => " j/k:nav  Enter:expand  g:goto  p:plan  r:refresh  q:quit  ?:help",
-        ViewState::PhaseDetail { .. } => " t:tasks  m:members  c:commits  d:diff  Enter:inspect  l:logs  Esc:back  ?:help",
+        ViewState::PhaseDetail { .. } => " t:tasks  m:members  c:commits  d:diff  Enter:inspect  l:logs  s:send  Esc:back  ?:help",
         ViewState::TaskInspector { .. } => " Esc:back  ?:help",
         ViewState::LogViewer { .. } => " j/k:scroll  Esc:back  ?:help",
+        ViewState::SendDialog { .. } => " Enter:send  Esc:cancel  ?:help",
         ViewState::CommandModal { .. } => " y:copy  Esc:close  ?:help",
         ViewState::PlanViewer { .. } => " j/k:scroll  Esc:close  ?:help",
         ViewState::CommitsView { .. } => " j/k:nav  Esc:close  ?:help",
         ViewState::DiffView { .. } => " j/k:nav  Enter:toggle  Esc:close  ?:help",
     };
 
-    let footer = Paragraph::new(footer_text)
-        .style(Style::default().fg(Color::DarkGray));
+    let footer = Paragraph::new(footer_text).style(Style::default().fg(Color::DarkGray));
     frame.render_widget(footer, area);
 }
 
@@ -161,8 +194,8 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::{backend::TestBackend, Terminal};
     use crate::data::discovery::{Orchestration, OrchestrationStatus};
+    use ratatui::{backend::TestBackend, Terminal};
     use std::path::PathBuf;
     use std::time::{Duration, Instant};
 
@@ -178,6 +211,8 @@ mod tests {
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
             log_viewer: None,
+            send_dialog: None,
+            command_logger: None,
         }
     }
 
@@ -205,6 +240,8 @@ mod tests {
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
             log_viewer: None,
+            send_dialog: None,
+            command_logger: None,
         }
     }
 
@@ -215,7 +252,10 @@ mod tests {
         let mut app = make_test_app();
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "Render should not panic with empty orchestrations");
+        assert!(
+            result.is_ok(),
+            "Render should not panic with empty orchestrations"
+        );
     }
 
     #[test]
@@ -225,7 +265,10 @@ mod tests {
         let mut app = make_test_app_with_orchestrations();
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "Render should not panic with orchestrations");
+        assert!(
+            result.is_ok(),
+            "Render should not panic with orchestrations"
+        );
     }
 
     #[test]
@@ -291,7 +334,10 @@ mod tests {
         app.view_state = crate::tui::app::ViewState::OrchestrationList;
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "OrchestrationList view should render without panic");
+        assert!(
+            result.is_ok(),
+            "OrchestrationList view should render without panic"
+        );
     }
 
     #[test]
@@ -306,7 +352,10 @@ mod tests {
         };
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "PhaseDetail view should render without panic");
+        assert!(
+            result.is_ok(),
+            "PhaseDetail view should render without panic"
+        );
     }
 
     #[test]
@@ -314,12 +363,13 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
         let mut app = make_test_app_with_orchestrations();
-        app.view_state = crate::tui::app::ViewState::TaskInspector {
-            task_index: 0,
-        };
+        app.view_state = crate::tui::app::ViewState::TaskInspector { task_index: 0 };
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "TaskInspector modal should render without panic");
+        assert!(
+            result.is_ok(),
+            "TaskInspector modal should render without panic"
+        );
     }
 
     #[test]
@@ -334,7 +384,10 @@ mod tests {
         };
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "LogViewer modal should render without panic");
+        assert!(
+            result.is_ok(),
+            "LogViewer modal should render without panic"
+        );
     }
 
     #[test]
@@ -346,7 +399,10 @@ mod tests {
         app.show_help = true;
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "Help modal should render on top of OrchestrationList");
+        assert!(
+            result.is_ok(),
+            "Help modal should render on top of OrchestrationList"
+        );
     }
 
     #[test]
@@ -362,7 +418,10 @@ mod tests {
         app.show_help = true;
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "Help modal should render on top of PhaseDetail");
+        assert!(
+            result.is_ok(),
+            "Help modal should render on top of PhaseDetail"
+        );
     }
 
     #[test]
@@ -370,13 +429,14 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
         let mut app = make_test_app_with_orchestrations();
-        app.view_state = crate::tui::app::ViewState::TaskInspector {
-            task_index: 0,
-        };
+        app.view_state = crate::tui::app::ViewState::TaskInspector { task_index: 0 };
         app.show_help = true;
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "Help modal should render on top of TaskInspector");
+        assert!(
+            result.is_ok(),
+            "Help modal should render on top of TaskInspector"
+        );
     }
 
     #[test]
@@ -392,7 +452,10 @@ mod tests {
         app.show_help = true;
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "Help modal should render on top of LogViewer");
+        assert!(
+            result.is_ok(),
+            "Help modal should render on top of LogViewer"
+        );
     }
 
     #[test]
@@ -402,12 +465,13 @@ mod tests {
         let mut app = make_test_app_with_orchestrations();
 
         // Set up TaskInspector view - this should show PhaseDetail as background
-        app.view_state = crate::tui::app::ViewState::TaskInspector {
-            task_index: 0,
-        };
+        app.view_state = crate::tui::app::ViewState::TaskInspector { task_index: 0 };
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "TaskInspector should render with PhaseDetail background");
+        assert!(
+            result.is_ok(),
+            "TaskInspector should render with PhaseDetail background"
+        );
     }
 
     #[test]
@@ -424,7 +488,10 @@ mod tests {
         };
 
         let result = terminal.draw(|frame| render(frame, &mut app));
-        assert!(result.is_ok(), "LogViewer should render with PhaseDetail background");
+        assert!(
+            result.is_ok(),
+            "LogViewer should render with PhaseDetail background"
+        );
     }
 
     #[test]
@@ -436,19 +503,39 @@ mod tests {
 
         terminal.draw(|frame| render(frame, &mut app)).unwrap();
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
 
         // Footer should contain orchestration list hints
-        assert!(content.contains("j/k:nav"), "Footer should contain navigation hint");
-        assert!(content.contains("Enter:expand"), "Footer should contain expand hint");
-        assert!(content.contains("r:refresh"), "Footer should contain refresh hint");
-        assert!(content.contains("q:quit"), "Footer should contain quit hint");
-        assert!(content.contains("?:help"), "Footer should contain help hint");
+        assert!(
+            content.contains("j/k:nav"),
+            "Footer should contain navigation hint"
+        );
+        assert!(
+            content.contains("Enter:expand"),
+            "Footer should contain expand hint"
+        );
+        assert!(
+            content.contains("r:refresh"),
+            "Footer should contain refresh hint"
+        );
+        assert!(
+            content.contains("q:quit"),
+            "Footer should contain quit hint"
+        );
+        assert!(
+            content.contains("?:help"),
+            "Footer should contain help hint"
+        );
     }
 
     #[test]
     fn test_footer_shows_phase_detail_hints() {
-        let backend = TestBackend::new(80, 24);
+        // Use wider terminal to accommodate full footer text
+        let backend = TestBackend::new(120, 24);
         let mut terminal = Terminal::new(backend).unwrap();
         let mut app = make_test_app_with_orchestrations();
         app.view_state = crate::tui::app::ViewState::PhaseDetail {
@@ -459,14 +546,85 @@ mod tests {
 
         terminal.draw(|frame| render(frame, &mut app)).unwrap();
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
 
         // Footer should contain phase detail hints
-        assert!(content.contains("t:tasks"), "Footer should contain tasks hint");
-        assert!(content.contains("m:members"), "Footer should contain members hint");
-        assert!(content.contains("Enter:inspect"), "Footer should contain inspect hint");
-        assert!(content.contains("l:logs"), "Footer should contain logs hint");
-        assert!(content.contains("Esc:back"), "Footer should contain back hint");
-        assert!(content.contains("?:help"), "Footer should contain help hint");
+        assert!(
+            content.contains("t:tasks"),
+            "Footer should contain tasks hint"
+        );
+        assert!(
+            content.contains("m:members"),
+            "Footer should contain members hint"
+        );
+        assert!(
+            content.contains("Enter:inspect"),
+            "Footer should contain inspect hint"
+        );
+        assert!(
+            content.contains("l:logs"),
+            "Footer should contain logs hint"
+        );
+        assert!(
+            content.contains("s:send"),
+            "Footer should contain send hint"
+        );
+        assert!(
+            content.contains("Esc:back"),
+            "Footer should contain back hint"
+        );
+        assert!(
+            content.contains("?:help"),
+            "Footer should contain help hint"
+        );
+    }
+
+    #[test]
+    fn test_render_shows_send_dialog_when_in_send_dialog_view() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut app = make_test_app_with_orchestrations();
+
+        // Create a send dialog
+        let send_dialog = super::super::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            true,
+        );
+        app.send_dialog = Some(send_dialog);
+
+        // Set view state to SendDialog
+        app.view_state = crate::tui::app::ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let result = terminal.draw(|frame| render(frame, &mut app));
+        assert!(
+            result.is_ok(),
+            "SendDialog view should render without panic"
+        );
+
+        // Verify the send dialog content is present in the buffer
+        let buffer = terminal.backend().buffer();
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+
+        // Check for send dialog elements
+        assert!(
+            content.contains("Send Command") || content.contains("Send"),
+            "Send dialog should show title"
+        );
+        assert!(
+            content.contains("test-agent"),
+            "Send dialog should show agent name"
+        );
     }
 }

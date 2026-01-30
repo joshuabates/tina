@@ -1,9 +1,9 @@
 //! Command logging for sent commands
 
+use chrono::Utc;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use chrono::Utc;
 
 pub struct CommandLogger {
     log_path: PathBuf,
@@ -12,7 +12,9 @@ pub struct CommandLogger {
 impl CommandLogger {
     pub fn new(log_path: PathBuf) -> Self {
         let expanded_path = Self::expand_path(&log_path);
-        Self { log_path: expanded_path }
+        Self {
+            log_path: expanded_path,
+        }
     }
 
     /// Expand ~ in path

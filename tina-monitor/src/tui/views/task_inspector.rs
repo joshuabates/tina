@@ -49,7 +49,10 @@ pub fn render_task_inspector(frame: &mut Frame, task: &Task) {
 
     // Split description into lines
     for desc_line in task.description.lines() {
-        lines.push(Line::from(truncate(desc_line, area.width.saturating_sub(4) as usize)));
+        lines.push(Line::from(truncate(
+            desc_line,
+            area.width.saturating_sub(4) as usize,
+        )));
     }
     lines.push(Line::from(""));
 
@@ -78,7 +81,12 @@ pub fn render_task_inspector(frame: &mut Frame, task: &Task) {
     }
 
     // Metadata section (only if metadata exists and is not null/empty object)
-    if !task.metadata.is_null() && task.metadata.as_object().map_or(true, |obj| !obj.is_empty()) {
+    if !task.metadata.is_null()
+        && task
+            .metadata
+            .as_object()
+            .map_or(true, |obj| !obj.is_empty())
+    {
         lines.push(Line::from(Span::styled(
             "Metadata:",
             Style::default().add_modifier(Modifier::BOLD),
@@ -170,7 +178,10 @@ mod tests {
         let task = make_test_task();
 
         let result = terminal.draw(|frame| render_task_inspector(frame, &task));
-        assert!(result.is_ok(), "Task inspector modal should render without panic");
+        assert!(
+            result.is_ok(),
+            "Task inspector modal should render without panic"
+        );
     }
 
     #[test]
@@ -195,18 +206,31 @@ mod tests {
 
         // Get the buffer to check content
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
 
         // Check that key information is present
         assert!(content.contains("Status:"), "Should display status label");
         assert!(content.contains("Owner:"), "Should display owner label");
         assert!(content.contains("alice"), "Should display owner name");
-        assert!(content.contains("Description:"), "Should display description label");
-        assert!(content.contains("Blocked by:"), "Should display blocked by section");
+        assert!(
+            content.contains("Description:"),
+            "Should display description label"
+        );
+        assert!(
+            content.contains("Blocked by:"),
+            "Should display blocked by section"
+        );
         assert!(content.contains("41"), "Should display blocking task ID");
         assert!(content.contains("Blocks:"), "Should display blocks section");
         assert!(content.contains("43"), "Should display blocked task ID");
-        assert!(content.contains("Metadata:"), "Should display metadata section");
+        assert!(
+            content.contains("Metadata:"),
+            "Should display metadata section"
+        );
         assert!(content.contains("[ESC] Close"), "Should display close hint");
     }
 
@@ -232,8 +256,15 @@ mod tests {
         assert!(result.is_ok());
 
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
-        assert!(!content.contains("Metadata:"), "Should not display metadata section when null");
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        assert!(
+            !content.contains("Metadata:"),
+            "Should not display metadata section when null"
+        );
 
         // Task with empty object metadata
         let task_empty_metadata = Task {
@@ -245,8 +276,15 @@ mod tests {
         assert!(result.is_ok());
 
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
-        assert!(!content.contains("Metadata:"), "Should not display metadata section when empty object");
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        assert!(
+            !content.contains("Metadata:"),
+            "Should not display metadata section when empty object"
+        );
 
         // Task with actual metadata
         let task_with_metadata = Task {
@@ -258,8 +296,15 @@ mod tests {
         assert!(result.is_ok());
 
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
-        assert!(content.contains("Metadata:"), "Should display metadata section when present");
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        assert!(
+            content.contains("Metadata:"),
+            "Should display metadata section when present"
+        );
     }
 
     #[test]
@@ -268,13 +313,21 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        for status in [TaskStatus::Completed, TaskStatus::InProgress, TaskStatus::Pending] {
+        for status in [
+            TaskStatus::Completed,
+            TaskStatus::InProgress,
+            TaskStatus::Pending,
+        ] {
             let task = Task {
                 status,
                 ..make_test_task()
             };
             let result = terminal.draw(|frame| render_task_inspector(frame, &task));
-            assert!(result.is_ok(), "Should render task with status {:?}", status);
+            assert!(
+                result.is_ok(),
+                "Should render task with status {:?}",
+                status
+            );
         }
     }
 
@@ -318,8 +371,15 @@ mod tests {
         assert!(result.is_ok());
 
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
-        assert!(content.contains("None"), "Should display 'None' for no owner");
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
+        assert!(
+            content.contains("None"),
+            "Should display 'None' for no owner"
+        );
     }
 
     #[test]
@@ -336,9 +396,16 @@ mod tests {
         assert!(result.is_ok(), "Should render multiline description");
 
         let buffer = terminal.backend().buffer();
-        let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
         assert!(content.contains("First line"), "Should display first line");
-        assert!(content.contains("Second line"), "Should display second line");
+        assert!(
+            content.contains("Second line"),
+            "Should display second line"
+        );
         assert!(content.contains("Third line"), "Should display third line");
     }
 
@@ -357,7 +424,11 @@ mod tests {
         assert!(result.is_ok());
 
         let buffer = terminal.backend().buffer();
-        let _content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
+        let _content = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<String>();
         // Should not show relationship sections when empty
         // But the labels might still be in buffer from previous renders, so we just ensure it doesn't panic
     }

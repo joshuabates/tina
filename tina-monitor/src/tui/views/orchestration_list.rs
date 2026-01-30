@@ -23,18 +23,25 @@ pub fn render_orchestration_list(frame: &mut Frame, area: Rect, app: &App) {
             let path = shorten_path(&orch.cwd, 30);
             let phase = format!("{}/{}", orch.current_phase, orch.total_phases);
             let progress = progress_bar::render(orch.tasks_completed(), orch.tasks_total(), 10);
-            let context = orch.context_percent
+            let context = orch
+                .context_percent
                 .map(|p| format!("ctx:{}%", p))
                 .unwrap_or_else(|| "ctx:--".to_string());
             let status = status_indicator::render(&orch.status);
 
             let line = Line::from(vec![
                 Span::styled(format!("{:<25} ", name), Style::default()),
-                Span::styled(format!("{:<30} ", path), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{:<30} ", path),
+                    Style::default().fg(Color::DarkGray),
+                ),
                 Span::styled(format!("{:<5} ", phase), Style::default()),
                 Span::raw(progress),
                 Span::raw("  "),
-                Span::styled(format!("{:<7} ", context), Style::default().fg(Color::Yellow)),
+                Span::styled(
+                    format!("{:<7} ", context),
+                    Style::default().fg(Color::Yellow),
+                ),
                 status,
             ]);
             ListItem::new(line)
@@ -42,7 +49,11 @@ pub fn render_orchestration_list(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Active Orchestrations"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Active Orchestrations"),
+        )
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
@@ -93,14 +104,8 @@ mod tests {
 
     #[test]
     fn test_truncate_name_removes_suffixes() {
-        assert_eq!(
-            truncate_name("my-project-orchestration", 30),
-            "my-project"
-        );
-        assert_eq!(
-            truncate_name("feature-work-execution", 30),
-            "feature-work"
-        );
+        assert_eq!(truncate_name("my-project-orchestration", 30), "my-project");
+        assert_eq!(truncate_name("feature-work-execution", 30), "feature-work");
     }
 
     #[test]

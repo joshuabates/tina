@@ -165,11 +165,7 @@ mod tests {
 
     #[test]
     fn test_new_creates_empty_input() {
-        let dialog = SendDialog::new(
-            "pane_123".to_string(),
-            "test-agent".to_string(),
-            true,
-        );
+        let dialog = SendDialog::new("pane_123".to_string(), "test-agent".to_string(), true);
 
         assert_eq!(dialog.input, "");
         assert_eq!(dialog.pane_id, "pane_123");
@@ -181,11 +177,7 @@ mod tests {
 
     #[test]
     fn test_handle_char_appends_to_input() {
-        let mut dialog = SendDialog::new(
-            "pane_123".to_string(),
-            "test-agent".to_string(),
-            false,
-        );
+        let mut dialog = SendDialog::new("pane_123".to_string(), "test-agent".to_string(), false);
 
         dialog.handle_char('h');
         dialog.handle_char('i');
@@ -194,11 +186,7 @@ mod tests {
 
     #[test]
     fn test_handle_backspace_removes_last_char() {
-        let mut dialog = SendDialog::new(
-            "pane_123".to_string(),
-            "test-agent".to_string(),
-            false,
-        );
+        let mut dialog = SendDialog::new("pane_123".to_string(), "test-agent".to_string(), false);
 
         dialog.input = "hello".to_string();
         dialog.handle_backspace();
@@ -215,11 +203,7 @@ mod tests {
 
     #[test]
     fn test_set_quick_action_sets_input_text() {
-        let mut dialog = SendDialog::new(
-            "pane_123".to_string(),
-            "test-agent".to_string(),
-            false,
-        );
+        let mut dialog = SendDialog::new("pane_123".to_string(), "test-agent".to_string(), false);
 
         dialog.set_quick_action(1);
         assert_eq!(dialog.quick_action, 1);
@@ -276,10 +260,7 @@ mod tests {
             confirming: false,
         };
 
-        let safe_commands = vec![
-            "/checkpoint".to_string(),
-            "/status".to_string(),
-        ];
+        let safe_commands = vec!["/checkpoint".to_string(), "/status".to_string()];
 
         assert!(!dialog.is_safe_command(&safe_commands));
     }
@@ -315,7 +296,8 @@ mod tests {
         let content = buffer.content();
 
         // Check that some expected text is present
-        let buffer_text: String = content.iter()
+        let buffer_text: String = content
+            .iter()
             .map(|cell| cell.symbol().chars().next().unwrap_or(' '))
             .collect();
 

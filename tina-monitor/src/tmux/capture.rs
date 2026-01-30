@@ -80,7 +80,10 @@ pub fn capture_pane(pane_id: &str, lines: usize) -> Result<String, CaptureError>
 }
 
 /// Capture pane content with metadata
-pub fn capture_pane_content(pane_id: &str, history_lines: usize) -> Result<PaneCapture, CaptureError> {
+pub fn capture_pane_content(
+    pane_id: &str,
+    history_lines: usize,
+) -> Result<PaneCapture, CaptureError> {
     if !is_tmux_available() {
         return Err(CaptureError::TmuxNotFound(
             "tmux command not found".to_string(),
@@ -94,10 +97,7 @@ pub fn capture_pane_content(pane_id: &str, history_lines: usize) -> Result<PaneC
     // Get the total line count (pane height + history)
     let total_lines = get_pane_height(pane_id).unwrap_or(lines.len());
 
-    Ok(PaneCapture {
-        lines,
-        total_lines,
-    })
+    Ok(PaneCapture { lines, total_lines })
 }
 
 /// Get the height of a tmux pane (visible lines + scrollback history)
@@ -109,13 +109,7 @@ pub fn get_pane_height(pane_id: &str) -> Result<usize, CaptureError> {
     }
 
     let output = Command::new("tmux")
-        .args([
-            "display-message",
-            "-t",
-            pane_id,
-            "-p",
-            "#{pane_height}",
-        ])
+        .args(["display-message", "-t", pane_id, "-p", "#{pane_height}"])
         .output()
         .map_err(|e| CaptureError::CaptureFailed(format!("Failed to execute tmux: {}", e)))?;
 

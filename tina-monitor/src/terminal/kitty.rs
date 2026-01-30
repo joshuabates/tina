@@ -39,9 +39,16 @@ impl TerminalHandler for KittyHandler {
         }
     }
 
-    fn attach_tmux(&self, session_name: &str, pane_id: Option<&str>) -> anyhow::Result<TerminalResult> {
+    fn attach_tmux(
+        &self,
+        session_name: &str,
+        pane_id: Option<&str>,
+    ) -> anyhow::Result<TerminalResult> {
         let tmux_cmd = if let Some(pane) = pane_id {
-            format!("tmux attach -t {} && tmux select-pane -t {}", session_name, pane)
+            format!(
+                "tmux attach -t {} && tmux select-pane -t {}",
+                session_name, pane
+            )
         } else {
             format!("tmux attach -t {}", session_name)
         };

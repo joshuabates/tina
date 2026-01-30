@@ -1,5 +1,6 @@
 //! Command modal for showing fallback commands
 
+use crate::tui::app::{App, ViewState};
 use arboard::Clipboard;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -8,7 +9,6 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
-use crate::tui::app::{App, ViewState};
 
 /// Command modal state
 pub struct CommandModal {
@@ -42,7 +42,11 @@ impl CommandModal {
 /// Render the command modal
 pub fn render(app: &App, frame: &mut Frame) {
     let (command, description, copied) = match &app.view_state {
-        ViewState::CommandModal { command, description, copied } => (command, description, copied),
+        ViewState::CommandModal {
+            command,
+            description,
+            copied,
+        } => (command, description, copied),
         _ => return,
     };
 
@@ -59,9 +63,15 @@ pub fn render(app: &App, frame: &mut Frame) {
     ];
 
     if *copied {
-        lines.push(Line::from(Span::styled("✓ Copied to clipboard", Style::default().fg(Color::Green))));
+        lines.push(Line::from(Span::styled(
+            "✓ Copied to clipboard",
+            Style::default().fg(Color::Green),
+        )));
     } else {
-        lines.push(Line::from(Span::styled("[y] Copy  [Esc] Close", Style::default().fg(Color::DarkGray))));
+        lines.push(Line::from(Span::styled(
+            "[y] Copy  [Esc] Close",
+            Style::default().fg(Color::DarkGray),
+        )));
     }
 
     let paragraph = Paragraph::new(lines)
@@ -103,10 +113,7 @@ mod tests {
 
     #[test]
     fn test_command_modal_new_creates_instance_with_correct_fields() {
-        let modal = CommandModal::new(
-            "cd /tmp".to_string(),
-            "Navigate to /tmp".to_string(),
-        );
+        let modal = CommandModal::new("cd /tmp".to_string(), "Navigate to /tmp".to_string());
 
         assert_eq!(modal.command, "cd /tmp");
         assert_eq!(modal.description, "Navigate to /tmp");
@@ -116,10 +123,7 @@ mod tests {
     #[test]
     #[ignore] // Clipboard tests can crash in CI/headless environments
     fn test_copy_to_clipboard_sets_copied_flag() {
-        let mut modal = CommandModal::new(
-            "cd /tmp".to_string(),
-            "Navigate to /tmp".to_string(),
-        );
+        let mut modal = CommandModal::new("cd /tmp".to_string(), "Navigate to /tmp".to_string());
 
         assert_eq!(modal.copied, false);
 
@@ -127,7 +131,10 @@ mod tests {
 
         // May fail if clipboard not available (CI environment)
         if result.is_ok() {
-            assert_eq!(modal.copied, true, "copied flag should be set after successful copy");
+            assert_eq!(
+                modal.copied, true,
+                "copied flag should be set after successful copy"
+            );
         }
     }
 

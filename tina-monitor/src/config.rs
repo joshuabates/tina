@@ -82,11 +82,7 @@ impl Default for SafetyConfig {
     fn default() -> Self {
         Self {
             confirm_send: true,
-            safe_commands: vec![
-                "status".to_string(),
-                "help".to_string(),
-                "list".to_string(),
-            ],
+            safe_commands: vec!["status".to_string(), "help".to_string(), "list".to_string()],
         }
     }
 }
@@ -180,7 +176,10 @@ command_log = "/tmp/commands.log"
         assert_eq!(config.tui.log_poll_interval, 1000);
         assert_eq!(config.safety.confirm_send, false);
         assert_eq!(config.safety.safe_commands.len(), 2);
-        assert_eq!(config.logging.command_log, PathBuf::from("/tmp/commands.log"));
+        assert_eq!(
+            config.logging.command_log,
+            PathBuf::from("/tmp/commands.log")
+        );
     }
 
     #[test]

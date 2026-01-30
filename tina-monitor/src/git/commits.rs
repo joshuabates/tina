@@ -1,8 +1,8 @@
 //! Commit history and statistics
 
+use super::git_command;
 use anyhow::Result;
 use std::path::Path;
-use super::git_command;
 
 /// A single commit in git history
 #[derive(Debug, Clone, PartialEq)]
@@ -89,7 +89,10 @@ mod tests {
     use std::path::PathBuf;
 
     fn get_test_repo_path() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .to_path_buf()
     }
 
     #[test]
@@ -100,16 +103,32 @@ mod tests {
 
         assert!(result.is_ok(), "should parse commits successfully");
         let summary = result.unwrap();
-        assert!(!summary.commits.is_empty(), "should have at least one commit");
+        assert!(
+            !summary.commits.is_empty(),
+            "should have at least one commit"
+        );
 
         let commit = &summary.commits[0];
-        assert!(!commit.short_hash.is_empty(), "short hash should not be empty");
+        assert!(
+            !commit.short_hash.is_empty(),
+            "short hash should not be empty"
+        );
         assert!(!commit.hash.is_empty(), "hash should not be empty");
         assert!(!commit.subject.is_empty(), "subject should not be empty");
         assert!(!commit.author.is_empty(), "author should not be empty");
-        assert!(!commit.relative_time.is_empty(), "relative time should not be empty");
-        assert_eq!(commit.short_hash.len(), 7, "short hash should be 7 characters");
-        assert!(commit.hash.len() >= 40, "full hash should be at least 40 characters");
+        assert!(
+            !commit.relative_time.is_empty(),
+            "relative time should not be empty"
+        );
+        assert_eq!(
+            commit.short_hash.len(),
+            7,
+            "short hash should be 7 characters"
+        );
+        assert!(
+            commit.hash.len() >= 40,
+            "full hash should be at least 40 characters"
+        );
     }
 
     #[test]
@@ -122,8 +141,14 @@ mod tests {
         let summary = result.unwrap();
         // Stats may be 0 for some commits, but should parse correctly
         // Both insertions and deletions are valid (could be 0 or positive)
-        assert!(summary.insertions == summary.insertions, "insertions should parse");
-        assert!(summary.deletions == summary.deletions, "deletions should parse");
+        assert!(
+            summary.insertions == summary.insertions,
+            "insertions should parse"
+        );
+        assert!(
+            summary.deletions == summary.deletions,
+            "deletions should parse"
+        );
     }
 
     #[test]

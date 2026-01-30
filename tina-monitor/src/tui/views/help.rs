@@ -11,18 +11,20 @@ use ratatui::{
 /// Get the help text lines for testing
 fn get_help_text() -> Vec<Line<'static>> {
     vec![
-        Line::from(vec![
-            Span::styled("Orchestration List:", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Orchestration List:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  j / k / Down / Up    Navigate up/down"),
         Line::from("  Enter                Expand orchestration details"),
         Line::from("  g                    Open terminal at worktree (goto)"),
         Line::from("  p                    View current phase plan"),
         Line::from("  r                    Refresh data"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Phase Detail:", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Phase Detail:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  t / Left             Focus tasks pane"),
         Line::from("  m / Right            Focus team members pane"),
         Line::from("  j / k                Navigate within focused pane"),
@@ -33,28 +35,32 @@ fn get_help_text() -> Vec<Line<'static>> {
         Line::from("  d                    View diff stats for current phase"),
         Line::from("  Esc                  Return to orchestration list"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Task Inspector:", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Task Inspector:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  Esc / Enter          Close inspector"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Log Viewer:", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Log Viewer:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  f                    Toggle follow mode"),
         Line::from("  G                    Jump to bottom"),
         Line::from("  PgUp / PgDn          Scroll page up/down"),
         Line::from("  Esc                  Close log viewer"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Diff Viewer:", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Diff Viewer:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  Enter                Toggle full diff view"),
         Line::from("  Esc                  Close diff viewer"),
         Line::from(""),
-        Line::from(vec![
-            Span::styled("Global:", Style::default().add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "Global:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )]),
         Line::from("  ?                    Toggle this help"),
         Line::from("  q / Ctrl+C           Quit"),
     ]
@@ -185,7 +191,10 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
 
         let result = terminal.draw(|frame| render_help(frame));
-        assert!(result.is_ok(), "Help modal should render all sections without panic");
+        assert!(
+            result.is_ok(),
+            "Help modal should render all sections without panic"
+        );
     }
 
     #[test]
@@ -255,9 +264,15 @@ mod tests {
 
         // Verify Log Viewer keybindings
         assert!(content.contains("f"), "Help should document 'f' key");
-        assert!(content.contains("Toggle follow mode"), "Help should document follow mode");
+        assert!(
+            content.contains("Toggle follow mode"),
+            "Help should document follow mode"
+        );
         assert!(content.contains("G"), "Help should document 'G' key");
-        assert!(content.contains("Jump to bottom"), "Help should document jump to bottom");
+        assert!(
+            content.contains("Jump to bottom"),
+            "Help should document jump to bottom"
+        );
         assert!(content.contains("PgUp"), "Help should document PgUp");
         assert!(content.contains("PgDn"), "Help should document PgDn");
     }
@@ -277,11 +292,17 @@ mod tests {
             .collect::<String>();
 
         // Verify Diff Viewer section exists with keybindings
-        assert!(content.contains("Diff Viewer"), "Help should have Diff Viewer section");
+        assert!(
+            content.contains("Diff Viewer"),
+            "Help should have Diff Viewer section"
+        );
         assert!(
             content.contains("Toggle full diff"),
             "Help should document toggle full diff"
         );
-        assert!(content.contains("Enter"), "Help should document Enter key for diff viewer");
+        assert!(
+            content.contains("Enter"),
+            "Help should document Enter key for diff viewer"
+        );
     }
 }

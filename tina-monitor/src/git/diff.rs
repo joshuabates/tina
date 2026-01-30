@@ -1,8 +1,8 @@
 //! Diff statistics for git ranges
 
+use super::git_command;
 use anyhow::Result;
 use std::path::Path;
-use super::git_command;
 
 /// Statistics for a single file in a diff
 #[derive(Debug, Clone, PartialEq)]
@@ -91,7 +91,10 @@ mod tests {
     use std::path::PathBuf;
 
     fn get_test_repo_path() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .to_path_buf()
     }
 
     #[test]
@@ -107,17 +110,30 @@ mod tests {
             let file = &stats.files[0];
             assert!(!file.path.is_empty(), "file path should not be empty");
             // insertions and deletions are usize, always non-negative
-            assert!(file.insertions == file.insertions, "insertions should parse");
+            assert!(
+                file.insertions == file.insertions,
+                "insertions should parse"
+            );
             assert!(file.deletions == file.deletions, "deletions should parse");
         }
 
-        assert_eq!(stats.files_changed, stats.files.len(), "files_changed should match files count");
+        assert_eq!(
+            stats.files_changed,
+            stats.files.len(),
+            "files_changed should match files count"
+        );
 
         // Verify totals match sum of individual files
         let total_ins: usize = stats.files.iter().map(|f| f.insertions).sum();
         let total_del: usize = stats.files.iter().map(|f| f.deletions).sum();
-        assert_eq!(stats.total_insertions, total_ins, "total insertions should match sum");
-        assert_eq!(stats.total_deletions, total_del, "total deletions should match sum");
+        assert_eq!(
+            stats.total_insertions, total_ins,
+            "total insertions should match sum"
+        );
+        assert_eq!(
+            stats.total_deletions, total_del,
+            "total deletions should match sum"
+        );
     }
 
     #[test]
@@ -171,10 +187,22 @@ mod tests {
             is_binary: false,
         };
 
-        assert!(binary_file.is_binary, "binary file should have is_binary=true");
-        assert!(!text_file.is_binary, "text file should have is_binary=false");
-        assert_eq!(binary_file.insertions, 0, "binary file should have 0 insertions");
-        assert_eq!(binary_file.deletions, 0, "binary file should have 0 deletions");
+        assert!(
+            binary_file.is_binary,
+            "binary file should have is_binary=true"
+        );
+        assert!(
+            !text_file.is_binary,
+            "text file should have is_binary=false"
+        );
+        assert_eq!(
+            binary_file.insertions, 0,
+            "binary file should have 0 insertions"
+        );
+        assert_eq!(
+            binary_file.deletions, 0,
+            "binary file should have 0 deletions"
+        );
         assert!(text_file.insertions > 0, "text file should have insertions");
         assert!(text_file.deletions > 0, "text file should have deletions");
     }

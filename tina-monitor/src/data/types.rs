@@ -165,7 +165,8 @@ mod tests {
             "status": "executing"
         }"#;
 
-        let state: SupervisorState = serde_json::from_str(json).expect("Should parse supervisor state");
+        let state: SupervisorState =
+            serde_json::from_str(json).expect("Should parse supervisor state");
         assert_eq!(state.total_phases, 3);
         assert_eq!(state.current_phase, 1);
         assert_eq!(state.status, "executing");
@@ -180,7 +181,8 @@ mod tests {
             "timestamp": "2026-01-30T10:00:00Z"
         }"#;
 
-        let metrics: ContextMetrics = serde_json::from_str(json).expect("Should parse context metrics");
+        let metrics: ContextMetrics =
+            serde_json::from_str(json).expect("Should parse context metrics");
         assert_eq!(metrics.used_pct, 42);
         assert_eq!(metrics.tokens, 50000);
     }

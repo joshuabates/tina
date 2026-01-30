@@ -10,14 +10,21 @@ use std::path::Path;
 #[derive(Debug, PartialEq)]
 pub enum TerminalResult {
     Success,
-    ShowCommand { command: String, description: String },
+    ShowCommand {
+        command: String,
+        description: String,
+    },
 }
 
 /// Terminal handler trait
 pub trait TerminalHandler: Send + Sync {
     fn is_available(&self) -> bool;
     fn open_tab_at(&self, cwd: &Path) -> anyhow::Result<TerminalResult>;
-    fn attach_tmux(&self, session_name: &str, pane_id: Option<&str>) -> anyhow::Result<TerminalResult>;
+    fn attach_tmux(
+        &self,
+        session_name: &str,
+        pane_id: Option<&str>,
+    ) -> anyhow::Result<TerminalResult>;
 }
 
 /// Get the appropriate terminal handler based on config

@@ -67,10 +67,7 @@ impl CommitsView {
         // Split area into commits list and summary footer
         let chunks = Layout::default()
             .direction(ratatui::layout::Direction::Vertical)
-            .constraints([
-                Constraint::Min(3),
-                Constraint::Length(3),
-            ])
+            .constraints([Constraint::Min(3), Constraint::Length(3)])
             .split(area);
 
         // Render commits list
@@ -88,12 +85,12 @@ impl CommitsView {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(self.title.clone())
+                    .title(self.title.clone()),
             )
             .highlight_style(
                 Style::default()
                     .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(Modifier::BOLD),
             );
 
         frame.render_stateful_widget(commits_list, chunks[0], &mut self.list_state);
@@ -104,9 +101,10 @@ impl CommitsView {
             self.summary.total_commits, self.summary.insertions, self.summary.deletions
         );
 
-        let summary = Paragraph::new(Line::from(vec![
-            Span::styled(summary_text, Style::default().fg(Color::Cyan)),
-        ]))
+        let summary = Paragraph::new(Line::from(vec![Span::styled(
+            summary_text,
+            Style::default().fg(Color::Cyan),
+        )]))
         .block(Block::default().borders(Borders::ALL).title("Summary"));
 
         frame.render_widget(summary, chunks[1]);
@@ -119,13 +117,20 @@ mod tests {
     use std::path::PathBuf;
 
     fn get_test_repo_path() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .to_path_buf()
     }
 
     #[test]
     fn test_commits_view_new() {
         let repo = get_test_repo_path();
-        let view = CommitsView::new(&repo, "HEAD~2..HEAD".to_string(), "Test Commits".to_string());
+        let view = CommitsView::new(
+            &repo,
+            "HEAD~2..HEAD".to_string(),
+            "Test Commits".to_string(),
+        );
 
         assert!(view.is_ok(), "Should create CommitsView successfully");
         let view = view.unwrap();
@@ -139,13 +144,18 @@ mod tests {
         let view = CommitsView::new(&repo, "HEAD~2..HEAD".to_string(), "Test".to_string()).unwrap();
 
         assert_eq!(view.selected, 0, "Should start with first commit selected");
-        assert_eq!(view.list_state.selected(), Some(0), "ListState should have first item selected");
+        assert_eq!(
+            view.list_state.selected(),
+            Some(0),
+            "ListState should have first item selected"
+        );
     }
 
     #[test]
     fn test_select_next_wraps_around() {
         let repo = get_test_repo_path();
-        let mut view = CommitsView::new(&repo, "HEAD~2..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            CommitsView::new(&repo, "HEAD~2..HEAD".to_string(), "Test".to_string()).unwrap();
 
         let commit_count = view.summary.commits.len();
         if commit_count > 0 {
@@ -164,20 +174,26 @@ mod tests {
     #[test]
     fn test_select_previous_wraps_around() {
         let repo = get_test_repo_path();
-        let mut view = CommitsView::new(&repo, "HEAD~2..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            CommitsView::new(&repo, "HEAD~2..HEAD".to_string(), "Test".to_string()).unwrap();
 
         if !view.summary.commits.is_empty() {
             assert_eq!(view.selected, 0);
 
             view.select_previous();
-            assert_eq!(view.selected, view.summary.commits.len() - 1, "Should wrap to last commit");
+            assert_eq!(
+                view.selected,
+                view.summary.commits.len() - 1,
+                "Should wrap to last commit"
+            );
         }
     }
 
     #[test]
     fn test_select_next_with_empty_commits() {
         let repo = get_test_repo_path();
-        let mut view = CommitsView::new(&repo, "HEAD..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            CommitsView::new(&repo, "HEAD..HEAD".to_string(), "Test".to_string()).unwrap();
 
         assert_eq!(view.summary.commits.len(), 0, "Should have no commits");
         view.select_next();
@@ -187,7 +203,8 @@ mod tests {
     #[test]
     fn test_select_previous_with_empty_commits() {
         let repo = get_test_repo_path();
-        let mut view = CommitsView::new(&repo, "HEAD..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            CommitsView::new(&repo, "HEAD..HEAD".to_string(), "Test".to_string()).unwrap();
 
         assert_eq!(view.summary.commits.len(), 0, "Should have no commits");
         view.select_previous();
@@ -197,16 +214,25 @@ mod tests {
     #[test]
     fn test_navigation_preserves_list_state() {
         let repo = get_test_repo_path();
-        let mut view = CommitsView::new(&repo, "HEAD~2..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            CommitsView::new(&repo, "HEAD~2..HEAD".to_string(), "Test".to_string()).unwrap();
 
         if view.summary.commits.len() >= 2 {
             view.select_next();
             assert_eq!(view.selected, 1);
-            assert_eq!(view.list_state.selected(), Some(1), "ListState should be synchronized");
+            assert_eq!(
+                view.list_state.selected(),
+                Some(1),
+                "ListState should be synchronized"
+            );
 
             view.select_previous();
             assert_eq!(view.selected, 0);
-            assert_eq!(view.list_state.selected(), Some(0), "ListState should be synchronized");
+            assert_eq!(
+                view.list_state.selected(),
+                Some(0),
+                "ListState should be synchronized"
+            );
         }
     }
 
@@ -216,14 +242,25 @@ mod tests {
         let view = CommitsView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
 
         // Check that summary fields exist and are reasonable
-        assert!(view.summary.total_commits <= 100, "Total commits should be reasonable");
-        assert_eq!(view.summary.total_commits, view.summary.commits.len(), "Total should match commits length");
+        assert!(
+            view.summary.total_commits <= 100,
+            "Total commits should be reasonable"
+        );
+        assert_eq!(
+            view.summary.total_commits,
+            view.summary.commits.len(),
+            "Total should match commits length"
+        );
     }
 
     #[test]
     fn test_invalid_worktree_path_returns_error() {
         let invalid_path = PathBuf::from("/nonexistent/path");
-        let result = CommitsView::new(&invalid_path, "HEAD~1..HEAD".to_string(), "Test".to_string());
+        let result = CommitsView::new(
+            &invalid_path,
+            "HEAD~1..HEAD".to_string(),
+            "Test".to_string(),
+        );
 
         assert!(result.is_err(), "Should return error for invalid path");
     }

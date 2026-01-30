@@ -7,7 +7,10 @@ use std::path::Path;
 
 /// Load supervisor state from a worktree
 pub fn load_supervisor_state(cwd: &Path) -> Result<Option<SupervisorState>> {
-    let state_path = cwd.join(".claude").join("tina").join("supervisor-state.json");
+    let state_path = cwd
+        .join(".claude")
+        .join("tina")
+        .join("supervisor-state.json");
     if !state_path.exists() {
         return Ok(None);
     }
@@ -21,15 +24,22 @@ pub fn load_supervisor_state(cwd: &Path) -> Result<Option<SupervisorState>> {
 
 /// Load context metrics from a worktree
 pub fn load_context_metrics(cwd: &Path) -> Result<Option<ContextMetrics>> {
-    let metrics_path = cwd.join(".claude").join("tina").join("context-metrics.json");
+    let metrics_path = cwd
+        .join(".claude")
+        .join("tina")
+        .join("context-metrics.json");
     if !metrics_path.exists() {
         return Ok(None);
     }
 
     let content = fs::read_to_string(&metrics_path)
         .with_context(|| format!("Failed to read context metrics: {}", metrics_path.display()))?;
-    let metrics: ContextMetrics = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse context metrics: {}", metrics_path.display()))?;
+    let metrics: ContextMetrics = serde_json::from_str(&content).with_context(|| {
+        format!(
+            "Failed to parse context metrics: {}",
+            metrics_path.display()
+        )
+    })?;
     Ok(Some(metrics))
 }
 

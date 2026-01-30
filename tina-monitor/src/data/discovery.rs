@@ -66,7 +66,11 @@ fn try_load_orchestration(team_name: &str) -> Result<Option<Orchestration>> {
     let team = teams::load_team(team_name)?;
 
     // Get cwd from first member (typically team lead)
-    let cwd = team.members.first().map(|m| m.cwd.clone()).unwrap_or_default();
+    let cwd = team
+        .members
+        .first()
+        .map(|m| m.cwd.clone())
+        .unwrap_or_default();
 
     // Check for supervisor state (defines this as an orchestration)
     let supervisor_state = match tina_state::load_supervisor_state(&cwd)? {
@@ -191,7 +195,10 @@ mod tests {
         let state = make_supervisor_state(2);
 
         let status = derive_orchestration_status(&tasks, &state);
-        assert!(matches!(status, OrchestrationStatus::Executing { phase: 2 }));
+        assert!(matches!(
+            status,
+            OrchestrationStatus::Executing { phase: 2 }
+        ));
     }
 
     #[test]

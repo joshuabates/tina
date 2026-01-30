@@ -106,10 +106,7 @@ impl DiffView {
         // Split area into file list and summary footer
         let chunks = Layout::default()
             .direction(ratatui::layout::Direction::Vertical)
-            .constraints([
-                Constraint::Min(3),
-                Constraint::Length(3),
-            ])
+            .constraints([Constraint::Min(3), Constraint::Length(3)])
             .split(area);
 
         // Render file list
@@ -131,12 +128,12 @@ impl DiffView {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(self.title.clone())
+                    .title(self.title.clone()),
             )
             .highlight_style(
                 Style::default()
                     .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(Modifier::BOLD),
             );
 
         frame.render_stateful_widget(file_list, chunks[0], &mut self.list_state);
@@ -147,9 +144,10 @@ impl DiffView {
             self.stats.files_changed, self.stats.total_insertions, self.stats.total_deletions
         );
 
-        let summary = Paragraph::new(Line::from(vec![
-            Span::styled(summary_text, Style::default().fg(Color::Cyan)),
-        ]))
+        let summary = Paragraph::new(Line::from(vec![Span::styled(
+            summary_text,
+            Style::default().fg(Color::Cyan),
+        )]))
         .block(Block::default().borders(Borders::ALL).title("Summary"));
 
         frame.render_widget(summary, chunks[1]);
@@ -163,7 +161,7 @@ impl DiffView {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(format!("{} (Full Diff)", self.title))
+                    .title(format!("{} (Full Diff)", self.title)),
             )
             .wrap(Wrap { trim: false })
             .scroll((self.scroll, 0));
@@ -178,7 +176,10 @@ mod tests {
     use std::path::PathBuf;
 
     fn get_test_repo_path() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .to_path_buf()
     }
 
     #[test]
@@ -192,7 +193,10 @@ mod tests {
         assert_eq!(view.range, "HEAD~1..HEAD");
         assert_eq!(view.show_full, false, "Should start in file list mode");
         assert_eq!(view.scroll, 0, "Should start with scroll at 0");
-        assert!(view.full_diff.is_none(), "Should not load full diff initially");
+        assert!(
+            view.full_diff.is_none(),
+            "Should not load full diff initially"
+        );
     }
 
     #[test]
@@ -202,14 +206,19 @@ mod tests {
 
         if !view.stats.files.is_empty() {
             assert_eq!(view.selected, 0, "Should start with first file selected");
-            assert_eq!(view.list_state.selected(), Some(0), "ListState should have first item selected");
+            assert_eq!(
+                view.list_state.selected(),
+                Some(0),
+                "ListState should have first item selected"
+            );
         }
     }
 
     #[test]
     fn test_select_next_wraps_around() {
         let repo = get_test_repo_path();
-        let mut view = DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
 
         let file_count = view.stats.files.len();
         if file_count > 0 {
@@ -228,13 +237,18 @@ mod tests {
     #[test]
     fn test_select_previous_wraps_around() {
         let repo = get_test_repo_path();
-        let mut view = DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
 
         if !view.stats.files.is_empty() {
             assert_eq!(view.selected, 0);
 
             view.select_previous();
-            assert_eq!(view.selected, view.stats.files.len() - 1, "Should wrap to last file");
+            assert_eq!(
+                view.selected,
+                view.stats.files.len() - 1,
+                "Should wrap to last file"
+            );
         }
     }
 
@@ -261,13 +275,17 @@ mod tests {
     #[test]
     fn test_toggle_full_diff_loads_diff() {
         let repo = get_test_repo_path();
-        let mut view = DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
 
         assert_eq!(view.show_full, false);
         assert!(view.full_diff.is_none());
 
         let result = view.toggle_full_diff();
-        assert!(result.is_ok(), "Should toggle to full diff mode successfully");
+        assert!(
+            result.is_ok(),
+            "Should toggle to full diff mode successfully"
+        );
         assert_eq!(view.show_full, true, "Should be in full diff mode");
         assert!(view.full_diff.is_some(), "Should have loaded full diff");
     }
@@ -275,7 +293,8 @@ mod tests {
     #[test]
     fn test_toggle_full_diff_back_to_list() {
         let repo = get_test_repo_path();
-        let mut view = DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
 
         // Toggle to full diff
         let _ = view.toggle_full_diff();
@@ -283,7 +302,10 @@ mod tests {
 
         // Toggle back to list
         let result = view.toggle_full_diff();
-        assert!(result.is_ok(), "Should toggle back to list mode successfully");
+        assert!(
+            result.is_ok(),
+            "Should toggle back to list mode successfully"
+        );
         assert_eq!(view.show_full, false, "Should be back in list mode");
         // full_diff should still be cached
         assert!(view.full_diff.is_some(), "Should keep cached full diff");
@@ -292,7 +314,8 @@ mod tests {
     #[test]
     fn test_scroll_down_increments() {
         let repo = get_test_repo_path();
-        let mut view = DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
 
         assert_eq!(view.scroll, 0);
         view.scroll_down();
@@ -304,7 +327,8 @@ mod tests {
     #[test]
     fn test_scroll_up_decrements() {
         let repo = get_test_repo_path();
-        let mut view = DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
 
         view.scroll = 5;
         view.scroll_up();
@@ -316,7 +340,8 @@ mod tests {
     #[test]
     fn test_scroll_up_stops_at_zero() {
         let repo = get_test_repo_path();
-        let mut view = DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
 
         assert_eq!(view.scroll, 0);
         view.scroll_up();
@@ -326,23 +351,36 @@ mod tests {
     #[test]
     fn test_navigation_preserves_list_state() {
         let repo = get_test_repo_path();
-        let mut view = DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
+        let mut view =
+            DiffView::new(&repo, "HEAD~1..HEAD".to_string(), "Test".to_string()).unwrap();
 
         if view.stats.files.len() >= 2 {
             view.select_next();
             assert_eq!(view.selected, 1);
-            assert_eq!(view.list_state.selected(), Some(1), "ListState should be synchronized");
+            assert_eq!(
+                view.list_state.selected(),
+                Some(1),
+                "ListState should be synchronized"
+            );
 
             view.select_previous();
             assert_eq!(view.selected, 0);
-            assert_eq!(view.list_state.selected(), Some(0), "ListState should be synchronized");
+            assert_eq!(
+                view.list_state.selected(),
+                Some(0),
+                "ListState should be synchronized"
+            );
         }
     }
 
     #[test]
     fn test_invalid_worktree_path_returns_error() {
         let invalid_path = PathBuf::from("/nonexistent/path");
-        let result = DiffView::new(&invalid_path, "HEAD~1..HEAD".to_string(), "Test".to_string());
+        let result = DiffView::new(
+            &invalid_path,
+            "HEAD~1..HEAD".to_string(),
+            "Test".to_string(),
+        );
 
         assert!(result.is_err(), "Should return error for invalid path");
     }

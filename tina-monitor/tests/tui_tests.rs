@@ -69,7 +69,11 @@ fn test_empty_state_renders() {
 
     // Verify the terminal buffer contains expected content
     let buffer = terminal.backend().buffer().clone();
-    let content = buffer.content.iter().map(|c| c.symbol()).collect::<String>();
+    let content = buffer
+        .content
+        .iter()
+        .map(|c| c.symbol())
+        .collect::<String>();
     assert!(
         content.contains("Orchestrations"),
         "Header should be rendered"
@@ -84,7 +88,10 @@ fn test_empty_state_navigation() {
 
     // Navigation should not panic on empty list
     app.next();
-    assert_eq!(app.selected_index, 0, "next() should not change index on empty list");
+    assert_eq!(
+        app.selected_index, 0,
+        "next() should not change index on empty list"
+    );
 
     app.previous();
     assert_eq!(
@@ -131,7 +138,11 @@ fn test_single_orchestration_renders() {
 
     // Verify the terminal buffer contains orchestration content
     let buffer = terminal.backend().buffer().clone();
-    let content = buffer.content.iter().map(|c| c.symbol()).collect::<String>();
+    let content = buffer
+        .content
+        .iter()
+        .map(|c| c.symbol())
+        .collect::<String>();
     assert!(
         content.contains("test-project"),
         "Orchestration title should be rendered"
@@ -221,7 +232,11 @@ fn test_multiple_orchestrations_render() {
 
     // Verify all orchestrations are present in the buffer
     let buffer = terminal.backend().buffer().clone();
-    let content = buffer.content.iter().map(|c| c.symbol()).collect::<String>();
+    let content = buffer
+        .content
+        .iter()
+        .map(|c| c.symbol())
+        .collect::<String>();
 
     assert!(
         content.contains("project-alpha"),
@@ -399,11 +414,18 @@ fn test_enter_expands_to_phase_detail() {
         tina_monitor::tui::ui::render(frame, &mut app);
     });
 
-    assert!(result.is_ok(), "PhaseDetail view should render successfully");
+    assert!(
+        result.is_ok(),
+        "PhaseDetail view should render successfully"
+    );
 
     // Verify we're in the correct state
     match app.view_state {
-        ViewState::PhaseDetail { focus, task_index, member_index } => {
+        ViewState::PhaseDetail {
+            focus,
+            task_index,
+            member_index,
+        } => {
             assert_eq!(focus, PaneFocus::Tasks, "Focus should be on Tasks pane");
             assert_eq!(task_index, 0, "Should start at first task");
             assert_eq!(member_index, 0, "Should start at first member");
@@ -435,7 +457,10 @@ fn test_esc_returns_to_orchestration_list() {
         tina_monitor::tui::ui::render(frame, &mut app);
     });
 
-    assert!(result.is_ok(), "OrchestrationList should render after returning");
+    assert!(
+        result.is_ok(),
+        "OrchestrationList should render after returning"
+    );
     assert!(
         matches!(app.view_state, ViewState::OrchestrationList),
         "Should be back in OrchestrationList view"
@@ -451,9 +476,8 @@ fn test_enter_opens_task_inspector() {
         make_test_task("3", TaskStatus::Pending),
     ];
 
-    let mut app = App::new_with_orchestrations(vec![
-        make_test_orchestration_with_tasks("project-1", tasks)
-    ]);
+    let mut app =
+        App::new_with_orchestrations(vec![make_test_orchestration_with_tasks("project-1", tasks)]);
 
     // Start in PhaseDetail with Tasks focused
     app.view_state = ViewState::PhaseDetail {
@@ -553,8 +577,15 @@ fn test_log_viewer_transitions() {
     assert!(result.is_ok(), "LogViewer should render successfully");
 
     match app.view_state {
-        ViewState::LogViewer { agent_index, pane_id, agent_name } => {
-            assert_eq!(agent_index, 2, "Should open log viewer for agent at index 2");
+        ViewState::LogViewer {
+            agent_index,
+            pane_id,
+            agent_name,
+        } => {
+            assert_eq!(
+                agent_index, 2,
+                "Should open log viewer for agent at index 2"
+            );
             assert_eq!(pane_id, "%0", "Should have pane_id");
             assert_eq!(agent_name, "test-agent", "Should have agent_name");
         }
@@ -588,7 +619,10 @@ fn test_empty_orchestration_list_graceful_handling() {
     let result = terminal.draw(|frame| {
         tina_monitor::tui::ui::render(frame, &mut app);
     });
-    assert!(result.is_ok(), "Empty OrchestrationList should render without panic");
+    assert!(
+        result.is_ok(),
+        "Empty OrchestrationList should render without panic"
+    );
 
     // Test PhaseDetail view with empty list (shouldn't normally happen, but test edge case)
     app.view_state = ViewState::PhaseDetail {
@@ -599,14 +633,20 @@ fn test_empty_orchestration_list_graceful_handling() {
     let result = terminal.draw(|frame| {
         tina_monitor::tui::ui::render(frame, &mut app);
     });
-    assert!(result.is_ok(), "PhaseDetail with empty list should render without panic");
+    assert!(
+        result.is_ok(),
+        "PhaseDetail with empty list should render without panic"
+    );
 
     // Test TaskInspector with empty list
     app.view_state = ViewState::TaskInspector { task_index: 0 };
     let result = terminal.draw(|frame| {
         tina_monitor::tui::ui::render(frame, &mut app);
     });
-    assert!(result.is_ok(), "TaskInspector with empty list should render without panic");
+    assert!(
+        result.is_ok(),
+        "TaskInspector with empty list should render without panic"
+    );
 
     // Test LogViewer with empty list
     app.view_state = ViewState::LogViewer {
@@ -617,7 +657,10 @@ fn test_empty_orchestration_list_graceful_handling() {
     let result = terminal.draw(|frame| {
         tina_monitor::tui::ui::render(frame, &mut app);
     });
-    assert!(result.is_ok(), "LogViewer with empty list should render without panic");
+    assert!(
+        result.is_ok(),
+        "LogViewer with empty list should render without panic"
+    );
 }
 
 /// Test complete navigation flow through all views
@@ -696,7 +739,10 @@ fn test_complete_navigation_flow() {
         member_index: 0,
     };
     let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
-    assert!(result.is_ok(), "Should return to PhaseDetail from TaskInspector");
+    assert!(
+        result.is_ok(),
+        "Should return to PhaseDetail from TaskInspector"
+    );
 
     // Step 8: Return to OrchestrationList
     app.view_state = ViewState::OrchestrationList;
@@ -711,9 +757,8 @@ fn test_rendering_with_various_task_counts() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     // Test with no tasks
-    let mut app = App::new_with_orchestrations(vec![
-        make_test_orchestration_with_tasks("no-tasks", vec![])
-    ]);
+    let mut app =
+        App::new_with_orchestrations(vec![make_test_orchestration_with_tasks("no-tasks", vec![])]);
     app.view_state = ViewState::PhaseDetail {
         focus: PaneFocus::Tasks,
         task_index: 0,
@@ -724,9 +769,8 @@ fn test_rendering_with_various_task_counts() {
 
     // Test with one task
     let tasks = vec![make_test_task("1", TaskStatus::Pending)];
-    let mut app = App::new_with_orchestrations(vec![
-        make_test_orchestration_with_tasks("one-task", tasks)
-    ]);
+    let mut app =
+        App::new_with_orchestrations(vec![make_test_orchestration_with_tasks("one-task", tasks)]);
     app.view_state = ViewState::PhaseDetail {
         focus: PaneFocus::Tasks,
         task_index: 0,
@@ -739,9 +783,10 @@ fn test_rendering_with_various_task_counts() {
     let tasks: Vec<Task> = (0..20)
         .map(|i| make_test_task(&format!("{}", i), TaskStatus::Pending))
         .collect();
-    let mut app = App::new_with_orchestrations(vec![
-        make_test_orchestration_with_tasks("many-tasks", tasks)
-    ]);
+    let mut app = App::new_with_orchestrations(vec![make_test_orchestration_with_tasks(
+        "many-tasks",
+        tasks,
+    )]);
     app.view_state = ViewState::PhaseDetail {
         focus: PaneFocus::Tasks,
         task_index: 10,
@@ -758,9 +803,8 @@ fn test_help_modal_in_all_views() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     let tasks = vec![make_test_task("1", TaskStatus::Pending)];
-    let mut app = App::new_with_orchestrations(vec![
-        make_test_orchestration_with_tasks("project", tasks)
-    ]);
+    let mut app =
+        App::new_with_orchestrations(vec![make_test_orchestration_with_tasks("project", tasks)]);
 
     // Test help in OrchestrationList
     app.view_state = ViewState::OrchestrationList;

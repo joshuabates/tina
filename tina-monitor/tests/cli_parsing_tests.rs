@@ -13,8 +13,14 @@ fn test_cli_help() {
 
     assert!(output.status.success(), "CLI --help should succeed");
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("tina-monitor"), "Help should mention tina-monitor");
-    assert!(stdout.contains("status"), "Help should mention status command");
+    assert!(
+        stdout.contains("tina-monitor"),
+        "Help should mention tina-monitor"
+    );
+    assert!(
+        stdout.contains("status"),
+        "Help should mention status command"
+    );
 }
 
 /// Test that `status team <name>` parses correctly
@@ -28,7 +34,10 @@ fn test_cli_status_team_parse() {
 
     // Should not error on parse (may fail later because team doesn't exist)
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!stderr.contains("error: unrecognized"), "Should parse status team command");
+    assert!(
+        !stderr.contains("error: unrecognized"),
+        "Should parse status team command"
+    );
 }
 
 /// Test that `teams` command parses

@@ -20,8 +20,8 @@ fn is_tmux_available() -> bool {
         .unwrap_or(false)
 }
 
-/// Send text to a tmux pane followed by Enter
-pub fn send_keys(pane_id: &str, text: &str) -> Result<(), SendError> {
+/// Send keys to a tmux pane with optional arguments
+fn send_keys_internal(pane_id: &str, args: &[&str]) -> Result<(), SendError> {
     if !is_tmux_available() {
         return Err(SendError::TmuxNotFound(
             "tmux command not found".to_string(),
@@ -29,7 +29,10 @@ pub fn send_keys(pane_id: &str, text: &str) -> Result<(), SendError> {
     }
 
     let output = Command::new("tmux")
-        .args(["send-keys", "-t", pane_id, text, "Enter"])
+        .arg("send-keys")
+        .arg("-t")
+        .arg(pane_id)
+        .args(args)
         .output()
         .map_err(|e| SendError::SendFailed(format!("Failed to execute tmux: {}", e)))?;
 
@@ -43,27 +46,14 @@ pub fn send_keys(pane_id: &str, text: &str) -> Result<(), SendError> {
     Ok(())
 }
 
+/// Send text to a tmux pane followed by Enter
+pub fn send_keys(pane_id: &str, text: &str) -> Result<(), SendError> {
+    send_keys_internal(pane_id, &[text, "Enter"])
+}
+
 /// Send text to a tmux pane without Enter
 pub fn send_keys_raw(pane_id: &str, text: &str) -> Result<(), SendError> {
-    if !is_tmux_available() {
-        return Err(SendError::TmuxNotFound(
-            "tmux command not found".to_string(),
-        ));
-    }
-
-    let output = Command::new("tmux")
-        .args(["send-keys", "-t", pane_id, text])
-        .output()
-        .map_err(|e| SendError::SendFailed(format!("Failed to execute tmux: {}", e)))?;
-
-    if !output.status.success() {
-        return Err(SendError::SendFailed(format!(
-            "tmux send-keys failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    Ok(())
+    send_keys_internal(pane_id, &[text])
 }
 
 #[cfg(test)]

@@ -6,9 +6,9 @@
 pub mod commits;
 pub mod diff;
 
+use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Command;
-use anyhow::{Context, Result};
 
 /// Execute a git command in the given directory
 pub fn git_command(cwd: &Path, args: &[&str]) -> Result<String> {
@@ -35,7 +35,10 @@ mod tests {
 
     fn get_test_repo_path() -> PathBuf {
         // Use the current git repo for testing
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .to_path_buf()
     }
 
     #[test]

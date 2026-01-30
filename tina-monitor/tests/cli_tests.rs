@@ -1,8 +1,8 @@
 //! CLI integration tests
 
+use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
-use std::fs;
 
 /// Helper to set up fixture environment
 #[allow(dead_code)]
@@ -97,9 +97,18 @@ fn test_help_completeness() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Check all commands are documented
-    assert!(stdout.contains("status"), "Help should mention status command");
-    assert!(stdout.contains("teams"), "Help should mention teams command");
-    assert!(stdout.contains("tasks"), "Help should mention tasks command");
+    assert!(
+        stdout.contains("status"),
+        "Help should mention status command"
+    );
+    assert!(
+        stdout.contains("teams"),
+        "Help should mention teams command"
+    );
+    assert!(
+        stdout.contains("tasks"),
+        "Help should mention tasks command"
+    );
 }
 
 /// Test status team subcommand help
@@ -115,7 +124,10 @@ fn test_status_team_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Check documented options
-    assert!(stdout.contains("--format"), "Should document --format option");
+    assert!(
+        stdout.contains("--format"),
+        "Should document --format option"
+    );
     assert!(stdout.contains("--check"), "Should document --check option");
 }
 
@@ -128,10 +140,16 @@ fn test_status_orchestration_help() {
         .output()
         .expect("Failed to execute command");
 
-    assert!(output.status.success(), "status orchestration --help should succeed");
+    assert!(
+        output.status.success(),
+        "status orchestration --help should succeed"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    assert!(stdout.contains("--format"), "Should document --format option");
+    assert!(
+        stdout.contains("--format"),
+        "Should document --format option"
+    );
     assert!(stdout.contains("--check"), "Should document --check option");
 }
 
@@ -147,8 +165,14 @@ fn test_teams_format_options() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    assert!(stdout.contains("--format"), "Should document --format option");
-    assert!(stdout.contains("--filter"), "Should document --filter option");
+    assert!(
+        stdout.contains("--format"),
+        "Should document --format option"
+    );
+    assert!(
+        stdout.contains("--filter"),
+        "Should document --filter option"
+    );
 }
 
 /// Test tasks command help
@@ -163,8 +187,14 @@ fn test_tasks_help() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    assert!(stdout.contains("--format"), "Should document --format option");
-    assert!(stdout.contains("--status"), "Should document --status filter option");
+    assert!(
+        stdout.contains("--format"),
+        "Should document --format option"
+    );
+    assert!(
+        stdout.contains("--status"),
+        "Should document --status filter option"
+    );
 }
 
 /// Test that teams list runs (may be empty)
@@ -206,7 +236,10 @@ fn test_status_team_requires_name() {
         .output()
         .expect("Failed to execute command");
 
-    assert!(!output.status.success(), "status team without name should fail");
+    assert!(
+        !output.status.success(),
+        "status team without name should fail"
+    );
 }
 
 /// Test missing team name for tasks
@@ -240,7 +273,15 @@ fn test_nonexistent_team_error() {
 fn test_check_complete_incomplete_team() {
     // Can't easily test with real team, but we can test the error case
     let output = Command::new("cargo")
-        .args(["run", "--", "status", "team", "nonexistent", "--check", "complete"])
+        .args([
+            "run",
+            "--",
+            "status",
+            "team",
+            "nonexistent",
+            "--check",
+            "complete",
+        ])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to execute command");

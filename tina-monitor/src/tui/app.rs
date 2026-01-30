@@ -42,6 +42,13 @@ pub enum ViewState {
         /// Agent name for display
         agent_name: String,
     },
+    /// Send dialog modal
+    SendDialog {
+        /// Pane ID to send to
+        pane_id: String,
+        /// Agent name for display
+        agent_name: String,
+    },
     /// Command modal for showing fallback commands
     CommandModal {
         /// Command to show
@@ -127,7 +134,9 @@ impl App {
 
         // Load config and initialize command logger
         let config = Config::load()?;
-        let command_logger = Some(crate::logging::CommandLogger::new(config.logging.command_log));
+        let command_logger = Some(crate::logging::CommandLogger::new(
+            config.logging.command_log,
+        ));
 
         Ok(Self {
             should_quit: false,
@@ -259,6 +268,7 @@ impl App {
             ViewState::PhaseDetail { .. } => self.handle_phase_detail_key(key),
             ViewState::TaskInspector { .. } => self.handle_task_inspector_key(key),
             ViewState::LogViewer { .. } => self.handle_log_viewer_key(key),
+            ViewState::SendDialog { .. } => self.handle_send_dialog_key(key),
             ViewState::CommandModal { .. } => self.handle_command_modal_key(key),
             ViewState::PlanViewer { .. } => self.handle_plan_viewer_key(key),
             ViewState::CommitsView { .. } => self.handle_commits_view_key(key),
@@ -311,7 +321,10 @@ impl App {
                 // Terminal opened successfully
                 Ok(())
             }
-            TerminalResult::ShowCommand { command, description } => {
+            TerminalResult::ShowCommand {
+                command,
+                description,
+            } => {
                 // Show command modal
                 self.view_state = ViewState::CommandModal {
                     command,
@@ -357,7 +370,10 @@ impl App {
 
         match handler.attach_tmux(&session_name, pane_id)? {
             TerminalResult::Success => Ok(()),
-            TerminalResult::ShowCommand { command, description } => {
+            TerminalResult::ShowCommand {
+                command,
+                description,
+            } => {
                 self.view_state = ViewState::CommandModal {
                     command,
                     description,
@@ -368,6 +384,66 @@ impl App {
         }
     }
 
+    /// Handle open send dialog action - open send dialog for selected agent
+    fn handle_open_send_dialog(&mut self, agent_index: usize) -> AppResult<()> {
+        if self.orchestrations.is_empty() {
+            return Ok(());
+        }
+
+        let orch = &self.orchestrations[self.selected_index];
+
+        // Load team config to get agent details
+        let team_path = dirs::home_dir()
+            .ok_or("Could not find home directory")?
+            .join(".claude/teams")
+            .join(&orch.team_name)
+            .join("config.json");
+
+        // Try to load team config, fall back to placeholder values if not available
+        let (pane_id, agent_name) = if team_path.exists() {
+            let team: Team = serde_json::from_str(&std::fs::read_to_string(&team_path)?)?;
+
+            // Get the selected agent
+            let agent = team
+                .members
+                .get(agent_index)
+                .ok_or("Agent index out of bounds")?;
+
+            // Get tmux pane ID - if not available, use placeholder
+            let pane_id = agent
+                .tmux_pane_id
+                .clone()
+                .unwrap_or_else(|| format!("unknown-{}", agent_index));
+            let agent_name = agent.name.clone();
+
+            (pane_id, agent_name)
+        } else {
+            // Team config doesn't exist (e.g., in tests) - use placeholders
+            (
+                format!("pane-{}", agent_index),
+                format!("Agent {}", agent_index),
+            )
+        };
+
+        // Load config to get safety settings, fall back to defaults if not available
+        let config = Config::load().unwrap_or_default();
+
+        // Create SendDialog instance
+        let dialog = super::views::send_dialog::SendDialog::new(
+            pane_id.clone(),
+            agent_name.clone(),
+            config.safety.confirm_send,
+        );
+
+        self.send_dialog = Some(dialog);
+        self.view_state = ViewState::SendDialog {
+            pane_id,
+            agent_name,
+        };
+
+        Ok(())
+    }
+
     /// Handle key events in CommandModal view
     fn handle_command_modal_key(&mut self, key: KeyEvent) {
         match key.code {
@@ -376,7 +452,12 @@ impl App {
             }
             KeyCode::Char('y') => {
                 // Try to copy to clipboard
-                if let ViewState::CommandModal { command, description, .. } = &self.view_state {
+                if let ViewState::CommandModal {
+                    command,
+                    description,
+                    ..
+                } = &self.view_state
+                {
                     let cmd = command.clone();
                     let desc = description.clone();
                     if let Ok(mut clipboard) = arboard::Clipboard::new() {
@@ -462,11 +543,18 @@ impl App {
         let phase = orch.current_phase;
 
         // Plans are typically in ../docs/plans/ relative to the cwd
-        let plan_name = format!("{}-phase-{}.md",
+        let plan_name = format!(
+            "{}-phase-{}.md",
             orch.design_doc_path.file_stem()?.to_str()?,
-            phase);
+            phase
+        );
 
-        let plan_path = orch.cwd.parent()?.join("docs").join("plans").join(plan_name);
+        let plan_path = orch
+            .cwd
+            .parent()?
+            .join("docs")
+            .join("plans")
+            .join(plan_name);
 
         if plan_path.exists() {
             Some(plan_path)
@@ -514,21 +602,29 @@ impl App {
         let phase = orch.current_phase;
 
         // Read supervisor state to get worktree path
-        let state_path = orch.cwd.join(".claude").join("tina").join("supervisor-state.json");
+        let state_path = orch
+            .cwd
+            .join(".claude")
+            .join("tina")
+            .join("supervisor-state.json");
         let state_content = std::fs::read_to_string(&state_path).ok()?;
-        let state: crate::data::types::SupervisorState = serde_json::from_str(&state_content).ok()?;
+        let state: crate::data::types::SupervisorState =
+            serde_json::from_str(&state_content).ok()?;
 
         // Read handoff to get git range
-        let handoff_path = orch.cwd.join(".claude").join("tina").join(format!("phase-{}", phase)).join("handoff.md");
+        let handoff_path = orch
+            .cwd
+            .join(".claude")
+            .join("tina")
+            .join(format!("phase-{}", phase))
+            .join("handoff.md");
         let handoff_content = std::fs::read_to_string(&handoff_path).ok()?;
 
         // Extract git range from handoff (format: **Git Range**: `main...phase-branch`)
         let range = handoff_content
             .lines()
             .find(|line| line.starts_with("**Git Range**:"))
-            .and_then(|line| {
-                line.split('`').nth(1).map(|s| s.to_string())
-            })?;
+            .and_then(|line| line.split('`').nth(1).map(|s| s.to_string()))?;
 
         let title = format!("Phase {} Commits - {}", phase, orch.title);
 
@@ -637,7 +733,10 @@ impl App {
                         // Create a LogViewer instance (placeholder pane_id and agent_name for now)
                         let pane_id = format!("pane-{}", member_index);
                         let agent_name = format!("Agent {}", member_index);
-                        self.log_viewer = Some(super::views::log_viewer::LogViewer::new(pane_id.clone(), agent_name.clone()));
+                        self.log_viewer = Some(super::views::log_viewer::LogViewer::new(
+                            pane_id.clone(),
+                            agent_name.clone(),
+                        ));
 
                         self.view_state = ViewState::LogViewer {
                             agent_index: member_index,
@@ -647,6 +746,9 @@ impl App {
                     }
                     KeyCode::Char('a') => {
                         let _ = self.handle_attach_tmux(member_index);
+                    }
+                    KeyCode::Char('s') => {
+                        let _ = self.handle_open_send_dialog(member_index);
                     }
                     _ => {}
                 }
@@ -728,6 +830,102 @@ impl App {
         }
     }
 
+    /// Handle key events in SendDialog view
+    fn handle_send_dialog_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.send_dialog = None; // Clean up the dialog
+                self.view_state = ViewState::PhaseDetail {
+                    focus: PaneFocus::Members,
+                    task_index: 0,
+                    member_index: 0,
+                };
+            }
+            KeyCode::Char(c) if c.is_ascii_digit() && c == '1' => {
+                if let Some(dialog) = &mut self.send_dialog {
+                    dialog.set_quick_action(1);
+                }
+            }
+            KeyCode::Char(c) if c.is_ascii_digit() && c == '2' => {
+                if let Some(dialog) = &mut self.send_dialog {
+                    dialog.set_quick_action(2);
+                }
+            }
+            KeyCode::Char('y') => {
+                // Confirm send if in confirmation state
+                if let Some(dialog) = &self.send_dialog {
+                    if dialog.confirming {
+                        self.execute_send();
+                    }
+                }
+            }
+            KeyCode::Char('n') => {
+                // Cancel confirmation
+                if let Some(dialog) = &mut self.send_dialog {
+                    dialog.confirming = false;
+                }
+            }
+            KeyCode::Char(c) => {
+                // Regular character input
+                if let Some(dialog) = &mut self.send_dialog {
+                    dialog.handle_char(c);
+                }
+            }
+            KeyCode::Backspace => {
+                if let Some(dialog) = &mut self.send_dialog {
+                    dialog.handle_backspace();
+                }
+            }
+            KeyCode::Enter => {
+                // Send command (with confirmation if required)
+                if let Some(dialog) = &mut self.send_dialog {
+                    // Load config to check safe commands
+                    let config = Config::load().unwrap_or_default();
+
+                    if dialog.needs_confirmation && !dialog.confirming {
+                        // Check if this is a safe command
+                        if !dialog.is_safe_command(&config.safety.safe_commands) {
+                            // Need confirmation
+                            dialog.confirming = true;
+                            return;
+                        }
+                    }
+
+                    // Either no confirmation needed, or already confirmed, or safe command
+                    self.execute_send();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Execute send command (stub for now, will be implemented in Task 9)
+    fn execute_send(&mut self) {
+        // Get command and pane_id from the dialog
+        if let Some(dialog) = self.send_dialog.as_ref() {
+            let command = dialog.get_command().to_string();
+            let pane_id = dialog.pane_id.clone();
+
+            // Send to tmux pane - ignore errors for now
+            let _ = crate::tmux::send_keys(&pane_id, &command);
+
+            // Log command if logger is configured
+            if let Some(logger) = self.command_logger.as_ref() {
+                let _ = logger.log(&pane_id, &command);
+            }
+        }
+
+        // Close send dialog
+        self.send_dialog = None;
+
+        // Return to previous view (PhaseDetail with Members focus)
+        self.view_state = ViewState::PhaseDetail {
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 0,
+        };
+    }
+
     /// Handle key events in CommitsView
     fn handle_commits_view_key(&mut self, _key: KeyEvent) {
         // Navigation is handled by the CommitsView widget itself
@@ -745,9 +943,21 @@ impl App {
     fn handle_diff_view_key(&mut self, key: KeyEvent) {
         // Extract current state
         let (worktree_path, range, title, selected, show_full, scroll) = match &self.view_state {
-            ViewState::DiffView { worktree_path, range, title, selected, show_full, scroll } => {
-                (worktree_path.clone(), range.clone(), title.clone(), *selected, *show_full, *scroll)
-            }
+            ViewState::DiffView {
+                worktree_path,
+                range,
+                title,
+                selected,
+                show_full,
+                scroll,
+            } => (
+                worktree_path.clone(),
+                range.clone(),
+                title.clone(),
+                *selected,
+                *show_full,
+                *scroll,
+            ),
             _ => return,
         };
 
@@ -761,7 +971,11 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 // Create temporary view to get file count
-                if let Ok(view) = super::views::diff_view::DiffView::new(&worktree_path, range.clone(), title.clone()) {
+                if let Ok(view) = super::views::diff_view::DiffView::new(
+                    &worktree_path,
+                    range.clone(),
+                    title.clone(),
+                ) {
                     let file_count = view.stats.files.len();
                     if file_count > 0 {
                         let new_selected = if show_full {
@@ -769,11 +983,7 @@ impl App {
                         } else {
                             (selected + 1) % file_count
                         };
-                        let new_scroll = if show_full {
-                            scroll + 1
-                        } else {
-                            scroll
-                        };
+                        let new_scroll = if show_full { scroll + 1 } else { scroll };
                         self.view_state = ViewState::DiffView {
                             worktree_path,
                             range,
@@ -787,7 +997,11 @@ impl App {
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 // Create temporary view to get file count
-                if let Ok(view) = super::views::diff_view::DiffView::new(&worktree_path, range.clone(), title.clone()) {
+                if let Ok(view) = super::views::diff_view::DiffView::new(
+                    &worktree_path,
+                    range.clone(),
+                    title.clone(),
+                ) {
                     let file_count = view.stats.files.len();
                     let new_selected = if show_full {
                         selected
@@ -948,7 +1162,10 @@ mod tests {
         app.handle_key_event(key);
 
         assert!(!app.show_help, "Esc should close help");
-        assert!(matches!(app.view_state, ViewState::OrchestrationList), "View should remain OrchestrationList");
+        assert!(
+            matches!(app.view_state, ViewState::OrchestrationList),
+            "View should remain OrchestrationList"
+        );
         assert!(!app.should_quit, "Should not quit");
     }
 
@@ -963,11 +1180,17 @@ mod tests {
 
         let j_key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
         app.handle_key_event(j_key);
-        assert_eq!(app.selected_index, 1, "'j' should navigate in OrchestrationList");
+        assert_eq!(
+            app.selected_index, 1,
+            "'j' should navigate in OrchestrationList"
+        );
 
         let k_key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
         app.handle_key_event(k_key);
-        assert_eq!(app.selected_index, 0, "'k' should navigate in OrchestrationList");
+        assert_eq!(
+            app.selected_index, 0,
+            "'k' should navigate in OrchestrationList"
+        );
     }
 
     #[test]
@@ -983,7 +1206,10 @@ mod tests {
 
         let j_key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
         app.handle_key_event(j_key.clone());
-        assert_eq!(app.selected_index, 1, "'j' should navigate in OrchestrationList");
+        assert_eq!(
+            app.selected_index, 1,
+            "'j' should navigate in OrchestrationList"
+        );
 
         // In PhaseDetail, j/k should NOT navigate orchestration list
         app.view_state = ViewState::PhaseDetail {
@@ -1333,7 +1559,10 @@ mod tests {
         let _ = app.on_tick();
 
         // Verify log viewer still exists
-        assert!(app.log_viewer.is_some(), "log_viewer should still exist after on_tick");
+        assert!(
+            app.log_viewer.is_some(),
+            "log_viewer should still exist after on_tick"
+        );
     }
 
     #[test]
@@ -1353,7 +1582,10 @@ mod tests {
         let _ = app.on_tick();
 
         // Verify log viewer still exists and remains functional
-        assert!(app.log_viewer.is_some(), "log_viewer should still exist after on_tick");
+        assert!(
+            app.log_viewer.is_some(),
+            "log_viewer should still exist after on_tick"
+        );
     }
 
     #[test]
@@ -1362,7 +1594,10 @@ mod tests {
         app.view_state = ViewState::OrchestrationList;
 
         // Create a log viewer (should be ignored since not in LogViewer view)
-        app.log_viewer = Some(LogViewer::new("test-pane".to_string(), "test-agent".to_string()));
+        app.log_viewer = Some(LogViewer::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+        ));
 
         // Call on_tick - should not attempt refresh
         let _ = app.on_tick();
@@ -1385,7 +1620,10 @@ mod tests {
         let result = app.on_tick();
 
         // Should return Ok even with missing log viewer
-        assert!(result.is_ok(), "on_tick should handle missing log viewer gracefully");
+        assert!(
+            result.is_ok(),
+            "on_tick should handle missing log viewer gracefully"
+        );
     }
 
     // Task 2: Enter key handling tests
@@ -1472,7 +1710,11 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { focus, .. } => {
-                assert_eq!(focus, PaneFocus::Tasks, "'t' should switch focus to Tasks pane");
+                assert_eq!(
+                    focus,
+                    PaneFocus::Tasks,
+                    "'t' should switch focus to Tasks pane"
+                );
             }
             _ => panic!("View state should still be PhaseDetail"),
         }
@@ -1492,7 +1734,11 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { focus, .. } => {
-                assert_eq!(focus, PaneFocus::Members, "'m' should switch focus to Members pane");
+                assert_eq!(
+                    focus,
+                    PaneFocus::Members,
+                    "'m' should switch focus to Members pane"
+                );
             }
             _ => panic!("View state should still be PhaseDetail"),
         }
@@ -1512,7 +1758,11 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { focus, .. } => {
-                assert_eq!(focus, PaneFocus::Tasks, "Left arrow should switch focus to Tasks pane");
+                assert_eq!(
+                    focus,
+                    PaneFocus::Tasks,
+                    "Left arrow should switch focus to Tasks pane"
+                );
             }
             _ => panic!("View state should still be PhaseDetail"),
         }
@@ -1532,7 +1782,11 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { focus, .. } => {
-                assert_eq!(focus, PaneFocus::Members, "Right arrow should switch focus to Members pane");
+                assert_eq!(
+                    focus,
+                    PaneFocus::Members,
+                    "Right arrow should switch focus to Members pane"
+                );
             }
             _ => panic!("View state should still be PhaseDetail"),
         }
@@ -1592,7 +1846,10 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { task_index, .. } => {
-                assert_eq!(task_index, 0, "'j' should wrap to beginning at end of tasks");
+                assert_eq!(
+                    task_index, 0,
+                    "'j' should wrap to beginning at end of tasks"
+                );
             }
             _ => panic!("View state should still be PhaseDetail"),
         }
@@ -1612,7 +1869,10 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { task_index, .. } => {
-                assert_eq!(task_index, 2, "'k' should wrap to end at beginning of tasks");
+                assert_eq!(
+                    task_index, 2,
+                    "'k' should wrap to end at beginning of tasks"
+                );
             }
             _ => panic!("View state should still be PhaseDetail"),
         }
@@ -1632,7 +1892,10 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { task_index, .. } => {
-                assert_eq!(task_index, 1, "Down arrow should navigate down in tasks pane");
+                assert_eq!(
+                    task_index, 1,
+                    "Down arrow should navigate down in tasks pane"
+                );
             }
             _ => panic!("View state should still be PhaseDetail"),
         }
@@ -1712,7 +1975,10 @@ mod tests {
 
         match app.view_state {
             ViewState::TaskInspector { task_index } => {
-                assert_eq!(task_index, 2, "Enter on tasks should open TaskInspector with correct task_index");
+                assert_eq!(
+                    task_index, 2,
+                    "Enter on tasks should open TaskInspector with correct task_index"
+                );
             }
             _ => panic!("View state should be TaskInspector"),
         }
@@ -1731,7 +1997,11 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+            } => {
                 assert_eq!(focus, PaneFocus::Members, "Focus should remain on Members");
                 assert_eq!(task_index, 0, "task_index should not change");
                 assert_eq!(member_index, 1, "member_index should not change");
@@ -1754,7 +2024,10 @@ mod tests {
 
         match app.view_state {
             ViewState::LogViewer { agent_index, .. } => {
-                assert_eq!(agent_index, 2, "'l' on members should open LogViewer with correct agent_index");
+                assert_eq!(
+                    agent_index, 2,
+                    "'l' on members should open LogViewer with correct agent_index"
+                );
             }
             _ => panic!("View state should be LogViewer"),
         }
@@ -1773,7 +2046,11 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Focus should remain on Tasks");
                 assert_eq!(task_index, 1, "task_index should not change");
                 assert_eq!(member_index, 0, "member_index should not change");
@@ -1831,7 +2108,11 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Should return to Tasks pane");
                 assert_eq!(task_index, 2, "Should preserve task_index");
                 assert_eq!(member_index, 0, "Should reset member_index to 0");
@@ -1846,7 +2127,12 @@ mod tests {
         app.view_state = ViewState::TaskInspector { task_index: 1 };
 
         // Try various keys that should do nothing
-        for key_code in [KeyCode::Char('j'), KeyCode::Char('k'), KeyCode::Enter, KeyCode::Char('r')] {
+        for key_code in [
+            KeyCode::Char('j'),
+            KeyCode::Char('k'),
+            KeyCode::Enter,
+            KeyCode::Char('r'),
+        ] {
             let key = KeyEvent::new(key_code, KeyModifiers::NONE);
             app.handle_key_event(key);
 
@@ -1955,8 +2241,7 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { .. } => {
-            }
+            ViewState::LogViewer { .. } => {}
             _ => panic!("Should remain in LogViewer view"),
         }
     }
@@ -2054,8 +2339,7 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { .. } => {
-            }
+            ViewState::LogViewer { .. } => {}
             _ => panic!("Should remain in LogViewer view"),
         }
     }
@@ -2073,10 +2357,21 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index } => {
-                assert_eq!(focus, PaneFocus::Members, "Esc should return to PhaseDetail with Members focus");
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+            } => {
+                assert_eq!(
+                    focus,
+                    PaneFocus::Members,
+                    "Esc should return to PhaseDetail with Members focus"
+                );
                 assert_eq!(task_index, 0, "task_index should be reset to 0");
-                assert_eq!(member_index, 3, "member_index should be set to the agent_index from LogViewer");
+                assert_eq!(
+                    member_index, 3,
+                    "member_index should be set to the agent_index from LogViewer"
+                );
             }
             _ => panic!("Esc should return to PhaseDetail view"),
         }
@@ -2128,8 +2423,15 @@ mod tests {
 
         // Should transition to CommandModal view
         match app.view_state {
-            ViewState::CommandModal { command, description, copied } => {
-                assert!(command.contains("/test"), "Command should contain the cwd path");
+            ViewState::CommandModal {
+                command,
+                description,
+                copied,
+            } => {
+                assert!(
+                    command.contains("/test"),
+                    "Command should contain the cwd path"
+                );
                 assert!(!description.is_empty(), "Description should not be empty");
                 assert_eq!(copied, false, "copied should start as false");
             }
@@ -2237,7 +2539,11 @@ mod tests {
 
         // Should remain in PhaseDetail with Tasks focus
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Focus should remain on Tasks");
                 assert_eq!(task_index, 1, "task_index should not change");
                 assert_eq!(member_index, 0, "member_index should not change");
@@ -2311,7 +2617,11 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Should return to Tasks pane");
                 assert_eq!(task_index, 0, "Should reset task_index to 0");
                 assert_eq!(member_index, 0, "Should reset member_index to 0");
@@ -2330,7 +2640,12 @@ mod tests {
         };
 
         // Try various keys that should do nothing at the app level
-        for key_code in [KeyCode::Char('j'), KeyCode::Char('k'), KeyCode::Enter, KeyCode::Char('r')] {
+        for key_code in [
+            KeyCode::Char('j'),
+            KeyCode::Char('k'),
+            KeyCode::Enter,
+            KeyCode::Char('r'),
+        ] {
             let key = KeyEvent::new(key_code, KeyModifiers::NONE);
             app.handle_key_event(key);
 
@@ -2358,7 +2673,10 @@ mod tests {
 
         // Should transition to SendDialog view
         match app.view_state {
-            ViewState::SendDialog { pane_id, agent_name } => {
+            ViewState::SendDialog {
+                pane_id,
+                agent_name,
+            } => {
                 assert!(!pane_id.is_empty(), "pane_id should be set");
                 assert!(!agent_name.is_empty(), "agent_name should be set");
             }
@@ -2366,7 +2684,10 @@ mod tests {
         }
 
         // Should have created a send_dialog instance
-        assert!(app.send_dialog.is_some(), "send_dialog should be initialized");
+        assert!(
+            app.send_dialog.is_some(),
+            "send_dialog should be initialized"
+        );
     }
 
     #[test]
@@ -2383,7 +2704,11 @@ mod tests {
 
         // Should remain in PhaseDetail with Tasks focus
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Focus should remain on Tasks");
                 assert_eq!(task_index, 1, "task_index should not change");
                 assert_eq!(member_index, 0, "member_index should not change");
@@ -2392,7 +2717,10 @@ mod tests {
         }
 
         // Should not have created a send_dialog
-        assert!(app.send_dialog.is_none(), "send_dialog should not be initialized");
+        assert!(
+            app.send_dialog.is_none(),
+            "send_dialog should not be initialized"
+        );
     }
 
     #[test]
@@ -2411,7 +2739,10 @@ mod tests {
         assert!(matches!(app.view_state, ViewState::PhaseDetail { .. }));
 
         // Should not have created a send_dialog
-        assert!(app.send_dialog.is_none(), "send_dialog should not be initialized");
+        assert!(
+            app.send_dialog.is_none(),
+            "send_dialog should not be initialized"
+        );
     }
 
     // Diff View tests
@@ -2466,12 +2797,389 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Should return to Tasks pane");
                 assert_eq!(task_index, 0, "Should reset task_index to 0");
                 assert_eq!(member_index, 0, "Should reset member_index to 0");
             }
             _ => panic!("Esc should return to PhaseDetail view"),
         }
+    }
+
+    // Task 8: Send Dialog Key Handler tests
+
+    #[test]
+    fn test_character_input_appends_to_send_dialog_input() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.send_dialog = Some(crate::tui::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            false,
+        ));
+        app.view_state = ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        assert_eq!(app.send_dialog.as_ref().unwrap().input, "a");
+
+        let key = KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        assert_eq!(app.send_dialog.as_ref().unwrap().input, "ab");
+    }
+
+    #[test]
+    fn test_backspace_removes_from_send_dialog_input() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        let mut dialog = crate::tui::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            false,
+        );
+        dialog.input = "hello".to_string();
+        app.send_dialog = Some(dialog);
+        app.view_state = ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        assert_eq!(app.send_dialog.as_ref().unwrap().input, "hell");
+    }
+
+    #[test]
+    fn test_1_key_sets_checkpoint_quick_action() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.send_dialog = Some(crate::tui::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            false,
+        ));
+        app.view_state = ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        let dialog = app.send_dialog.as_ref().unwrap();
+        assert_eq!(dialog.quick_action, 1);
+        assert_eq!(dialog.input, "/checkpoint");
+    }
+
+    #[test]
+    fn test_2_key_sets_clear_quick_action() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.send_dialog = Some(crate::tui::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            false,
+        ));
+        app.view_state = ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        let dialog = app.send_dialog.as_ref().unwrap();
+        assert_eq!(dialog.quick_action, 2);
+        assert_eq!(dialog.input, "/clear");
+    }
+
+    #[test]
+    fn test_enter_sends_command_when_no_confirmation_needed() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        let mut dialog = crate::tui::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            false, // No confirmation needed
+        );
+        dialog.input = "/checkpoint".to_string();
+        app.send_dialog = Some(dialog);
+        app.view_state = ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should have closed the dialog (execute_send closes it)
+        assert!(
+            app.send_dialog.is_none(),
+            "Dialog should be closed after send"
+        );
+    }
+
+    #[test]
+    fn test_enter_shows_confirmation_when_confirm_send_enabled() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        let mut dialog = crate::tui::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            true, // Confirmation needed
+        );
+        dialog.input = "echo test".to_string(); // Not a safe command
+        app.send_dialog = Some(dialog);
+        app.view_state = ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should be in confirmation state
+        let dialog = app.send_dialog.as_ref().unwrap();
+        assert_eq!(dialog.confirming, true, "Should be in confirmation state");
+    }
+
+    #[test]
+    fn test_y_confirms_and_sends() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        let mut dialog = crate::tui::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            true,
+        );
+        dialog.input = "echo test".to_string();
+        dialog.confirming = true; // Already in confirmation state
+        app.send_dialog = Some(dialog);
+        app.view_state = ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should have closed the dialog (execute_send closes it)
+        assert!(
+            app.send_dialog.is_none(),
+            "Dialog should be closed after confirmed send"
+        );
+    }
+
+    #[test]
+    fn test_n_cancels_confirmation() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        let mut dialog = crate::tui::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            true,
+        );
+        dialog.confirming = true; // In confirmation state
+        app.send_dialog = Some(dialog);
+        app.view_state = ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should have cancelled confirmation
+        let dialog = app.send_dialog.as_ref().unwrap();
+        assert_eq!(
+            dialog.confirming, false,
+            "Should have cancelled confirmation"
+        );
+    }
+
+    #[test]
+    fn test_esc_closes_send_dialog() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.send_dialog = Some(crate::tui::views::send_dialog::SendDialog::new(
+            "test-pane".to_string(),
+            "test-agent".to_string(),
+            false,
+        ));
+        app.view_state = ViewState::SendDialog {
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should have closed the dialog and returned to PhaseDetail
+        assert!(app.send_dialog.is_none(), "Dialog should be closed");
+        match app.view_state {
+            ViewState::PhaseDetail { .. } => (),
+            _ => panic!("Should have returned to PhaseDetail"),
+        }
+    }
+
+    #[test]
+    fn test_execute_send_calls_send_keys() {
+        use tempfile::NamedTempFile;
+
+        // Create a temporary log file
+        let log_file = NamedTempFile::new().unwrap();
+        let log_path = log_file.path().to_path_buf();
+
+        let mut app = App {
+            should_quit: false,
+            orchestrations: vec![make_test_orchestration("project-1")],
+            selected_index: 0,
+            tick_rate: Duration::from_millis(100),
+            show_help: false,
+            watcher: None,
+            last_refresh: Instant::now(),
+            view_state: ViewState::PhaseDetail {
+                focus: PaneFocus::Members,
+                task_index: 0,
+                member_index: 0,
+            },
+            log_viewer: None,
+            send_dialog: Some(crate::tui::views::send_dialog::SendDialog {
+                input: "echo test".to_string(),
+                pane_id: "invalid-pane-for-test".to_string(),
+                agent_name: "test-agent".to_string(),
+                quick_action: 0,
+                needs_confirmation: false,
+                confirming: false,
+            }),
+            command_logger: Some(crate::logging::CommandLogger::new(log_path.clone())),
+        };
+
+        // Execute send - this will fail with invalid pane, but we verify it attempts to send
+        app.execute_send();
+
+        // Verify dialog was closed
+        assert!(
+            app.send_dialog.is_none(),
+            "Dialog should be closed after send"
+        );
+
+        // Verify returned to PhaseDetail with Members focus
+        match app.view_state {
+            ViewState::PhaseDetail {
+                focus: PaneFocus::Members,
+                ..
+            } => (),
+            _ => panic!("Should have returned to PhaseDetail with Members focus"),
+        }
+    }
+
+    #[test]
+    fn test_execute_send_logs_command() {
+        use std::io::Read;
+        use tempfile::NamedTempFile;
+
+        // Create a temporary log file
+        let log_file = NamedTempFile::new().unwrap();
+        let log_path = log_file.path().to_path_buf();
+
+        let mut app = App {
+            should_quit: false,
+            orchestrations: vec![make_test_orchestration("project-1")],
+            selected_index: 0,
+            tick_rate: Duration::from_millis(100),
+            show_help: false,
+            watcher: None,
+            last_refresh: Instant::now(),
+            view_state: ViewState::PhaseDetail {
+                focus: PaneFocus::Members,
+                task_index: 0,
+                member_index: 0,
+            },
+            log_viewer: None,
+            send_dialog: Some(crate::tui::views::send_dialog::SendDialog {
+                input: "echo logged command".to_string(),
+                pane_id: "test-pane-123".to_string(),
+                agent_name: "test-agent".to_string(),
+                quick_action: 0,
+                needs_confirmation: false,
+                confirming: false,
+            }),
+            command_logger: Some(crate::logging::CommandLogger::new(log_path.clone())),
+        };
+
+        // Execute send
+        app.execute_send();
+
+        // Read log file to verify command was logged
+        let mut log_contents = String::new();
+        std::fs::File::open(&log_path)
+            .unwrap()
+            .read_to_string(&mut log_contents)
+            .unwrap();
+
+        assert!(
+            log_contents.contains("test-pane-123"),
+            "Log should contain pane ID"
+        );
+        assert!(
+            log_contents.contains("echo logged command"),
+            "Log should contain the command"
+        );
+    }
+
+    #[test]
+    fn test_execute_send_returns_to_phase_detail() {
+        use tempfile::NamedTempFile;
+
+        // Create a temporary log file
+        let log_file = NamedTempFile::new().unwrap();
+        let log_path = log_file.path().to_path_buf();
+
+        let mut app = App {
+            should_quit: false,
+            orchestrations: vec![make_test_orchestration("project-1")],
+            selected_index: 0,
+            tick_rate: Duration::from_millis(100),
+            show_help: false,
+            watcher: None,
+            last_refresh: Instant::now(),
+            view_state: ViewState::PhaseDetail {
+                focus: PaneFocus::Tasks,
+                task_index: 2,
+                member_index: 3,
+            },
+            log_viewer: None,
+            send_dialog: Some(crate::tui::views::send_dialog::SendDialog {
+                input: "/checkpoint".to_string(),
+                pane_id: "test-pane-456".to_string(),
+                agent_name: "agent-x".to_string(),
+                quick_action: 1,
+                needs_confirmation: false,
+                confirming: false,
+            }),
+            command_logger: Some(crate::logging::CommandLogger::new(log_path)),
+        };
+
+        // Execute send
+        app.execute_send();
+
+        // Verify view state changed to PhaseDetail with Members focus
+        match app.view_state {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+            } => {
+                assert_eq!(focus, PaneFocus::Members, "Should switch to Members focus");
+                assert_eq!(task_index, 0, "Should reset task index to 0");
+                assert_eq!(member_index, 0, "Should reset member index to 0");
+            }
+            _ => panic!("Should be in PhaseDetail view after execute_send"),
+        }
+
+        // Verify dialog was closed
+        assert!(app.send_dialog.is_none(), "Dialog should be closed");
     }
 }
