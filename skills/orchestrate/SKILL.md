@@ -595,6 +595,50 @@ Then: Mark review-phase-N as in_progress
 7. Check TaskList for newly unblocked tasks
 8. Spawn next teammate
 
+### Phase Executor Monitoring
+
+The phase executor monitors the phase execution team using `tina-monitor` CLI:
+
+```bash
+PHASE_TEAM_NAME="$1"  # from prompt
+
+# Wait for team to be created
+while ! tina-monitor status team "$PHASE_TEAM_NAME" --format=json &>/dev/null; do
+  sleep 2
+done
+
+# Monitor until complete or blocked
+while true; do
+  STATUS=$(tina-monitor status team "$PHASE_TEAM_NAME" --format=json)
+  TEAM_STATUS=$(echo "$STATUS" | jq -r '.status')
+
+  case "$TEAM_STATUS" in
+    complete)
+      GIT_RANGE=$(echo "$STATUS" | jq -r '.metadata.git_range // empty')
+      # Report completion to orchestrator
+      break
+      ;;
+    blocked)
+      REASON=$(echo "$STATUS" | jq -r '.blocked_reason')
+      # Report blocked status to orchestrator
+      break
+      ;;
+    *)
+      sleep 10
+      ;;
+  esac
+done
+```
+
+**Fallback:** If `tina-monitor` is not installed, fall back to reading `.claude/tina/phase-N/status.json` directly:
+
+```bash
+STATUS_FILE="${WORKTREE_PATH}/.claude/tina/phase-${PHASE_NUM}/status.json"
+if [ -f "$STATUS_FILE" ]; then
+  PHASE_STATUS=$(jq -r '.status' "$STATUS_FILE")
+fi
+```
+
 ### Task Metadata Convention
 
 Orchestration tasks store metadata for monitoring and recovery:
