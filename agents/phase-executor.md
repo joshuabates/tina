@@ -15,6 +15,7 @@ You receive via spawn prompt:
 - `worktree_path`: Path to the worktree
 - `plan_path`: Path to the implementation plan
 - `feature_name`: Name of the feature (for tmux session naming)
+- `phase_team_name`: The name of the team executing this phase (e.g., auth-feature-phase-1)
 
 ## Your Job
 
@@ -103,33 +104,87 @@ tmux send-keys -t "$SESSION_NAME" Enter
 
 **NEVER combine these** - putting command and Enter on one line does NOT work.
 
-## Team Name Discovery
+## Phase Monitoring
 
-After sending the init command, wait for team-lead to write its team name:
+Monitor the phase execution team using the CLI with fallback to status files.
+
+### CLI-Based Monitoring (Primary)
+
+Use `tina-monitor` CLI to query the team status:
 
 ```bash
-TEAM_NAME_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/team-name.txt"
+PHASE_TEAM_NAME="$1"  # from invocation prompt
 
-# Poll for team name file (max 60 seconds)
-for i in $(seq 1 60); do
-  if [ -f "$TEAM_NAME_FILE" ]; then
-    TEAM_LEAD_TEAM=$(cat "$TEAM_NAME_FILE")
-    echo "Team-lead team: $TEAM_LEAD_TEAM"
+# Wait for team to be created (max 30 seconds)
+for i in $(seq 1 30); do
+  if tina-monitor status team "$PHASE_TEAM_NAME" --format=json 2>/dev/null; then
+    echo "Team created: $PHASE_TEAM_NAME"
     break
   fi
   sleep 1
 done
 
-if [ -z "$TEAM_LEAD_TEAM" ]; then
-  echo "Error: Team-lead did not write team name within 60 seconds"
-  # Message orchestrator about failure
-  exit 1
-fi
+# Monitor until complete or blocked
+while true; do
+  STATUS=$(tina-monitor status team "$PHASE_TEAM_NAME" --format=json 2>/dev/null)
+
+  if [ -z "$STATUS" ]; then
+    # Team not yet available, continue waiting
+    sleep 5
+    continue
+  fi
+
+  TEAM_STATUS=$(echo "$STATUS" | jq -r '.status // "unknown"' 2>/dev/null)
+
+  case "$TEAM_STATUS" in
+    complete)
+      GIT_RANGE=$(echo "$STATUS" | jq -r '.metadata.git_range // empty' 2>/dev/null)
+      echo "Phase complete. Git range: $GIT_RANGE"
+      break
+      ;;
+    blocked)
+      REASON=$(echo "$STATUS" | jq -r '.blocked_reason // "unknown"' 2>/dev/null)
+      echo "Phase blocked: $REASON"
+      exit 1
+      ;;
+    *)
+      sleep 10
+      ;;
+  esac
+done
 ```
 
-## Monitoring Loop
+### File-Based Monitoring (Fallback)
 
-Monitor phase execution until completion or error.
+If `tina-monitor` CLI is not available, fall back to reading status.json directly:
+
+```bash
+STATUS_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/status.json"
+
+# Monitor phase status file
+while true; do
+  if [ -f "$STATUS_FILE" ]; then
+    STATUS=$(jq -r '.status // "unknown"' "$STATUS_FILE" 2>/dev/null)
+
+    if [ "$STATUS" = "complete" ]; then
+      echo "Phase complete"
+      break
+    fi
+
+    if [ "$STATUS" = "blocked" ]; then
+      REASON=$(jq -r '.reason // "unknown"' "$STATUS_FILE" 2>/dev/null)
+      echo "Phase blocked: $REASON"
+      exit 1
+    fi
+  fi
+
+  sleep 10
+done
+```
+
+## Context Threshold Monitoring (Optional)
+
+During phase execution, optionally monitor context metrics to trigger checkpoints:
 
 **Context threshold tuning:**
 - Default threshold: 50% (conservative, triggers checkpoint early)
@@ -137,62 +192,23 @@ Monitor phase execution until completion or error.
 - Observed behavior: Most phases complete well under 50% context. Phases exceeding 50% typically have complex tasks that benefit from fresh context anyway.
 - Adjustment: Can raise to 70% for known short phases, lower to 40% for complex multi-task phases.
 
+If monitoring context:
+
 ```bash
 STATUS_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/status.json"
 METRICS_FILE="$WORKTREE_PATH/.claude/tina/context-metrics.json"
 CONTEXT_THRESHOLD=50
 
-while true; do
-    # 1. Check tmux session alive
-    if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-        # Check if phase completed before session died
-        if [ -f "$STATUS_FILE" ]; then
-            STATUS=$(jq -r '.status // "unknown"' "$STATUS_FILE" 2>/dev/null)
-            if [ "$STATUS" = "complete" ]; then
-                # Phase finished, session exit is expected
-                break
-            fi
-        fi
-        # Session died unexpectedly
-        # Message orchestrator: session_died
-        exit 1
+# Check context metrics periodically during phase monitoring
+if [ -f "$METRICS_FILE" ]; then
+    USED_PCT=$(jq -r '.used_pct // 0' "$METRICS_FILE" 2>/dev/null)
+
+    if [ "$(echo "$USED_PCT >= $CONTEXT_THRESHOLD" | bc)" -eq 1 ]; then
+        # Context threshold exceeded - trigger checkpoint
+        # Message orchestrator: context_threshold with pct
+        # Then trigger checkpoint sequence (see Checkpoint Sequence section)
     fi
-
-    # 2. Check phase status
-    if [ -f "$STATUS_FILE" ]; then
-        STATUS=$(jq -r '.status // "unknown"' "$STATUS_FILE" 2>/dev/null)
-
-        if [ "$STATUS" = "complete" ]; then
-            # Phase complete - success
-            break
-        fi
-
-        if [ "$STATUS" = "blocked" ]; then
-            REASON=$(jq -r '.reason // "unknown"' "$STATUS_FILE" 2>/dev/null)
-            # Message orchestrator: phase_blocked with reason
-            exit 1
-        fi
-    fi
-
-    # 3. Check context metrics
-    if [ -f "$METRICS_FILE" ]; then
-        USED_PCT=$(jq -r '.used_pct // 0' "$METRICS_FILE" 2>/dev/null)
-
-        if [ "$(echo "$USED_PCT >= $CONTEXT_THRESHOLD" | bc)" -eq 1 ]; then
-            # Context threshold exceeded - trigger checkpoint
-            # Message orchestrator: context_threshold with pct
-            # Then trigger checkpoint sequence (see below)
-        fi
-    fi
-
-    # Monitoring interval tuning:
-    # - 15 seconds balances responsiveness with resource usage
-    # - Shorter (5s): Faster checkpoint/completion detection, higher CPU for executor
-    # - Longer (30s): Lower overhead, but slower reaction to context threshold
-    # - Observed: Most task completions happen in 1-5 minute chunks. 15s catches
-    #   completion within one poll cycle while keeping executor lightweight.
-    sleep 15
-done
+fi
 ```
 
 ## Checkpoint Sequence
@@ -271,9 +287,10 @@ Use Teammate tool to message the orchestrator:
 - Wait up to 30 seconds for prompt
 - If timeout: message orchestrator, exit with error
 
-**Team-lead doesn't write team name:**
-- Wait up to 60 seconds
-- If timeout: message orchestrator, exit with error
+**Team doesn't initialize:**
+- Monitor via CLI with max 30 second timeout for team creation
+- If team not available: message orchestrator with team_init_timeout
+- Orchestrator decides whether to retry or escalate
 
 **Tmux session dies unexpectedly:**
 - Check if phase was complete (proceed if yes)
@@ -281,7 +298,7 @@ Use Teammate tool to message the orchestrator:
 - Orchestrator decides whether to retry or escalate
 
 **Phase blocked:**
-- Read reason from status.json
+- Read reason from CLI status or status.json (fallback)
 - Message orchestrator with phase_blocked and reason
 - Exit (orchestrator handles remediation)
 
@@ -289,3 +306,7 @@ Use Teammate tool to message the orchestrator:
 - If handoff not written within 5 minutes
 - Message orchestrator with checkpoint_timeout
 - Orchestrator decides whether to force-kill or escalate
+
+**CLI unavailable:**
+- Fall back to status.json file monitoring (see File-Based Monitoring section)
+- Phase will complete using status file checks
