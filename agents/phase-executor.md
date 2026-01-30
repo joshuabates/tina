@@ -26,7 +26,27 @@ You receive via spawn prompt:
 
 ## Tmux Session Management
 
+### Check for Existing Session (Resume Support)
+
+Before creating a new session, check if one already exists:
+
+```bash
+SESSION_NAME="tina-$FEATURE_NAME-phase-$PHASE_NUM"
+
+# Check if session already exists
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    echo "Found existing tmux session: $SESSION_NAME"
+    # Session exists - skip creation, go directly to monitoring
+    # This handles resume after executor crash
+else
+    # No existing session - create new one
+    # Continue to "Creating the Session" below
+fi
+```
+
 ### Creating the Session
+
+Only create if session does not exist:
 
 ```bash
 SESSION_NAME="tina-$FEATURE_NAME-phase-$PHASE_NUM"
@@ -50,9 +70,31 @@ for i in $(seq 1 30); do
 done
 ```
 
+### Check Phase Status Before Sending Commands
+
+Before sending team-lead-init, check if the phase is already complete or in progress:
+
+```bash
+STATUS_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/status.json"
+
+if [ -f "$STATUS_FILE" ]; then
+    STATUS=$(jq -r '.status // "unknown"' "$STATUS_FILE" 2>/dev/null)
+
+    if [ "$STATUS" = "complete" ]; then
+        echo "Phase already complete - skipping to completion reporting"
+        # Jump to Completion section
+    fi
+
+    if [ "$STATUS" = "executing" ]; then
+        echo "Phase already executing - skip init, go to monitoring"
+        # Jump to Monitoring Loop (team-lead-init already ran)
+    fi
+fi
+```
+
 ### Sending Commands
 
-**CRITICAL:** Command and Enter MUST be two separate tmux send-keys calls:
+Only send if phase not already started. **CRITICAL:** Command and Enter MUST be two separate tmux send-keys calls:
 
 ```bash
 tmux send-keys -t "$SESSION_NAME" "/tina:team-lead-init $PLAN_PATH"
