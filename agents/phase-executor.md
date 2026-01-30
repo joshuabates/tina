@@ -129,7 +129,13 @@ fi
 
 ## Monitoring Loop
 
-Monitor phase execution until completion or error:
+Monitor phase execution until completion or error.
+
+**Context threshold tuning:**
+- Default threshold: 50% (conservative, triggers checkpoint early)
+- Rationale: Team-lead checkpoints are expensive (context save/restore). Triggering too late risks data loss if checkpoint fails. Triggering too early wastes compute.
+- Observed behavior: Most phases complete well under 50% context. Phases exceeding 50% typically have complex tasks that benefit from fresh context anyway.
+- Adjustment: Can raise to 70% for known short phases, lower to 40% for complex multi-task phases.
 
 ```bash
 STATUS_FILE="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/status.json"
