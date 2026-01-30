@@ -11,6 +11,43 @@ use crate::data::watcher::{FileWatcher, WatchEvent};
 /// Result type for TUI operations
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error>>;
 
+/// Which view/modal is currently active
+#[derive(Debug, Clone, PartialEq)]
+pub enum ViewState {
+    /// Main orchestration list view
+    OrchestrationList,
+    /// Phase detail view
+    PhaseDetail {
+        /// Which pane has focus
+        focus: PaneFocus,
+        /// Selected task index
+        task_index: usize,
+        /// Selected member index
+        member_index: usize,
+    },
+    /// Task inspector modal
+    TaskInspector {
+        /// Selected task index
+        task_index: usize,
+    },
+    /// Log viewer modal
+    LogViewer {
+        /// Selected agent index
+        agent_index: usize,
+        /// Scroll offset
+        scroll_offset: usize,
+    },
+}
+
+/// Which pane has focus in PhaseDetail view
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PaneFocus {
+    /// Tasks pane
+    Tasks,
+    /// Members pane
+    Members,
+}
+
 /// Main TUI application state
 pub struct App {
     /// Whether the application should quit
@@ -27,6 +64,8 @@ pub struct App {
     pub(crate) watcher: Option<FileWatcher>,
     /// Time of last refresh (for debouncing)
     pub(crate) last_refresh: Instant,
+    /// Current view state
+    pub view_state: ViewState,
 }
 
 impl App {
@@ -43,6 +82,7 @@ impl App {
             show_help: false,
             watcher,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         })
     }
 
@@ -59,6 +99,7 @@ impl App {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         }
     }
 
@@ -123,26 +164,74 @@ impl App {
 
     /// Handle a key event
     fn handle_key_event(&mut self, key: KeyEvent) {
+        // Global keys work in all views
         match key.code {
-            KeyCode::Char('?') => self.show_help = !self.show_help,
+            KeyCode::Char('?') => {
+                self.show_help = !self.show_help;
+                return;
+            }
             KeyCode::Esc => {
                 if self.show_help {
                     self.show_help = false;
                 } else {
                     self.should_quit = true;
                 }
+                return;
             }
-            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('q') => {
+                self.should_quit = true;
+                return;
+            }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.should_quit = true
-            }
-            KeyCode::Char('j') => self.next(),
-            KeyCode::Char('k') => self.previous(),
-            KeyCode::Char('r') => {
-                let _ = self.refresh();
+                self.should_quit = true;
+                return;
             }
             _ => {}
         }
+
+        // Dispatch to view-specific handler
+        match &self.view_state {
+            ViewState::OrchestrationList => self.handle_orchestration_list_key(key),
+            ViewState::PhaseDetail { .. } => self.handle_phase_detail_key(key),
+            ViewState::TaskInspector { .. } => self.handle_task_inspector_key(key),
+            ViewState::LogViewer { .. } => self.handle_log_viewer_key(key),
+        }
+    }
+
+    /// Handle key events in OrchestrationList view
+    fn handle_orchestration_list_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('j') | KeyCode::Down => self.next(),
+            KeyCode::Char('k') | KeyCode::Up => self.previous(),
+            KeyCode::Char('r') => {
+                let _ = self.refresh();
+            }
+            KeyCode::Enter => {
+                if !self.orchestrations.is_empty() {
+                    self.view_state = ViewState::PhaseDetail {
+                        focus: PaneFocus::Tasks,
+                        task_index: 0,
+                        member_index: 0,
+                    };
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle key events in PhaseDetail view (stub)
+    fn handle_phase_detail_key(&mut self, _key: KeyEvent) {
+        // TODO: Implement in Task 2
+    }
+
+    /// Handle key events in TaskInspector view (stub)
+    fn handle_task_inspector_key(&mut self, _key: KeyEvent) {
+        // TODO: Implement in Task 4
+    }
+
+    /// Handle key events in LogViewer view (stub)
+    fn handle_log_viewer_key(&mut self, _key: KeyEvent) {
+        // TODO: Implement in Task 6
     }
 
     /// Run the application event loop
@@ -192,6 +281,109 @@ mod tests {
     }
 
     #[test]
+    fn test_app_starts_in_orchestration_list_view() {
+        let app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        assert!(matches!(app.view_state, ViewState::OrchestrationList));
+    }
+
+    #[test]
+    fn test_global_question_mark_toggles_help_in_any_view() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+
+        // Start in OrchestrationList
+        assert!(!app.show_help);
+
+        let key = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE);
+        app.handle_key_event(key.clone());
+        assert!(app.show_help, "'?' should show help in OrchestrationList");
+
+        app.handle_key_event(key);
+        assert!(!app.show_help, "'?' should hide help in OrchestrationList");
+    }
+
+    #[test]
+    fn test_global_q_quits_from_any_view() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+
+        assert!(!app.should_quit);
+
+        let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+        assert!(app.should_quit, "'q' should quit from OrchestrationList");
+    }
+
+    #[test]
+    fn test_global_ctrl_c_quits_from_any_view() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+
+        assert!(!app.should_quit);
+
+        let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        app.handle_key_event(key);
+        assert!(app.should_quit, "Ctrl+C should quit from OrchestrationList");
+    }
+
+    #[test]
+    fn test_esc_closes_help_without_changing_view() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.show_help = true;
+
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        assert!(!app.show_help, "Esc should close help");
+        assert!(matches!(app.view_state, ViewState::OrchestrationList), "View should remain OrchestrationList");
+        assert!(!app.should_quit, "Should not quit");
+    }
+
+    #[test]
+    fn test_navigation_keys_work_in_orchestration_list() {
+        let mut app = App::new_with_orchestrations(vec![
+            make_test_orchestration("project-1"),
+            make_test_orchestration("project-2"),
+        ]);
+
+        assert_eq!(app.selected_index, 0);
+
+        let j_key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        app.handle_key_event(j_key);
+        assert_eq!(app.selected_index, 1, "'j' should navigate in OrchestrationList");
+
+        let k_key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
+        app.handle_key_event(k_key);
+        assert_eq!(app.selected_index, 0, "'k' should navigate in OrchestrationList");
+    }
+
+    #[test]
+    fn test_keys_dispatch_based_on_view_state() {
+        let mut app = App::new_with_orchestrations(vec![
+            make_test_orchestration("project-1"),
+            make_test_orchestration("project-2"),
+        ]);
+
+        // In OrchestrationList, j/k should navigate
+        app.view_state = ViewState::OrchestrationList;
+        assert_eq!(app.selected_index, 0);
+
+        let j_key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
+        app.handle_key_event(j_key.clone());
+        assert_eq!(app.selected_index, 1, "'j' should navigate in OrchestrationList");
+
+        // In PhaseDetail, j/k should NOT navigate orchestration list
+        app.view_state = ViewState::PhaseDetail {
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+        };
+        let initial_index = app.selected_index;
+        app.handle_key_event(j_key);
+        assert_eq!(
+            app.selected_index, initial_index,
+            "'j' should not navigate orchestration list in PhaseDetail view"
+        );
+    }
+
+    #[test]
     fn test_next_wraps_around_at_end() {
         let mut app = App {
             should_quit: false,
@@ -205,6 +397,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         app.next();
@@ -225,6 +418,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         app.previous();
@@ -241,6 +435,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         app.next();
@@ -257,6 +452,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         app.previous();
@@ -273,6 +469,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
@@ -290,6 +487,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
@@ -310,6 +508,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         let key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
@@ -330,6 +529,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
@@ -347,6 +547,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         let key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
@@ -364,6 +565,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         let key = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE);
@@ -387,6 +589,7 @@ mod tests {
             show_help: true,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
@@ -405,6 +608,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
@@ -422,6 +626,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         assert_eq!(app.orchestrations.len(), 1);
@@ -438,10 +643,79 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         };
 
         // Should not panic when watcher is None
         app.check_watcher();
         assert!(!app.should_quit);
+    }
+
+    // Task 2: Enter key handling tests
+    #[test]
+    fn test_enter_transitions_to_phase_detail_when_orchestrations_exist() {
+        let mut app = App::new_with_orchestrations(vec![
+            make_test_orchestration("project-1"),
+            make_test_orchestration("project-2"),
+        ]);
+        app.selected_index = 1;
+        app.view_state = ViewState::OrchestrationList;
+
+        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        assert!(
+            matches!(
+                app.view_state,
+                ViewState::PhaseDetail {
+                    focus: PaneFocus::Tasks,
+                    task_index: 0,
+                    member_index: 0,
+                }
+            ),
+            "Enter should transition to PhaseDetail view with focus on Tasks"
+        );
+    }
+
+    #[test]
+    fn test_enter_does_nothing_when_orchestrations_list_is_empty() {
+        let mut app = App::new_with_orchestrations(vec![]);
+        app.view_state = ViewState::OrchestrationList;
+
+        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        assert!(
+            matches!(app.view_state, ViewState::OrchestrationList),
+            "Enter should not change view when orchestrations list is empty"
+        );
+    }
+
+    #[test]
+    fn test_down_arrow_navigates_in_orchestration_list() {
+        let mut app = App::new_with_orchestrations(vec![
+            make_test_orchestration("project-1"),
+            make_test_orchestration("project-2"),
+        ]);
+        app.selected_index = 0;
+
+        let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        assert_eq!(app.selected_index, 1, "Down arrow should navigate down");
+    }
+
+    #[test]
+    fn test_up_arrow_navigates_in_orchestration_list() {
+        let mut app = App::new_with_orchestrations(vec![
+            make_test_orchestration("project-1"),
+            make_test_orchestration("project-2"),
+        ]);
+        app.selected_index = 1;
+
+        let key = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        assert_eq!(app.selected_index, 0, "Up arrow should navigate up");
     }
 }
