@@ -502,30 +502,138 @@ Then: Mark review-phase-N as in_progress
 
 ### Event Loop
 
-The orchestrator waits for teammate messages and reacts:
+The orchestrator is event-driven: it waits for teammate messages and reacts. No polling.
 
+**Message delivery:**
+Messages from teammates are automatically delivered when you're between turns. The UI shows "Queued teammate messages" when messages are waiting.
+
+**Message parsing patterns:**
+
+Each teammate sends a structured completion message. Parse these patterns:
+
+| Teammate | Success Pattern | Failure Pattern |
+|----------|----------------|-----------------|
+| validator | `VALIDATION_STATUS: Pass` or `VALIDATION_STATUS: Warning` | `VALIDATION_STATUS: Stop` |
+| worktree-setup | `setup-worktree complete. worktree_path: X, branch: Y` | `setup-worktree error: X` |
+| planner-N | `plan-phase-N complete. PLAN_PATH: X` | `plan-phase-N error: X` |
+| executor-N | `execute-N complete. Git range: X..Y` | `execute-N error: X` |
+| reviewer-N | `review-N complete (pass)` or `review-N complete (gaps): X` | `review-N error: X` |
+
+**Event handlers:**
+
+**On validator message:**
 ```
-On teammate message:
-+-- validator says "VALIDATION_STATUS: Pass/Warning"
-|   -> Mark task complete, spawn worktree-setup
-+-- validator says "VALIDATION_STATUS: Stop"
-|   -> Mark task complete, report failure, exit
-+-- worktree-setup says "complete" with worktree_path
-|   -> Store path in metadata, spawn planner-1
-+-- planner-N says "complete" with PLAN_PATH
-|   -> Store path in metadata, spawn executor-N
-+-- executor-N says "complete" with git_range
-|   -> Store range in metadata, spawn reviewer-N
-+-- reviewer-N says "pass"
-|   -> If more phases: spawn planner-(N+1)
-|   -> If last phase: invoke finishing workflow
-+-- reviewer-N says "gaps" with issues
-|   -> Create remediation phase N.5
-|   -> Update dependencies
-|   -> Spawn planner-N.5
-+-- Any teammate says "error"
-    -> Retry once, then escalate
+if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
+    TaskUpdate: validate-design, status: completed
+    TaskUpdate: validate-design, metadata: { validation_status: "pass" or "warning" }
+    Spawn worktree-setup teammate
+    Print: "Design validated. Setting up worktree..."
+
+if message contains "VALIDATION_STATUS: Stop":
+    TaskUpdate: validate-design, status: completed
+    TaskUpdate: validate-design, metadata: { validation_status: "stop" }
+    Print: "Design validation FAILED. See .claude/tina/validation/design-report.md"
+    Exit orchestration
 ```
+
+**On worktree-setup message:**
+```
+if message contains "setup-worktree complete":
+    Parse: worktree_path from "worktree_path: X"
+    Parse: branch from "branch: Y"
+    TaskUpdate: setup-worktree, status: completed
+    TaskUpdate: setup-worktree, metadata: { worktree_path: X, branch: Y }
+    Spawn planner-1 teammate
+    Print: "Worktree created at X. Planning phase 1..."
+
+if message contains "error":
+    TaskUpdate: setup-worktree, status: completed, metadata: { error: message }
+    Print error and exit
+```
+
+**On planner-N message:**
+```
+if message contains "plan-phase-N complete":
+    Parse: PLAN_PATH from "PLAN_PATH: X"
+    TaskUpdate: plan-phase-N, status: completed
+    TaskUpdate: plan-phase-N, metadata: { plan_path: X }
+
+    # Get worktree path from earlier task
+    worktree_task = TaskGet: setup-worktree
+    worktree_path = worktree_task.metadata.worktree_path
+
+    Spawn executor-N teammate with plan_path and worktree_path
+    Print: "Phase N planned. Executing..."
+
+if message contains "error":
+    Retry once, then exit with error
+```
+
+**On executor-N message:**
+```
+if message contains "execute-N complete":
+    Parse: git_range from "Git range: X..Y"
+    TaskUpdate: execute-phase-N, status: completed
+    TaskUpdate: execute-phase-N, metadata: { git_range: X..Y }
+
+    # Get worktree path and design doc for reviewer
+    worktree_task = TaskGet: setup-worktree
+    worktree_path = worktree_task.metadata.worktree_path
+
+    Spawn reviewer-N teammate
+    Print: "Phase N executed. Reviewing..."
+
+if message contains "session_died" or "error":
+    Retry once, then exit with error
+```
+
+**On reviewer-N message:**
+```
+if message contains "review-N complete (pass)":
+    TaskUpdate: review-phase-N, status: completed
+    TaskUpdate: review-phase-N, metadata: { status: "pass" }
+
+    if N < TOTAL_PHASES:
+        Spawn planner-(N+1) teammate
+        Print: "Phase N passed review. Planning phase N+1..."
+    else:
+        # Last phase - finalize
+        Mark finalize as in_progress
+        Invoke tina:finishing-a-development-branch
+        Print: "All phases complete. Ready for merge/PR workflow."
+
+if message contains "review-N complete (gaps)":
+    Parse: issues list from message
+    TaskUpdate: review-phase-N, status: completed
+    TaskUpdate: review-phase-N, metadata: { status: "gaps", issues: [...] }
+
+    Create remediation tasks (see Remediation Flow)
+    Spawn planner-N.5
+    Print: "Phase N has gaps. Creating remediation phase N.5..."
+
+if message contains "error":
+    Exit with error
+```
+
+**Error handling:**
+
+For any error message:
+1. Log the full error
+2. Check if this is first retry
+3. If first retry: respawn the teammate
+4. If second failure: exit with error, leave tasks for manual inspection
+
+**Retry tracking:**
+
+Track retries in task metadata:
+```json
+TaskUpdate {
+  "taskId": "execute-phase-1",
+  "metadata": { "retry_count": 1 }
+}
+```
+
+Max 1 retry per task before escalating.
 
 ### Remediation Flow
 
