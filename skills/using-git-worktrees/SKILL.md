@@ -191,6 +191,28 @@ Tests passing (47 tests, 0 failures)
 Ready to implement auth feature
 ```
 
+## Critical Shell Corruption Warning
+
+**NEVER cd into a worktree directory before removing it.**
+
+When you remove a worktree while the shell's CWD is inside it, the Bash tool becomes permanently broken for the entire session. All subsequent Bash commands will fail with exit code 1.
+
+**Always cd to project root before removal:**
+
+```bash
+# WRONG - breaks shell
+cd .worktrees/feature
+git worktree remove .worktrees/feature  # ← shell corruption!
+
+# RIGHT - safe removal
+cd "$(git rev-parse --show-toplevel)"
+git worktree remove .worktrees/feature  # ← safe
+```
+
+**Why this happens:** Bash maintains persistent CWD state. Deleting the CWD leaves the shell in an invalid state that cannot be recovered without starting a new session.
+
+**Recovery:** None within session. User must commit manually and start new session.
+
 ## Red Flags
 
 **Never:**
@@ -199,12 +221,14 @@ Ready to implement auth feature
 - Proceed with failing tests without asking
 - Assume directory location when ambiguous
 - Skip CLAUDE.md check
+- **cd into a worktree before removing it (causes permanent shell corruption)**
 
 **Always:**
 - Follow directory priority: existing > CLAUDE.md > ask
 - Verify directory is ignored for project-local
 - Auto-detect and run project setup
 - Verify clean test baseline
+- **cd to project root before removing any worktree**
 
 ## Integration
 

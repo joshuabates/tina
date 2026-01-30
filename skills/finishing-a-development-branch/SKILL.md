@@ -144,10 +144,15 @@ git worktree list | grep $(git branch --show-current)
 
 If yes:
 ```bash
+# CRITICAL: cd to project root BEFORE removing worktree
+# Removing worktree while CWD is inside it causes permanent shell corruption
+cd "$(git rev-parse --show-toplevel)"
 git worktree remove <worktree-path>
 ```
 
 **For Option 3:** Keep worktree.
+
+**Why cd first:** If you remove a worktree while the shell's CWD is inside it, the Bash tool becomes permanently broken for the entire session. Always cd to project root before removal.
 
 ## Quick Reference
 
@@ -176,6 +181,10 @@ git worktree remove <worktree-path>
 - **Problem:** Accidentally delete work
 - **Fix:** Require typed "discard" confirmation
 
+**Removing worktree without cd'ing out first**
+- **Problem:** Permanent shell corruption, all Bash commands fail for rest of session
+- **Fix:** ALWAYS `cd "$(git rev-parse --show-toplevel)"` before `git worktree remove`
+
 ## Red Flags
 
 **Never:**
@@ -183,12 +192,14 @@ git worktree remove <worktree-path>
 - Merge without verifying tests on result
 - Delete work without confirmation
 - Force-push without explicit request
+- **Remove worktree without cd'ing to project root first (causes shell corruption)**
 
 **Always:**
 - Verify tests before offering options
 - Present exactly 4 options
 - Get typed confirmation for Option 4
 - Clean up worktree for Options 1 & 4 only
+- **cd to project root (`cd "$(git rev-parse --show-toplevel)"`) before removing worktree**
 
 ## Integration
 
