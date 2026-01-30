@@ -404,57 +404,101 @@ Later tasks can read this metadata to get paths they need.
 
 ### Spawning Teammates
 
-When a task becomes unblocked, spawn the appropriate teammate:
+When a task becomes unblocked (all blockedBy tasks complete), spawn the appropriate teammate.
 
-**Design validator:**
+**Getting metadata from completed tasks:**
+
+Before spawning, often need data from earlier tasks. Use TaskGet to retrieve:
+
+```bash
+# Example: Get worktree path for executor
+WORKTREE_TASK=$(TaskGet { taskId: "setup-worktree" })
+WORKTREE_PATH=$WORKTREE_TASK.metadata.worktree_path
+
+# Example: Get plan path for executor
+PLAN_TASK=$(TaskGet { taskId: "plan-phase-$N" })
+PLAN_PATH=$PLAN_TASK.metadata.plan_path
+```
+
+**Design validator spawn:**
+
+When: validate-design task is unblocked (always first)
 ```json
 {
   "subagent_type": "tina:design-validator",
-  "team_name": "feature-orchestration",
+  "team_name": "<TEAM_NAME>",
   "name": "validator",
-  "prompt": "Design doc: path\nOutput file: .claude/tina/validation/design-report.md"
+  "prompt": "Design doc: <DESIGN_DOC>\nOutput file: .claude/tina/validation/design-report.md\n\nValidate this design and write your report to the output file.\nReturn ONLY: VALIDATION_STATUS: Pass/Warning/Stop"
 }
 ```
+Then: Mark validate-design as in_progress
 
-**Worktree setup:**
+**Worktree setup spawn:**
+
+When: validate-design complete with Pass or Warning
+Prerequisites: None (uses design doc path from team description)
 ```json
 {
   "subagent_type": "tina:worktree-setup",
-  "team_name": "feature-orchestration",
+  "team_name": "<TEAM_NAME>",
   "name": "worktree-setup",
-  "prompt": "feature_name: feature\ndesign_doc_path: path"
+  "prompt": "feature_name: <FEATURE_NAME>\ndesign_doc_path: <DESIGN_DOC>\n\nCreate worktree and provision statusline config.\nReport: setup-worktree complete. worktree_path: <PATH>, branch: <BRANCH>"
 }
 ```
+Then: Mark setup-worktree as in_progress
 
-**Phase planner:**
+**Phase planner spawn:**
+
+When: setup-worktree complete (for phase 1) OR review-phase-(N-1) complete with pass (for phase N>1)
+Prerequisites: Need DESIGN_DOC from team description
 ```json
 {
   "subagent_type": "tina:phase-planner",
-  "team_name": "feature-orchestration",
-  "name": "planner-N",
-  "prompt": "phase_num: N\ndesign_doc_path: path"
+  "team_name": "<TEAM_NAME>",
+  "name": "planner-<N>",
+  "prompt": "phase_num: <N>\ndesign_doc_path: <DESIGN_DOC>\n\nCreate implementation plan for phase <N>.\nReport: plan-phase-<N> complete. PLAN_PATH: <PATH>"
 }
 ```
+Then: Mark plan-phase-N as in_progress
 
-**Phase executor:**
+**Phase executor spawn:**
+
+When: plan-phase-N complete
+Prerequisites: Need worktree_path (from setup-worktree metadata), plan_path (from plan-phase-N metadata)
 ```json
 {
   "subagent_type": "tina:phase-executor",
-  "team_name": "feature-orchestration",
-  "name": "executor-N",
-  "prompt": "phase_num: N\nworktree_path: path\nplan_path: path\nfeature_name: feature"
+  "team_name": "<TEAM_NAME>",
+  "name": "executor-<N>",
+  "prompt": "phase_num: <N>\nworktree_path: <WORKTREE_PATH>\nplan_path: <PLAN_PATH>\nfeature_name: <FEATURE_NAME>\n\nStart team-lead in tmux and monitor until phase completes.\nReport: execute-<N> complete. Git range: <BASE>..<HEAD>"
 }
 ```
+Then: Mark execute-phase-N as in_progress
 
-**Phase reviewer:**
+**Phase reviewer spawn:**
+
+When: execute-phase-N complete
+Prerequisites: Need worktree_path, design_doc, git_range (from execute-phase-N metadata)
 ```json
 {
   "subagent_type": "tina:phase-reviewer",
-  "team_name": "feature-orchestration",
-  "name": "reviewer-N",
-  "prompt": "phase_num: N\nworktree_path: path\ndesign_doc_path: path\ngit_range: base..head"
+  "team_name": "<TEAM_NAME>",
+  "name": "reviewer-<N>",
+  "prompt": "phase_num: <N>\nworktree_path: <WORKTREE_PATH>\ndesign_doc_path: <DESIGN_DOC>\ngit_range: <GIT_RANGE>\n\nReview phase <N> implementation.\nReport: review-<N> complete (pass) OR review-<N> complete (gaps): <issue list>"
 }
 ```
+Then: Mark review-phase-N as in_progress
+
+**Teammate lifecycle:**
+
+1. Spawn teammate with Task tool
+2. Mark task as in_progress via TaskUpdate
+3. Wait for teammate message
+4. Parse message content
+5. Store relevant data in task metadata
+6. Mark task as completed
+7. Check TaskList for newly unblocked tasks
+8. Spawn next teammate
 
 ### Event Loop
 
