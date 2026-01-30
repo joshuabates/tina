@@ -52,6 +52,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     fn make_test_app() -> App {
+        use crate::tui::app::ViewState;
         App {
             should_quit: false,
             orchestrations: vec![],
@@ -60,10 +61,12 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         }
     }
 
     fn make_test_app_with_orchestrations() -> App {
+        use crate::tui::app::ViewState;
         let orchestration = Orchestration {
             team_name: "test-team".to_string(),
             title: "Test Project".to_string(),
@@ -84,6 +87,7 @@ mod tests {
             show_help: false,
             watcher: None,
             last_refresh: Instant::now(),
+            view_state: ViewState::OrchestrationList,
         }
     }
 

@@ -4,3 +4,4 @@
 
 pub mod help;
 pub mod orchestration_list;
+pub mod phase_detail;
