@@ -752,20 +752,130 @@ If `remediation_depth >= 2` and still finding gaps, exit with error requiring hu
 
 ### Task List as Source of Truth
 
-The task list IS the recovery mechanism. No separate state file needed.
+The task list IS the recovery mechanism. All orchestration state lives in:
+- Task status (pending, in_progress, completed)
+- Task metadata (worktree_path, plan_path, git_range, etc.)
+- Task dependencies (blockedBy relationships)
 
-### Orchestrator Crash
+No separate supervisor-state.json needed.
 
+### Detecting Existing Orchestration
+
+When orchestrate is invoked, check if orchestration already exists for this design doc:
+
+```bash
+# Extract feature name from design doc
+FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
+TEAM_NAME="${FEATURE_NAME}-orchestration"
+
+# Check if team config exists
+TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}.json"
+if [ -f "$TEAM_CONFIG" ]; then
+    echo "Found existing orchestration team: $TEAM_NAME"
+    # Resume from task list
+else
+    echo "Starting new orchestration"
+    # Create team and tasks from scratch
+fi
+```
+
+### Resumption Logic
+
+When resuming from existing task list:
+
+**Step 1: Read task list**
+```
+TaskList
+# Returns all tasks with their status and dependencies
+```
+
+**Step 2: Find current state**
+```
+for each task in TaskList:
+    if task.status == "in_progress":
+        CURRENT_TASK = task
+        break
+    if task.status == "pending" and task.blockedBy all complete:
+        NEXT_TASK = task
+```
+
+**Step 3: Resume based on state**
+
+| State | Action |
+|-------|--------|
+| in_progress task found | Check if teammate still active, respawn if not |
+| No in_progress, have pending unblocked | Spawn teammate for next task |
+| All tasks complete except finalize | Invoke finishing workflow |
+| All tasks complete | Report completion |
+
+**Step 4: Check teammate health**
+
+If task is in_progress, the teammate might be:
+- Still running (wait for message)
+- Dead (respawn)
+- Never started (spawn)
+
+Check by looking at recent messages and task metadata.
+
+### Crash Scenarios
+
+**Orchestrator crashes mid-task:**
 1. User reruns `/tina:orchestrate design.md`
-2. Orchestrator finds existing team matching design doc
-3. Reads task list, identifies incomplete tasks
-4. Resumes: respawns teammate for current incomplete task
+2. Orchestrator finds existing team
+3. Reads task list, finds in_progress task
+4. Respawns teammate for that task
+5. Continues normally
 
-### Teammate Crash
+**Teammate crashes:**
+1. Orchestrator doesn't receive completion message
+2. After timeout (handled by orchestrator turning idle), orchestrator checks task status
+3. Task still in_progress but no teammate messages -> respawn
+4. Retry count tracked in metadata (max 1 retry)
 
-1. Orchestrator notices no messages for extended period
-2. Orchestrator respawns same teammate type for same task
-3. Teammates are stateless - they read task description and execute
+**Tmux session crashes (executor's tmux):**
+1. Executor teammate detects session died
+2. Executor messages orchestrator: "execute-N error: session_died"
+3. Orchestrator respawns executor
+4. Executor checks for existing session, starts new one if needed
+5. If phase was complete (status.json shows complete), proceed to reviewer
+
+### Manual Recovery Commands
+
+If automatic recovery fails, user can:
+
+1. **Check current state:**
+```
+TaskList
+# Shows all tasks with status
+```
+
+2. **Force respawn a teammate:**
+```
+# Mark task back to pending, then spawn manually
+TaskUpdate { taskId: "execute-phase-1", status: "pending" }
+# Then rerun orchestrate to pick it up
+```
+
+3. **Skip a task (mark complete without running):**
+```
+TaskUpdate { taskId: "review-phase-1", status: "completed", metadata: { manual_skip: true } }
+```
+
+4. **Clean up and restart:**
+```
+# Delete team config and task directory
+rm -rf ~/.claude/teams/${TEAM_NAME}.json
+rm -rf ~/.claude/tasks/${TEAM_NAME}/
+# Then rerun orchestrate for fresh start
+```
+
+### Prevention
+
+To minimize recovery needs:
+- Each teammate is stateless and idempotent
+- Task metadata persists across crashes
+- Dependencies automatically gate execution
+- Retries are built in (1 per task)
 
 ## Integration
 
