@@ -8,14 +8,9 @@ use ratatui::{
     Frame,
 };
 
-/// Render the help modal
-pub fn render_help(frame: &mut Frame) {
-    let area = centered_rect(60, 60, frame.area());
-
-    // Clear the area first
-    frame.render_widget(Clear, area);
-
-    let help_text = vec![
+/// Get the help text lines for testing
+fn get_help_text() -> Vec<Line<'static>> {
+    vec![
         Line::from(vec![
             Span::styled("Orchestration List:", Style::default().add_modifier(Modifier::BOLD)),
         ]),
@@ -34,6 +29,8 @@ pub fn render_help(frame: &mut Frame) {
         Line::from("  Enter                Open task inspector (when task focused)"),
         Line::from("  l                    View agent logs (when member focused)"),
         Line::from("  a                    Attach to agent's tmux pane (when member focused)"),
+        Line::from("  c                    View commits for current phase"),
+        Line::from("  d                    View diff stats for current phase"),
         Line::from("  Esc                  Return to orchestration list"),
         Line::from(""),
         Line::from(vec![
@@ -44,16 +41,33 @@ pub fn render_help(frame: &mut Frame) {
         Line::from(vec![
             Span::styled("Log Viewer:", Style::default().add_modifier(Modifier::BOLD)),
         ]),
-        Line::from("  j / k                Scroll up/down"),
-        Line::from("  d / u                Page down/up"),
+        Line::from("  f                    Toggle follow mode"),
+        Line::from("  G                    Jump to bottom"),
+        Line::from("  PgUp / PgDn          Scroll page up/down"),
         Line::from("  Esc                  Close log viewer"),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("Diff Viewer:", Style::default().add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from("  Enter                Toggle full diff view"),
+        Line::from("  Esc                  Close diff viewer"),
         Line::from(""),
         Line::from(vec![
             Span::styled("Global:", Style::default().add_modifier(Modifier::BOLD)),
         ]),
         Line::from("  ?                    Toggle this help"),
         Line::from("  q / Ctrl+C           Quit"),
-    ];
+    ]
+}
+
+/// Render the help modal
+pub fn render_help(frame: &mut Frame) {
+    let area = centered_rect(60, 60, frame.area());
+
+    // Clear the area first
+    frame.render_widget(Clear, area);
+
+    let help_text = get_help_text();
 
     let help = Paragraph::new(help_text)
         .block(
@@ -189,5 +203,85 @@ mod tests {
                 height
             );
         }
+    }
+
+    #[test]
+    fn test_help_modal_contains_phase6_keybindings() {
+        let help_text = get_help_text();
+
+        // Convert help text to searchable content
+        let content = help_text
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<String>();
+
+        // Verify Phase 6 keybindings are documented
+        assert!(
+            content.contains("View commits for current phase"),
+            "Help should document commits keybinding"
+        );
+        assert!(
+            content.contains("View diff stats for current phase"),
+            "Help should document diff keybinding"
+        );
+        assert!(
+            content.contains("c") && content.contains("commits"),
+            "Help should document 'c' key for commits"
+        );
+        assert!(
+            content.contains("d") && content.contains("diff"),
+            "Help should document 'd' key for diff"
+        );
+    }
+
+    #[test]
+    fn test_help_modal_contains_log_viewer_keybindings() {
+        let help_text = get_help_text();
+
+        let content = help_text
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<String>();
+
+        // Verify Log Viewer keybindings
+        assert!(content.contains("f"), "Help should document 'f' key");
+        assert!(content.contains("Toggle follow mode"), "Help should document follow mode");
+        assert!(content.contains("G"), "Help should document 'G' key");
+        assert!(content.contains("Jump to bottom"), "Help should document jump to bottom");
+        assert!(content.contains("PgUp"), "Help should document PgUp");
+        assert!(content.contains("PgDn"), "Help should document PgDn");
+    }
+
+    #[test]
+    fn test_help_modal_contains_diff_viewer_section() {
+        let help_text = get_help_text();
+
+        let content = help_text
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<String>();
+
+        // Verify Diff Viewer section exists with keybindings
+        assert!(content.contains("Diff Viewer"), "Help should have Diff Viewer section");
+        assert!(
+            content.contains("Toggle full diff"),
+            "Help should document toggle full diff"
+        );
+        assert!(content.contains("Enter"), "Help should document Enter key for diff viewer");
     }
 }

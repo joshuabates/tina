@@ -55,11 +55,11 @@ fn test_empty_state_renders() {
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let app = App::new_with_orchestrations(vec![]);
+    let mut app = App::new_with_orchestrations(vec![]);
 
     // Render should succeed with empty orchestrations
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
 
     assert!(
@@ -117,11 +117,11 @@ fn test_single_orchestration_renders() {
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let app = App::new_with_orchestrations(vec![make_test_orchestration("test-project")]);
+    let mut app = App::new_with_orchestrations(vec![make_test_orchestration("test-project")]);
 
     // Render should succeed with single orchestration
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
 
     assert!(
@@ -211,7 +211,7 @@ fn test_multiple_orchestrations_render() {
     app.selected_index = 1;
 
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
 
     assert!(
@@ -377,7 +377,7 @@ fn test_enter_expands_to_phase_detail() {
 
     // Render to ensure we're in a good state
     let _ = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
 
     // Simulate Enter key through the key event method (tested in unit tests)
@@ -396,7 +396,7 @@ fn test_enter_expands_to_phase_detail() {
 
     // Verify the view renders correctly in PhaseDetail state
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
 
     assert!(result.is_ok(), "PhaseDetail view should render successfully");
@@ -432,7 +432,7 @@ fn test_esc_returns_to_orchestration_list() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
 
     assert!(result.is_ok(), "OrchestrationList should render after returning");
@@ -469,7 +469,7 @@ fn test_enter_opens_task_inspector() {
     let mut terminal = Terminal::new(backend).unwrap();
 
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
 
     assert!(result.is_ok(), "TaskInspector should render successfully");
@@ -499,7 +499,7 @@ fn test_pane_focus_switches() {
 
     // Render with Tasks focus
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
     assert!(result.is_ok(), "Should render with Tasks focus");
 
@@ -512,7 +512,7 @@ fn test_pane_focus_switches() {
 
     // Render with Members focus
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
     assert!(result.is_ok(), "Should render with Members focus");
 
@@ -539,22 +539,24 @@ fn test_log_viewer_transitions() {
     // Open LogViewer (simulating 'l' key)
     app.view_state = ViewState::LogViewer {
         agent_index: 2,
-        scroll_offset: 0,
+        pane_id: "%0".to_string(),
+        agent_name: "test-agent".to_string(),
     };
 
     let backend = TestBackend::new(100, 30);
     let mut terminal = Terminal::new(backend).unwrap();
 
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
 
     assert!(result.is_ok(), "LogViewer should render successfully");
 
     match app.view_state {
-        ViewState::LogViewer { agent_index, scroll_offset } => {
+        ViewState::LogViewer { agent_index, pane_id, agent_name } => {
             assert_eq!(agent_index, 2, "Should open log viewer for agent at index 2");
-            assert_eq!(scroll_offset, 0, "Should start at scroll offset 0");
+            assert_eq!(pane_id, "%0", "Should have pane_id");
+            assert_eq!(agent_name, "test-agent", "Should have agent_name");
         }
         _ => panic!("Should be in LogViewer view"),
     }
@@ -567,7 +569,7 @@ fn test_log_viewer_transitions() {
     };
 
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
 
     assert!(result.is_ok(), "Should return to PhaseDetail successfully");
@@ -584,7 +586,7 @@ fn test_empty_orchestration_list_graceful_handling() {
     // Test OrchestrationList view with empty list
     app.view_state = ViewState::OrchestrationList;
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
     assert!(result.is_ok(), "Empty OrchestrationList should render without panic");
 
@@ -595,24 +597,25 @@ fn test_empty_orchestration_list_graceful_handling() {
         member_index: 0,
     };
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
     assert!(result.is_ok(), "PhaseDetail with empty list should render without panic");
 
     // Test TaskInspector with empty list
     app.view_state = ViewState::TaskInspector { task_index: 0 };
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
     assert!(result.is_ok(), "TaskInspector with empty list should render without panic");
 
     // Test LogViewer with empty list
     app.view_state = ViewState::LogViewer {
         agent_index: 0,
-        scroll_offset: 0,
+        pane_id: "%0".to_string(),
+        agent_name: "test-agent".to_string(),
     };
     let result = terminal.draw(|frame| {
-        tina_monitor::tui::ui::render(frame, &app);
+        tina_monitor::tui::ui::render(frame, &mut app);
     });
     assert!(result.is_ok(), "LogViewer with empty list should render without panic");
 }
@@ -636,7 +639,7 @@ fn test_complete_navigation_flow() {
 
     // Step 1: Start in OrchestrationList
     assert!(matches!(app.view_state, ViewState::OrchestrationList));
-    let _ = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let _ = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
 
     // Step 2: Enter PhaseDetail
     app.view_state = ViewState::PhaseDetail {
@@ -644,7 +647,7 @@ fn test_complete_navigation_flow() {
         task_index: 0,
         member_index: 0,
     };
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should navigate to PhaseDetail");
 
     // Step 3: Switch to Members pane
@@ -653,15 +656,16 @@ fn test_complete_navigation_flow() {
         task_index: 0,
         member_index: 0,
     };
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should switch to Members pane");
 
     // Step 4: Open LogViewer
     app.view_state = ViewState::LogViewer {
         agent_index: 0,
-        scroll_offset: 0,
+        pane_id: "%0".to_string(),
+        agent_name: "test-agent".to_string(),
     };
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should open LogViewer");
 
     // Step 5: Return to PhaseDetail
@@ -670,7 +674,7 @@ fn test_complete_navigation_flow() {
         task_index: 0,
         member_index: 0,
     };
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should return to PhaseDetail");
 
     // Step 6: Switch to Tasks and open TaskInspector
@@ -679,10 +683,10 @@ fn test_complete_navigation_flow() {
         task_index: 1,
         member_index: 0,
     };
-    let _ = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let _ = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
 
     app.view_state = ViewState::TaskInspector { task_index: 1 };
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should open TaskInspector");
 
     // Step 7: Return to PhaseDetail
@@ -691,12 +695,12 @@ fn test_complete_navigation_flow() {
         task_index: 1,
         member_index: 0,
     };
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should return to PhaseDetail from TaskInspector");
 
     // Step 8: Return to OrchestrationList
     app.view_state = ViewState::OrchestrationList;
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should return to OrchestrationList");
 }
 
@@ -715,7 +719,7 @@ fn test_rendering_with_various_task_counts() {
         task_index: 0,
         member_index: 0,
     };
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should render with zero tasks");
 
     // Test with one task
@@ -728,7 +732,7 @@ fn test_rendering_with_various_task_counts() {
         task_index: 0,
         member_index: 0,
     };
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should render with one task");
 
     // Test with many tasks
@@ -743,7 +747,7 @@ fn test_rendering_with_various_task_counts() {
         task_index: 10,
         member_index: 0,
     };
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should render with many tasks");
 }
 
@@ -761,7 +765,7 @@ fn test_help_modal_in_all_views() {
     // Test help in OrchestrationList
     app.view_state = ViewState::OrchestrationList;
     app.show_help = true;
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Help should render in OrchestrationList");
 
     // Test help in PhaseDetail
@@ -771,21 +775,22 @@ fn test_help_modal_in_all_views() {
         member_index: 0,
     };
     app.show_help = true;
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Help should render in PhaseDetail");
 
     // Test help in TaskInspector
     app.view_state = ViewState::TaskInspector { task_index: 0 };
     app.show_help = true;
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Help should render in TaskInspector");
 
     // Test help in LogViewer
     app.view_state = ViewState::LogViewer {
         agent_index: 0,
-        scroll_offset: 0,
+        pane_id: "%0".to_string(),
+        agent_name: "test-agent".to_string(),
     };
     app.show_help = true;
-    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &app));
+    let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Help should render in LogViewer");
 }

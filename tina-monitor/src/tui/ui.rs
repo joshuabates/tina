@@ -14,7 +14,7 @@ use super::views::task_inspector::render_task_inspector;
 use super::views::log_viewer;
 
 /// Render the application UI
-pub fn render(frame: &mut Frame, app: &App) {
+pub fn render(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -50,7 +50,13 @@ pub fn render(frame: &mut Frame, app: &App) {
             // First render the PhaseDetail view as background
             phase_detail::render(frame, chunks[1], app);
             // Then render the log viewer modal on top
-            log_viewer::render(app, frame);
+            if let Some(viewer) = &mut app.log_viewer {
+                let area = centered_rect(85, 85, frame.area());
+                viewer.render(frame, area);
+            } else {
+                // Fallback to placeholder if viewer is not initialized
+                log_viewer::render(app, frame);
+            }
         }
         ViewState::CommandModal { .. } => {
             // First render the OrchestrationList view as background
@@ -67,6 +73,35 @@ pub fn render(frame: &mut Frame, app: &App) {
                 let area = centered_rect(85, 85, frame.area());
                 frame.render_widget(ratatui::widgets::Clear, area);
                 viewer.render(frame, area);
+            }
+        }
+        ViewState::CommitsView { worktree_path, range, title } => {
+            // First render the PhaseDetail view as background
+            phase_detail::render(frame, chunks[1], app);
+            // Then render the commits view modal on top
+            if let Ok(mut commits_view) = super::views::commits_view::CommitsView::new(worktree_path, range.clone(), title.clone()) {
+                let area = centered_rect(85, 85, frame.area());
+                frame.render_widget(ratatui::widgets::Clear, area);
+                commits_view.render(frame, area);
+            }
+        }
+        ViewState::DiffView { worktree_path, range, title, selected, show_full, scroll } => {
+            // First render the PhaseDetail view as background
+            phase_detail::render(frame, chunks[1], app);
+            // Then render the diff view modal on top
+            if let Ok(mut diff_view) = super::views::diff_view::DiffView::new(worktree_path, range.clone(), title.clone()) {
+                // Apply state from ViewState
+                diff_view.selected = *selected;
+                diff_view.show_full = *show_full;
+                diff_view.scroll = *scroll;
+                // Update list_state to match selected
+                if !diff_view.stats.files.is_empty() {
+                    diff_view.list_state.select(Some(*selected));
+                }
+
+                let area = centered_rect(85, 85, frame.area());
+                frame.render_widget(ratatui::widgets::Clear, area);
+                diff_view.render(frame, area);
             }
         }
     }
@@ -88,11 +123,13 @@ fn render_header(frame: &mut Frame, area: Rect) {
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     let footer_text = match &app.view_state {
         ViewState::OrchestrationList => " j/k:nav  Enter:expand  g:goto  p:plan  r:refresh  q:quit  ?:help",
-        ViewState::PhaseDetail { .. } => " t:tasks  m:members  Enter:inspect  l:logs  Esc:back  ?:help",
+        ViewState::PhaseDetail { .. } => " t:tasks  m:members  c:commits  d:diff  Enter:inspect  l:logs  Esc:back  ?:help",
         ViewState::TaskInspector { .. } => " Esc:back  ?:help",
         ViewState::LogViewer { .. } => " j/k:scroll  Esc:back  ?:help",
         ViewState::CommandModal { .. } => " y:copy  Esc:close  ?:help",
         ViewState::PlanViewer { .. } => " j/k:scroll  Esc:close  ?:help",
+        ViewState::CommitsView { .. } => " j/k:nav  Esc:close  ?:help",
+        ViewState::DiffView { .. } => " j/k:nav  Enter:toggle  Esc:close  ?:help",
     };
 
     let footer = Paragraph::new(footer_text)
@@ -140,6 +177,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         }
     }
 
@@ -166,6 +204,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         }
     }
 
@@ -173,9 +212,9 @@ mod tests {
     fn test_render_does_not_panic_with_empty_orchestrations() {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
-        let app = make_test_app();
+        let mut app = make_test_app();
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "Render should not panic with empty orchestrations");
     }
 
@@ -183,9 +222,9 @@ mod tests {
     fn test_render_does_not_panic_with_orchestrations() {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
-        let app = make_test_app_with_orchestrations();
+        let mut app = make_test_app_with_orchestrations();
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "Render should not panic with orchestrations");
     }
 
@@ -197,9 +236,9 @@ mod tests {
         for (width, height) in sizes {
             let backend = TestBackend::new(width, height);
             let mut terminal = Terminal::new(backend).unwrap();
-            let app = make_test_app();
+            let mut app = make_test_app();
 
-            let result = terminal.draw(|frame| render(frame, &app));
+            let result = terminal.draw(|frame| render(frame, &mut app));
             assert!(
                 result.is_ok(),
                 "Layout should work with terminal size {}x{}",
@@ -214,9 +253,9 @@ mod tests {
         // Even with a very small terminal, it shouldn't panic
         let backend = TestBackend::new(20, 5);
         let mut terminal = Terminal::new(backend).unwrap();
-        let app = make_test_app();
+        let mut app = make_test_app();
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "Layout should handle small terminal sizes");
     }
 
@@ -227,7 +266,7 @@ mod tests {
         let mut app = make_test_app();
         app.show_help = true;
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "Render should work with help modal visible");
     }
 
@@ -238,7 +277,7 @@ mod tests {
         let mut app = make_test_app();
         app.show_help = false;
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "Render should work with help modal hidden");
     }
 
@@ -251,7 +290,7 @@ mod tests {
         let mut app = make_test_app_with_orchestrations();
         app.view_state = crate::tui::app::ViewState::OrchestrationList;
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "OrchestrationList view should render without panic");
     }
 
@@ -266,7 +305,7 @@ mod tests {
             member_index: 0,
         };
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "PhaseDetail view should render without panic");
     }
 
@@ -279,7 +318,7 @@ mod tests {
             task_index: 0,
         };
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "TaskInspector modal should render without panic");
     }
 
@@ -290,10 +329,11 @@ mod tests {
         let mut app = make_test_app_with_orchestrations();
         app.view_state = crate::tui::app::ViewState::LogViewer {
             agent_index: 0,
-            scroll_offset: 0,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "LogViewer modal should render without panic");
     }
 
@@ -305,7 +345,7 @@ mod tests {
         app.view_state = crate::tui::app::ViewState::OrchestrationList;
         app.show_help = true;
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "Help modal should render on top of OrchestrationList");
     }
 
@@ -321,7 +361,7 @@ mod tests {
         };
         app.show_help = true;
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "Help modal should render on top of PhaseDetail");
     }
 
@@ -335,7 +375,7 @@ mod tests {
         };
         app.show_help = true;
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "Help modal should render on top of TaskInspector");
     }
 
@@ -346,11 +386,12 @@ mod tests {
         let mut app = make_test_app_with_orchestrations();
         app.view_state = crate::tui::app::ViewState::LogViewer {
             agent_index: 0,
-            scroll_offset: 0,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
         app.show_help = true;
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "Help modal should render on top of LogViewer");
     }
 
@@ -365,7 +406,7 @@ mod tests {
             task_index: 0,
         };
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "TaskInspector should render with PhaseDetail background");
     }
 
@@ -378,10 +419,11 @@ mod tests {
         // Set up LogViewer view - this should show PhaseDetail as background
         app.view_state = crate::tui::app::ViewState::LogViewer {
             agent_index: 0,
-            scroll_offset: 0,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
-        let result = terminal.draw(|frame| render(frame, &app));
+        let result = terminal.draw(|frame| render(frame, &mut app));
         assert!(result.is_ok(), "LogViewer should render with PhaseDetail background");
     }
 
@@ -392,7 +434,7 @@ mod tests {
         let mut app = make_test_app_with_orchestrations();
         app.view_state = crate::tui::app::ViewState::OrchestrationList;
 
-        terminal.draw(|frame| render(frame, &app)).unwrap();
+        terminal.draw(|frame| render(frame, &mut app)).unwrap();
         let buffer = terminal.backend().buffer();
         let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
 
@@ -415,7 +457,7 @@ mod tests {
             member_index: 0,
         };
 
-        terminal.draw(|frame| render(frame, &app)).unwrap();
+        terminal.draw(|frame| render(frame, &mut app)).unwrap();
         let buffer = terminal.backend().buffer();
         let content = buffer.content().iter().map(|c| c.symbol()).collect::<String>();
 

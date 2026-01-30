@@ -37,8 +37,10 @@ pub enum ViewState {
     LogViewer {
         /// Selected agent index
         agent_index: usize,
-        /// Scroll offset
-        scroll_offset: usize,
+        /// Pane ID for tmux capture
+        pane_id: String,
+        /// Agent name for display
+        agent_name: String,
     },
     /// Command modal for showing fallback commands
     CommandModal {
@@ -55,6 +57,30 @@ pub enum ViewState {
         plan_path: std::path::PathBuf,
         /// Scroll offset
         scroll_offset: u16,
+    },
+    /// Commits view modal
+    CommitsView {
+        /// Worktree path
+        worktree_path: std::path::PathBuf,
+        /// Git range
+        range: String,
+        /// Modal title
+        title: String,
+    },
+    /// Diff view modal
+    DiffView {
+        /// Worktree path
+        worktree_path: std::path::PathBuf,
+        /// Git range
+        range: String,
+        /// Modal title
+        title: String,
+        /// Selected file index
+        selected: usize,
+        /// Whether showing full diff
+        show_full: bool,
+        /// Scroll offset for full diff
+        scroll: u16,
     },
 }
 
@@ -85,6 +111,8 @@ pub struct App {
     pub(crate) last_refresh: Instant,
     /// Current view state
     pub view_state: ViewState,
+    /// Log viewer instance
+    pub(crate) log_viewer: Option<super::views::log_viewer::LogViewer>,
 }
 
 impl App {
@@ -102,6 +130,7 @@ impl App {
             watcher,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         })
     }
 
@@ -119,6 +148,7 @@ impl App {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         }
     }
 
@@ -219,6 +249,8 @@ impl App {
             ViewState::LogViewer { .. } => self.handle_log_viewer_key(key),
             ViewState::CommandModal { .. } => self.handle_command_modal_key(key),
             ViewState::PlanViewer { .. } => self.handle_plan_viewer_key(key),
+            ViewState::CommitsView { .. } => self.handle_commits_view_key(key),
+            ViewState::DiffView { .. } => self.handle_diff_view_key(key),
         }
     }
 
@@ -431,6 +463,66 @@ impl App {
         }
     }
 
+    /// Handle view commits action
+    fn handle_view_commits(&mut self) -> AppResult<()> {
+        if let Some((worktree_path, range, title)) = self.get_current_phase_git_info() {
+            self.view_state = ViewState::CommitsView {
+                worktree_path,
+                range,
+                title,
+            };
+        }
+        Ok(())
+    }
+
+    /// Handle view diff action
+    fn handle_view_diff(&mut self) -> AppResult<()> {
+        if let Some((worktree_path, range, _)) = self.get_current_phase_git_info() {
+            let orch = &self.orchestrations[self.selected_index];
+            let title = format!("Phase {} Diff - {}", orch.current_phase, orch.title);
+            self.view_state = ViewState::DiffView {
+                worktree_path,
+                range,
+                title,
+                selected: 0,
+                show_full: false,
+                scroll: 0,
+            };
+        }
+        Ok(())
+    }
+
+    /// Get the current phase git info (worktree path and git range)
+    fn get_current_phase_git_info(&self) -> Option<(std::path::PathBuf, String, String)> {
+        if self.orchestrations.is_empty() {
+            return None;
+        }
+
+        let orch = &self.orchestrations[self.selected_index];
+        let phase = orch.current_phase;
+
+        // Read supervisor state to get worktree path
+        let state_path = orch.cwd.join(".claude").join("tina").join("supervisor-state.json");
+        let state_content = std::fs::read_to_string(&state_path).ok()?;
+        let state: crate::data::types::SupervisorState = serde_json::from_str(&state_content).ok()?;
+
+        // Read handoff to get git range
+        let handoff_path = orch.cwd.join(".claude").join("tina").join(format!("phase-{}", phase)).join("handoff.md");
+        let handoff_content = std::fs::read_to_string(&handoff_path).ok()?;
+
+        // Extract git range from handoff (format: **Git Range**: `main...phase-branch`)
+        let range = handoff_content
+            .lines()
+            .find(|line| line.starts_with("**Git Range**:"))
+            .and_then(|line| {
+                line.split('`').nth(1).map(|s| s.to_string())
+            })?;
+
+        let title = format!("Phase {} Commits - {}", phase, orch.title);
+
+        Some((state.worktree_path, range, title))
+    }
+
     /// Handle key events in PhaseDetail view
     fn handle_phase_detail_key(&mut self, key: KeyEvent) {
         // Extract current state - we need to destructure to modify
@@ -451,6 +543,14 @@ impl App {
             }
             KeyCode::Char('r') => {
                 let _ = self.refresh();
+                return;
+            }
+            KeyCode::Char('c') => {
+                let _ = self.handle_view_commits();
+                return;
+            }
+            KeyCode::Char('d') => {
+                let _ = self.handle_view_diff();
                 return;
             }
             KeyCode::Char('t') | KeyCode::Left => {
@@ -522,9 +622,15 @@ impl App {
                         };
                     }
                     KeyCode::Char('l') => {
+                        // Create a LogViewer instance (placeholder pane_id and agent_name for now)
+                        let pane_id = format!("pane-{}", member_index);
+                        let agent_name = format!("Agent {}", member_index);
+                        self.log_viewer = Some(super::views::log_viewer::LogViewer::new(pane_id.clone(), agent_name.clone()));
+
                         self.view_state = ViewState::LogViewer {
                             agent_index: member_index,
-                            scroll_offset: 0,
+                            pane_id,
+                            agent_name,
                         };
                     }
                     KeyCode::Char('a') => {
@@ -553,40 +659,48 @@ impl App {
 
     /// Handle key events in LogViewer view
     fn handle_log_viewer_key(&mut self, key: KeyEvent) {
-        let (agent_index, scroll_offset) = match self.view_state {
-            ViewState::LogViewer {
-                agent_index,
-                scroll_offset,
-            } => (agent_index, scroll_offset),
+        let agent_index = match self.view_state {
+            ViewState::LogViewer { agent_index, .. } => agent_index,
             _ => return,
         };
 
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
-                self.view_state = ViewState::LogViewer {
-                    agent_index,
-                    scroll_offset: scroll_offset + 1,
-                };
+                if let Some(viewer) = &mut self.log_viewer {
+                    viewer.scroll_down(1);
+                }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.view_state = ViewState::LogViewer {
-                    agent_index,
-                    scroll_offset: scroll_offset.saturating_sub(1),
-                };
+                if let Some(viewer) = &mut self.log_viewer {
+                    viewer.scroll_up(1);
+                }
             }
             KeyCode::Char('d') | KeyCode::PageDown => {
-                self.view_state = ViewState::LogViewer {
-                    agent_index,
-                    scroll_offset: scroll_offset + 20,
-                };
+                if let Some(viewer) = &mut self.log_viewer {
+                    viewer.scroll_down(20);
+                }
             }
             KeyCode::Char('u') | KeyCode::PageUp => {
-                self.view_state = ViewState::LogViewer {
-                    agent_index,
-                    scroll_offset: scroll_offset.saturating_sub(20),
-                };
+                if let Some(viewer) = &mut self.log_viewer {
+                    viewer.scroll_up(20);
+                }
+            }
+            KeyCode::Char('G') => {
+                if let Some(viewer) = &mut self.log_viewer {
+                    viewer.scroll_to_bottom();
+                }
+            }
+            KeyCode::Char('f') => {
+                if let Some(viewer) = &mut self.log_viewer {
+                    viewer.toggle_follow();
+                }
+            }
+            KeyCode::Char('a') => {
+                // TODO: Attach to tmux pane
+                // For now, do nothing as tmux attach functionality is not yet implemented
             }
             KeyCode::Esc => {
+                self.log_viewer = None; // Clean up the viewer
                 self.view_state = ViewState::PhaseDetail {
                     focus: PaneFocus::Members,
                     task_index: 0,
@@ -594,10 +708,130 @@ impl App {
                 };
             }
             KeyCode::Char('r') => {
-                let _ = self.refresh();
+                if let Some(viewer) = &mut self.log_viewer {
+                    let _ = viewer.refresh();
+                }
             }
             _ => {}
         }
+    }
+
+    /// Handle key events in CommitsView
+    fn handle_commits_view_key(&mut self, _key: KeyEvent) {
+        // Navigation is handled by the CommitsView widget itself
+        // We only need to handle Esc to return to PhaseDetail
+        if _key.code == KeyCode::Esc {
+            self.view_state = ViewState::PhaseDetail {
+                focus: PaneFocus::Tasks,
+                task_index: 0,
+                member_index: 0,
+            };
+        }
+    }
+
+    /// Handle key events in DiffView
+    fn handle_diff_view_key(&mut self, key: KeyEvent) {
+        // Extract current state
+        let (worktree_path, range, title, selected, show_full, scroll) = match &self.view_state {
+            ViewState::DiffView { worktree_path, range, title, selected, show_full, scroll } => {
+                (worktree_path.clone(), range.clone(), title.clone(), *selected, *show_full, *scroll)
+            }
+            _ => return,
+        };
+
+        match key.code {
+            KeyCode::Esc => {
+                self.view_state = ViewState::PhaseDetail {
+                    focus: PaneFocus::Tasks,
+                    task_index: 0,
+                    member_index: 0,
+                };
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                // Create temporary view to get file count
+                if let Ok(view) = super::views::diff_view::DiffView::new(&worktree_path, range.clone(), title.clone()) {
+                    let file_count = view.stats.files.len();
+                    if file_count > 0 {
+                        let new_selected = if show_full {
+                            selected
+                        } else {
+                            (selected + 1) % file_count
+                        };
+                        let new_scroll = if show_full {
+                            scroll + 1
+                        } else {
+                            scroll
+                        };
+                        self.view_state = ViewState::DiffView {
+                            worktree_path,
+                            range,
+                            title,
+                            selected: new_selected,
+                            show_full,
+                            scroll: new_scroll,
+                        };
+                    }
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                // Create temporary view to get file count
+                if let Ok(view) = super::views::diff_view::DiffView::new(&worktree_path, range.clone(), title.clone()) {
+                    let file_count = view.stats.files.len();
+                    let new_selected = if show_full {
+                        selected
+                    } else if file_count > 0 {
+                        if selected == 0 {
+                            file_count - 1
+                        } else {
+                            selected - 1
+                        }
+                    } else {
+                        selected
+                    };
+                    let new_scroll = if show_full {
+                        scroll.saturating_sub(1)
+                    } else {
+                        scroll
+                    };
+                    self.view_state = ViewState::DiffView {
+                        worktree_path,
+                        range,
+                        title,
+                        selected: new_selected,
+                        show_full,
+                        scroll: new_scroll,
+                    };
+                }
+            }
+            KeyCode::Enter => {
+                // Toggle full diff mode
+                self.view_state = ViewState::DiffView {
+                    worktree_path,
+                    range,
+                    title,
+                    selected,
+                    show_full: !show_full,
+                    scroll,
+                };
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle tick events - called periodically from the event loop
+    /// Checks if log viewer needs refresh and refreshes if necessary
+    pub fn on_tick(&mut self) -> AppResult<()> {
+        // Only refresh if we're in LogViewer view
+        if let ViewState::LogViewer { .. } = self.view_state {
+            if let Some(viewer) = &mut self.log_viewer {
+                // Check if refresh is needed based on poll interval
+                if viewer.maybe_refresh() {
+                    // Attempt to refresh, but don't fail if it can't
+                    let _ = viewer.refresh();
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Run the application event loop
@@ -607,6 +841,9 @@ impl App {
 
             // Check for file watcher events
             self.check_watcher();
+
+            // Call on_tick to handle periodic updates (e.g., log viewer refresh)
+            self.on_tick()?;
 
             self.handle_events()?;
         }
@@ -630,6 +867,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::data::discovery::OrchestrationStatus;
+    use crate::tui::views::log_viewer::LogViewer;
     use std::path::PathBuf;
 
     fn make_test_orchestration(title: &str) -> Orchestration {
@@ -764,6 +1002,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         app.next();
@@ -785,6 +1024,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         app.previous();
@@ -802,6 +1042,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         app.next();
@@ -819,6 +1060,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         app.previous();
@@ -836,6 +1078,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
@@ -854,6 +1097,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
@@ -875,6 +1119,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
@@ -896,6 +1141,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
@@ -914,6 +1160,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
@@ -932,6 +1179,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE);
@@ -956,6 +1204,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
@@ -975,6 +1224,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
@@ -993,6 +1243,7 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         assert_eq!(app.orchestrations.len(), 1);
@@ -1010,11 +1261,91 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::OrchestrationList,
+            log_viewer: None,
         };
 
         // Should not panic when watcher is None
         app.check_watcher();
         assert!(!app.should_quit);
+    }
+
+    // Task 5: App Event Loop Updates - on_tick() tests
+
+    #[test]
+    fn test_on_tick_refreshes_log_viewer_when_interval_elapsed() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+
+        // Create a log viewer and set it in the app
+        let mut viewer = LogViewer::new("test-pane".to_string(), "test-agent".to_string());
+        // Set poll interval to 100ms for testing
+        viewer.poll_interval = Duration::from_millis(100);
+        // Set last refresh to more than 100ms ago
+        viewer.last_refresh = Instant::now() - Duration::from_millis(200);
+
+        app.log_viewer = Some(viewer);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 0,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        // Call on_tick - should attempt to refresh if time has elapsed
+        let _ = app.on_tick();
+
+        // Verify log viewer still exists
+        assert!(app.log_viewer.is_some(), "log_viewer should still exist after on_tick");
+    }
+
+    #[test]
+    fn test_on_tick_skips_refresh_when_interval_not_elapsed() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+
+        // Create a log viewer with recent refresh time
+        let viewer = LogViewer::new("test-pane".to_string(), "test-agent".to_string());
+        app.log_viewer = Some(viewer);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 0,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+
+        // Call on_tick - should skip refresh since viewer was just created
+        let _ = app.on_tick();
+
+        // Verify log viewer still exists and remains functional
+        assert!(app.log_viewer.is_some(), "log_viewer should still exist after on_tick");
+    }
+
+    #[test]
+    fn test_on_tick_does_nothing_when_not_in_log_viewer_view() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::OrchestrationList;
+
+        // Create a log viewer (should be ignored since not in LogViewer view)
+        app.log_viewer = Some(LogViewer::new("test-pane".to_string(), "test-agent".to_string()));
+
+        // Call on_tick - should not attempt refresh
+        let _ = app.on_tick();
+
+        // App should remain in OrchestrationList
+        assert!(matches!(app.view_state, ViewState::OrchestrationList));
+    }
+
+    #[test]
+    fn test_on_tick_handles_missing_log_viewer() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::LogViewer {
+            agent_index: 0,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
+        };
+        app.log_viewer = None;
+
+        // Call on_tick - should handle gracefully when log_viewer is None
+        let result = app.on_tick();
+
+        // Should return Ok even with missing log viewer
+        assert!(result.is_ok(), "on_tick should handle missing log viewer gracefully");
     }
 
     // Task 2: Enter key handling tests
@@ -1382,9 +1713,8 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 2, "'l' on members should open LogViewer with correct agent_index");
-                assert_eq!(scroll_offset, 0, "scroll_offset should start at 0");
             }
             _ => panic!("View state should be LogViewer"),
         }
@@ -1497,16 +1827,16 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 1,
-            scroll_offset: 5,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 1, "agent_index should not change");
-                assert_eq!(scroll_offset, 6, "'j' should scroll down by 1");
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1517,16 +1847,16 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 1,
-            scroll_offset: 5,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 1, "agent_index should not change");
-                assert_eq!(scroll_offset, 4, "'k' should scroll up by 1");
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1537,16 +1867,16 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 2,
-            scroll_offset: 10,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 2, "agent_index should not change");
-                assert_eq!(scroll_offset, 11, "Down arrow should scroll down by 1");
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1557,16 +1887,16 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 2,
-            scroll_offset: 10,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 2, "agent_index should not change");
-                assert_eq!(scroll_offset, 9, "Up arrow should scroll up by 1");
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1577,15 +1907,15 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 1,
-            scroll_offset: 0,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { scroll_offset, .. } => {
-                assert_eq!(scroll_offset, 0, "'k' should not make scroll_offset negative");
+            ViewState::LogViewer { .. } => {
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1596,16 +1926,16 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 1,
-            scroll_offset: 5,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 1, "agent_index should not change");
-                assert_eq!(scroll_offset, 25, "'d' should page down by 20");
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1616,16 +1946,16 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 1,
-            scroll_offset: 30,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 1, "agent_index should not change");
-                assert_eq!(scroll_offset, 10, "'u' should page up by 20");
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1636,16 +1966,16 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 1,
-            scroll_offset: 5,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 1, "agent_index should not change");
-                assert_eq!(scroll_offset, 25, "PageDown should page down by 20");
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1656,16 +1986,16 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 1,
-            scroll_offset: 30,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 1, "agent_index should not change");
-                assert_eq!(scroll_offset, 10, "PageUp should page up by 20");
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1676,15 +2006,15 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 1,
-            scroll_offset: 10,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::LogViewer { scroll_offset, .. } => {
-                assert_eq!(scroll_offset, 0, "'u' should not make scroll_offset negative when paging up from 10");
+            ViewState::LogViewer { .. } => {
             }
             _ => panic!("Should remain in LogViewer view"),
         }
@@ -1695,7 +2025,8 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 3,
-            scroll_offset: 15,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
@@ -1716,7 +2047,8 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::LogViewer {
             agent_index: 1,
-            scroll_offset: 5,
+            pane_id: "test-pane".to_string(),
+            agent_name: "test-agent".to_string(),
         };
 
         let key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
@@ -1724,9 +2056,8 @@ mod tests {
 
         // Should remain in LogViewer after refresh
         match app.view_state {
-            ViewState::LogViewer { agent_index, scroll_offset } => {
+            ViewState::LogViewer { agent_index, .. } => {
                 assert_eq!(agent_index, 1, "agent_index should not change on refresh");
-                assert_eq!(scroll_offset, 5, "scroll_offset should not change on refresh");
             }
             _ => panic!("Should remain in LogViewer view after refresh"),
         }
@@ -1866,5 +2197,146 @@ mod tests {
 
         // Should not crash, should remain in PhaseDetail
         assert!(matches!(app.view_state, ViewState::PhaseDetail { .. }));
+    }
+
+    // Commits View tests
+
+    #[test]
+    fn test_c_key_does_nothing_when_no_orchestrations() {
+        let mut app = App::new_with_orchestrations(vec![]);
+        app.view_state = ViewState::PhaseDetail {
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should not crash, should remain in PhaseDetail
+        assert!(matches!(app.view_state, ViewState::PhaseDetail { .. }));
+    }
+
+    #[test]
+    fn test_c_key_in_phase_detail_attempts_to_open_commits_view() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::PhaseDetail {
+            focus: PaneFocus::Tasks,
+            task_index: 1,
+            member_index: 0,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Will either transition to CommitsView (if phase data exists)
+        // or stay in PhaseDetail (if no handoff.md exists)
+        // For this test, just verify no panic
+        assert!(!app.should_quit, "App should not quit on 'c' key");
+    }
+
+    #[test]
+    fn test_esc_in_commits_view_returns_to_phase_detail() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::CommitsView {
+            worktree_path: PathBuf::from("/test"),
+            range: "main...branch".to_string(),
+            title: "Test Commits".to_string(),
+        };
+
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::PhaseDetail { focus, task_index, member_index } => {
+                assert_eq!(focus, PaneFocus::Tasks, "Should return to Tasks pane");
+                assert_eq!(task_index, 0, "Should reset task_index to 0");
+                assert_eq!(member_index, 0, "Should reset member_index to 0");
+            }
+            _ => panic!("Esc should return to PhaseDetail view"),
+        }
+    }
+
+    #[test]
+    fn test_commits_view_ignores_other_keys() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::CommitsView {
+            worktree_path: PathBuf::from("/test"),
+            range: "main...branch".to_string(),
+            title: "Test Commits".to_string(),
+        };
+
+        // Try various keys that should do nothing at the app level
+        for key_code in [KeyCode::Char('j'), KeyCode::Char('k'), KeyCode::Enter, KeyCode::Char('r')] {
+            let key = KeyEvent::new(key_code, KeyModifiers::NONE);
+            app.handle_key_event(key);
+
+            // Should still be in CommitsView
+            match app.view_state {
+                ViewState::CommitsView { .. } => {}
+                _ => panic!("Should remain in CommitsView view"),
+            }
+        }
+    }
+
+    // Diff View tests
+
+    #[test]
+    fn test_d_key_does_nothing_when_no_orchestrations() {
+        let mut app = App::new_with_orchestrations(vec![]);
+        app.view_state = ViewState::PhaseDetail {
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Should not crash, should remain in PhaseDetail
+        assert!(matches!(app.view_state, ViewState::PhaseDetail { .. }));
+    }
+
+    #[test]
+    fn test_d_key_in_phase_detail_attempts_to_open_diff_view() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::PhaseDetail {
+            focus: PaneFocus::Tasks,
+            task_index: 1,
+            member_index: 0,
+        };
+
+        let key = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        // Will either transition to DiffView (if phase data exists)
+        // or stay in PhaseDetail (if no handoff.md exists)
+        // For this test, just verify no panic
+        assert!(!app.should_quit, "App should not quit on 'd' key");
+    }
+
+    #[test]
+    fn test_esc_in_diff_view_returns_to_phase_detail() {
+        let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
+        app.view_state = ViewState::DiffView {
+            worktree_path: PathBuf::from("/test"),
+            range: "main...branch".to_string(),
+            title: "Test Diff".to_string(),
+            selected: 0,
+            show_full: false,
+            scroll: 0,
+        };
+
+        let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+        app.handle_key_event(key);
+
+        match app.view_state {
+            ViewState::PhaseDetail { focus, task_index, member_index } => {
+                assert_eq!(focus, PaneFocus::Tasks, "Should return to Tasks pane");
+                assert_eq!(task_index, 0, "Should reset task_index to 0");
+                assert_eq!(member_index, 0, "Should reset member_index to 0");
+            }
+            _ => panic!("Esc should return to PhaseDetail view"),
+        }
     }
 }

@@ -3,6 +3,8 @@
 //! Views represent different screens or major UI components in the application.
 
 pub mod command_modal;
+pub mod commits_view;
+pub mod diff_view;
 pub mod help;
 pub mod log_viewer;
 pub mod orchestration_list;
