@@ -1037,6 +1037,100 @@ To minimize recovery needs:
 - TaskCreate, TaskUpdate, TaskList, TaskGet - Task management
 - Teammate tool - Team creation and messaging
 
+## Failure Modes and Handling
+
+### Teammate Never Responds
+
+**Symptoms:** Orchestrator waits indefinitely for teammate message.
+
+**Cause:** Teammate crashed without sending error message, or teammate is stuck in infinite loop.
+
+**Detection:** Manual observation (no automatic timeout in current design).
+
+**Handling:**
+1. User notices orchestration stalled
+2. User checks task list: `TaskList`
+3. User finds in_progress task with no recent activity
+4. User manually marks task failed or respawns teammate
+
+**Future improvement:** Add heartbeat messages from teammates, or orchestrator-side timeout.
+
+### Tmux Session Dies Mid-Phase
+
+**Symptoms:** Executor reports "session_died" error.
+
+**Cause:** Claude CLI crashed, user killed session, system OOM.
+
+**Detection:** Executor's `tmux has-session` check fails.
+
+**Handling:**
+1. Executor messages orchestrator with error
+2. Orchestrator respawns executor
+3. New executor checks status.json:
+   - If complete: proceed to review
+   - If executing: start new tmux session, team-lead detects existing team and resumes
+   - If not started: start fresh
+
+**Caveat:** If team-lead wrote partial work but didn't update status, work may be repeated.
+
+### Review Fails Repeatedly (Remediation Loop)
+
+**Symptoms:** Multiple N.5, N.5.5 phases created and all fail.
+
+**Cause:** Fundamental design flaw, or reviewer has unreachable standards.
+
+**Detection:** Remediation depth reaches 2.
+
+**Handling:**
+1. Orchestrator exits with "failed after 2 remediation attempts"
+2. Tasks preserved for manual inspection
+3. User must manually fix or adjust design
+
+**Future improvement:** Surface specific issues to user for targeted intervention.
+
+### Task Dependency Cycle
+
+**Symptoms:** Tasks blocked indefinitely, no progress.
+
+**Cause:** Bug in dependency setup (e.g., task A blocks B, B blocks A).
+
+**Detection:** Manual observation - all tasks pending but none unblocked.
+
+**Handling:**
+1. User runs TaskList
+2. User identifies circular dependencies
+3. User manually updates task dependencies via TaskUpdate
+
+**Prevention:** Orchestrator creates dependencies in strict phase order - no cross-phase back-dependencies.
+
+### Out of Disk Space
+
+**Symptoms:** Various failures - file writes fail, git commits fail.
+
+**Cause:** Worktree, task files, or checkpoint files fill disk.
+
+**Detection:** Error messages mentioning "no space left" or "disk full".
+
+**Handling:**
+1. Manual cleanup of old worktrees: `rm -rf .worktrees/old-feature`
+2. Clean up old tasks: `rm -rf ~/.claude/tasks/old-orchestration/`
+3. Resume orchestration
+
+### Git Conflicts in Worktree
+
+**Symptoms:** Git commands fail in team-lead session.
+
+**Cause:** Main branch advanced while feature work ongoing, merge needed.
+
+**Detection:** Git error messages in tmux output.
+
+**Handling:**
+1. Current design does not auto-handle conflicts
+2. User must manually resolve in worktree
+3. Then resume team-lead (if still running) or restart phase
+
+**Future improvement:** Worktree setup could track main branch position, executor could detect divergence.
+
 ## Test Scenarios
 
 Use these scenarios to verify recovery and remediation work correctly.
