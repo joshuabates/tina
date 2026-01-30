@@ -67,6 +67,15 @@ This enables the phase executor (from the orchestrator's team) to monitor the te
 
 Read the plan file and create tasks via TaskCreate for each task in the plan.
 
+**Parse model from each task:** Look for `**Model:** <model>` line in each task section. Store in task metadata:
+```json
+TaskCreate {
+  "subject": "Task N: <description>",
+  "description": "<full task content>",
+  "metadata": { "model": "<haiku|sonnet|opus>" }
+}
+```
+
 Do NOT spawn workers or reviewers yet. The team is just a container at this point.
 
 ---
@@ -76,14 +85,17 @@ Do NOT spawn workers or reviewers yet. The team is just a container at this poin
 For each task in priority order:
 
 1. **Spawn worker for this task:**
+   Get the model from task metadata (via TaskGet), then spawn with that model:
    ```json
    {
      "subagent_type": "tina:implementer",
      "team_name": "phase-<N>-execution",
      "name": "worker",
+     "model": "<model from task metadata>",
      "prompt": "Implement task: <task subject and description>. Use TDD."
    }
    ```
+   The `model` field controls which model the implementer uses (haiku, sonnet, or opus).
 
 2. **Wait for worker to complete implementation**
    Monitor for Teammate messages from worker indicating completion.
@@ -268,14 +280,25 @@ For each task:
 6. Move to next task
 
 **Worker spawn:**
+
+Get the model from the current task's metadata first:
+```json
+TaskGet { "taskId": "<current-task-id>" }
+# Read metadata.model from response
+```
+
+Then spawn with that model:
 ```json
 {
   "subagent_type": "tina:implementer",
   "team_name": "phase-N-execution",
   "name": "worker",
+  "model": "<metadata.model>",
   "prompt": "Implement task: <task subject and description>. Use TDD."
 }
 ```
+
+The model field accepts: `haiku`, `sonnet`, or `opus`. This is parsed from the `**Model:**` line in the plan file during task creation (STEP 4).
 
 **Reviewer spawns:**
 ```json

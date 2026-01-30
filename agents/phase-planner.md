@@ -13,6 +13,7 @@ You are a phase planner teammate responsible for creating implementation plans.
 You receive via spawn prompt:
 - `phase_num`: The phase number to plan (may be decimal like "1.5" for remediation)
 - `design_doc_path`: Path to the design document
+- `model_override`: (optional) Model to use for all tasks (haiku, sonnet, opus). If provided, use this for every task. If empty, choose per-task based on complexity.
 - `remediation_for`: (optional) Original phase number if this is a remediation phase
 - `issues`: (optional) List of specific gaps to address if this is a remediation phase
 
@@ -83,6 +84,29 @@ Following the planner methodology:
 - Exact commands with expected output
 - Reference relevant skills with @ syntax
 - Include Phase Estimates section
+
+### Task Model Selection
+
+Each task in the plan MUST include a `**Model:**` field that specifies which model the implementer should use.
+
+**Format:**
+```markdown
+### Task N: <description>
+
+**Files:**
+- ...
+
+**Model:** <haiku|sonnet|opus>
+
+**review:** <spec-only|full>
+```
+
+**Selection logic:**
+- If `model_override` is provided: use that model for ALL tasks
+- If no override: choose based on task complexity:
+  - `haiku` - Simple, mechanical changes (rename, move, delete, simple additions)
+  - `sonnet` - Standard implementation tasks (new functions, tests, integrations)
+  - `opus` - Complex tasks requiring deep reasoning (architecture, refactoring, debugging)
 
 ### Commit the Plan
 

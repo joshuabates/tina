@@ -21,14 +21,29 @@ You are a TEAM LEAD coordinating TEAMMATES. Do not do the work yourself - spawn 
 
 ---
 
-## STEP 1: Count phases and extract feature name
+## STEP 1: Parse invocation and extract info
 
 ```bash
-DESIGN_DOC="<path from invocation>"
+# Parse --model argument if provided
+# Invocation: /tina:orchestrate [--model <model>] <design-doc-path>
+# Examples:
+#   /tina:orchestrate docs/plans/feature-design.md
+#   /tina:orchestrate --model haiku docs/plans/feature-design.md
+
+MODEL_OVERRIDE=""  # empty means planner decides per-task
+if [[ "$1" == "--model" ]]; then
+    MODEL_OVERRIDE="$2"  # haiku, sonnet, or opus
+    DESIGN_DOC="$3"
+else
+    DESIGN_DOC="$1"
+fi
+
 TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
 FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
 TEAM_NAME="${FEATURE_NAME}-orchestration"
 ```
+
+If `MODEL_OVERRIDE` is set, pass it to phase-planner prompts so all tasks use that model.
 
 ---
 
@@ -193,9 +208,10 @@ After spawning a teammate, wait for their message. Based on the message content,
   "subagent_type": "tina:phase-planner",
   "team_name": "<feature-name>-orchestration",
   "name": "planner-1",
-  "prompt": "phase_num: 1\ndesign_doc_path: <DESIGN_DOC>"
+  "prompt": "phase_num: 1\ndesign_doc_path: <DESIGN_DOC>\nmodel_override: <MODEL_OVERRIDE or empty>"
 }
 ```
+Note: Include `model_override` only if MODEL_OVERRIDE was set from `--model` arg.
 
 **"plan-phase-N complete" with PLAN_PATH:**
 1. Mark plan-phase-N task complete
@@ -517,9 +533,10 @@ Prerequisites: Need DESIGN_DOC from team description
   "subagent_type": "tina:phase-planner",
   "team_name": "<TEAM_NAME>",
   "name": "planner-<N>",
-  "prompt": "phase_num: <N>\ndesign_doc_path: <DESIGN_DOC>\n\nCreate implementation plan for phase <N>.\nReport: plan-phase-<N> complete. PLAN_PATH: <PATH>"
+  "prompt": "phase_num: <N>\ndesign_doc_path: <DESIGN_DOC>\nmodel_override: <MODEL_OVERRIDE or empty>\n\nCreate implementation plan for phase <N>.\nReport: plan-phase-<N> complete. PLAN_PATH: <PATH>"
 }
 ```
+Include `model_override` only if set from `--model` arg.
 Then: Mark plan-phase-N as in_progress
 
 **Phase executor spawn:**
@@ -723,6 +740,7 @@ if message contains "review-N complete (gaps)":
     Spawn phase-planner with:
         phase_num: ${REMEDIATION_PHASE}
         design_doc_path: <DESIGN_DOC>
+        model_override: <MODEL_OVERRIDE or empty>
         remediation_for: phase ${N}
         issues: <issues list>
 
@@ -848,9 +866,10 @@ TaskUpdate {
   "subagent_type": "tina:phase-planner",
   "team_name": "<TEAM_NAME>",
   "name": "planner-<N>.5",
-  "prompt": "phase_num: <N>.5\ndesign_doc_path: <DESIGN_DOC>\nremediation_for: phase <N>\nissues: <issues list>\n\nCreate implementation plan to address these specific gaps.\nReport: plan-phase-<N>.5 complete. PLAN_PATH: <PATH>"
+  "prompt": "phase_num: <N>.5\ndesign_doc_path: <DESIGN_DOC>\nmodel_override: <MODEL_OVERRIDE or empty>\nremediation_for: phase <N>\nissues: <issues list>\n\nCreate implementation plan to address these specific gaps.\nReport: plan-phase-<N>.5 complete. PLAN_PATH: <PATH>"
 }
 ```
+Include `model_override` only if set from `--model` arg.
 
 **Remediation planner guidance:**
 
