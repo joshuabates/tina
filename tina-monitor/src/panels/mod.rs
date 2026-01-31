@@ -242,6 +242,23 @@ mod tests {
     #[test]
     fn commits_panel_navigates_down_within_items() {
         let mut panel = CommitsPanel::new();
+        use crate::git::commits::Commit;
+        panel.set_commits(vec![
+            Commit {
+                short_hash: "abc1234".to_string(),
+                hash: "abc12340000000000000000000000000000".to_string(),
+                subject: "Add feature".to_string(),
+                author: "Test".to_string(),
+                relative_time: "2h".to_string(),
+            },
+            Commit {
+                short_hash: "def5678".to_string(),
+                hash: "def56780000000000000000000000000000".to_string(),
+                subject: "Fix bug".to_string(),
+                author: "Test".to_string(),
+                relative_time: "1h".to_string(),
+            },
+        ], 50, 10);
         let initial = panel.selected;
         let result = panel.handle_key(make_key_event(KeyCode::Down));
         assert_eq!(result, HandleResult::Consumed);
@@ -251,7 +268,17 @@ mod tests {
     #[test]
     fn commits_panel_moves_focus_down_at_bottom() {
         let mut panel = CommitsPanel::new();
-        panel.selected = panel.items.len().saturating_sub(1);
+        use crate::git::commits::Commit;
+        panel.set_commits(vec![
+            Commit {
+                short_hash: "abc1234".to_string(),
+                hash: "abc12340000000000000000000000000000".to_string(),
+                subject: "Add feature".to_string(),
+                author: "Test".to_string(),
+                relative_time: "2h".to_string(),
+            },
+        ], 50, 10);
+        panel.selected = panel.commits.len().saturating_sub(1);
         let result = panel.handle_key(make_key_event(KeyCode::Down));
         assert_eq!(result, HandleResult::MoveFocus(Direction::Down));
     }
