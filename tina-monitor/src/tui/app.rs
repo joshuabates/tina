@@ -252,12 +252,10 @@ impl App {
         }
 
         // Handle Esc key - behavior depends on current view and help state
-        if key.code == KeyCode::Esc {
-            if self.show_help {
-                // Close help modal
-                self.show_help = false;
-                return;
-            }
+        if key.code == KeyCode::Esc && self.show_help {
+            // Close help modal
+            self.show_help = false;
+            return;
             // Let view-specific handlers handle Esc for navigation
             // Only quit from OrchestrationList view
         }

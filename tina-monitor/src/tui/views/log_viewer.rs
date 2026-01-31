@@ -163,23 +163,18 @@ pub fn render(app: &App, frame: &mut Frame) {
     // Clear the area first
     frame.render_widget(Clear, area);
 
-    let mut lines = Vec::new();
-
-    // Placeholder text
-    lines.push(Line::from(""));
-    lines.push(Line::from("Feature not yet implemented"));
-    lines.push(Line::from(""));
-    lines.push(Line::from(
-        "Team loading is required to display agent logs.",
-    ));
-    lines.push(Line::from(""));
-    lines.push(Line::from(""));
-
-    // Keybinding hints
-    lines.push(Line::from(Span::styled(
-        "[j/k] Scroll  [f] Follow  [a] Attach  [ESC] Close",
-        Style::default().fg(Color::DarkGray),
-    )));
+    let lines = vec![
+        Line::from(""),
+        Line::from("Feature not yet implemented"),
+        Line::from(""),
+        Line::from("Team loading is required to display agent logs."),
+        Line::from(""),
+        Line::from(""),
+        Line::from(Span::styled(
+            "[j/k] Scroll  [f] Follow  [a] Attach  [ESC] Close",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
 
     let paragraph = Paragraph::new(lines)
         .block(

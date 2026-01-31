@@ -12,6 +12,12 @@ pub struct CommitsPanel {
     pub selected: usize,
 }
 
+impl Default for CommitsPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommitsPanel {
     pub fn new() -> Self {
         Self {

@@ -8,6 +8,12 @@ use super::{TerminalHandler, TerminalResult};
 /// Handler for Kitty terminal
 pub struct KittyHandler;
 
+impl Default for KittyHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KittyHandler {
     pub fn new() -> Self {
         Self

@@ -85,7 +85,7 @@ pub fn render_task_inspector(frame: &mut Frame, task: &Task) {
         && task
             .metadata
             .as_object()
-            .map_or(true, |obj| !obj.is_empty())
+            .is_none_or(|obj| !obj.is_empty())
     {
         lines.push(Line::from(Span::styled(
             "Metadata:",

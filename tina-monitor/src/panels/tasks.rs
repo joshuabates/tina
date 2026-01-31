@@ -12,6 +12,12 @@ pub struct TasksPanel {
     pub selected: usize,
 }
 
+impl Default for TasksPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TasksPanel {
     pub fn new() -> Self {
         Self {

@@ -12,6 +12,12 @@ pub struct TeamPanel {
     pub selected: usize,
 }
 
+impl Default for TeamPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TeamPanel {
     pub fn new() -> Self {
         Self {

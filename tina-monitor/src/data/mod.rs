@@ -232,7 +232,7 @@ impl DataSource {
     }
 
     /// Load orchestration summary from worktree/.claude/tina/status.json
-    pub fn load_summary(&self, lookup_path: &PathBuf) -> Result<OrchestrationSummary> {
+    pub fn load_summary(&self, lookup_path: &Path) -> Result<OrchestrationSummary> {
         let state = self.load_supervisor_state(lookup_path)?;
 
         // Calculate elapsed time in minutes

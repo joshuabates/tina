@@ -29,14 +29,11 @@ pub trait TerminalHandler: Send + Sync {
 
 /// Get the appropriate terminal handler based on config
 pub fn get_handler(preferred: &str) -> Box<dyn TerminalHandler> {
-    match preferred {
-        "kitty" => {
-            let handler = KittyHandler::new();
-            if handler.is_available() {
-                return Box::new(handler);
-            }
+    if preferred == "kitty" {
+        let handler = KittyHandler::new();
+        if handler.is_available() {
+            return Box::new(handler);
         }
-        _ => {}
     }
     Box::new(FallbackHandler)
 }
