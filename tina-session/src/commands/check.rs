@@ -391,6 +391,52 @@ impl Foo {
         let violations = check_function_lengths(&src, 50).unwrap();
         assert!(violations.is_empty());
     }
+
+    #[test]
+    fn test_plan_validation_requires_complexity_budget_table() {
+        let temp = TempDir::new().unwrap();
+
+        // Plan with Complexity Budget section but no table
+        let plan_no_table = r#"
+# Phase 1 Plan
+
+### Task 1: Something
+**Model:** haiku
+
+### Complexity Budget
+
+Some text but no table.
+"#;
+        let path = temp.path().join("plan.md");
+        fs::write(&path, plan_no_table).unwrap();
+
+        let result = plan(&path).unwrap();
+        assert_eq!(result, 1, "Should fail without budget table");
+    }
+
+    #[test]
+    fn test_plan_validation_passes_with_complexity_budget_table() {
+        let temp = TempDir::new().unwrap();
+
+        let plan_with_table = r#"
+# Phase 1 Plan
+
+### Task 1: Something
+**Model:** haiku
+
+### Complexity Budget
+
+| Metric | Limit |
+|--------|-------|
+| Max lines per file | 400 |
+| Max function length | 50 lines |
+"#;
+        let path = temp.path().join("plan.md");
+        fs::write(&path, plan_with_table).unwrap();
+
+        let result = plan(&path).unwrap();
+        assert_eq!(result, 0, "Should pass with budget table");
+    }
 }
 
 pub fn plan(path: &Path) -> anyhow::Result<u8> {
@@ -442,6 +488,46 @@ pub fn plan(path: &Path) -> anyhow::Result<u8> {
         return Ok(1);
     }
 
+    // Verify Complexity Budget section contains a table
+    if !has_complexity_budget_table(&contents) {
+        println!("FAIL: Complexity Budget section must contain a table with metrics");
+        return Ok(1);
+    }
+
     println!("PASS: Plan validation passed");
     Ok(0)
+}
+
+/// Check if the Complexity Budget section contains a markdown table.
+fn has_complexity_budget_table(contents: &str) -> bool {
+    let lines: Vec<&str> = contents.lines().collect();
+    let mut in_budget_section = false;
+
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        // Start of Complexity Budget section
+        if trimmed.starts_with("### Complexity Budget") || trimmed.starts_with("## Complexity Budget") {
+            in_budget_section = true;
+            continue;
+        }
+
+        // End of section (next heading)
+        if in_budget_section && (trimmed.starts_with("### ") || trimmed.starts_with("## ") || trimmed.starts_with("# ")) {
+            break;
+        }
+
+        // Look for table structure: | header | header |
+        if in_budget_section && trimmed.starts_with('|') && trimmed.ends_with('|') {
+            // Check next line for separator |---|---|
+            if i + 1 < lines.len() {
+                let next = lines[i + 1].trim();
+                if next.starts_with('|') && next.contains("---") {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
 }
