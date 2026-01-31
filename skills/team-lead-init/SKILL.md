@@ -90,30 +90,34 @@ Do NOT spawn workers or reviewers yet. The team is just a container at this poin
 
 For each task in priority order:
 
-1. **Spawn worker for this task:**
-   Get the model from task metadata (via TaskGet), then spawn with that model:
-   ```json
-   {
-     "subagent_type": "tina:implementer",
-     "team_name": "phase-<N>-execution",
-     "name": "worker",
-     "model": "<model from task metadata>",
-     "prompt": "Implement task: <task subject and description>. Use TDD."
-   }
-   ```
-   The `model` field controls which model the implementer uses (haiku or opus).
+### 5.1 Spawn worker for this task
+Get the model from task metadata (via TaskGet), then spawn:
+```json
+{
+  "subagent_type": "tina:implementer",
+  "team_name": "<team-name>",
+  "name": "worker",
+  "model": "<model from task metadata>",
+  "prompt": "Implement task: <task subject and description>. Use TDD."
+}
+```
+The `model` field controls which model the implementer uses (haiku or opus).
 
-2. **Wait for worker to complete implementation**
-   Monitor for Teammate messages from worker indicating completion.
+### 5.2 Wait for worker to complete implementation
+Monitor for Teammate messages from worker indicating completion.
 
-3. **Spawn reviewers for this task:**
-   - spec-reviewer: Review implementation against spec
-   - code-quality-reviewer: Review code quality
+### 5.3 Spawn reviewers for this task
+- spec-reviewer (haiku): Review implementation against spec
+- code-quality-reviewer (opus): Review code quality
 
-4. **Wait for both reviews to pass**
-   Monitor for Teammate messages from spec-reviewer and code-quality-reviewer.
+### 5.4 Wait for both reviews to pass
+Monitor for Teammate messages from reviewers. Both must approve.
 
-5. **Shut down worker and reviewers:**
+### 5.5 Shut down ALL agents for this task
+
+Request shutdown for each agent in order:
+
+1. **Worker:**
    ```json
    {
      "operation": "requestShutdown",
@@ -121,10 +125,35 @@ For each task in priority order:
      "reason": "Task complete"
    }
    ```
-   Repeat for each agent (worker, spec-reviewer, code-quality-reviewer if spawned).
-   Wait for shutdown acknowledgment from each before proceeding.
 
-6. **Mark task complete, loop to next task**
+2. **Spec-reviewer:**
+   ```json
+   {
+     "operation": "requestShutdown",
+     "target_agent_id": "spec-reviewer",
+     "reason": "Review complete"
+   }
+   ```
+
+3. **Code-quality-reviewer:**
+   ```json
+   {
+     "operation": "requestShutdown",
+     "target_agent_id": "code-quality-reviewer",
+     "reason": "Review complete"
+   }
+   ```
+
+**Wait for acknowledgments** from all three before proceeding.
+Timeout: 30 seconds per agent. If no acknowledgment, log warning and proceed.
+
+### 5.6 Mark task complete
+
+Update task status to complete via TaskUpdate.
+
+### 5.7 Loop to next task
+
+Only after all agents have been shut down (acknowledged or timed out).
 
 This ephemeral model gives each task a fresh context window.
 
@@ -196,12 +225,32 @@ Do NOT proceed to completion. Do NOT attempt workarounds.
 
 ### 6.3 Complete phase
 
-**Only after BOTH gates pass with exit code 0:**
+**Completion Checklist - verify ALL before setting status = complete:**
 
-1. All tasks complete (workers/reviewers already shut down per-task)
-2. Clean up team resources at phase end: `Teammate { operation: "cleanup" }`
-3. Update status.json to "complete"
-4. Wait for supervisor to kill session
+1. [ ] All tasks marked complete
+2. [ ] No active workers (last task's agents shut down and acknowledged)
+3. [ ] No active reviewers
+4. [ ] Verification gate passed (Step 6.1)
+5. [ ] Complexity gate passed (Step 6.2)
+6. [ ] Team cleanup completed:
+   ```json
+   {
+     "operation": "cleanup"
+   }
+   ```
+
+**Only after ALL items verified:**
+
+Update status.json:
+```json
+{
+  "status": "complete",
+  "started_at": "<original timestamp>",
+  "completed_at": "<current ISO timestamp>"
+}
+```
+
+Wait for supervisor to detect completion and kill session.
 
 ---
 
@@ -411,6 +460,40 @@ When all tasks complete:
 - Clean up team resources with Teammate `cleanup` operation (required unless supervisor will reuse the team)
 - Update status.json to "complete"
 
+## Shutdown Verification
+
+Shutdown is a two-step process:
+
+### Step 1: Request Shutdown
+
+For each active agent (worker, spec-reviewer, code-quality-reviewer):
+
+```json
+{
+  "operation": "requestShutdown",
+  "target_agent_id": "<agent-name>",
+  "reason": "Task complete"
+}
+```
+
+### Step 2: Verify Shutdown
+
+After requesting shutdown, monitor for acknowledgment message from each agent:
+
+```json
+{
+  "type": "shutdown_acknowledged",
+  "from": "<agent-name>",
+  "requestId": "<request-id>"
+}
+```
+
+**Timeout:** If acknowledgment not received within 30 seconds:
+1. Log warning: "Agent <name> did not acknowledge shutdown within timeout"
+2. Proceed anyway (agent process may have already terminated)
+
+**IMPORTANT:** Do NOT spawn agents for the next task until all current agents have acknowledged shutdown OR timed out.
+
 ## Checkpoint Protocol
 
 With ephemeral spawning, checkpoint is simpler because there's no long-lived team composition to save.
@@ -465,6 +548,16 @@ See: `skills/checkpoint/SKILL.md` and `skills/rehydrate/SKILL.md`
 - Shut down unresponsive agent
 - Spawn replacement (ephemeral model makes this easy)
 - If replacement also fails: Set status = blocked
+
+**Shutdown request not acknowledged:**
+- Wait 30 seconds for acknowledgment
+- Log warning: "Agent <name> did not acknowledge shutdown"
+- Proceed to next task (agent may have already terminated)
+
+**Cleanup operation fails:**
+- Retry cleanup once
+- If still fails: Log error but proceed (status can still be marked complete)
+- Include cleanup failure in completion notes
 
 ## Escalation Protocol
 
@@ -541,6 +634,10 @@ Note: `team-name.txt` is no longer used. Team names are passed explicitly from o
 - Mark phase complete if complexity gate fails
 - Skip or bypass completion gates for any reason
 - Claim success without running `tina-session check verify`
+- Spawn agents for next task before current agents are shut down
+- Skip shutdown verification (always wait for acknowledgment or timeout)
+- Leave teammates running after phase completes
+- Proceed without requesting shutdown for ALL active agents
 
 **Always:**
 - Update status.json at each state transition
@@ -548,3 +645,7 @@ Note: `team-name.txt` is no longer used. Team names are passed explicitly from o
 - Include reasons when blocked
 - Run BOTH gates (verify AND complexity) before completion
 - Set status to "blocked" with gate details if any gate fails
+- Request shutdown for worker, spec-reviewer, and code-quality-reviewer after each task
+- Wait for shutdown acknowledgment (or 30s timeout) before next task
+- Run team cleanup at phase end
+- Log warning if agent doesn't acknowledge shutdown
