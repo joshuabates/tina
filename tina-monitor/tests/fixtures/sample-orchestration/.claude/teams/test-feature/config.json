@@ -1,0 +1,23 @@
+{
+  "name": "test-feature",
+  "description": "Test feature team for orchestration testing",
+  "lead_agent_id": "team-lead",
+  "members": [
+    {
+      "name": "team-lead",
+      "agent_id": "team-lead-uuid-1234",
+      "agent_type": "team-lead",
+      "model": "claude-opus",
+      "tmux_pane_id": "0",
+      "cwd": "/path/to/work"
+    },
+    {
+      "name": "worker",
+      "agent_id": "worker-uuid-5678",
+      "agent_type": "implementer",
+      "model": "claude-haiku",
+      "tmux_pane_id": "1",
+      "cwd": "/path/to/work"
+    }
+  ]
+}

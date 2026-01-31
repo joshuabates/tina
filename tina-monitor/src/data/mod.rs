@@ -13,15 +13,6 @@ use anyhow::{Result, Context};
 use chrono::Utc;
 use crate::types::*;
 
-/// Convert a feature name to its worktree .claude/tina directory path
-fn lookup_to_worktree_path(feature: &str) -> PathBuf {
-    let home = dirs::home_dir().expect("Could not determine home directory");
-    home.join(".claude")
-        .join("worktrees")
-        .join(format!("tina-{}", feature))
-        .join(".claude")
-        .join("tina")
-}
 
 /// Full orchestration data (loaded on demand)
 #[derive(Debug, Clone)]
@@ -82,9 +73,10 @@ impl DataSource {
                 .to_string();
 
             // Try to load the session lookup to find the worktree path
-            if let Ok(_lookup) = self.load_session_lookup(&feature) {
-                // Try to find the supervisor state in the worktree
-                let tina_dir = lookup_to_worktree_path(&feature);
+            if let Ok(lookup) = self.load_session_lookup(&feature) {
+                // Resolve cwd relative to fixture path if needed
+                let worktree = self.resolve_path(&lookup.cwd);
+                let tina_dir = worktree.join(".claude").join("tina");
                 if let Ok(summary) = self.load_summary(&tina_dir) {
                     summaries.push(summary);
                 }
@@ -97,10 +89,11 @@ impl DataSource {
     /// Load full orchestration data for a feature
     pub fn load_orchestration(&mut self, feature: &str) -> Result<&Orchestration> {
         // Load session lookup to find worktree location
-        let _lookup = self.load_session_lookup(feature)?;
+        let lookup = self.load_session_lookup(feature)?;
 
-        // Load supervisor state (status.json)
-        let tina_dir = lookup_to_worktree_path(feature);
+        // Use lookup.cwd directly (resolve relative paths for fixtures)
+        let worktree = self.resolve_path(&lookup.cwd);
+        let tina_dir = worktree.join(".claude").join("tina");
         let state = self.load_supervisor_state(&tina_dir)?;
 
         // Load orchestrator team if available
@@ -158,6 +151,14 @@ impl DataSource {
         }
     }
 
+    /// Resolve a path, handling relative paths when using fixtures
+    fn resolve_path(&self, path: &Path) -> PathBuf {
+        match &self.fixture_path {
+            Some(base) if path.is_relative() => base.join(path),
+            _ => path.to_path_buf(),
+        }
+    }
+
     /// Load session lookup from ~/.claude/tina-sessions/{feature}.json
     pub fn load_session_lookup(&self, feature: &str) -> Result<SessionLookup> {
         let path = self.sessions_dir().join(format!("{}.json", feature));
@@ -167,18 +168,18 @@ impl DataSource {
             .context("Failed to parse session lookup JSON")
     }
 
-    /// Load supervisor state from worktree/.claude/tina/status.json
-    pub fn load_supervisor_state(&self, worktree: &Path) -> Result<SupervisorState> {
-        let path = worktree.join("status.json");
+    /// Load supervisor state from worktree/.claude/tina/supervisor-state.json
+    pub fn load_supervisor_state(&self, tina_dir: &Path) -> Result<SupervisorState> {
+        let path = tina_dir.join("supervisor-state.json");
         let content = fs::read_to_string(&path)
             .context(format!("Failed to read supervisor state: {}", path.display()))?;
         serde_json::from_str(&content)
             .context("Failed to parse supervisor state JSON")
     }
 
-    /// Load team from ~/.claude/teams/{name}.json
+    /// Load team from ~/.claude/teams/{name}/config.json
     pub fn load_team(&self, name: &str) -> Result<Team> {
-        let path = self.teams_dir().join(format!("{}.json", name));
+        let path = self.teams_dir().join(name).join("config.json");
         let content = fs::read_to_string(&path)
             .context(format!("Failed to read team: {}", path.display()))?;
         serde_json::from_str(&content)

@@ -51,7 +51,8 @@ pub enum TaskStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionLookup {
     pub feature: String,
-    pub session_id: String,
+    pub cwd: PathBuf,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Timing breakdown for a phase.
@@ -193,7 +194,8 @@ mod tests {
     fn session_lookup_serializes_and_deserializes() {
         let original = SessionLookup {
             feature: "feature-x".to_string(),
-            session_id: "session-123".to_string(),
+            cwd: PathBuf::from("/path/to/worktree"),
+            created_at: Utc::now(),
         };
 
         let json = serde_json::to_string(&original).expect("serialize");

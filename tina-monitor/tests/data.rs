@@ -130,10 +130,11 @@ fn load_session_lookup_from_fixture() {
     let temp_dir = TempDir::new().unwrap();
     let fixture_path = temp_dir.path();
 
-    // Create session lookup file
+    // Create session lookup file with correct schema
     let session_content = r#"{
         "feature": "auth-feature",
-        "session_id": "sess-123"
+        "cwd": "/path/to/worktree",
+        "created_at": "2026-01-30T10:00:00Z"
     }"#;
     fs::write(
         fixture_path.join("auth-feature.json"),
@@ -146,7 +147,7 @@ fn load_session_lookup_from_fixture() {
     assert!(result.is_ok());
     let lookup = result.unwrap();
     assert_eq!(lookup.feature, "auth-feature");
-    assert_eq!(lookup.session_id, "sess-123");
+    assert_eq!(lookup.cwd, std::path::PathBuf::from("/path/to/worktree"));
 }
 
 #[test]
@@ -185,7 +186,7 @@ fn load_supervisor_state_from_fixture() {
         "timing": {}
     }"#;
     fs::write(
-        fixture_path.join(".claude/tina/status.json"),
+        fixture_path.join(".claude/tina/supervisor-state.json"),
         state_content,
     ).unwrap();
 
@@ -219,9 +220,9 @@ fn load_supervisor_state_missing_file_returns_error() {
 fn load_team_from_fixture() {
     let temp_dir = TempDir::new().unwrap();
     let fixture_path = temp_dir.path();
-    fs::create_dir_all(fixture_path.join(".claude/teams")).unwrap();
+    fs::create_dir_all(fixture_path.join(".claude/teams/my-team")).unwrap();
 
-    // Create team file
+    // Create team file at {name}/config.json
     let team_content = r#"{
         "name": "my-team",
         "description": "A test team",
@@ -229,7 +230,7 @@ fn load_team_from_fixture() {
         "members": []
     }"#;
     fs::write(
-        fixture_path.join(".claude/teams/my-team.json"),
+        fixture_path.join(".claude/teams/my-team/config.json"),
         team_content,
     ).unwrap();
 
@@ -378,7 +379,7 @@ fn load_summary_from_fixture() {
         "timing": {}
     }"#;
     fs::write(
-        fixture_path.join(".claude/tina/status.json"),
+        fixture_path.join(".claude/tina/supervisor-state.json"),
         summary_content,
     ).unwrap();
 
