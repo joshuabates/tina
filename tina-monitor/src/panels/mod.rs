@@ -33,10 +33,23 @@ pub fn border_type(focused: bool) -> BorderType {
 mod tests {
     use super::*;
     use crate::panel::{Panel, HandleResult, Direction};
+    use crate::types::TeamMember;
     use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
+    use std::path::PathBuf;
 
     fn make_key_event(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn create_test_member(name: &str) -> TeamMember {
+        TeamMember {
+            agent_id: format!("agent-{}", name),
+            name: name.to_string(),
+            agent_type: "test-type".to_string(),
+            model: "claude-opus".to_string(),
+            tmux_pane_id: None,
+            cwd: PathBuf::from("/test"),
+        }
     }
 
     // Focus styling tests
@@ -68,6 +81,11 @@ mod tests {
     #[test]
     fn team_panel_navigates_down_within_items() {
         let mut panel = TeamPanel::new();
+        panel.set_members(vec![
+            create_test_member("alice"),
+            create_test_member("bob"),
+            create_test_member("charlie"),
+        ]);
         let initial = panel.selected;
         let result = panel.handle_key(make_key_event(KeyCode::Down));
         assert_eq!(result, HandleResult::Consumed);
@@ -77,6 +95,11 @@ mod tests {
     #[test]
     fn team_panel_navigates_up_within_items() {
         let mut panel = TeamPanel::new();
+        panel.set_members(vec![
+            create_test_member("alice"),
+            create_test_member("bob"),
+            create_test_member("charlie"),
+        ]);
         panel.selected = 2;
         let result = panel.handle_key(make_key_event(KeyCode::Up));
         assert_eq!(result, HandleResult::Consumed);
@@ -86,7 +109,11 @@ mod tests {
     #[test]
     fn team_panel_moves_focus_down_at_bottom() {
         let mut panel = TeamPanel::new();
-        panel.selected = panel.items.len().saturating_sub(1);
+        panel.set_members(vec![
+            create_test_member("alice"),
+            create_test_member("bob"),
+        ]);
+        panel.selected = panel.members.len().saturating_sub(1);
         let result = panel.handle_key(make_key_event(KeyCode::Down));
         assert_eq!(result, HandleResult::MoveFocus(Direction::Down));
     }
@@ -94,6 +121,7 @@ mod tests {
     #[test]
     fn team_panel_moves_focus_up_at_top() {
         let mut panel = TeamPanel::new();
+        panel.set_members(vec![create_test_member("alice")]);
         panel.selected = 0;
         let result = panel.handle_key(make_key_event(KeyCode::Up));
         assert_eq!(result, HandleResult::MoveFocus(Direction::Up));
@@ -116,6 +144,11 @@ mod tests {
     #[test]
     fn team_panel_j_key_navigates_down() {
         let mut panel = TeamPanel::new();
+        panel.set_members(vec![
+            create_test_member("alice"),
+            create_test_member("bob"),
+            create_test_member("charlie"),
+        ]);
         let initial = panel.selected;
         let result = panel.handle_key(make_key_event(KeyCode::Char('j')));
         assert_eq!(result, HandleResult::Consumed);
@@ -125,6 +158,11 @@ mod tests {
     #[test]
     fn team_panel_k_key_navigates_up() {
         let mut panel = TeamPanel::new();
+        panel.set_members(vec![
+            create_test_member("alice"),
+            create_test_member("bob"),
+            create_test_member("charlie"),
+        ]);
         panel.selected = 2;
         let result = panel.handle_key(make_key_event(KeyCode::Char('k')));
         assert_eq!(result, HandleResult::Consumed);
