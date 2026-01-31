@@ -3,6 +3,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::data::types::Task;
+use crate::entity::Entity;
 use crate::git::commits::Commit;
 use crate::panel::{Direction, HandleResult, Panel};
 use crate::panels::{CommitsPanel, TasksPanel, TeamPanel};
@@ -120,6 +121,30 @@ impl PanelGrid {
         self.commits_panel.selected_commit()
     }
 
+    /// Get the entity from the currently focused panel
+    pub fn selected_entity(&self) -> Option<Entity> {
+        let (row, col) = self.focus;
+        match (row, col) {
+            (0, 0) => self
+                .orchestrator_panel
+                .selected_member()
+                .map(|m| Entity::TeamMember(m.clone())),
+            (0, 1) => self
+                .tasks_panel
+                .selected_task()
+                .map(|t| Entity::Task(t.clone())),
+            (1, 0) => self
+                .phase_panel
+                .selected_member()
+                .map(|m| Entity::TeamMember(m.clone())),
+            (1, 1) => self
+                .commits_panel
+                .selected_commit()
+                .map(|c| Entity::Commit(c.clone())),
+            _ => None,
+        }
+    }
+
     /// Handle a key event
     pub fn handle_key(&mut self, key: KeyEvent) -> GridResult {
         // Check for grid-level navigation keys
@@ -159,6 +184,14 @@ impl PanelGrid {
             HandleResult::Ignored => GridResult::Ignored,
             HandleResult::MoveFocus(dir) => {
                 self.move_focus(dir);
+                GridResult::Consumed
+            }
+            HandleResult::Quicklook(_) => {
+                // TODO: Implement quicklook overlay in Phase 4
+                GridResult::Consumed
+            }
+            HandleResult::EntityAction(_) => {
+                // TODO: Implement entity action handling in Phase 4
                 GridResult::Consumed
             }
         }

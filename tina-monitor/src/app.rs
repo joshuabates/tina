@@ -3,10 +3,27 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::Frame;
 use std::path::PathBuf;
 
+use crate::actions;
 use crate::dashboard::Dashboard;
 use crate::data::{DataSource, Orchestration};
 use crate::git::commits::get_commits;
 use crate::layout::PanelGrid;
+use crate::overlay::{fuzzy, help, quicklook, send};
+
+/// Overlay state for modal dialogs
+#[derive(Debug)]
+pub enum Overlay {
+    /// No overlay active
+    None,
+    /// Help screen showing keybindings
+    Help,
+    /// Quicklook for entity details
+    Quicklook(quicklook::QuicklookState),
+    /// Fuzzy finder for orchestrations
+    FuzzyFinder(fuzzy::FuzzyState),
+    /// Send command dialog
+    SendDialog(send::SendDialogState),
+}
 
 /// App represents the minimal app shell
 pub struct App {
@@ -15,6 +32,9 @@ pub struct App {
     pub dashboard: Dashboard,
     pub data_source: Option<DataSource>,
     pub current_feature: Option<String>,
+    pub overlay: Overlay,
+    /// Status message to display (clears on next key)
+    pub status_message: Option<String>,
 }
 
 impl App {
@@ -26,6 +46,8 @@ impl App {
             dashboard: Dashboard::new(),
             data_source: None,
             current_feature: None,
+            overlay: Overlay::None,
+            status_message: None,
         }
     }
 
@@ -38,19 +60,106 @@ impl App {
             dashboard: Dashboard::new(),
             data_source,
             current_feature: None,
+            overlay: Overlay::None,
+            status_message: None,
         }
     }
 
     /// Handle a key event
     pub fn handle_key(&mut self, key: KeyEvent) {
-        // Global keys first
+        // Clear status message on any key
+        self.status_message = None;
+
+        // Handle overlay keys first (overlay captures all input)
+        match &mut self.overlay {
+            Overlay::None => {}
+            Overlay::Help => {
+                if help::handle_key(key) {
+                    self.overlay = Overlay::None;
+                }
+                return;
+            }
+            Overlay::Quicklook(state) => {
+                match quicklook::handle_key(state, key) {
+                    quicklook::QuicklookResult::Close => self.overlay = Overlay::None,
+                    quicklook::QuicklookResult::Action(action) => {
+                        self.overlay = Overlay::None;
+                        if let Ok(Some(msg)) = actions::execute(action) {
+                            self.status_message = Some(msg);
+                        }
+                    }
+                    quicklook::QuicklookResult::Consumed => {}
+                }
+                return;
+            }
+            Overlay::FuzzyFinder(state) => {
+                match fuzzy::handle_key(state, key) {
+                    fuzzy::FuzzyResult::Close => self.overlay = Overlay::None,
+                    fuzzy::FuzzyResult::Select(feature) => {
+                        self.overlay = Overlay::None;
+                        if let Err(e) = self.load_orchestration(&feature) {
+                            self.status_message = Some(format!("Error: {}", e));
+                        }
+                    }
+                    fuzzy::FuzzyResult::Consumed => {}
+                }
+                return;
+            }
+            Overlay::SendDialog(state) => {
+                match send::handle_key(state, key) {
+                    send::SendResult::Cancel => self.overlay = Overlay::None,
+                    send::SendResult::Send(pane_id, cmd) => {
+                        self.overlay = Overlay::None;
+                        let action = crate::entity::EntityAction::SendCommand {
+                            pane_id,
+                            command: cmd,
+                        };
+                        if let Ok(Some(msg)) = actions::execute(action) {
+                            self.status_message = Some(msg);
+                        }
+                    }
+                    send::SendResult::Consumed => {}
+                }
+                return;
+            }
+        }
+
+        // Global keys (when no overlay)
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Esc => self.should_quit = true,
+            KeyCode::Char('?') => self.overlay = Overlay::Help,
+            KeyCode::Char('/') => {
+                // Open fuzzy finder with available orchestrations
+                let items = self.list_orchestrations();
+                self.overlay = Overlay::FuzzyFinder(fuzzy::FuzzyState::new(items));
+            }
+            KeyCode::Char(' ') => {
+                // Quicklook for selected entity
+                if let Some(entity) = self.grid.selected_entity() {
+                    self.overlay = Overlay::Quicklook(quicklook::QuicklookState::new(entity));
+                }
+            }
             _ => {
                 // Non-global keys delegated to grid
                 self.grid.handle_key(key);
             }
+        }
+    }
+
+    /// List available orchestrations for fuzzy finder
+    fn list_orchestrations(&self) -> Vec<fuzzy::OrchestrationSummary> {
+        if let Some(ds) = &self.data_source {
+            ds.list_orchestrations()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|summary| fuzzy::OrchestrationSummary {
+                    feature: summary.feature,
+                    status: format!("{:?}", summary.status),
+                })
+                .collect()
+        } else {
+            vec![]
         }
     }
 
@@ -73,6 +182,15 @@ impl App {
 
         // Render panel grid
         self.grid.render(frame, grid_area);
+
+        // Render overlay on top (if active)
+        match &self.overlay {
+            Overlay::None => {}
+            Overlay::Help => help::render(frame),
+            Overlay::Quicklook(state) => quicklook::render(state, frame),
+            Overlay::FuzzyFinder(state) => fuzzy::render(state, frame),
+            Overlay::SendDialog(state) => send::render(state, frame),
+        }
     }
 
     /// Check if app should quit

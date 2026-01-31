@@ -38,7 +38,7 @@ pub struct Agent {
 }
 
 /// A task in the task system
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Task {
     pub id: String,
     pub subject: String,

@@ -2,6 +2,8 @@ use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
+use crate::entity::{Entity, EntityAction};
+
 /// Direction for focus movement
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -12,7 +14,7 @@ pub enum Direction {
 }
 
 /// Result of handling a key event in a panel
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum HandleResult {
     /// Key was handled by the panel
     Consumed,
@@ -20,6 +22,10 @@ pub enum HandleResult {
     Ignored,
     /// Request to move focus in a direction
     MoveFocus(Direction),
+    /// Request to open quicklook for an entity
+    Quicklook(Entity),
+    /// Request to perform an action on an entity
+    EntityAction(EntityAction),
 }
 
 /// Core abstraction for TUI panels
@@ -62,6 +68,35 @@ mod tests {
     fn handle_result_move_focus() {
         let result = HandleResult::MoveFocus(Direction::Up);
         assert!(matches!(result, HandleResult::MoveFocus(Direction::Up)));
+    }
+
+    #[test]
+    fn handle_result_quicklook() {
+        let entity = Entity::TeamMember(crate::types::TeamMember {
+            agent_id: "test".to_string(),
+            name: "test".to_string(),
+            agent_type: "test".to_string(),
+            model: "test".to_string(),
+            tmux_pane_id: None,
+            cwd: std::path::PathBuf::from("/test"),
+        });
+        let result = HandleResult::Quicklook(entity.clone());
+        assert!(matches!(result, HandleResult::Quicklook(_)));
+        if let HandleResult::Quicklook(e) = result {
+            assert_eq!(e, entity);
+        }
+    }
+
+    #[test]
+    fn handle_result_entity_action() {
+        let action = EntityAction::CopySha {
+            sha: "abc123".to_string(),
+        };
+        let result = HandleResult::EntityAction(action.clone());
+        assert!(matches!(result, HandleResult::EntityAction(_)));
+        if let HandleResult::EntityAction(a) = result {
+            assert_eq!(a, action);
+        }
     }
 
     #[test]

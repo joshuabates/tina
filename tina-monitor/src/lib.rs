@@ -4,14 +4,17 @@
 
 use clap::ValueEnum;
 
+pub mod actions;
 pub mod app;
 pub mod cli;
 pub mod config;
 pub mod dashboard;
 pub mod data;
+pub mod entity;
 pub mod git;
 pub mod layout;
 pub mod logging;
+pub mod overlay;
 pub mod panel;
 pub mod panels;
 pub mod terminal;
