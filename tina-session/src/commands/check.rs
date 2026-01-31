@@ -50,11 +50,49 @@ fn extract_rust_function_lengths(code: &str) -> Vec<(String, u32)> {
     functions
 }
 
+/// Check all Rust files for functions exceeding max_lines.
+/// Returns vector of (file_path, function_name, line_count) tuples.
+fn check_function_lengths(dir: &Path, max_lines: u32) -> anyhow::Result<Vec<(String, String, u32)>> {
+    let mut violations = Vec::new();
+    check_function_lengths_recursive(dir, max_lines, &mut violations)?;
+    Ok(violations)
+}
+
+fn check_function_lengths_recursive(
+    dir: &Path,
+    max_lines: u32,
+    violations: &mut Vec<(String, String, u32)>,
+) -> anyhow::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with('.') || name == "target" || name == "node_modules" {
+                continue;
+            }
+        }
+
+        if path.is_dir() {
+            check_function_lengths_recursive(&path, max_lines, violations)?;
+        } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            if let Ok(contents) = fs::read_to_string(&path) {
+                for (fn_name, line_count) in extract_rust_function_lengths(&contents) {
+                    if line_count > max_lines {
+                        violations.push((path.display().to_string(), fn_name, line_count));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn complexity(
     cwd: &Path,
     max_file_lines: u32,
     max_total_lines: u32,
-    _max_complexity: u32,
+    max_function_lines: u32,
 ) -> anyhow::Result<u8> {
     if !cwd.exists() {
         anyhow::bail!(SessionError::DirectoryNotFound(cwd.display().to_string()));
@@ -107,6 +145,16 @@ pub fn complexity(
         println!("FAIL: Files exceeding {} lines:", max_file_lines);
         for (path, lines) in &violations {
             println!("  {} ({} lines)", path, lines);
+        }
+        return Ok(1);
+    }
+
+    // Check function lengths
+    let fn_violations = check_function_lengths(check_dir, max_function_lines)?;
+    if !fn_violations.is_empty() {
+        println!("FAIL: Functions exceeding {} lines:", max_function_lines);
+        for (path, fn_name, lines) in &fn_violations {
+            println!("  {}::{} ({} lines)", path, fn_name, lines);
         }
         return Ok(1);
     }
@@ -308,6 +356,40 @@ impl Foo {
         assert!(functions.iter().any(|(name, len)| name == "longer_function" && *len == 6));
         assert!(functions.iter().any(|(name, len)| name == "method_one" && *len == 3));
         assert!(functions.iter().any(|(name, len)| name == "method_two" && *len == 5));
+    }
+
+    #[test]
+    fn test_check_function_lengths_finds_violations() {
+        let temp = TempDir::new().unwrap();
+        let src = temp.path().join("src");
+        fs::create_dir(&src).unwrap();
+
+        // Create file with long function (>50 lines)
+        let mut long_fn = String::from("fn very_long_function() {\n");
+        for i in 0..55 {
+            long_fn.push_str(&format!("    let x{} = {};\n", i, i));
+        }
+        long_fn.push_str("}\n");
+        fs::write(src.join("main.rs"), long_fn).unwrap();
+
+        let violations = check_function_lengths(&src, 50).unwrap();
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].0.contains("main.rs"));
+        assert_eq!(violations[0].1, "very_long_function");
+        assert!(violations[0].2 > 50);
+    }
+
+    #[test]
+    fn test_check_function_lengths_passes_when_under_limit() {
+        let temp = TempDir::new().unwrap();
+        let src = temp.path().join("src");
+        fs::create_dir(&src).unwrap();
+
+        let short_fn = "fn short() {\n    println!(\"hi\");\n}\n";
+        fs::write(src.join("main.rs"), short_fn).unwrap();
+
+        let violations = check_function_lengths(&src, 50).unwrap();
+        assert!(violations.is_empty());
     }
 }
 

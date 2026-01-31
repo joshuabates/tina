@@ -234,9 +234,9 @@ enum CheckCommands {
         #[arg(long, default_value = "2000")]
         max_total_lines: u32,
 
-        /// Max cyclomatic complexity per function
-        #[arg(long, default_value = "10")]
-        max_complexity: u32,
+        /// Max lines per function
+        #[arg(long, default_value = "50")]
+        max_function_lines: u32,
     },
 
     /// Run test and lint verification
@@ -328,8 +328,8 @@ fn run() -> anyhow::Result<u8> {
                 cwd,
                 max_file_lines,
                 max_total_lines,
-                max_complexity,
-            } => commands::check::complexity(&cwd, max_file_lines, max_total_lines, max_complexity),
+                max_function_lines,
+            } => commands::check::complexity(&cwd, max_file_lines, max_total_lines, max_function_lines),
 
             CheckCommands::Verify { cwd } => commands::check::verify(&cwd),
 
