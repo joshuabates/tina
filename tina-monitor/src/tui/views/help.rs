@@ -31,6 +31,7 @@ fn get_help_text() -> Vec<Line<'static>> {
         Line::from("  Enter                Open task inspector (when task focused)"),
         Line::from("  l                    View agent logs (when member focused)"),
         Line::from("  a                    Attach to agent's tmux pane (when member focused)"),
+        Line::from("  s                    Open send dialog (when member focused)"),
         Line::from("  c                    View commits for current phase"),
         Line::from("  d                    View diff stats for current phase"),
         Line::from("  Esc                  Return to orchestration list"),
@@ -303,6 +304,31 @@ mod tests {
         assert!(
             content.contains("Enter"),
             "Help should document Enter key for diff viewer"
+        );
+    }
+
+    #[test]
+    fn test_help_modal_contains_send_dialog_keybinding() {
+        let help_text = get_help_text();
+
+        let content = help_text
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<String>();
+
+        // Verify 's' key for send dialog is documented
+        assert!(
+            content.contains("s") && content.contains("Open send dialog"),
+            "Help should document 's' key for send dialog"
+        );
+        assert!(
+            content.contains("when member focused"),
+            "Help should indicate send dialog requires member focus"
         );
     }
 }
