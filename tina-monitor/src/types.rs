@@ -170,6 +170,17 @@ pub struct Task {
     pub blocked_by: Vec<String>,
 }
 
+/// Summary of an orchestration for display in finder
+#[derive(Debug, Clone)]
+pub struct OrchestrationSummary {
+    pub feature: String,
+    pub worktree_path: PathBuf,
+    pub status: OrchestrationStatus,
+    pub current_phase: u32,
+    pub total_phases: u32,
+    pub elapsed_mins: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -638,5 +649,28 @@ mod tests {
         let deserialized: Task = serde_json::from_str(&json).expect("deserialize");
 
         assert_eq!(deserialized, original);
+    }
+
+    // ====================================================================
+    // OrchestrationSummary Tests
+    // ====================================================================
+
+    #[test]
+    fn orchestration_summary_can_be_created() {
+        let summary = OrchestrationSummary {
+            feature: "auth-system".to_string(),
+            worktree_path: PathBuf::from("/path/to/worktree"),
+            status: OrchestrationStatus::Executing,
+            current_phase: 2,
+            total_phases: 4,
+            elapsed_mins: 45,
+        };
+
+        assert_eq!(summary.feature, "auth-system");
+        assert_eq!(summary.worktree_path, PathBuf::from("/path/to/worktree"));
+        assert_eq!(summary.status, OrchestrationStatus::Executing);
+        assert_eq!(summary.current_phase, 2);
+        assert_eq!(summary.total_phases, 4);
+        assert_eq!(summary.elapsed_mins, 45);
     }
 }

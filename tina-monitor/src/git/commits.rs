@@ -35,7 +35,7 @@ pub fn get_commits(cwd: &Path, range: &str) -> Result<CommitSummary> {
         .map(|line| {
             let parts: Vec<&str> = line.splitn(5, '|').collect();
             Commit {
-                short_hash: parts.get(0).unwrap_or(&"").to_string(),
+                short_hash: parts.first().unwrap_or(&"").to_string(),
                 hash: parts.get(1).unwrap_or(&"").to_string(),
                 subject: parts.get(2).unwrap_or(&"").to_string(),
                 author: parts.get(3).unwrap_or(&"").to_string(),

@@ -1,5 +1,7 @@
 use std::path::PathBuf;
+use std::fs;
 use tina_monitor::types::*;
+use tempfile::TempDir;
 
 #[test]
 fn data_source_new_with_no_fixture() {
@@ -117,4 +119,277 @@ fn data_source_load_orchestration_placeholder() {
     let result = ds.load_orchestration("test-feature");
     // Placeholder should return empty or an error
     assert!(result.is_ok() || result.is_err());
+}
+
+// ====================================================================
+// Tests for load_session_lookup
+// ====================================================================
+
+#[test]
+fn load_session_lookup_from_fixture() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+
+    // Create session lookup file
+    let session_content = r#"{
+        "feature": "auth-feature",
+        "session_id": "sess-123"
+    }"#;
+    fs::write(
+        fixture_path.join("auth-feature.json"),
+        session_content,
+    ).unwrap();
+
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_session_lookup("auth-feature");
+
+    assert!(result.is_ok());
+    let lookup = result.unwrap();
+    assert_eq!(lookup.feature, "auth-feature");
+    assert_eq!(lookup.session_id, "sess-123");
+}
+
+#[test]
+fn load_session_lookup_missing_file_returns_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_session_lookup("nonexistent");
+
+    assert!(result.is_err());
+}
+
+// ====================================================================
+// Tests for load_supervisor_state
+// ====================================================================
+
+#[test]
+fn load_supervisor_state_from_fixture() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+    fs::create_dir_all(fixture_path.join(".claude/tina")).unwrap();
+
+    // Create supervisor state file
+    let state_content = r#"{
+        "version": 1,
+        "feature": "test-feature",
+        "design_doc": "/path/to/design.md",
+        "worktree_path": "/path/to/worktree",
+        "branch": "test-feature",
+        "total_phases": 3,
+        "current_phase": 2,
+        "status": "executing",
+        "orchestration_started_at": "2025-01-31T10:00:00Z",
+        "phases": {},
+        "timing": {}
+    }"#;
+    fs::write(
+        fixture_path.join(".claude/tina/status.json"),
+        state_content,
+    ).unwrap();
+
+    let worktree_path = fixture_path.join(".claude/tina");
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_supervisor_state(&worktree_path);
+
+    assert!(result.is_ok());
+    let state = result.unwrap();
+    assert_eq!(state.feature, "test-feature");
+    assert_eq!(state.current_phase, 2);
+    assert_eq!(state.status, OrchestrationStatus::Executing);
+}
+
+#[test]
+fn load_supervisor_state_missing_file_returns_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_supervisor_state(&fixture_path.join(".claude/tina"));
+
+    assert!(result.is_err());
+}
+
+// ====================================================================
+// Tests for load_team
+// ====================================================================
+
+#[test]
+fn load_team_from_fixture() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+    fs::create_dir_all(fixture_path.join(".claude/teams")).unwrap();
+
+    // Create team file
+    let team_content = r#"{
+        "name": "my-team",
+        "description": "A test team",
+        "lead_agent_id": "team-lead",
+        "members": []
+    }"#;
+    fs::write(
+        fixture_path.join(".claude/teams/my-team.json"),
+        team_content,
+    ).unwrap();
+
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_team("my-team");
+
+    assert!(result.is_ok());
+    let team = result.unwrap();
+    assert_eq!(team.name, "my-team");
+    assert_eq!(team.lead_agent_id, "team-lead");
+}
+
+#[test]
+fn load_team_missing_file_returns_error() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+    fs::create_dir_all(fixture_path.join(".claude/teams")).unwrap();
+
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_team("nonexistent");
+
+    assert!(result.is_err());
+}
+
+// ====================================================================
+// Tests for load_tasks
+// ====================================================================
+
+#[test]
+fn load_tasks_from_fixture() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+    fs::create_dir_all(fixture_path.join(".claude/tasks/my-team")).unwrap();
+
+    // Create task files
+    let task1_content = r#"{
+        "id": "2",
+        "subject": "Task Two",
+        "description": "Second task",
+        "status": "pending",
+        "owner": null,
+        "blocks": [],
+        "blocked_by": []
+    }"#;
+    let task2_content = r#"{
+        "id": "1",
+        "subject": "Task One",
+        "description": "First task",
+        "status": "in_progress",
+        "owner": null,
+        "blocks": [],
+        "blocked_by": []
+    }"#;
+    fs::write(
+        fixture_path.join(".claude/tasks/my-team/2.json"),
+        task1_content,
+    ).unwrap();
+    fs::write(
+        fixture_path.join(".claude/tasks/my-team/1.json"),
+        task2_content,
+    ).unwrap();
+
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_tasks("my-team");
+
+    assert!(result.is_ok());
+    let tasks = result.unwrap();
+    assert_eq!(tasks.len(), 2);
+    // Tasks should be sorted by id numerically
+    assert_eq!(tasks[0].id, "1");
+    assert_eq!(tasks[1].id, "2");
+}
+
+#[test]
+fn load_tasks_empty_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+    fs::create_dir_all(fixture_path.join(".claude/tasks/my-team")).unwrap();
+
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_tasks("my-team");
+
+    assert!(result.is_ok());
+    let tasks = result.unwrap();
+    assert_eq!(tasks.len(), 0);
+}
+
+#[test]
+fn load_tasks_sorts_numerically() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+    fs::create_dir_all(fixture_path.join(".claude/tasks/my-team")).unwrap();
+
+    // Create tasks with numeric ids in non-sequential order
+    for (id, subject) in &[("10", "Task Ten"), ("2", "Task Two"), ("1", "Task One"), ("3", "Task Three")] {
+        let task_content = format!(r#"{{
+            "id": "{}",
+            "subject": "{}",
+            "description": "",
+            "status": "pending",
+            "owner": null,
+            "blocks": [],
+            "blocked_by": []
+        }}"#, id, subject);
+        fs::write(
+            fixture_path.join(format!(".claude/tasks/my-team/{}.json", id)),
+            task_content,
+        ).unwrap();
+    }
+
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_tasks("my-team");
+
+    assert!(result.is_ok());
+    let tasks = result.unwrap();
+    assert_eq!(tasks.len(), 4);
+    // Should be sorted numerically: 1, 2, 3, 10
+    assert_eq!(tasks[0].id, "1");
+    assert_eq!(tasks[1].id, "2");
+    assert_eq!(tasks[2].id, "3");
+    assert_eq!(tasks[3].id, "10");
+}
+
+// ====================================================================
+// Tests for load_summary
+// ====================================================================
+
+#[test]
+fn load_summary_from_fixture() {
+    let temp_dir = TempDir::new().unwrap();
+    let fixture_path = temp_dir.path();
+    fs::create_dir_all(fixture_path.join(".claude/tina")).unwrap();
+
+    // Create summary file
+    let summary_content = r#"{
+        "version": 1,
+        "feature": "test-feature",
+        "design_doc": "/path/to/design.md",
+        "worktree_path": "/path/to/worktree",
+        "branch": "test-feature",
+        "total_phases": 3,
+        "current_phase": 2,
+        "status": "executing",
+        "orchestration_started_at": "2025-01-31T10:00:00Z",
+        "phases": {},
+        "timing": {}
+    }"#;
+    fs::write(
+        fixture_path.join(".claude/tina/status.json"),
+        summary_content,
+    ).unwrap();
+
+    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
+    let result = ds.load_summary(&fixture_path.join(".claude/tina"));
+
+    assert!(result.is_ok());
+    let summary = result.unwrap();
+    assert_eq!(summary.feature, "test-feature");
+    assert_eq!(summary.current_phase, 2);
+    assert_eq!(summary.total_phases, 3);
+    // elapsed_mins should be calculated (it will be positive)
+    assert!(summary.elapsed_mins >= 0);
 }

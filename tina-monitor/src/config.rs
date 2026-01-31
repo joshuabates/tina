@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Main configuration structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     pub terminal: TerminalConfig,
@@ -50,16 +50,6 @@ pub struct LoggingConfig {
     pub command_log: PathBuf,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            terminal: TerminalConfig::default(),
-            tui: TuiConfig::default(),
-            safety: SafetyConfig::default(),
-            logging: LoggingConfig::default(),
-        }
-    }
-}
 
 impl Default for TerminalConfig {
     fn default() -> Self {

@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::Frame;
 
 use crate::layout::PanelGrid;
@@ -41,6 +41,11 @@ impl App {
     pub fn should_quit(&self) -> bool {
         self.should_quit
     }
+
+    /// Get the current panel focus position
+    pub fn get_panel_focus(&self) -> (usize, usize) {
+        self.grid.focus()
+    }
 }
 
 impl Default for App {
@@ -52,6 +57,7 @@ impl Default for App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crossterm::event::KeyModifiers;
 
     fn make_key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
