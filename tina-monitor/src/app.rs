@@ -148,16 +148,9 @@ impl App {
     }
 
     /// List available orchestrations for fuzzy finder
-    fn list_orchestrations(&self) -> Vec<fuzzy::OrchestrationSummary> {
+    fn list_orchestrations(&self) -> Vec<crate::types::OrchestrationSummary> {
         if let Some(ds) = &self.data_source {
-            ds.list_orchestrations()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|summary| fuzzy::OrchestrationSummary {
-                    feature: summary.feature,
-                    status: format!("{:?}", summary.status),
-                })
-                .collect()
+            ds.list_orchestrations().unwrap_or_default()
         } else {
             vec![]
         }

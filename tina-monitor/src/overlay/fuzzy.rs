@@ -1,7 +1,8 @@
 //! Fuzzy finder overlay for searching orchestrations
 
 use super::centered_rect;
-use crate::types::OrchestrationSummary;
+// Re-export for use by app.rs
+pub use crate::types::OrchestrationSummary;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
@@ -110,7 +111,7 @@ pub fn render(state: &FuzzyState, frame: &mut Frame) {
             ListItem::new(Line::from(vec![
                 Span::styled(&item.feature, style),
                 Span::styled(
-                    format!(" ({})", item.status),
+                    format!(" ({:?})", item.status),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]))
@@ -170,18 +171,32 @@ mod tests {
     }
 
     fn create_items() -> Vec<OrchestrationSummary> {
+        use crate::types::OrchestrationStatus;
+        use std::path::PathBuf;
         vec![
             OrchestrationSummary {
                 feature: "auth-feature".to_string(),
-                status: "executing".to_string(),
+                worktree_path: PathBuf::from("/tmp/auth"),
+                status: OrchestrationStatus::Executing,
+                current_phase: 1,
+                total_phases: 3,
+                elapsed_mins: 10,
             },
             OrchestrationSummary {
                 feature: "payment-system".to_string(),
-                status: "complete".to_string(),
+                worktree_path: PathBuf::from("/tmp/payment"),
+                status: OrchestrationStatus::Complete,
+                current_phase: 3,
+                total_phases: 3,
+                elapsed_mins: 60,
             },
             OrchestrationSummary {
                 feature: "auth-refactor".to_string(),
-                status: "pending".to_string(),
+                worktree_path: PathBuf::from("/tmp/auth-refactor"),
+                status: OrchestrationStatus::Planning,
+                current_phase: 0,
+                total_phases: 2,
+                elapsed_mins: 5,
             },
         ]
     }

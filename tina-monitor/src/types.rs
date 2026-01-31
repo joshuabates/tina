@@ -44,6 +44,22 @@ pub enum TaskStatus {
 }
 
 // ====================================================================
+// Trait Implementations
+// ====================================================================
+
+impl std::fmt::Display for OrchestrationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Planning => write!(f, "Planning"),
+            Self::Executing => write!(f, "Executing"),
+            Self::Reviewing => write!(f, "Reviewing"),
+            Self::Complete => write!(f, "Complete"),
+            Self::Blocked => write!(f, "Blocked"),
+        }
+    }
+}
+
+// ====================================================================
 // Data Structures
 // ====================================================================
 
