@@ -2,8 +2,11 @@ use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
+use crate::data::types::Task;
+use crate::git::commits::Commit;
 use crate::panel::{Direction, HandleResult, Panel};
 use crate::panels::{CommitsPanel, TasksPanel, TeamPanel};
+use crate::types::TeamMember;
 
 /// Result of handling a key event in the grid
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,8 +28,14 @@ pub enum Action {
 
 /// 2x2 grid of panels with focus tracking
 pub struct PanelGrid {
-    /// 2x2 array of panels: [row][col]
-    panels: [[Box<dyn Panel>; 2]; 2],
+    /// Top-left: orchestrator team
+    orchestrator_panel: TeamPanel,
+    /// Top-right: tasks
+    tasks_panel: TasksPanel,
+    /// Bottom-left: phase team
+    phase_panel: TeamPanel,
+    /// Bottom-right: commits
+    commits_panel: CommitsPanel,
     /// Current focus position: (row, col)
     focus: (usize, usize),
 }
@@ -35,16 +44,10 @@ impl PanelGrid {
     /// Create a new PanelGrid with default panels
     pub fn new() -> Self {
         Self {
-            panels: [
-                [
-                    Box::new(TeamPanel::new()),
-                    Box::new(TasksPanel::new()),
-                ],
-                [
-                    Box::new(TeamPanel::new()),
-                    Box::new(CommitsPanel::new()),
-                ],
-            ],
+            orchestrator_panel: TeamPanel::new(),
+            tasks_panel: TasksPanel::new(),
+            phase_panel: TeamPanel::new(),
+            commits_panel: CommitsPanel::new(),
             focus: (0, 0),
         }
     }
@@ -77,6 +80,46 @@ impl PanelGrid {
         }
     }
 
+    /// Set orchestrator team data (top-left panel)
+    pub fn set_orchestrator_team(&mut self, members: Vec<TeamMember>) {
+        self.orchestrator_panel.set_members(members);
+    }
+
+    /// Set phase team data (bottom-left panel)
+    pub fn set_phase_team(&mut self, members: Vec<TeamMember>) {
+        self.phase_panel.set_members(members);
+    }
+
+    /// Set tasks data (top-right panel)
+    pub fn set_tasks(&mut self, tasks: Vec<Task>) {
+        self.tasks_panel.set_tasks(tasks);
+    }
+
+    /// Set commits data (bottom-right panel)
+    pub fn set_commits(&mut self, commits: Vec<Commit>, insertions: usize, deletions: usize) {
+        self.commits_panel.set_commits(commits, insertions, deletions);
+    }
+
+    /// Get the selected orchestrator team member
+    pub fn get_orchestrator_team_member(&self) -> Option<&TeamMember> {
+        self.orchestrator_panel.selected_member()
+    }
+
+    /// Get the selected phase team member
+    pub fn get_phase_team_member(&self) -> Option<&TeamMember> {
+        self.phase_panel.selected_member()
+    }
+
+    /// Get the selected task
+    pub fn get_selected_task(&self) -> Option<&Task> {
+        self.tasks_panel.selected_task()
+    }
+
+    /// Get the selected commit
+    pub fn get_selected_commit(&self) -> Option<&Commit> {
+        self.commits_panel.selected_commit()
+    }
+
     /// Handle a key event
     pub fn handle_key(&mut self, key: KeyEvent) -> GridResult {
         // Check for grid-level navigation keys
@@ -102,7 +145,13 @@ impl PanelGrid {
 
         // Delegate to the focused panel
         let (row, col) = self.focus;
-        let result = self.panels[row][col].handle_key(key);
+        let result = match (row, col) {
+            (0, 0) => self.orchestrator_panel.handle_key(key),
+            (0, 1) => self.tasks_panel.handle_key(key),
+            (1, 0) => self.phase_panel.handle_key(key),
+            (1, 1) => self.commits_panel.handle_key(key),
+            _ => HandleResult::Ignored,
+        };
 
         // Handle the panel's result
         match result {
@@ -143,10 +192,10 @@ impl PanelGrid {
         let is_focused_10 = self.focus == (1, 0);
         let is_focused_11 = self.focus == (1, 1);
 
-        self.panels[0][0].render(frame, top_left, is_focused_00);
-        self.panels[0][1].render(frame, top_right, is_focused_01);
-        self.panels[1][0].render(frame, bottom_left, is_focused_10);
-        self.panels[1][1].render(frame, bottom_right, is_focused_11);
+        self.orchestrator_panel.render(frame, top_left, is_focused_00);
+        self.tasks_panel.render(frame, top_right, is_focused_01);
+        self.phase_panel.render(frame, bottom_left, is_focused_10);
+        self.commits_panel.render(frame, bottom_right, is_focused_11);
     }
 }
 
@@ -602,5 +651,166 @@ mod tests {
 
         grid.move_focus(Direction::Left);
         assert_eq!(grid.focus(), (0, 0), "After left");
+    }
+
+    // ====================================================================
+    // Data Setter Tests (failing tests for TDD)
+    // ====================================================================
+
+    #[test]
+    fn set_orchestrator_team_updates_top_left_panel() {
+        use crate::types::TeamMember;
+        use std::path::PathBuf;
+
+        let mut grid = PanelGrid::new();
+        let members = vec![TeamMember {
+            agent_id: "agent-1".to_string(),
+            name: "test-member".to_string(),
+            agent_type: "test".to_string(),
+            model: "claude-haiku".to_string(),
+            tmux_pane_id: None,
+            cwd: PathBuf::from("/test"),
+        }];
+
+        grid.set_orchestrator_team(members.clone());
+
+        // Verify the team panel was updated
+        let selected_member = grid.get_orchestrator_team_member();
+        assert!(selected_member.is_some());
+        assert_eq!(selected_member.unwrap().name, "test-member");
+    }
+
+    #[test]
+    fn set_phase_team_updates_bottom_left_panel() {
+        use crate::types::TeamMember;
+        use std::path::PathBuf;
+
+        let mut grid = PanelGrid::new();
+        let members = vec![TeamMember {
+            agent_id: "agent-2".to_string(),
+            name: "phase-member".to_string(),
+            agent_type: "test".to_string(),
+            model: "claude-haiku".to_string(),
+            tmux_pane_id: None,
+            cwd: PathBuf::from("/test"),
+        }];
+
+        grid.set_phase_team(members.clone());
+
+        let selected_member = grid.get_phase_team_member();
+        assert!(selected_member.is_some());
+        assert_eq!(selected_member.unwrap().name, "phase-member");
+    }
+
+    #[test]
+    fn set_tasks_updates_top_right_panel() {
+        use crate::data::types::Task;
+
+        let mut grid = PanelGrid::new();
+        let tasks = vec![Task {
+            id: "task-1".to_string(),
+            subject: "Test Task".to_string(),
+            description: "Test description".to_string(),
+            active_form: None,
+            status: crate::data::types::TaskStatus::Pending,
+            owner: None,
+            blocks: vec![],
+            blocked_by: vec![],
+            metadata: serde_json::Value::Null,
+        }];
+
+        grid.set_tasks(tasks);
+
+        let task = grid.get_selected_task();
+        assert!(task.is_some());
+        assert_eq!(task.unwrap().id, "task-1");
+    }
+
+    #[test]
+    fn set_commits_updates_bottom_right_panel() {
+        use crate::git::commits::Commit;
+
+        let mut grid = PanelGrid::new();
+        let commits = vec![Commit {
+            short_hash: "abc1234".to_string(),
+            hash: "abc12340000000000000000000000000000".to_string(),
+            subject: "Test commit".to_string(),
+            author: "Test Author".to_string(),
+            relative_time: "2 hours ago".to_string(),
+        }];
+
+        grid.set_commits(commits, 50, 10);
+
+        let commit = grid.get_selected_commit();
+        assert!(commit.is_some());
+        assert_eq!(commit.unwrap().short_hash, "abc1234");
+    }
+
+    #[test]
+    fn multiple_data_updates_persist_independently() {
+        use crate::types::TeamMember;
+        use crate::data::types::Task;
+        use crate::git::commits::Commit;
+        use std::path::PathBuf;
+
+        let mut grid = PanelGrid::new();
+
+        // Set orchestrator team
+        let orchestrator_members = vec![TeamMember {
+            agent_id: "orch-1".to_string(),
+            name: "orchestrator".to_string(),
+            agent_type: "lead".to_string(),
+            model: "claude-opus".to_string(),
+            tmux_pane_id: Some("pane-1".to_string()),
+            cwd: PathBuf::from("/work"),
+        }];
+        grid.set_orchestrator_team(orchestrator_members);
+
+        // Set phase team
+        let phase_members = vec![TeamMember {
+            agent_id: "phase-1".to_string(),
+            name: "phase-worker".to_string(),
+            agent_type: "worker".to_string(),
+            model: "claude-sonnet".to_string(),
+            tmux_pane_id: None,
+            cwd: PathBuf::from("/work"),
+        }];
+        grid.set_phase_team(phase_members);
+
+        // Set tasks
+        let tasks = vec![Task {
+            id: "t1".to_string(),
+            subject: "Task 1".to_string(),
+            description: "Desc".to_string(),
+            active_form: None,
+            status: crate::data::types::TaskStatus::Pending,
+            owner: None,
+            blocks: vec![],
+            blocked_by: vec![],
+            metadata: serde_json::Value::Null,
+        }];
+        grid.set_tasks(tasks);
+
+        // Set commits
+        let commits = vec![Commit {
+            short_hash: "def5678".to_string(),
+            hash: "def56780000000000000000000000000000".to_string(),
+            subject: "Commit msg".to_string(),
+            author: "Author".to_string(),
+            relative_time: "1 hour ago".to_string(),
+        }];
+        grid.set_commits(commits, 100, 20);
+
+        // Verify all data persists
+        assert_eq!(
+            grid.get_orchestrator_team_member().unwrap().name,
+            "orchestrator"
+        );
+        assert_eq!(
+            grid.get_phase_team_member().unwrap().name,
+            "phase-worker"
+        );
+        assert_eq!(grid.get_selected_task().unwrap().id, "t1");
+        assert_eq!(grid.get_selected_commit().unwrap().short_hash, "def5678");
     }
 }
