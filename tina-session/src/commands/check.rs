@@ -437,6 +437,29 @@ Some text but no table.
         let result = plan(&path).unwrap();
         assert_eq!(result, 0, "Should pass with budget table");
     }
+
+    #[test]
+    fn test_plan_validation_rejects_sonnet() {
+        let temp = TempDir::new().unwrap();
+
+        let plan_with_sonnet = r#"
+# Phase 1 Plan
+
+### Task 1: Something
+**Model:** sonnet
+
+### Complexity Budget
+
+| Metric | Limit |
+|--------|-------|
+| Max lines per file | 400 |
+"#;
+        let path = temp.path().join("plan.md");
+        fs::write(&path, plan_with_sonnet).unwrap();
+
+        let result = plan(&path).unwrap();
+        assert_eq!(result, 1, "Should reject sonnet model");
+    }
 }
 
 pub fn plan(path: &Path) -> anyhow::Result<u8> {

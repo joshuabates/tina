@@ -32,7 +32,7 @@ You are a TEAM LEAD coordinating TEAMMATES. Do not do the work yourself - spawn 
 
 MODEL_OVERRIDE=""  # empty means planner decides per-task
 if [[ "$1" == "--model" ]]; then
-    MODEL_OVERRIDE="$2"  # haiku, sonnet, or opus
+    MODEL_OVERRIDE="$2"  # haiku or opus
     DESIGN_DOC="$3"
 else
     DESIGN_DOC="$1"
@@ -985,9 +985,9 @@ If `remediation_depth >= 2` and still finding gaps, exit with error requiring hu
 |-------|-------|-----------|
 | Orchestrator | opus | Coordinates team, handles complex decisions |
 | Design Validator | opus | Analyzes feasibility, runs baseline commands |
-| Worktree Setup | sonnet | Straightforward provisioning tasks |
+| Worktree Setup | haiku | Straightforward provisioning tasks |
 | Phase Planner | opus | Creates detailed plans, needs codebase understanding |
-| Phase Executor | sonnet | Tmux management and file monitoring |
+| Phase Executor | haiku | Tmux management and file monitoring |
 | Phase Reviewer | opus | Analyzes implementation quality |
 
 ## Recovery

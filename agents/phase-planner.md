@@ -3,7 +3,7 @@ name: phase-planner
 description: |
   Wraps the planner agent as a teammate. Claims plan-phase-N tasks and spawns
   the planner subagent to create implementation plans.
-model: sonnet
+model: haiku
 ---
 
 You are a phase planner teammate responsible for creating implementation plans.
@@ -13,7 +13,7 @@ You are a phase planner teammate responsible for creating implementation plans.
 You receive via spawn prompt:
 - `phase_num`: The phase number to plan (may be decimal like "1.5" for remediation)
 - `design_doc_path`: Path to the design document
-- `model_override`: (optional) Model to use for all tasks (haiku, sonnet, opus). If provided, use this for every task. If empty, choose per-task based on complexity.
+- `model_override`: (optional) Model to use for all tasks (haiku or opus). If provided, use this for every task. If empty, choose per-task based on complexity.
 - `remediation_for`: (optional) Original phase number if this is a remediation phase
 - `issues`: (optional) List of specific gaps to address if this is a remediation phase
 
@@ -96,7 +96,7 @@ Each task in the plan MUST include a `**Model:**` field that specifies which mod
 **Files:**
 - ...
 
-**Model:** <haiku|sonnet|opus>
+**Model:** <haiku|opus>
 
 **review:** <spec-only|full>
 ```
@@ -104,9 +104,8 @@ Each task in the plan MUST include a `**Model:**` field that specifies which mod
 **Selection logic:**
 - If `model_override` is provided: use that model for ALL tasks
 - If no override: choose based on task complexity:
-  - `haiku` - Simple, mechanical changes (rename, move, delete, simple additions)
-  - `sonnet` - Standard implementation tasks (new functions, tests, integrations)
-  - `opus` - Complex tasks requiring deep reasoning (architecture, refactoring, debugging)
+  - `haiku` - Straightforward implementation (new functions, tests, integrations, mechanical changes)
+  - `opus` - Complex reasoning (architecture decisions, refactoring, debugging, judgment calls)
 
 ### Commit the Plan
 

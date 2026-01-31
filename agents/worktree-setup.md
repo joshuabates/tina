@@ -3,7 +3,7 @@ name: worktree-setup
 description: |
   Creates isolated worktree with statusline config for orchestrated execution.
   Handles directory selection, gitignore verification, and dependency installation.
-model: sonnet
+model: haiku
 ---
 
 You are a worktree setup teammate responsible for creating an isolated workspace.

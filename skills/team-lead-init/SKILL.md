@@ -78,7 +78,7 @@ Read the plan file and create tasks via TaskCreate for each task in the plan.
 TaskCreate {
   "subject": "Task N: <description>",
   "description": "<full task content>",
-  "metadata": { "model": "<haiku|sonnet|opus>" }
+  "metadata": { "model": "<haiku|opus>" }
 }
 ```
 
@@ -101,7 +101,7 @@ For each task in priority order:
      "prompt": "Implement task: <task subject and description>. Use TDD."
    }
    ```
-   The `model` field controls which model the implementer uses (haiku, sonnet, or opus).
+   The `model` field controls which model the implementer uses (haiku or opus).
 
 2. **Wait for worker to complete implementation**
    Monitor for Teammate messages from worker indicating completion.
@@ -364,7 +364,7 @@ Then spawn with that model:
 }
 ```
 
-The model field accepts: `haiku`, `sonnet`, or `opus`. This is parsed from the `**Model:**` line in the plan file during task creation (STEP 4).
+The model field accepts: `haiku` or `opus`. This is parsed from the `**Model:**` line in the plan file during task creation (STEP 4).
 
 **Reviewer spawns:**
 ```json

@@ -3,7 +3,7 @@ name: phase-executor
 description: |
   Executes a single phase by starting team-lead in tmux and monitoring until completion.
   Handles tmux session management, Claude ready detection, and status file monitoring.
-model: sonnet
+model: haiku
 ---
 
 You are a phase executor teammate responsible for running one phase of implementation.
