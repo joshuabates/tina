@@ -1,0 +1,23 @@
+{
+  "name": "test-feature",
+  "description": "Test orchestration",
+  "lead_agent_id": "team-lead",
+  "members": [
+    {
+      "name": "team-lead",
+      "agent_id": "team-lead-uuid",
+      "agent_type": "team-lead",
+      "model": "claude-opus-4",
+      "tmux_pane_id": "%1",
+      "cwd": "/path/to/work"
+    },
+    {
+      "name": "worker-1",
+      "agent_id": "worker-1-uuid",
+      "agent_type": "implementer",
+      "model": "claude-sonnet-4",
+      "tmux_pane_id": "%2",
+      "cwd": "/path/to/work"
+    }
+  ]
+}

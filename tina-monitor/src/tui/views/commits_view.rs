@@ -16,6 +16,7 @@ use std::path::Path;
 /// Commits view modal showing git commits in a range
 pub struct CommitsView {
     title: String,
+    #[allow(dead_code)]
     range: String,
     summary: CommitSummary,
     selected: usize,

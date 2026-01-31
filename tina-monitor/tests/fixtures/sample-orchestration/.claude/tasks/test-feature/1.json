@@ -1,0 +1,9 @@
+{
+  "id": "1",
+  "subject": "Plan phase 1",
+  "description": "Create implementation plan for phase 1",
+  "status": "completed",
+  "owner": "team-lead",
+  "blocks": [],
+  "blocked_by": []
+}

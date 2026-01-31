@@ -4,14 +4,24 @@
 
 use clap::ValueEnum;
 
+pub mod actions;
+pub mod app;
 pub mod cli;
 pub mod config;
+pub mod dashboard;
 pub mod data;
+pub mod entity;
 pub mod git;
+pub mod layout;
 pub mod logging;
+pub mod overlay;
+pub mod panel;
+pub mod panels;
 pub mod terminal;
 pub mod tmux;
 pub mod tui;
+pub mod types;
+pub mod watcher;
 
 /// Filter for task status in task listings
 #[derive(Debug, Clone, Copy, ValueEnum)]

@@ -3,7 +3,7 @@
 use chrono::Utc;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct CommandLogger {
     log_path: PathBuf,
@@ -18,15 +18,15 @@ impl CommandLogger {
     }
 
     /// Expand ~ in path
-    fn expand_path(path: &PathBuf) -> PathBuf {
+    fn expand_path(path: &Path) -> PathBuf {
         if let Some(path_str) = path.to_str() {
-            if path_str.starts_with("~/") {
+            if let Some(stripped) = path_str.strip_prefix("~/") {
                 if let Some(home) = dirs::home_dir() {
-                    return home.join(&path_str[2..]);
+                    return home.join(stripped);
                 }
             }
         }
-        path.clone()
+        path.to_path_buf()
     }
 
     /// Log a sent command
