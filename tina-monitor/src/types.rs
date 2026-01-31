@@ -4,6 +4,8 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 // ====================================================================
 // Enums
@@ -11,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 /// Status of an orchestration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OrchestrationStatus {
     Planning,
     Executing,
@@ -21,6 +24,7 @@ pub enum OrchestrationStatus {
 
 /// Status of a phase
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PhaseStatus {
     Planning,
     Planned,
@@ -32,6 +36,7 @@ pub enum PhaseStatus {
 
 /// Status of a task
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
     Pending,
     InProgress,
@@ -49,31 +54,88 @@ pub struct SessionLookup {
     pub session_id: String,
 }
 
+/// Timing breakdown for a phase.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct PhaseBreakdown {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub planning_mins: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_mins: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_mins: Option<i64>,
+}
+
+/// Gap between phases for timing analysis.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TimingGap {
+    pub after: String,
+    pub before: String,
+    pub duration_mins: i64,
+    pub timestamp: DateTime<Utc>,
+}
+
+/// Overall timing statistics.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct TimingStats {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_elapsed_mins: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_mins: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idle_mins: Option<i64>,
+    #[serde(default)]
+    pub gaps: Vec<TimingGap>,
+}
+
 /// State of a single phase
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PhaseState {
-    pub plan_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_path: Option<PathBuf>,
+
     pub status: PhaseStatus,
-    pub created_at: DateTime<Utc>,
-    pub started_at: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub planning_started_at: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_started_at: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_started_at: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<DateTime<Utc>>,
-    pub duration_mins: u64,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_mins: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub git_range: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocked_reason: Option<String>,
+
+    #[serde(default)]
+    pub breakdown: PhaseBreakdown,
 }
 
 /// State of the supervisor/orchestration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SupervisorState {
-    pub version: String,
+    pub version: u32,
     pub feature: String,
-    pub design_doc: String,
-    pub worktree_path: String,
+    pub design_doc: PathBuf,
+    pub worktree_path: PathBuf,
     pub branch: String,
-    pub total_phases: usize,
-    pub current_phase: usize,
+    pub total_phases: u32,
+    pub current_phase: u32,
     pub status: OrchestrationStatus,
     pub orchestration_started_at: DateTime<Utc>,
-    pub phases: Vec<PhaseState>,
+    #[serde(default)]
+    pub phases: HashMap<String, PhaseState>,
+    #[serde(default)]
+    pub timing: TimingStats,
 }
 
 /// Team member information
@@ -84,7 +146,7 @@ pub struct TeamMember {
     pub agent_type: String,
     pub model: String,
     pub tmux_pane_id: Option<String>,
-    pub cwd: String,
+    pub cwd: PathBuf,
 }
 
 /// Team information
@@ -276,13 +338,16 @@ mod tests {
     fn phase_state_serializes_and_deserializes() {
         let now = Utc::now();
         let original = PhaseState {
-            plan_path: "/path/to/plan.md".to_string(),
+            plan_path: Some(PathBuf::from("/path/to/plan.md")),
             status: PhaseStatus::Executing,
-            created_at: now,
-            started_at: Some(now),
+            planning_started_at: None,
+            execution_started_at: Some(now),
+            review_started_at: None,
             completed_at: None,
-            duration_mins: 30,
+            duration_mins: Some(30),
             git_range: Some("abc123..def456".to_string()),
+            blocked_reason: None,
+            breakdown: PhaseBreakdown::default(),
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -294,15 +359,17 @@ mod tests {
 
     #[test]
     fn phase_state_with_no_timestamps_serializes() {
-        let now = Utc::now();
         let original = PhaseState {
-            plan_path: "/path/to/plan.md".to_string(),
+            plan_path: Some(PathBuf::from("/path/to/plan.md")),
             status: PhaseStatus::Planning,
-            created_at: now,
-            started_at: None,
+            planning_started_at: None,
+            execution_started_at: None,
+            review_started_at: None,
             completed_at: None,
-            duration_mins: 0,
+            duration_mins: None,
             git_range: None,
+            blocked_reason: None,
+            breakdown: PhaseBreakdown::default(),
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -319,27 +386,35 @@ mod tests {
     #[test]
     fn supervisor_state_serializes_and_deserializes() {
         let now = Utc::now();
-        let phase = PhaseState {
-            plan_path: "/path/to/plan.md".to_string(),
-            status: PhaseStatus::Complete,
-            created_at: now,
-            started_at: Some(now),
-            completed_at: Some(now),
-            duration_mins: 60,
-            git_range: Some("abc123..def456".to_string()),
-        };
+        let mut phases = HashMap::new();
+        phases.insert(
+            "1".to_string(),
+            PhaseState {
+                plan_path: Some(PathBuf::from("/path/to/plan.md")),
+                status: PhaseStatus::Complete,
+                planning_started_at: None,
+                execution_started_at: Some(now),
+                review_started_at: None,
+                completed_at: Some(now),
+                duration_mins: Some(60),
+                git_range: Some("abc123..def456".to_string()),
+                blocked_reason: None,
+                breakdown: PhaseBreakdown::default(),
+            },
+        );
 
         let original = SupervisorState {
-            version: "1.0.0".to_string(),
+            version: 1,
             feature: "feature-x".to_string(),
-            design_doc: "/path/to/design.md".to_string(),
-            worktree_path: "/path/to/worktree".to_string(),
+            design_doc: PathBuf::from("/path/to/design.md"),
+            worktree_path: PathBuf::from("/path/to/worktree"),
             branch: "feature-x".to_string(),
             total_phases: 3,
             current_phase: 2,
             status: OrchestrationStatus::Executing,
             orchestration_started_at: now,
-            phases: vec![phase],
+            phases,
+            timing: TimingStats::default(),
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -352,38 +427,50 @@ mod tests {
     #[test]
     fn supervisor_state_with_multiple_phases_serializes() {
         let now = Utc::now();
-        let phases = vec![
+        let mut phases = HashMap::new();
+        phases.insert(
+            "1".to_string(),
             PhaseState {
-                plan_path: "/path/to/plan1.md".to_string(),
+                plan_path: Some(PathBuf::from("/path/to/plan1.md")),
                 status: PhaseStatus::Complete,
-                created_at: now,
-                started_at: Some(now),
+                planning_started_at: None,
+                execution_started_at: Some(now),
+                review_started_at: None,
                 completed_at: Some(now),
-                duration_mins: 60,
+                duration_mins: Some(60),
                 git_range: Some("abc123..def456".to_string()),
+                blocked_reason: None,
+                breakdown: PhaseBreakdown::default(),
             },
+        );
+        phases.insert(
+            "2".to_string(),
             PhaseState {
-                plan_path: "/path/to/plan2.md".to_string(),
+                plan_path: Some(PathBuf::from("/path/to/plan2.md")),
                 status: PhaseStatus::Executing,
-                created_at: now,
-                started_at: Some(now),
+                planning_started_at: None,
+                execution_started_at: Some(now),
+                review_started_at: None,
                 completed_at: None,
-                duration_mins: 30,
+                duration_mins: Some(30),
                 git_range: None,
+                blocked_reason: None,
+                breakdown: PhaseBreakdown::default(),
             },
-        ];
+        );
 
         let original = SupervisorState {
-            version: "1.0.0".to_string(),
+            version: 1,
             feature: "feature-x".to_string(),
-            design_doc: "/path/to/design.md".to_string(),
-            worktree_path: "/path/to/worktree".to_string(),
+            design_doc: PathBuf::from("/path/to/design.md"),
+            worktree_path: PathBuf::from("/path/to/worktree"),
             branch: "feature-x".to_string(),
             total_phases: 3,
             current_phase: 2,
             status: OrchestrationStatus::Executing,
             orchestration_started_at: now,
             phases,
+            timing: TimingStats::default(),
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -405,7 +492,7 @@ mod tests {
             agent_type: "general-purpose".to_string(),
             model: "claude-opus".to_string(),
             tmux_pane_id: Some("0".to_string()),
-            cwd: "/path/to/work".to_string(),
+            cwd: PathBuf::from("/path/to/work"),
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -423,7 +510,7 @@ mod tests {
             agent_type: "test-runner".to_string(),
             model: "claude-haiku".to_string(),
             tmux_pane_id: None,
-            cwd: "/path/to/work".to_string(),
+            cwd: PathBuf::from("/path/to/work"),
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -445,7 +532,7 @@ mod tests {
             agent_type: "general-purpose".to_string(),
             model: "claude-opus".to_string(),
             tmux_pane_id: Some("0".to_string()),
-            cwd: "/path/to/work".to_string(),
+            cwd: PathBuf::from("/path/to/work"),
         };
 
         let original = Team {
@@ -470,7 +557,7 @@ mod tests {
                 agent_type: "general-purpose".to_string(),
                 model: "claude-opus".to_string(),
                 tmux_pane_id: Some("0".to_string()),
-                cwd: "/path/to/work".to_string(),
+                cwd: PathBuf::from("/path/to/work"),
             },
             TeamMember {
                 agent_id: "agent-2".to_string(),
@@ -478,7 +565,7 @@ mod tests {
                 agent_type: "test-runner".to_string(),
                 model: "claude-haiku".to_string(),
                 tmux_pane_id: Some("1".to_string()),
-                cwd: "/path/to/work".to_string(),
+                cwd: PathBuf::from("/path/to/work"),
             },
         ];
 
