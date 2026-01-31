@@ -7,6 +7,7 @@ use clap::ValueEnum;
 pub mod app;
 pub mod cli;
 pub mod config;
+pub mod dashboard;
 pub mod data;
 pub mod git;
 pub mod layout;
