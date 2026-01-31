@@ -1,12 +1,21 @@
 {
   "name": "tina",
   "description": "Personal skills library for Claude Code",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "author": {
     "name": "Joshua"
   },
   "homepage": "https://github.com/joshuabates/tina",
   "repository": "https://github.com/joshuabates/tina",
   "license": "MIT",
-  "keywords": ["skills", "tdd", "debugging", "workflows", "orchestrate", "automation", "team-lead", "pipeline"]
+  "keywords": [
+    "skills",
+    "tdd",
+    "debugging",
+    "workflows",
+    "orchestrate",
+    "automation",
+    "team-lead",
+    "pipeline"
+  ]
 }
