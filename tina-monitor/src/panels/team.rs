@@ -1,6 +1,9 @@
 use crate::panel::{Panel, HandleResult, Direction};
+use crate::panels::{border_style, border_type};
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
+use ratatui::style::{Color, Style};
+use ratatui::widgets::{Block, Borders, List, ListItem, ListState};
 use ratatui::Frame;
 
 pub struct TeamPanel {
@@ -52,10 +55,26 @@ impl Panel for TeamPanel {
         }
     }
 
-    fn render(&self, frame: &mut Frame, area: Rect, _focused: bool) {
-        // Placeholder render implementation
-        let paragraph = ratatui::widgets::Paragraph::new(self.title);
-        frame.render_widget(paragraph, area);
+    fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
+        let block = Block::default()
+            .title(self.title)
+            .borders(Borders::ALL)
+            .border_type(border_type(focused))
+            .border_style(border_style(focused));
+
+        let items: Vec<ListItem> = self.items
+            .iter()
+            .map(|item| ListItem::new(item.as_str()))
+            .collect();
+
+        let list = List::new(items)
+            .block(block)
+            .highlight_style(Style::default().bg(Color::DarkGray));
+
+        let mut state = ListState::default();
+        state.select(Some(self.selected));
+
+        frame.render_stateful_widget(list, area, &mut state);
     }
 
     fn name(&self) -> &'static str {
