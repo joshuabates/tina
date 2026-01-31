@@ -276,6 +276,60 @@ fn test_focused_panel_highlighted() {
     // Both renders should succeed, grid handles focus tracking correctly
 }
 
+/// Test that focused panel has visual highlight (cyan border color)
+#[test]
+fn test_focused_panel_has_visual_highlight() {
+    use ratatui::style::Color;
+
+    let mut grid = PanelGrid::new();
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    // Initial focus is (0,0) - Orchestrator Team
+    grid.set_focus((0, 0));
+    terminal.draw(|frame| {
+        let area = frame.area();
+        grid.render(frame, area);
+    }).unwrap();
+
+    // Get cell style at a border position of focused panel (top-left)
+    let buffer = terminal.backend().buffer();
+
+    // The focused panel border should have Cyan color
+    // Check the top-left corner of the grid (position 0,0 is the corner)
+    let cell = buffer.cell((0, 0)).unwrap();
+    assert_eq!(
+        cell.fg,
+        Color::Cyan,
+        "Focused panel at (0,0) should have Cyan border"
+    );
+
+    // Move focus to right panel (0,1) - Tasks panel
+    grid.move_focus(Direction::Right);
+    terminal.draw(|frame| {
+        let area = frame.area();
+        grid.render(frame, area);
+    }).unwrap();
+
+    let buffer = terminal.backend().buffer();
+    // Now top-left panel should be unfocused (DarkGray)
+    let cell = buffer.cell((0, 0)).unwrap();
+    assert_eq!(
+        cell.fg,
+        Color::DarkGray,
+        "Unfocused panel at (0,0) should have DarkGray border after moving focus"
+    );
+
+    // The Tasks panel is in the right half, so check its left border
+    // With 80 columns, each half is 40 columns, so Tasks panel starts around column 40
+    let cell = buffer.cell((40, 0)).unwrap();
+    assert_eq!(
+        cell.fg,
+        Color::Cyan,
+        "Focused panel at (0,1) should have Cyan border"
+    );
+}
+
 // ============================================================================
 // Grid Layout Tests
 // ============================================================================
