@@ -4,6 +4,52 @@ use std::process::Command;
 
 use tina_session::error::SessionError;
 
+/// Extract function names and their line counts from Rust source code.
+/// Returns vector of (function_name, line_count) tuples.
+fn extract_rust_function_lengths(code: &str) -> Vec<(String, u32)> {
+    let mut functions = Vec::new();
+    let mut current_fn: Option<(String, u32, i32)> = None; // (name, start_line, brace_depth)
+
+    for (line_idx, line) in code.lines().enumerate() {
+        let trimmed = line.trim();
+
+        // Check for function start
+        if let Some(fn_start) = trimmed.find("fn ") {
+            if current_fn.is_none() {
+                // Extract function name
+                let after_fn = &trimmed[fn_start + 3..];
+                if let Some(paren_pos) = after_fn.find('(') {
+                    let name = after_fn[..paren_pos].trim().to_string();
+                    if !name.is_empty() && !name.contains(' ') {
+                        let brace_count = trimmed.matches('{').count() as i32
+                            - trimmed.matches('}').count() as i32;
+                        if brace_count > 0 {
+                            current_fn = Some((name, line_idx as u32 + 1, brace_count));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Track braces for current function
+        if let Some((ref name, start, ref mut depth)) = current_fn {
+            if !trimmed.contains("fn ") {
+                *depth += trimmed.matches('{').count() as i32;
+                *depth -= trimmed.matches('}').count() as i32;
+            }
+
+            if *depth == 0 {
+                let end_line = line_idx as u32 + 1;
+                let length = end_line - start + 1;
+                functions.push((name.clone(), length));
+                current_fn = None;
+            }
+        }
+    }
+
+    functions
+}
+
 pub fn complexity(
     cwd: &Path,
     max_file_lines: u32,
@@ -222,6 +268,47 @@ pub fn verify(cwd: &Path) -> anyhow::Result<u8> {
 
     println!("PASS: All verification checks passed");
     Ok(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_extract_rust_function_lengths() {
+        let code = r#"
+fn short_function() {
+    println!("short");
+}
+
+fn longer_function() {
+    let x = 1;
+    let y = 2;
+    let z = 3;
+    println!("{}", x + y + z);
+}
+
+impl Foo {
+    fn method_one(&self) {
+        self.do_thing();
+    }
+
+    fn method_two(&self) -> i32 {
+        let a = 1;
+        let b = 2;
+        a + b
+    }
+}
+"#;
+        let functions = extract_rust_function_lengths(code);
+        assert_eq!(functions.len(), 4);
+        assert!(functions.iter().any(|(name, len)| name == "short_function" && *len == 3));
+        assert!(functions.iter().any(|(name, len)| name == "longer_function" && *len == 6));
+        assert!(functions.iter().any(|(name, len)| name == "method_one" && *len == 3));
+        assert!(functions.iter().any(|(name, len)| name == "method_two" && *len == 5));
+    }
 }
 
 pub fn plan(path: &Path) -> anyhow::Result<u8> {
