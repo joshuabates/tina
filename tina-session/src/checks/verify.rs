@@ -1,8 +1,2 @@
-use std::path::Path;
-
-use crate::error::Result;
-
-/// Run verification checks (tests + linter).
-pub fn run_verification(_cwd: &Path) -> Result<()> {
-    todo!("verification check")
-}
+// Verification logic is implemented in commands/check.rs
+// This module is kept for potential shared types in the future

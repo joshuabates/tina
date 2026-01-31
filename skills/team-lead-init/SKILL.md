@@ -130,9 +130,11 @@ This ephemeral model gives each task a fresh context window.
 
 ---
 
-## STEP 6: Run completion gates
+## STEP 6: Run completion gates (HARD GATE - BLOCKING)
 
-Before marking phase complete, run verification gates:
+**CRITICAL: These gates are HARD requirements. Phase CANNOT complete if any gate fails.**
+
+Before marking phase complete, you MUST run verification gates. Partial completion is NOT acceptable.
 
 ### 6.1 Run test and lint verification
 
@@ -140,10 +142,25 @@ Before marking phase complete, run verification gates:
 tina-session check verify --cwd "$WORKTREE_PATH"
 ```
 
-If exit code is non-zero:
-- Set phase status to "blocked"
-- Reason: "Verification failed: <output from command>"
-- Do NOT proceed to completion
+**If exit code is non-zero, the phase is BLOCKED:**
+
+Update status.json:
+```json
+{
+  "status": "blocked",
+  "started_at": "<original timestamp>",
+  "blocked_at": "<current ISO timestamp>",
+  "reason": "Verification gate failed",
+  "gate": "verify",
+  "context": {
+    "command": "tina-session check verify",
+    "output": "<first 500 chars of command output>",
+    "exit_code": 1
+  }
+}
+```
+
+Do NOT proceed to completion. Do NOT attempt workarounds.
 
 ### 6.2 Run complexity checks
 
@@ -157,14 +174,30 @@ tina-session check complexity \
   --max-function-lines 50
 ```
 
-If exit code is non-zero:
-- Set phase status to "blocked"
-- Reason: "Complexity budget exceeded: <output from command>"
-- Do NOT proceed to completion
+**If exit code is non-zero, the phase is BLOCKED:**
+
+Update status.json:
+```json
+{
+  "status": "blocked",
+  "started_at": "<original timestamp>",
+  "blocked_at": "<current ISO timestamp>",
+  "reason": "Complexity gate failed",
+  "gate": "complexity",
+  "context": {
+    "command": "tina-session check complexity",
+    "output": "<first 500 chars of command output>",
+    "exit_code": 1
+  }
+}
+```
+
+Do NOT proceed to completion. Do NOT attempt workarounds.
 
 ### 6.3 Complete phase
 
-Only after both gates pass:
+**Only after BOTH gates pass with exit code 0:**
+
 1. All tasks complete (workers/reviewers already shut down per-task)
 2. Clean up team resources at phase end: `Teammate { operation: "cleanup" }`
 3. Update status.json to "complete"
@@ -504,8 +537,14 @@ Note: `team-name.txt` is no longer used. Team names are passed explicitly from o
 - Start executing without setting status to "executing"
 - Finish without setting status to "complete" or "blocked"
 - Swallow errors (always update status with reason)
+- Mark phase complete if verify gate fails (tests or linter)
+- Mark phase complete if complexity gate fails
+- Skip or bypass completion gates for any reason
+- Claim success without running `tina-session check verify`
 
 **Always:**
 - Update status.json at each state transition
 - Include timestamps for debugging
 - Include reasons when blocked
+- Run BOTH gates (verify AND complexity) before completion
+- Set status to "blocked" with gate details if any gate fails
