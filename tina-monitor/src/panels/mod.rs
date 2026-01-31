@@ -200,6 +200,11 @@ mod tests {
     #[test]
     fn tasks_panel_navigates_down_within_items() {
         let mut panel = TasksPanel::new();
+        use crate::data::types::TaskStatus;
+        panel.set_tasks(vec![
+            crate::panels::tasks::tests::make_test_task("1", TaskStatus::Pending),
+            crate::panels::tasks::tests::make_test_task("2", TaskStatus::Pending),
+        ]);
         let initial = panel.selected;
         let result = panel.handle_key(make_key_event(KeyCode::Down));
         assert_eq!(result, HandleResult::Consumed);
@@ -209,7 +214,12 @@ mod tests {
     #[test]
     fn tasks_panel_moves_focus_down_at_bottom() {
         let mut panel = TasksPanel::new();
-        panel.selected = panel.items.len().saturating_sub(1);
+        use crate::data::types::TaskStatus;
+        panel.set_tasks(vec![
+            crate::panels::tasks::tests::make_test_task("1", TaskStatus::Pending),
+            crate::panels::tasks::tests::make_test_task("2", TaskStatus::Pending),
+        ]);
+        panel.selected = panel.tasks.len().saturating_sub(1);
         let result = panel.handle_key(make_key_event(KeyCode::Down));
         assert_eq!(result, HandleResult::MoveFocus(Direction::Down));
     }
