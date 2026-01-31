@@ -16,6 +16,8 @@ pub mod panels;
 pub mod terminal;
 pub mod tmux;
 pub mod tui;
+pub mod types;
+pub mod watcher;
 
 /// Filter for task status in task listings
 #[derive(Debug, Clone, Copy, ValueEnum)]
