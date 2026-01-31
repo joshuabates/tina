@@ -42,17 +42,17 @@ Rebuild tina-monitor with:
 │ ORCHESTRATOR TEAM      │ TASKS                                              │
 │                        │                                                    │
 │ ● team-lead    opus    │ [✓] Set up project structure                       │
-│ ○ planner-1    idle    │ [✓] Implement auth middleware                      │
-│ ○ executor-1   working │ [→] Add token refresh logic         ← executor-1   │
+│ ○ planner-1    opus    │ [✓] Implement auth middleware                      │
+│ ○ executor-1   haiku   │ [→] Add token refresh logic         ← executor-1   │
 │                        │ [ ] Write integration tests                        │
 │                        │ [ ] Update API documentation                       │
 ├────────────────────────┼────────────────────────────────────────────────────┤
 │ PHASE TEAM             │ COMMITS                                            │
 │                        │                                                    │
-│ ● phase-lead   opus    │ abc1234 feat: add auth middleware                  │
-│ ○ worker-1     working │ def5678 feat: implement token validation           │
-│ ○ worker-2     idle    │ 789abcd refactor: extract token utils              │
-│ ○ reviewer     idle    │                                                    │
+│ ○ phase-lead   opus    │ abc1234 feat: add auth middleware                  │
+│ ● worker-1     opus    │ def5678 feat: implement token validation           │
+│ ○ worker-2     opus    │ 789abcd refactor: extract token utils              │
+│ ○ reviewer     opus    │                                                    │
 │                        │                                                    │
 └────────────────────────┴────────────────────────────────────────────────────┘
  [a] Attach  [s] Send  [Space] Quicklook                    ← context-aware hints
@@ -66,7 +66,7 @@ Rebuild tina-monitor with:
 | `Space` | Quicklook selected entity |
 | `/` | Fuzzy find project |
 | `?` | Help |
-| `q` or `Esc` | Quit / close overlay |
+| `Space` or `Esc` | Quit / close overlay |
 
 ### Entity-Specific Actions
 
