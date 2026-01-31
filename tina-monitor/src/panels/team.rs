@@ -3,10 +3,10 @@ use crate::panels::{border_style, border_type};
 use crate::types::TeamMember;
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState};
 use ratatui::Frame;
-use std::path::PathBuf;
 
 pub struct TeamPanel {
     title: &'static str,
@@ -104,8 +104,12 @@ impl Panel for TeamPanel {
                         "○ "
                     };
                     let model_short = shorten_model(&member.model);
-                    let text = format!("{}{} ({})", active_indicator, member.name, model_short);
-                    ListItem::new(text)
+                    let line = Line::from(vec![
+                        Span::raw(active_indicator),
+                        Span::styled(&member.name, Style::default().add_modifier(Modifier::BOLD)),
+                        Span::raw(format!(" ({})", model_short)),
+                    ]);
+                    ListItem::new(line)
                 })
                 .collect()
         };
@@ -130,6 +134,7 @@ impl Panel for TeamPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn create_test_member(name: &str, model: &str, pane_id: Option<String>) -> TeamMember {
         TeamMember {

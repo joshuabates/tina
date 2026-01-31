@@ -78,7 +78,7 @@ impl Panel for CommitsPanel {
 
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
         let title = if let Some((ins, del)) = self.stats {
-            format!("Commits (+{} -{}", ins, del)
+            format!("Commits (+{} -{})", ins, del)
         } else {
             self.title.to_string()
         };
