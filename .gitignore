@@ -3,4 +3,4 @@
 .claude/
 
 # Rust compilation artifacts
-target/
+**/target/
