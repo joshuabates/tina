@@ -137,6 +137,28 @@ Before reporting completion, verify:
 2. **Granularity:** Steps are 2-5 minute actions
 3. **Completeness:** All phase scope is covered
 4. **Phase Estimates:** Section exists with metrics table and ROI expectation
+5. **Model specification:** Every task has `**Model:** <haiku|opus>` line
+6. **Complexity Budget:** Section exists with table specifying limits
+
+### Required Complexity Budget Format
+
+Every plan MUST include a Complexity Budget section with this structure:
+
+```markdown
+### Complexity Budget
+
+| Metric | Limit |
+|--------|-------|
+| Max lines per file | 400 |
+| Max function length | 50 lines |
+| Max total implementation lines | <budget for this phase> |
+```
+
+- **Max lines per file:** Always 400 (non-negotiable)
+- **Max function length:** Always 50 lines (non-negotiable)
+- **Max total implementation lines:** Set based on phase scope (typical: 500-2000)
+
+Plans without this section will fail validation.
 
 ## Error Handling
 
