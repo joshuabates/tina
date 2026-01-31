@@ -85,30 +85,81 @@ impl Dashboard {
         }
     }
 
-    /// Render the dashboard header
+    /// Render the dashboard header (backward compatible)
     pub fn render(&self, frame: &mut Frame, area: Rect) {
+        self.render_with_status(frame, area, None);
+    }
+
+    /// Render the dashboard header with optional status message
+    ///
+    /// When a status message is provided, it appears on the right side.
+    /// Otherwise, keybinding hints are shown.
+    pub fn render_with_status(&self, frame: &mut Frame, area: Rect, status_message: Option<&str>) {
+        use ratatui::layout::{Constraint, Direction, Layout};
+
+        // Split area: left for status info, right for hints/message
+        let [left_area, right_area] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(40), Constraint::Length(30)])
+            .areas(area);
+
+        // Left side: feature, status, phase, elapsed
         let phase_text = format!("Phase {}/{}", self.current_phase, self.total_phases);
         let duration_text = Self::format_duration(self.elapsed_mins);
         let status_color = self.status_color();
         let status_text = self.status_text();
 
-        let content = Line::from(vec![
-            Span::raw("  "),
-            Span::styled(self.feature.clone(), Style::default().fg(Color::White)),
-            Span::raw(" | "),
-            Span::styled(status_text, Style::default().fg(status_color)),
-            Span::raw(" | "),
-            Span::raw(phase_text),
-            Span::raw(" | "),
-            Span::raw(format!("Elapsed: {}", duration_text)),
-            Span::raw("  "),
-        ]);
+        let left_content = if self.feature.is_empty() {
+            // No feature loaded - show welcome message
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled("tina-monitor", Style::default().fg(Color::Cyan)),
+                Span::raw("  Press "),
+                Span::styled("/", Style::default().fg(Color::Yellow)),
+                Span::raw(" to find an orchestration"),
+            ])
+        } else {
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled(self.feature.clone(), Style::default().fg(Color::White)),
+                Span::raw(" | "),
+                Span::styled(status_text, Style::default().fg(status_color)),
+                Span::raw(" | "),
+                Span::raw(phase_text),
+                Span::raw(" | "),
+                Span::raw(format!("Elapsed: {}", duration_text)),
+            ])
+        };
 
-        let paragraph = Paragraph::new(content)
+        let left_paragraph = Paragraph::new(left_content)
             .block(Block::default().borders(Borders::BOTTOM))
             .style(Style::default().bg(Color::Black).fg(Color::White));
 
-        frame.render_widget(paragraph, area);
+        frame.render_widget(left_paragraph, left_area);
+
+        // Right side: status message or keybinding hints
+        let right_content = if let Some(msg) = status_message {
+            // Show status message (temporary feedback)
+            Line::from(vec![
+                Span::styled(msg, Style::default().fg(Color::Green)),
+                Span::raw("  "),
+            ])
+        } else {
+            // Show keybinding hints
+            Line::from(vec![
+                Span::styled("[/]", Style::default().fg(Color::DarkGray)),
+                Span::raw(" Find  "),
+                Span::styled("[?]", Style::default().fg(Color::DarkGray)),
+                Span::raw(" Help  "),
+            ])
+        };
+
+        let right_paragraph = Paragraph::new(right_content)
+            .block(Block::default().borders(Borders::BOTTOM))
+            .style(Style::default().bg(Color::Black).fg(Color::White))
+            .alignment(ratatui::layout::Alignment::Right);
+
+        frame.render_widget(right_paragraph, right_area);
     }
 }
 
@@ -426,5 +477,46 @@ mod tests {
             elapsed_mins: 0,
         };
         assert_eq!(dashboard.status_text(), "Blocked");
+    }
+
+    // ====================================================================
+    // Status Message Tests (Phase 5)
+    // ====================================================================
+
+    #[test]
+    fn render_with_status_message_does_not_panic() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let dashboard = Dashboard::new();
+        let status_msg = Some("Copied: abc1234".to_string());
+
+        let backend = TestBackend::new(120, 3);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let result = terminal.draw(|frame| {
+            let area = frame.area();
+            dashboard.render_with_status(frame, area, status_msg.as_deref());
+        });
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn render_without_status_message_shows_hints() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let dashboard = Dashboard::new();
+
+        let backend = TestBackend::new(120, 3);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let result = terminal.draw(|frame| {
+            let area = frame.area();
+            dashboard.render_with_status(frame, area, None);
+        });
+
+        assert!(result.is_ok());
     }
 }

@@ -187,11 +187,11 @@ impl PanelGrid {
                 GridResult::Consumed
             }
             HandleResult::Quicklook(_) => {
-                // TODO: Implement quicklook overlay in Phase 4
+                // Quicklook is handled by App via overlay system
                 GridResult::Consumed
             }
             HandleResult::EntityAction(_) => {
-                // TODO: Implement entity action handling in Phase 4
+                // Entity actions are handled by App via actions module
                 GridResult::Consumed
             }
         }

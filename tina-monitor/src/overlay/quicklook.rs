@@ -86,66 +86,50 @@ pub fn render(state: &QuicklookState, frame: &mut Frame) {
 
 fn render_entity_details(entity: &Entity) -> Vec<Line<'static>> {
     match entity {
-        Entity::TeamMember(m) => vec![
-            Line::from(vec![
-                Span::styled("Name: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(m.name.clone()),
-            ]),
-            Line::from(vec![
-                Span::styled("Model: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(m.model.clone()),
-            ]),
-            Line::from(vec![
-                Span::styled("Type: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(m.agent_type.clone()),
-            ]),
-            Line::from(vec![
-                Span::styled("Pane: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(m.tmux_pane_id.clone().unwrap_or_else(|| "N/A".to_string())),
-            ]),
-        ],
-        Entity::Task(t) => {
-            let mut lines = vec![
-                Line::from(vec![
-                    Span::styled("ID: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(t.id.clone()),
-                ]),
-                Line::from(vec![
-                    Span::styled("Subject: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(t.subject.clone()),
-                ]),
-                Line::from(vec![
-                    Span::styled("Status: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!("{:?}", t.status)),
-                ]),
-                Line::from(vec![
-                    Span::styled("Owner: ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(t.owner.clone().unwrap_or_else(|| "Unassigned".to_string())),
-                ]),
-            ];
-            if !t.description.is_empty() {
-                lines.push(Line::from(""));
-                lines.push(Line::from(t.description.clone()));
-            }
-            lines
-        }
-        Entity::Commit(c) => vec![
-            Line::from(vec![
-                Span::styled("SHA: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(c.hash.clone()),
-            ]),
-            Line::from(vec![
-                Span::styled("Author: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(c.author.clone()),
-            ]),
-            Line::from(vec![
-                Span::styled("Time: ", Style::default().fg(Color::DarkGray)),
-                Span::raw(c.relative_time.clone()),
-            ]),
-            Line::from(""),
-            Line::from(c.subject.clone()),
-        ],
+        Entity::TeamMember(m) => render_team_member_details(m),
+        Entity::Task(t) => render_task_details(t),
+        Entity::Commit(c) => render_commit_details(c),
     }
+}
+
+fn render_team_member_details(m: &crate::types::TeamMember) -> Vec<Line<'static>> {
+    vec![
+        detail_line("Name: ", m.name.clone()),
+        detail_line("Model: ", m.model.clone()),
+        detail_line("Type: ", m.agent_type.clone()),
+        detail_line("Pane: ", m.tmux_pane_id.clone().unwrap_or_else(|| "N/A".to_string())),
+    ]
+}
+
+fn render_task_details(t: &crate::data::types::Task) -> Vec<Line<'static>> {
+    let mut lines = vec![
+        detail_line("ID: ", t.id.clone()),
+        detail_line("Subject: ", t.subject.clone()),
+        detail_line("Status: ", format!("{:?}", t.status)),
+        detail_line("Owner: ", t.owner.clone().unwrap_or_else(|| "Unassigned".to_string())),
+    ];
+    if !t.description.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(t.description.clone()));
+    }
+    lines
+}
+
+fn render_commit_details(c: &crate::git::commits::Commit) -> Vec<Line<'static>> {
+    vec![
+        detail_line("SHA: ", c.hash.clone()),
+        detail_line("Author: ", c.author.clone()),
+        detail_line("Time: ", c.relative_time.clone()),
+        Line::from(""),
+        Line::from(c.subject.clone()),
+    ]
+}
+
+fn detail_line(label: &'static str, value: String) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(label, Style::default().fg(Color::DarkGray)),
+        Span::raw(value),
+    ])
 }
 
 /// Handle key input for quicklook

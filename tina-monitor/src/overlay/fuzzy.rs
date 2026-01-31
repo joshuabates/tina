@@ -97,26 +97,48 @@ pub fn render(state: &FuzzyState, frame: &mut Frame) {
     frame.render_widget(input, chunks[0]);
 
     // Results list
-    let items: Vec<ListItem> = state
-        .filtered
-        .iter()
-        .enumerate()
-        .map(|(i, &idx)| {
-            let item = &state.items[idx];
-            let style = if i == state.selected {
-                Style::default().add_modifier(Modifier::REVERSED)
-            } else {
-                Style::default()
-            };
-            ListItem::new(Line::from(vec![
-                Span::styled(&item.feature, style),
-                Span::styled(
-                    format!(" ({:?})", item.status),
-                    Style::default().fg(Color::DarkGray),
-                ),
-            ]))
-        })
-        .collect();
+    let items: Vec<ListItem> = if state.items.is_empty() {
+        // No orchestrations at all
+        vec![
+            ListItem::new(Line::from("")),
+            ListItem::new(Line::from(Span::styled(
+                "  No orchestrations found",
+                Style::default().fg(Color::DarkGray),
+            ))),
+            ListItem::new(Line::from("")),
+            ListItem::new(Line::from(Span::styled(
+                "  Start an orchestration with tina-session",
+                Style::default().fg(Color::DarkGray),
+            ))),
+        ]
+    } else if state.filtered.is_empty() {
+        // Filter returned no results
+        vec![ListItem::new(Line::from(Span::styled(
+            "  No matches",
+            Style::default().fg(Color::DarkGray),
+        )))]
+    } else {
+        state
+            .filtered
+            .iter()
+            .enumerate()
+            .map(|(i, &idx)| {
+                let item = &state.items[idx];
+                let style = if i == state.selected {
+                    Style::default().add_modifier(Modifier::REVERSED)
+                } else {
+                    Style::default()
+                };
+                ListItem::new(Line::from(vec![
+                    Span::styled(&item.feature, style),
+                    Span::styled(
+                        format!(" ({:?})", item.status),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]))
+            })
+            .collect()
+    };
 
     let list = List::new(items).block(Block::default().borders(Borders::ALL));
     frame.render_widget(list, chunks[1]);
@@ -323,5 +345,41 @@ mod tests {
         });
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn render_empty_state_does_not_panic() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let state = FuzzyState::new(vec![]);
+        let backend = TestBackend::new(80, 40);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let result = terminal.draw(|frame| {
+            render(&state, frame);
+        });
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn render_no_matches_state_does_not_panic() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let mut state = FuzzyState::new(create_items());
+        state.query = "xyz123nonexistent".to_string();
+        state.update_filter();
+
+        let backend = TestBackend::new(80, 40);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let result = terminal.draw(|frame| {
+            render(&state, frame);
+        });
+
+        assert!(result.is_ok());
+        assert!(state.filtered.is_empty());
     }
 }

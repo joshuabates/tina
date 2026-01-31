@@ -170,8 +170,12 @@ impl App {
             .constraints([Constraint::Length(2), Constraint::Min(0)])
             .areas(area);
 
-        // Render dashboard header
-        self.dashboard.render(frame, dashboard_area);
+        // Render dashboard header with optional status message
+        self.dashboard.render_with_status(
+            frame,
+            dashboard_area,
+            self.status_message.as_deref(),
+        );
 
         // Render panel grid
         self.grid.render(frame, grid_area);
@@ -684,6 +688,35 @@ mod tests {
         });
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn render_with_status_message_does_not_panic() {
+        use ratatui::backend::TestBackend;
+        use ratatui::Terminal;
+
+        let mut app = App::new();
+        app.status_message = Some("Copied: abc1234".to_string());
+
+        let backend = TestBackend::new(120, 40);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let result = terminal.draw(|frame| {
+            app.render(frame);
+        });
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn status_message_clears_on_key_press() {
+        let mut app = App::new();
+        app.status_message = Some("Test message".to_string());
+
+        // Any key should clear the message
+        app.handle_key(make_key(KeyCode::Right));
+
+        assert!(app.status_message.is_none());
     }
 
     #[test]

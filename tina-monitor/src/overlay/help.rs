@@ -15,45 +15,7 @@ pub fn render(frame: &mut Frame) {
     let area = centered_rect(60, 70, frame.area());
     frame.render_widget(Clear, area);
 
-    let help_text = vec![
-        Line::from(Span::styled(
-            "Navigation",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Line::from("  h/j/k/l or arrows   Move between panels"),
-        Line::from("  Space               Quicklook selected item"),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Team Members",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Line::from("  a                   Attach to tmux session"),
-        Line::from("  s                   Send command dialog"),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Tasks",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Line::from("  i                   Inspect task details"),
-        Line::from("  o                   Jump to task owner"),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Commits",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Line::from("  d                   View diff"),
-        Line::from("  y                   Copy SHA"),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Global",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Line::from("  /                   Fuzzy find orchestration"),
-        Line::from("  ?                   This help screen"),
-        Line::from("  q / Esc             Quit / close overlay"),
-    ];
-
-    let help = Paragraph::new(help_text)
+    let help = Paragraph::new(help_text())
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -63,6 +25,35 @@ pub fn render(frame: &mut Frame) {
         .style(Style::default().fg(Color::White));
 
     frame.render_widget(help, area);
+}
+
+fn section_header(title: &'static str) -> Line<'static> {
+    Line::from(Span::styled(title, Style::default().add_modifier(Modifier::BOLD)))
+}
+
+fn help_text() -> Vec<Line<'static>> {
+    vec![
+        section_header("Navigation"),
+        Line::from("  h/j/k/l or arrows   Move between panels"),
+        Line::from("  Space               Quicklook selected item"),
+        Line::from(""),
+        section_header("Team Members"),
+        Line::from("  a                   Attach to tmux session"),
+        Line::from("  s                   Send command dialog"),
+        Line::from(""),
+        section_header("Tasks"),
+        Line::from("  i                   Inspect task details"),
+        Line::from("  o                   Jump to task owner"),
+        Line::from(""),
+        section_header("Commits"),
+        Line::from("  d                   View diff"),
+        Line::from("  y                   Copy SHA"),
+        Line::from(""),
+        section_header("Global"),
+        Line::from("  /                   Fuzzy find orchestration"),
+        Line::from("  ?                   This help screen"),
+        Line::from("  q / Esc             Quit / close overlay"),
+    ]
 }
 
 /// Handle key input for help overlay
