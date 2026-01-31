@@ -44,13 +44,45 @@ Read the implementation code and verify:
 
 **Verify by reading code, not by trusting report.**
 
+## Precondition Verification
+
+Before approving implementation, verify:
+
+1. **Data sources exist** - If code reads a file/API/database, verify the writer exists
+2. **Dependencies available** - If code imports a module, verify it's implemented
+3. **Integration points connected** - If code is called by X, verify X actually calls it
+
+### Example Failures
+
+- Reading from file that nothing writes → FAIL
+- Implementing interface that nothing uses → FAIL
+- Handler that's never registered → FAIL
+- Test mocking a system that doesn't exist → FAIL
+
+If preconditions are not met, the review FAILS.
+
 ## Report Format
 
 Report one of:
-- **Spec compliant:** Everything matches after code inspection (zero issues)
+- **Spec compliant:** Everything matches after code inspection AND preconditions verified
+- **Precondition failure:** List unmet preconditions with specifics
 - **Issues found:** List specifically what's missing or extra, with file:line references
 
 **ANY issue blocks approval.** No "close enough" - spec compliant means exactly what was asked, nothing more, nothing less.
+
+## Critical Rules
+
+**DO:**
+- Read the actual code, not just the report
+- Verify preconditions, not just spec match
+- Check that data sources exist before approving readers
+- Verify dependencies are implemented before approving imports
+
+**DON'T:**
+- Trust the implementer's claims without verification
+- Approve code that reads from non-existent sources
+- Approve handlers that are never registered
+- Approve interfaces that nothing implements or uses
 
 ## Team Mode Behavior (Ephemeral)
 
@@ -81,12 +113,21 @@ Teammate.write({
 })
 ```
 
-**If FAIL:**
+**If FAIL (issues):**
 
 ```
 Teammate.write({
   target: "worker",
   value: "Spec review FAILED. Issues:\n- [Issue 1]: [details]\n- [Issue 2]: [details]"
+})
+```
+
+**If FAIL (preconditions):**
+
+```
+Teammate.write({
+  target: "worker",
+  value: "Spec review FAILED. Preconditions unmet:\n- [Precondition]: [what's missing]"
 })
 ```
 

@@ -52,7 +52,45 @@ Verify new code is actually connected, not orphaned:
 - Incomplete chains: Flow doesn't reach expected output
 - Orphaned tests: Tests for unreachable code
 
-### 3. Reuse + Consistency
+### 3. Functional Verification
+
+You MUST run the implemented code, not just read it.
+
+**For CLI tools:**
+```bash
+./target/release/tool --help
+./target/release/tool <typical-args>
+```
+
+**For libraries:**
+```bash
+cargo test
+cargo run --example basic  # if examples exist
+```
+
+**For services:**
+```bash
+cargo run &
+PID=$!
+curl http://localhost:8080/health
+kill $PID
+```
+
+**For TypeScript/Node:**
+```bash
+npm test
+npm run start  # verify it starts
+```
+
+**For Python:**
+```bash
+pytest
+python -m <module> --help  # if CLI
+```
+
+If you cannot run the code successfully, the review FAILS.
+
+### 4. Reuse + Consistency
 
 Check for proper reuse and consistent style:
 
@@ -62,7 +100,7 @@ Check for proper reuse and consistent style:
 - Consistent style with codebase?
 - Readable tests following existing patterns?
 
-### 4. Metrics Collection and Estimate Comparison
+### 5. Metrics Collection and Estimate Comparison
 
 Collect actual metrics from the phase and compare against plan estimates.
 
@@ -160,6 +198,17 @@ actual_roi = coverage_lines_added / test_lines_added
 **Issues:**
 1. **[Severity]** `file:line` - [what's disconnected] - Fix: [how to connect]
 
+### Functional Verification
+**Executed:** [list of commands run]
+**Results:**
+- ✅ `./target/release/tina-session --help` - returned help text
+- ✅ `cargo test` - 18 tests passed
+- ❌ `./target/release/tina-session start` - segfault
+
+**Functional:** Yes / No
+
+If No, status is automatically **Stop**.
+
 ### Reuse + Consistency
 **Issues:**
 1. **[Severity]** `file:line` - [what's wrong] - Fix: [what to use instead]
@@ -196,6 +245,7 @@ actual_roi = coverage_lines_added / test_lines_added
 **DO:**
 - Read Architectural Context section first
 - Trace actual data flow (don't assume connections)
+- Execute code, not just trace flow
 - Give file:line references
 - Verify ALL patterns from Architectural Context
 - Read Phase Estimates section from plan file
@@ -206,12 +256,14 @@ actual_roi = coverage_lines_added / test_lines_added
 
 **DON'T:**
 - Assume code is connected because it exists
+- Approve code you haven't actually run
 - Skip integration tracing
 - Give vague feedback
 - Approve with any open issues
 - Skip metrics collection even if estimates are missing (report "no estimates provided")
 - Approve with Stop-level metric drift
 - Ignore ROI for test-heavy work
+- Trust "it compiles" as proof of functionality
 
 ## Completion Message Format
 
