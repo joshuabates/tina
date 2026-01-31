@@ -6,6 +6,29 @@ pub use team::TeamPanel;
 pub use tasks::TasksPanel;
 pub use commits::CommitsPanel;
 
+use ratatui::style::{Color, Style};
+use ratatui::widgets::BorderType;
+
+/// Returns the border style for a panel based on focus state.
+/// Focused panels get Cyan color, unfocused panels get DarkGray.
+pub fn border_style(focused: bool) -> Style {
+    if focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    }
+}
+
+/// Returns the border type for a panel based on focus state.
+/// Focused panels get Thick borders, unfocused panels get Plain borders.
+pub fn border_type(focused: bool) -> BorderType {
+    if focused {
+        BorderType::Thick
+    } else {
+        BorderType::Plain
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -14,6 +37,31 @@ mod tests {
 
     fn make_key_event(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    // Focus styling tests
+    #[test]
+    fn border_style_returns_cyan_when_focused() {
+        let style = border_style(true);
+        assert_eq!(style.fg, Some(Color::Cyan));
+    }
+
+    #[test]
+    fn border_style_returns_dark_gray_when_unfocused() {
+        let style = border_style(false);
+        assert_eq!(style.fg, Some(Color::DarkGray));
+    }
+
+    #[test]
+    fn border_type_returns_thick_when_focused() {
+        let bt = border_type(true);
+        assert_eq!(bt, BorderType::Thick);
+    }
+
+    #[test]
+    fn border_type_returns_plain_when_unfocused() {
+        let bt = border_type(false);
+        assert_eq!(bt, BorderType::Plain);
     }
 
     // TeamPanel tests
