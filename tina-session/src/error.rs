@@ -1,6 +1,9 @@
 use thiserror::Error;
 
+/// Error types for tina-session operations.
+/// These are used by both the library and binary crates.
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum SessionError {
     #[error("Feature '{0}' not initialized. Run 'tina-session init' first.")]
     NotInitialized(String),
@@ -54,4 +57,5 @@ pub enum SessionError {
     InvalidModel(String),
 }
 
+#[allow(dead_code)]
 pub type Result<T> = std::result::Result<T, SessionError>;

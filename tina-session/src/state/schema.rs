@@ -249,7 +249,7 @@ impl SupervisorState {
         let key = phase.to_string();
         self.phases
             .get(&key)
-            .ok_or_else(|| SessionError::PhaseNotFound(phase, self.total_phases))
+            .ok_or(SessionError::PhaseNotFound(phase, self.total_phases))
     }
 }
 

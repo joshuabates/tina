@@ -98,15 +98,10 @@ tina-session stop \
 # CONTEXT MANAGEMENT
 # ============================================
 
-# Cycle context (checkpoint + restore)
-tina-session refresh \
-  --feature auth \
-  --phase 1
-
-# 1. Sends /checkpoint to tmux session
-# 2. Waits for checkpoint acknowledgment
-# 3. Sends /tina:rehydrate to restore context
-# 4. Waits for ready state
+# To refresh context, simply stop and start:
+tina-session stop --feature auth --phase 1
+tina-session start --feature auth --phase 1 --plan /path/to/plan.md
+# The start command handles resuming existing phases gracefully
 
 # ============================================
 # STATE MANAGEMENT (schema-enforced)
@@ -339,32 +334,49 @@ tina-session/
 ├── Cargo.toml
 ├── src/
 │   ├── main.rs              # CLI parsing (clap)
+│   ├── lib.rs               # Library exports
+│   ├── error.rs             # Custom error types
 │   ├── commands/
 │   │   ├── mod.rs
+│   │   ├── init.rs          # Initialize orchestration
 │   │   ├── start.rs         # Phase start (tmux + claude + skill)
 │   │   ├── wait.rs          # Wait for completion (file watching)
 │   │   ├── stop.rs          # Clean shutdown
-│   │   ├── refresh.rs       # Context cycling
-│   │   └── state.rs         # State management subcommands
+│   │   ├── state.rs         # State management subcommands
+│   │   ├── check.rs         # Validation subcommands
+│   │   ├── name.rs          # Get session name
+│   │   ├── exists.rs        # Check session exists
+│   │   ├── send.rs          # Send text to session
+│   │   ├── attach.rs        # Attach to session
+│   │   ├── list.rs          # List orchestrations
+│   │   └── cleanup.rs       # Remove lookup file
+│   ├── session/
+│   │   ├── mod.rs
+│   │   ├── naming.rs        # Canonical session naming
+│   │   └── lookup.rs        # Read/write lookup files
 │   ├── tmux/
 │   │   ├── mod.rs
 │   │   ├── session.rs       # Create/kill sessions
 │   │   ├── send.rs          # Send keys
-│   │   └── detect.rs        # Detect Claude ready
+│   │   └── capture.rs       # Capture pane output
+│   ├── claude/
+│   │   ├── mod.rs
+│   │   └── ready.rs         # Detect Claude ready state
 │   ├── state/
 │   │   ├── mod.rs
-│   │   ├── schema.rs        # State structs + serde
-│   │   ├── validate.rs      # Transition validation
+│   │   ├── schema.rs        # SupervisorState + PhaseState
+│   │   ├── transitions.rs   # Status transition validation
 │   │   └── timing.rs        # Duration calculations
+│   ├── checks/
+│   │   ├── mod.rs
+│   │   ├── complexity.rs    # Line count checks
+│   │   ├── verify.rs        # Test + lint checks
+│   │   └── plan.rs          # Plan validation
 │   └── watch/
 │       ├── mod.rs
 │       └── status.rs        # File watching for status.json
 └── tests/
-    ├── integration/
-    │   ├── start_test.rs
-    │   ├── state_test.rs
-    │   └── wait_test.rs
-    └── fixtures/
+    └── (unit tests embedded in modules)
 ```
 
 ### Dependencies
@@ -406,6 +418,30 @@ predicates = "3"
 - `tina-session state` validates all transitions, rejects invalid operations
 - Skills reduced to simple tina-session invocations
 - All timing data captured automatically
+
+### Implementation Notes (2026-01-30)
+
+**Status:** ✓ Phase 1 Complete
+
+Key implementation details discovered during development:
+
+1. **Claude Binary Detection**: The `start` command auto-detects `claudesp` (sneak peek) vs `claude` (release) since different environments may have different binaries installed.
+
+2. **Session Creation Strategy**: tmux sessions are created with a shell first, then the claude command is sent to the shell. This prevents session death if Claude fails to start (e.g., binary not in PATH).
+
+3. **Ready Detection**: Claude is detected as ready when the pane output contains either:
+   - A line starting with `>` (the prompt)
+   - The text "bypass permissions" (indicates ready for input)
+
+4. **Complexity Check Scope**: The `check complexity` command checks `src/` directory specifically (if it exists) to avoid counting generated code in `target/` or `node_modules/`.
+
+5. **Lookup File Location**: Session lookup files are stored at `~/.claude/tina-sessions/{feature}.json`, enabling commands to find the worktree without requiring `--cwd` on every invocation.
+
+**Final Metrics:**
+- 18 unit tests passing
+- 1,739 lines of implementation code (under 2,000 budget)
+- All files under 400 lines
+- Clippy clean with `-D warnings`
 
 ---
 

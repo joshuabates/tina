@@ -1,18 +1,278 @@
+use std::fs;
 use std::path::Path;
+use std::process::Command;
+
+use tina_session::error::SessionError;
 
 pub fn complexity(
-    _cwd: &Path,
-    _max_file_lines: u32,
-    _max_total_lines: u32,
+    cwd: &Path,
+    max_file_lines: u32,
+    max_total_lines: u32,
     _max_complexity: u32,
 ) -> anyhow::Result<u8> {
-    todo!("check complexity command")
+    if !cwd.exists() {
+        anyhow::bail!(SessionError::DirectoryNotFound(cwd.display().to_string()));
+    }
+
+    println!("Checking complexity in {}...", cwd.display());
+
+    // Try to run tokei for line counts on src/ directory
+    let src_dir = cwd.join("src");
+    let tokei_path = if src_dir.exists() { &src_dir } else { cwd };
+
+    let output = Command::new("tokei")
+        .args(["--output", "json"])
+        .arg(tokei_path)
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                // Get total code lines
+                let total = json
+                    .get("Total")
+                    .and_then(|t| t.get("code"))
+                    .and_then(|c| c.as_u64())
+                    .unwrap_or(0);
+
+                println!("Total lines: {}", total);
+
+                if total > max_total_lines as u64 {
+                    println!(
+                        "FAIL: Total lines {} exceeds budget {}",
+                        total, max_total_lines
+                    );
+                    return Ok(1);
+                }
+            }
+        }
+        _ => {
+            eprintln!("Warning: tokei not available, skipping line count check");
+        }
+    }
+
+    // Check individual file sizes (in src/ if it exists)
+    let mut violations = Vec::new();
+    let check_dir = if src_dir.exists() { &src_dir } else { cwd };
+    check_file_sizes(check_dir, max_file_lines, &mut violations)?;
+
+    if !violations.is_empty() {
+        println!("FAIL: Files exceeding {} lines:", max_file_lines);
+        for (path, lines) in &violations {
+            println!("  {} ({} lines)", path, lines);
+        }
+        return Ok(1);
+    }
+
+    println!("PASS: Complexity checks passed");
+    Ok(0)
 }
 
-pub fn verify(_cwd: &Path) -> anyhow::Result<u8> {
-    todo!("check verify command")
+fn check_file_sizes(dir: &Path, max_lines: u32, violations: &mut Vec<(String, u32)>) -> anyhow::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        // Skip hidden directories and common non-source directories
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with('.') || name == "target" || name == "node_modules" {
+                continue;
+            }
+        }
+
+        if path.is_dir() {
+            check_file_sizes(&path, max_lines, violations)?;
+        } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            // Check source files
+            if matches!(ext, "rs" | "ts" | "tsx" | "js" | "jsx" | "py" | "go") {
+                if let Ok(contents) = fs::read_to_string(&path) {
+                    let lines = contents.lines().count() as u32;
+                    if lines > max_lines {
+                        violations.push((path.display().to_string(), lines));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
-pub fn plan(_path: &Path) -> anyhow::Result<u8> {
-    todo!("check plan command")
+pub fn verify(cwd: &Path) -> anyhow::Result<u8> {
+    if !cwd.exists() {
+        anyhow::bail!(SessionError::DirectoryNotFound(cwd.display().to_string()));
+    }
+
+    println!("Running verification in {}...", cwd.display());
+
+    // Detect project type and run appropriate commands
+    if cwd.join("Cargo.toml").exists() {
+        println!("Detected Rust project");
+
+        // Run tests
+        println!("Running cargo test...");
+        let test_status = Command::new("cargo")
+            .args(["test", "--no-fail-fast"])
+            .current_dir(cwd)
+            .status()?;
+
+        if !test_status.success() {
+            println!("FAIL: Tests failed");
+            return Ok(1);
+        }
+
+        // Run clippy
+        println!("Running cargo clippy...");
+        let clippy_status = Command::new("cargo")
+            .args(["clippy", "--", "-D", "warnings"])
+            .current_dir(cwd)
+            .status()?;
+
+        if !clippy_status.success() {
+            println!("FAIL: Clippy warnings found");
+            return Ok(1);
+        }
+    } else if cwd.join("package.json").exists() {
+        println!("Detected Node.js project");
+
+        // Run tests
+        println!("Running npm test...");
+        let test_status = Command::new("npm")
+            .args(["test"])
+            .current_dir(cwd)
+            .status()?;
+
+        if !test_status.success() {
+            println!("FAIL: Tests failed");
+            return Ok(1);
+        }
+
+        // Run lint
+        println!("Running npm run lint...");
+        let lint_status = Command::new("npm")
+            .args(["run", "lint"])
+            .current_dir(cwd)
+            .status();
+
+        if let Ok(status) = lint_status {
+            if !status.success() {
+                println!("FAIL: Lint errors found");
+                return Ok(1);
+            }
+        }
+    } else if cwd.join("pyproject.toml").exists() || cwd.join("setup.py").exists() {
+        println!("Detected Python project");
+
+        // Run pytest
+        println!("Running pytest...");
+        let test_status = Command::new("pytest")
+            .current_dir(cwd)
+            .status()?;
+
+        if !test_status.success() {
+            println!("FAIL: Tests failed");
+            return Ok(1);
+        }
+
+        // Run flake8
+        println!("Running flake8...");
+        let lint_status = Command::new("flake8")
+            .arg(".")
+            .current_dir(cwd)
+            .status();
+
+        if let Ok(status) = lint_status {
+            if !status.success() {
+                println!("FAIL: Flake8 errors found");
+                return Ok(1);
+            }
+        }
+    } else if cwd.join("go.mod").exists() {
+        println!("Detected Go project");
+
+        // Run tests
+        println!("Running go test...");
+        let test_status = Command::new("go")
+            .args(["test", "./..."])
+            .current_dir(cwd)
+            .status()?;
+
+        if !test_status.success() {
+            println!("FAIL: Tests failed");
+            return Ok(1);
+        }
+
+        // Run golangci-lint
+        println!("Running golangci-lint...");
+        let lint_status = Command::new("golangci-lint")
+            .args(["run"])
+            .current_dir(cwd)
+            .status();
+
+        if let Ok(status) = lint_status {
+            if !status.success() {
+                println!("FAIL: Lint errors found");
+                return Ok(1);
+            }
+        }
+    } else {
+        println!("Warning: Unknown project type, skipping verification");
+        return Ok(0);
+    }
+
+    println!("PASS: All verification checks passed");
+    Ok(0)
+}
+
+pub fn plan(path: &Path) -> anyhow::Result<u8> {
+    if !path.exists() {
+        anyhow::bail!(SessionError::FileNotFound(path.display().to_string()));
+    }
+
+    println!("Validating plan: {}", path.display());
+
+    let contents = fs::read_to_string(path)?;
+
+    // Check for model specifications
+    let task_count = contents.matches("### Task").count();
+    let model_count = contents.matches("**Model:**").count();
+
+    if model_count < task_count {
+        println!(
+            "FAIL: Missing model specifications ({} tasks, {} model specs)",
+            task_count, model_count
+        );
+        return Ok(1);
+    }
+
+    // Check model values are valid (opus or haiku only)
+    // Only check lines that look like actual model specifications (start with **Model:**)
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("**Model:**") {
+            let model = trimmed
+                .strip_prefix("**Model:**")
+                .map(|s| s.trim().to_lowercase())
+                .unwrap_or_default();
+
+            // Skip empty or clearly non-model values
+            if model.is_empty() || model.contains('`') || model.len() > 20 {
+                continue;
+            }
+
+            if !model.starts_with("opus") && !model.starts_with("haiku") {
+                println!("FAIL: Invalid model '{}'. Must be 'opus' or 'haiku'.", model);
+                return Ok(1);
+            }
+        }
+    }
+
+    // Check for Complexity Budget section
+    if !contents.contains("### Complexity Budget") && !contents.contains("## Complexity Budget") {
+        println!("FAIL: Missing Complexity Budget section");
+        return Ok(1);
+    }
+
+    println!("PASS: Plan validation passed");
+    Ok(0)
 }

@@ -110,10 +110,6 @@ impl SessionLookup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
-
-    // Note: These tests would need to mock the home directory
-    // For now, we test the struct creation
 
     #[test]
     fn test_session_lookup_new() {
