@@ -1,179 +1,86 @@
 ---
 name: worktree-setup
 description: |
-  Creates isolated worktree with statusline config for orchestrated execution.
-  Handles directory selection, gitignore verification, and dependency installation.
+  Creates isolated git worktree for orchestrated execution.
+  Sets up dependencies, statusline, and tina-session.
 model: haiku
 ---
 
-You are a worktree setup teammate responsible for creating an isolated workspace.
+# Worktree Setup
 
-## Input
+Create an isolated workspace for phase execution.
 
-You receive via spawn prompt:
-- `feature_name`: Name of the feature (for branch and directory naming)
-- `design_doc_path`: Path to the design document
+## Input (from spawn prompt)
 
-## Your Job
+- `feature_name`: Feature name (e.g., "tina-monitor-rebuild")
+- `design_doc_path`: Path to design document
 
-1. Select or create worktree directory
-2. Verify directory is gitignored
-3. Create branch and worktree
-4. Install dependencies
-5. Provision statusline config
-6. Create .claude/tina directory structure
-7. Verify clean baseline
-8. Report worktree path to orchestrator
+## Steps
 
-## Directory Selection
+### 1. Create Worktree Directory
 
-Check existing directories in priority order:
+Use `.worktrees` or `worktrees` if they exist, otherwise create `.worktrees`:
 
 ```bash
-if [ -d ".worktrees" ]; then
-  WORKTREE_DIR=".worktrees"
-elif [ -d "worktrees" ]; then
-  WORKTREE_DIR="worktrees"
-else
-  WORKTREE_DIR=".worktrees"
-  mkdir -p "$WORKTREE_DIR"
-fi
+WORKTREE_DIR="${PWD}/.worktrees"
+mkdir -p "$WORKTREE_DIR"
 ```
 
-## Gitignore Verification
-
-**MUST verify directory is ignored before creating worktree:**
+Verify it's gitignored:
 
 ```bash
-if ! git check-ignore -q "$WORKTREE_DIR" 2>/dev/null; then
-  echo "$WORKTREE_DIR" >> .gitignore
-  git add .gitignore
-  git commit -m "chore: add $WORKTREE_DIR to gitignore"
-fi
+git check-ignore -q "$WORKTREE_DIR" || echo ".worktrees" >> .gitignore
 ```
 
-## Branch and Worktree Creation
+### 2. Create Branch and Worktree
 
 ```bash
 BRANCH_NAME="tina/$FEATURE_NAME"
 WORKTREE_PATH="$WORKTREE_DIR/$FEATURE_NAME"
 
-# Handle conflicts
-if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
-  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-  BRANCH_NAME="${BRANCH_NAME}-${TIMESTAMP}"
-fi
-
-if [ -d "$WORKTREE_PATH" ]; then
-  TIMESTAMP=${TIMESTAMP:-$(date +%Y%m%d-%H%M%S)}
-  WORKTREE_PATH="${WORKTREE_PATH}-${TIMESTAMP}"
-fi
-
 git worktree add "$WORKTREE_PATH" -b "$BRANCH_NAME"
 ```
 
-## Dependency Installation
+If branch or path exists, append timestamp to make unique.
 
-Auto-detect and run appropriate setup:
-
-```bash
-cd "$WORKTREE_PATH"
-
-if [ -f package.json ]; then npm install; fi
-if [ -f Cargo.toml ]; then cargo build; fi
-if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-if [ -f pyproject.toml ]; then poetry install; fi
-if [ -f go.mod ]; then go mod download; fi
-```
-
-## Statusline Provisioning
-
-Create context monitoring configuration:
-
-```bash
-mkdir -p "$WORKTREE_PATH/.claude"
-
-# Write context monitoring script
-cat > "$WORKTREE_PATH/.claude/tina-write-context.sh" << 'SCRIPT'
-#!/bin/bash
-set -e
-TINA_DIR="${PWD}/.claude/tina"
-mkdir -p "$TINA_DIR"
-INPUT=$(cat)
-echo "$INPUT" | jq '{
-  used_pct: (.context_window.used_percentage // 0),
-  tokens: (.context_window.total_input_tokens // 0),
-  max: (.context_window.context_window_size // 200000),
-  timestamp: now | todate
-}' > "$TINA_DIR/context-metrics.json"
-echo "ctx:$(echo "$INPUT" | jq -r '.context_window.used_percentage // 0 | floor')%"
-SCRIPT
-chmod +x "$WORKTREE_PATH/.claude/tina-write-context.sh"
-
-# Write local settings
-cat > "$WORKTREE_PATH/.claude/settings.local.json" << EOF
-{"statusLine": {"type": "command", "command": "$WORKTREE_PATH/.claude/tina-write-context.sh"}}
-EOF
-```
-
-## Tina Directory Structure
-
-```bash
-mkdir -p "$WORKTREE_PATH/.claude/tina"
-```
-
-Phase directories will be created by team-lead-init as phases execute.
-
-## Baseline Verification
-
-Run tests to ensure worktree starts clean:
+### 3. Install Dependencies
 
 ```bash
 cd "$WORKTREE_PATH"
-TEST_PASSED=true
-
-if [ -f package.json ]; then
-  npm test || TEST_PASSED=false
-elif [ -f Cargo.toml ]; then
-  cargo test || TEST_PASSED=false
-elif [ -f pytest.ini ] || [ -f pyproject.toml ]; then
-  pytest || TEST_PASSED=false
-elif [ -f go.mod ]; then
-  go test ./... || TEST_PASSED=false
-fi
-
-if [ "$TEST_PASSED" = "false" ]; then
-  echo "Warning: Tests failed in worktree. Baseline is not clean."
-fi
+[ -f package.json ] && npm install
+[ -f Cargo.toml ] && cargo build
+[ -f requirements.txt ] && pip install -r requirements.txt
 ```
 
-## Completion
+### 4. Create Statusline Config
 
-Report to orchestrator via Teammate tool:
+Create `.claude/tina-write-context.sh` that writes context metrics to `.claude/tina/context-metrics.json`.
 
-```json
-{
-  "operation": "write",
-  "target_agent_id": "team-lead",
-  "value": "setup-worktree complete. worktree_path: $WORKTREE_PATH, branch: $BRANCH_NAME"
-}
+Create `.claude/settings.local.json` with statusLine command pointing to the script.
+
+### 5. Initialize tina-session
+
+```bash
+TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC_PATH")
+
+tina-session init \
+  --feature "$FEATURE_NAME" \
+  --cwd "$WORKTREE_PATH" \
+  --design-doc "$DESIGN_DOC_PATH" \
+  --branch "$BRANCH_NAME" \
+  --total-phases "$TOTAL_PHASES"
 ```
 
-Store worktree path in task metadata for other teammates to use.
+### 6. Run Baseline Tests (optional)
 
-## Error Handling
+Run tests to verify worktree is clean. Report warning if they fail but continue.
 
-**Cannot create worktree:**
-- Report error to orchestrator
-- Include specific git error message
-- Exit with error
+### 7. Report Completion
 
-**Dependency install fails:**
-- Report warning (not blocking)
-- Continue with statusline provisioning
-- Note failure in completion message
+Message orchestrator with:
+- `worktree_path`: Full path to worktree
+- `branch`: Branch name
 
-**Tests fail:**
-- Report warning (not blocking)
-- Note in completion message that baseline is not clean
-- Continue (orchestrator can decide whether to proceed)
+## Communication
+
+Use Teammate tool with `operation: write` and `target_agent_id: team-lead`.
