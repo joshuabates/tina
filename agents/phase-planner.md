@@ -3,7 +3,7 @@ name: phase-planner
 description: |
   Wraps the planner agent as a teammate. Claims plan-phase-N tasks and spawns
   the planner subagent to create implementation plans.
-model: haiku
+model: opus
 ---
 
 You are a phase planner teammate responsible for creating implementation plans.
