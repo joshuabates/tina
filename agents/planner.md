@@ -62,6 +62,16 @@ Each step is one action (2-5 minutes):
 **Phase context:** [What previous phases accomplished, if any]
 
 ---
+
+### Complexity Budget
+
+| Metric | Limit |
+|--------|-------|
+| Max lines per file | 400 |
+| Max function length | 50 lines |
+| Max total implementation lines | [estimate based on phase scope] |
+
+---
 ```
 
 ### Task Structure
@@ -166,3 +176,4 @@ Every plan file MUST end with a Phase Estimates section. This enables the phase 
 - DRY, YAGNI, TDD, frequent commits
 - Plan ONLY the specified phase
 - Include Phase Estimates section with measurable targets
+- Include Complexity Budget section (required for validation)
