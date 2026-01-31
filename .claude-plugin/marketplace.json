@@ -9,7 +9,7 @@
     {
       "name": "tina",
       "description": "Personal skills library for Claude Code",
-      "version": "0.8.1",
+      "version": "0.8.2",
       "source": "./",
       "author": {
         "name": "Joshua",
