@@ -355,3 +355,35 @@ tempfile = "3"
 2. **Git commits**: Shows commits since phase start, even for in-progress phases (before git range is finalized).
 
 3. **Refresh strategy**: File watcher for auto-refresh. No manual refresh needed.
+
+---
+
+## Architectural Context
+
+**Reusable from existing codebase:**
+- `src/data/types.rs` - Team, Agent, Task, TaskStatus structs are correct and tested
+- `src/data/watcher.rs` - FileWatcher pattern is sound, reuse with minor adaptation
+- `src/git/commits.rs`, `src/git/diff.rs` - Git operations can be extracted
+
+**Schema alignment required:**
+- tina-monitor's `SupervisorState` (src/data/types.rs:67-76) differs from tina-session's schema
+- tina-session uses: `feature`, `design_doc`, `worktree_path`, `branch`, `phases` HashMap
+- tina-monitor uses: `design_doc_path`, `worktree_path`, `branch_name`, `plan_paths` HashMap
+- **Action:** Align types.rs with tina-session's `schema.rs` or add adapter
+
+**Data source paths:**
+- Session lookup: `~/.claude/tina-sessions/{feature}.json` (tina-session)
+- Supervisor state: `{worktree}/.claude/tina/supervisor-state.json` (tina-session)
+- Teams: `~/.claude/teams/{team}/config.json` (claude-code)
+- Tasks: `~/.claude/tasks/{team}/*.json` (claude-code)
+
+**Anti-patterns to avoid:**
+- Don't replicate app.rs god-object pattern - each panel owns its logic
+- Don't mock data in tests - use fixture files with real structure
+- Don't put all key handlers in one file - Panel trait distributes responsibility
+
+**Integration points:**
+- Entry: `main.rs` CLI with `--fixture` flag for testing
+- DataSource reads from tina-session's SessionLookup to discover orchestrations
+- FileWatcher monitors `~/.claude/tina-sessions/` and team/task directories
+- tmux operations use existing `src/tmux/send.rs` patterns
