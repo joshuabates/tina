@@ -1,7 +1,13 @@
 use tina_session::session::lookup::SessionLookup;
 use tina_session::watch;
 
-pub fn run(feature: &str, phase: u32, timeout: Option<u64>) -> anyhow::Result<u8> {
+pub fn run(
+    feature: &str,
+    phase: &str,
+    timeout: Option<u64>,
+    stream_interval: Option<u64>,
+    team: Option<&str>,
+) -> anyhow::Result<u8> {
     // Load lookup to get cwd
     let lookup = SessionLookup::load(feature)?;
     let cwd = &lookup.cwd;
@@ -16,11 +22,34 @@ pub fn run(feature: &str, phase: u32, timeout: Option<u64>) -> anyhow::Result<u8
     eprintln!("Waiting for phase {} completion...", phase);
     eprintln!("Watching: {}", status_path.display());
 
-    // Watch for completion
-    match watch::watch_status(&status_path, timeout) {
+    // Derive team name if not provided: {feature}-phase-{phase}
+    let derived_team;
+    let team_name = match team {
+        Some(t) => Some(t),
+        None => {
+            derived_team = format!("{}-phase-{}", feature, phase);
+            Some(derived_team.as_str())
+        }
+    };
+
+    // Use streaming or simple wait based on interval
+    let result = if let Some(interval) = stream_interval {
+        if let Some(t) = team_name {
+            eprintln!("Streaming updates every {}s (tracking team: {})", interval, t);
+        } else {
+            eprintln!("Streaming updates every {}s", interval);
+        }
+        watch::watch_status_streaming(&status_path, cwd, team_name, timeout, interval)
+    } else {
+        watch::watch_status(&status_path, timeout)
+    };
+
+    match result {
         Ok(result) => {
-            // Output JSON to stdout
-            println!("{}", serde_json::to_string(&result)?);
+            // Output final JSON to stdout (streaming already outputs updates)
+            if stream_interval.is_none() {
+                println!("{}", serde_json::to_string(&result)?);
+            }
 
             // Return exit code based on status
             match result.status.as_str() {

@@ -8,5 +8,7 @@ pub mod name;
 pub mod exists;
 pub mod send;
 pub mod attach;
+pub mod capture;
+pub mod status;
 pub mod list;
 pub mod cleanup;

@@ -38,7 +38,7 @@ fn detect_claude_binary() -> &'static str {
     "claude"
 }
 
-pub fn run(feature: &str, phase: u32, plan: &Path) -> anyhow::Result<u8> {
+pub fn run(feature: &str, phase: &str, plan: &Path) -> anyhow::Result<u8> {
     // Load lookup to get cwd
     let lookup = SessionLookup::load(feature)?;
     let cwd = &lookup.cwd;
@@ -49,11 +49,22 @@ pub fn run(feature: &str, phase: u32, plan: &Path) -> anyhow::Result<u8> {
     }
     let plan_abs = fs::canonicalize(plan)?;
 
-    // Load state to validate phase
+    // Load state to validate phase (only for integer phases)
     let state = SupervisorState::load(cwd)?;
-    if phase > state.total_phases {
-        anyhow::bail!(SessionError::PhaseNotFound(phase, state.total_phases));
+    if let Ok(phase_num) = phase.parse::<u32>() {
+        if phase_num > state.total_phases {
+            anyhow::bail!(
+                "Phase {} does not exist (total phases: {}).\n\
+                 \n\
+                 Valid phases: 1-{}\n\
+                 Remediation phases (e.g., 1.5, 2.5) are created dynamically.",
+                phase_num,
+                state.total_phases,
+                state.total_phases
+            );
+        }
     }
+    // Decimal phases (e.g., "1.5") are remediation phases - skip validation
 
     // Generate session name
     let name = session_name(feature, phase);

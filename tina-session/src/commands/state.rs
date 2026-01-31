@@ -9,7 +9,7 @@ use tina_session::state::timing::duration_mins;
 
 pub fn update(
     feature: &str,
-    phase: u32,
+    phase: &str,
     status: &str,
     plan_path: Option<&Path>,
 ) -> anyhow::Result<u8> {
@@ -21,7 +21,7 @@ pub fn update(
     // Get current status for validation
     let current_status = state
         .phases
-        .get(&phase.to_string())
+        .get(phase)
         .map(|p| p.status)
         .unwrap_or(PhaseStatus::Planning);
 
@@ -75,7 +75,11 @@ pub fn update(
     }
 
     phase_state.status = new_status;
-    state.current_phase = phase;
+
+    // Update current_phase only for integer phases
+    if let Ok(phase_num) = phase.parse::<u32>() {
+        state.current_phase = phase_num;
+    }
 
     // Update orchestration status if needed
     if let Some(orch_status) = new_orch_status {
@@ -88,19 +92,30 @@ pub fn update(
     Ok(0)
 }
 
-pub fn phase_complete(feature: &str, phase: u32, git_range: &str) -> anyhow::Result<u8> {
+pub fn phase_complete(feature: &str, phase: &str, git_range: &str) -> anyhow::Result<u8> {
     let lookup = SessionLookup::load(feature)?;
     let mut state = SupervisorState::load(&lookup.cwd)?;
 
-    // Validate phase exists
-    if phase > state.total_phases {
-        anyhow::bail!("Phase {} does not exist (total phases: {})", phase, state.total_phases);
+    // Validate integer phases against total_phases
+    let phase_num = phase.parse::<u32>().ok();
+    if let Some(num) = phase_num {
+        if num > state.total_phases {
+            anyhow::bail!(
+                "Phase {} does not exist (total phases: {}).\n\
+                 \n\
+                 Valid phases: 1-{}\n\
+                 Remediation phases (e.g., 1.5, 2.5) are created dynamically.",
+                num,
+                state.total_phases,
+                state.total_phases
+            );
+        }
     }
 
     // Get current status for validation
     let current_status = state
         .phases
-        .get(&phase.to_string())
+        .get(phase)
         .map(|p| p.status)
         .unwrap_or(PhaseStatus::Planning);
 
@@ -132,12 +147,14 @@ pub fn phase_complete(feature: &str, phase: u32, git_range: &str) -> anyhow::Res
     phase_state.completed_at = Some(now);
     phase_state.git_range = Some(git_range.to_string());
 
-    // Update orchestration status
-    if phase == state.total_phases {
-        state.status = OrchestrationStatus::Complete;
-    } else {
-        state.current_phase = phase + 1;
-        state.status = OrchestrationStatus::Planning;
+    // Update orchestration status (only for integer phases)
+    if let Some(num) = phase_num {
+        if num == state.total_phases {
+            state.status = OrchestrationStatus::Complete;
+        } else {
+            state.current_phase = num + 1;
+            state.status = OrchestrationStatus::Planning;
+        }
     }
 
     state.save()?;
@@ -146,13 +163,23 @@ pub fn phase_complete(feature: &str, phase: u32, git_range: &str) -> anyhow::Res
     Ok(0)
 }
 
-pub fn blocked(feature: &str, phase: u32, reason: &str) -> anyhow::Result<u8> {
+pub fn blocked(feature: &str, phase: &str, reason: &str) -> anyhow::Result<u8> {
     let lookup = SessionLookup::load(feature)?;
     let mut state = SupervisorState::load(&lookup.cwd)?;
 
-    // Validate phase exists
-    if phase > state.total_phases {
-        anyhow::bail!("Phase {} does not exist (total phases: {})", phase, state.total_phases);
+    // Validate integer phases against total_phases
+    if let Ok(phase_num) = phase.parse::<u32>() {
+        if phase_num > state.total_phases {
+            anyhow::bail!(
+                "Phase {} does not exist (total phases: {}).\n\
+                 \n\
+                 Valid phases: 1-{}\n\
+                 Remediation phases (e.g., 1.5, 2.5) are created dynamically.",
+                phase_num,
+                state.total_phases,
+                state.total_phases
+            );
+        }
     }
 
     // Get mutable reference to phase state
@@ -172,17 +199,27 @@ pub fn blocked(feature: &str, phase: u32, reason: &str) -> anyhow::Result<u8> {
     Ok(0)
 }
 
-pub fn show(feature: &str, phase: Option<u32>, json: bool) -> anyhow::Result<u8> {
+pub fn show(feature: &str, phase: Option<&str>, json: bool) -> anyhow::Result<u8> {
     let lookup = SessionLookup::load(feature)?;
     let state = SupervisorState::load(&lookup.cwd)?;
 
     if json {
-        if let Some(phase_num) = phase {
-            if phase_num > state.total_phases {
-                anyhow::bail!("Phase {} does not exist (total phases: {})", phase_num, state.total_phases);
+        if let Some(phase_key) = phase {
+            // Validate integer phases against total_phases
+            if let Ok(phase_num) = phase_key.parse::<u32>() {
+                if phase_num > state.total_phases {
+                    anyhow::bail!(
+                        "Phase {} does not exist (total phases: {}).\n\
+                         \n\
+                         Valid phases: 1-{}\n\
+                         Remediation phases (e.g., 1.5, 2.5) are created dynamically.",
+                        phase_num,
+                        state.total_phases,
+                        state.total_phases
+                    );
+                }
             }
-            let key = phase_num.to_string();
-            if let Some(phase_state) = state.phases.get(&key) {
+            if let Some(phase_state) = state.phases.get(phase_key) {
                 println!("{}", serde_json::to_string_pretty(phase_state)?);
             } else {
                 println!("{{}}");
@@ -190,13 +227,23 @@ pub fn show(feature: &str, phase: Option<u32>, json: bool) -> anyhow::Result<u8>
         } else {
             println!("{}", serde_json::to_string_pretty(&state)?);
         }
-    } else if let Some(phase_num) = phase {
-        if phase_num > state.total_phases {
-            anyhow::bail!("Phase {} does not exist (total phases: {})", phase_num, state.total_phases);
+    } else if let Some(phase_key) = phase {
+        // Validate integer phases against total_phases
+        if let Ok(phase_num) = phase_key.parse::<u32>() {
+            if phase_num > state.total_phases {
+                anyhow::bail!(
+                    "Phase {} does not exist (total phases: {}).\n\
+                     \n\
+                     Valid phases: 1-{}\n\
+                     Remediation phases (e.g., 1.5, 2.5) are created dynamically.",
+                    phase_num,
+                    state.total_phases,
+                    state.total_phases
+                );
+            }
         }
-        let key = phase_num.to_string();
-        if let Some(phase_state) = state.phases.get(&key) {
-            println!("Phase {}", phase_num);
+        if let Some(phase_state) = state.phases.get(phase_key) {
+            println!("Phase {}", phase_key);
             println!("  Status: {}", phase_state.status);
             if let Some(ref plan) = phase_state.plan_path {
                 println!("  Plan: {}", plan.display());
@@ -211,7 +258,7 @@ pub fn show(feature: &str, phase: Option<u32>, json: bool) -> anyhow::Result<u8>
                 println!("  Duration: {} mins", mins);
             }
         } else {
-            println!("Phase {} (not started)", phase_num);
+            println!("Phase {} (not started)", phase_key);
         }
     } else {
         println!("Orchestration: {}", state.feature);
@@ -234,6 +281,20 @@ pub fn show(feature: &str, phase: Option<u32>, json: bool) -> anyhow::Result<u8>
                 println!("  {} Phase {}: {}", status_icon, i, ps.status);
             } else {
                 println!("  ○ Phase {}: pending", i);
+            }
+        }
+        // Also show remediation phases if any exist
+        for key in state.phases.keys() {
+            if key.contains('.') {
+                if let Some(ps) = state.phases.get(key) {
+                    let status_icon = match ps.status {
+                        PhaseStatus::Complete => "✓",
+                        PhaseStatus::Executing | PhaseStatus::Reviewing => "▶",
+                        PhaseStatus::Blocked => "✗",
+                        _ => "○",
+                    };
+                    println!("  {} Phase {} (remediation): {}", status_icon, key, ps.status);
+                }
             }
         }
     }

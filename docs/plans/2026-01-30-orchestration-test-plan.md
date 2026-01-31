@@ -170,8 +170,8 @@ To test remediation flow, temporarily modify reviewer to always report gaps:
 # Capture full orchestrator output
 script -q /tmp/orchestrator-test.log
 
-# Tail recent tmux output
-tmux capture-pane -t tina-orchestration-test-phase-1 -p | tail -50
+# Capture recent session output (use tina-session instead of raw tmux)
+tina-session capture --feature orchestration-test --phase 1 --lines 50
 
 # Check teammate messages
 cat ~/.claude/teams/orchestration-test-orchestration/mailbox/*.json 2>/dev/null | jq .

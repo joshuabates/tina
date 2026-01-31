@@ -2,8 +2,15 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use tina_session::session::naming::validate_phase;
+
 mod commands;
 mod error;
+
+/// Validate phase format and return an error with helpful guidance if invalid.
+fn check_phase(phase: &str) -> anyhow::Result<()> {
+    validate_phase(phase).map_err(|e| anyhow::anyhow!("{}", e))
+}
 
 #[derive(Parser)]
 #[command(name = "tina-session")]
@@ -45,9 +52,9 @@ enum Commands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
 
         /// Path to plan file
         #[arg(long)]
@@ -60,13 +67,21 @@ enum Commands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
 
         /// Timeout in seconds (default: no timeout)
         #[arg(long)]
         timeout: Option<u64>,
+
+        /// Stream status updates at this interval (seconds). Shows progress while waiting.
+        #[arg(long)]
+        stream: Option<u64>,
+
+        /// Team name for task progress tracking (default: {feature}-phase-{phase})
+        #[arg(long)]
+        team: Option<String>,
     },
 
     /// Stop phase and cleanup session
@@ -75,9 +90,9 @@ enum Commands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
     },
 
     /// State management subcommands
@@ -98,9 +113,9 @@ enum Commands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
     },
 
     /// Check if session exists
@@ -109,9 +124,9 @@ enum Commands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
     },
 
     /// Send text to session
@@ -120,9 +135,9 @@ enum Commands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
 
         /// Text to send
         #[arg(long)]
@@ -135,9 +150,39 @@ enum Commands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
+    },
+
+    /// Capture screen contents from session
+    Capture {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
+        #[arg(long)]
+        phase: String,
+
+        /// Number of lines to capture (default: 100)
+        #[arg(long, default_value = "100")]
+        lines: u32,
+    },
+
+    /// Get current phase status (one-shot, no waiting)
+    Status {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
+        #[arg(long)]
+        phase: String,
+
+        /// Team name for task progress tracking (default: {feature}-phase-{phase})
+        #[arg(long)]
+        team: Option<String>,
     },
 
     /// List active orchestrations
@@ -159,9 +204,9 @@ enum StateCommands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
 
         /// New status (planning, planned, executing, reviewing, complete, blocked)
         #[arg(long)]
@@ -178,9 +223,9 @@ enum StateCommands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
 
         /// Git range (e.g., abc123..def456)
         #[arg(long)]
@@ -193,9 +238,9 @@ enum StateCommands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number
+        /// Phase identifier (e.g., "1", "2", "1.5" for remediation)
         #[arg(long)]
-        phase: u32,
+        phase: String,
 
         /// Reason for being blocked
         #[arg(long)]
@@ -208,9 +253,9 @@ enum StateCommands {
         #[arg(long)]
         feature: String,
 
-        /// Phase number (optional, shows specific phase)
+        /// Phase identifier (optional, shows specific phase)
         #[arg(long)]
-        phase: Option<u32>,
+        phase: Option<String>,
 
         /// Output format
         #[arg(long, value_enum, default_value = "text")]
@@ -286,15 +331,26 @@ fn run() -> anyhow::Result<u8> {
             feature,
             phase,
             plan,
-        } => commands::start::run(&feature, phase, &plan),
+        } => {
+            check_phase(&phase)?;
+            commands::start::run(&feature, &phase, &plan)
+        }
 
         Commands::Wait {
             feature,
             phase,
             timeout,
-        } => commands::wait::run(&feature, phase, timeout),
+            stream,
+            team,
+        } => {
+            check_phase(&phase)?;
+            commands::wait::run(&feature, &phase, timeout, stream, team.as_deref())
+        }
 
-        Commands::Stop { feature, phase } => commands::stop::run(&feature, phase),
+        Commands::Stop { feature, phase } => {
+            check_phase(&phase)?;
+            commands::stop::run(&feature, &phase)
+        }
 
         Commands::State { command } => match command {
             StateCommands::Update {
@@ -302,25 +358,39 @@ fn run() -> anyhow::Result<u8> {
                 phase,
                 status,
                 plan_path,
-            } => commands::state::update(&feature, phase, &status, plan_path.as_deref()),
+            } => {
+                check_phase(&phase)?;
+                commands::state::update(&feature, &phase, &status, plan_path.as_deref())
+            }
 
             StateCommands::PhaseComplete {
                 feature,
                 phase,
                 git_range,
-            } => commands::state::phase_complete(&feature, phase, &git_range),
+            } => {
+                check_phase(&phase)?;
+                commands::state::phase_complete(&feature, &phase, &git_range)
+            }
 
             StateCommands::Blocked {
                 feature,
                 phase,
                 reason,
-            } => commands::state::blocked(&feature, phase, &reason),
+            } => {
+                check_phase(&phase)?;
+                commands::state::blocked(&feature, &phase, &reason)
+            }
 
             StateCommands::Show {
                 feature,
                 phase,
                 format,
-            } => commands::state::show(&feature, phase, format == OutputFormat::Json),
+            } => {
+                if let Some(ref p) = phase {
+                    check_phase(p)?;
+                }
+                commands::state::show(&feature, phase.as_deref(), format == OutputFormat::Json)
+            }
         },
 
         Commands::Check { command } => match command {
@@ -336,17 +406,47 @@ fn run() -> anyhow::Result<u8> {
             CheckCommands::Plan { path } => commands::check::plan(&path),
         },
 
-        Commands::Name { feature, phase } => commands::name::run(&feature, phase),
+        Commands::Name { feature, phase } => {
+            check_phase(&phase)?;
+            commands::name::run(&feature, &phase)
+        }
 
-        Commands::Exists { feature, phase } => commands::exists::run(&feature, phase),
+        Commands::Exists { feature, phase } => {
+            check_phase(&phase)?;
+            commands::exists::run(&feature, &phase)
+        }
 
         Commands::Send {
             feature,
             phase,
             text,
-        } => commands::send::run(&feature, phase, &text),
+        } => {
+            check_phase(&phase)?;
+            commands::send::run(&feature, &phase, &text)
+        }
 
-        Commands::Attach { feature, phase } => commands::attach::run(&feature, phase),
+        Commands::Attach { feature, phase } => {
+            check_phase(&phase)?;
+            commands::attach::run(&feature, &phase)
+        }
+
+        Commands::Capture {
+            feature,
+            phase,
+            lines,
+        } => {
+            check_phase(&phase)?;
+            commands::capture::run(&feature, &phase, lines)
+        }
+
+        Commands::Status {
+            feature,
+            phase,
+            team,
+        } => {
+            check_phase(&phase)?;
+            commands::status::run(&feature, &phase, team.as_deref())
+        }
 
         Commands::List => commands::list::run(),
 

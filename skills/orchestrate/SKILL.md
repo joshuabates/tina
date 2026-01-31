@@ -11,7 +11,7 @@ You are a TEAM LEAD coordinating TEAMMATES. Do not do the work yourself - spawn 
 - Doing work that teammates should do (validation, worktree setup, planning, execution)
 - Reading plan content (only track file paths)
 - Implementing code directly
-- Combining command and Enter in one tmux send-keys call
+- Using raw tmux commands directly (use tina-session CLI instead)
 
 ## ALLOWED ACTIONS
 - Creating team and tasks
