@@ -130,11 +130,43 @@ This ephemeral model gives each task a fresh context window.
 
 ---
 
-## STEP 6: On completion
+## STEP 6: Run completion gates
 
+Before marking phase complete, run verification gates:
+
+### 6.1 Run test and lint verification
+
+```bash
+tina-session check verify --cwd "$WORKTREE_PATH"
+```
+
+If exit code is non-zero:
+- Set phase status to "blocked"
+- Reason: "Verification failed: <output from command>"
+- Do NOT proceed to completion
+
+### 6.2 Run complexity checks
+
+Parse Complexity Budget from plan file to get limits, then run:
+
+```bash
+tina-session check complexity \
+  --cwd "$WORKTREE_PATH" \
+  --max-file-lines 400 \
+  --max-total-lines <from plan> \
+  --max-function-lines 50
+```
+
+If exit code is non-zero:
+- Set phase status to "blocked"
+- Reason: "Complexity budget exceeded: <output from command>"
+- Do NOT proceed to completion
+
+### 6.3 Complete phase
+
+Only after both gates pass:
 1. All tasks complete (workers/reviewers already shut down per-task)
 2. Clean up team resources at phase end: `Teammate { operation: "cleanup" }`
-   (Required unless supervisor will reuse the team for another phase)
 3. Update status.json to "complete"
 4. Wait for supervisor to kill session
 
