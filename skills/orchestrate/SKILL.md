@@ -129,9 +129,11 @@ Use Task tool:
   "subagent_type": "tina:design-validator",
   "team_name": "<feature-name>-orchestration",
   "name": "validator",
-  "prompt": "Design doc: <DESIGN_DOC>\nOutput file: .claude/tina/validation/design-report.md\n\nValidate this design and write your report. Return ONLY: VALIDATION_STATUS: Pass/Warning/Stop"
+  "prompt": "task_id: validate-design"
 }
 ```
+
+The agent reads task metadata to get design_doc_path and other parameters. Agent definitions carry methodology (HOW), tasks carry data (WHAT), spawn prompts are minimal (just task ID).
 
 ---
 
@@ -190,7 +192,7 @@ After spawning a teammate, wait for their message. Based on the message content,
   "subagent_type": "tina:worktree-setup",
   "team_name": "<feature-name>-orchestration",
   "name": "worktree-setup",
-  "prompt": "feature_name: <FEATURE_NAME>\ndesign_doc_path: <DESIGN_DOC>"
+  "prompt": "task_id: setup-worktree"
 }
 ```
 
@@ -208,35 +210,35 @@ After spawning a teammate, wait for their message. Based on the message content,
   "subagent_type": "tina:phase-planner",
   "team_name": "<feature-name>-orchestration",
   "name": "planner-1",
-  "prompt": "phase_num: 1\ndesign_doc_path: <DESIGN_DOC>\nmodel_override: <MODEL_OVERRIDE or empty>"
+  "prompt": "task_id: plan-phase-1"
 }
 ```
-Note: Include `model_override` only if MODEL_OVERRIDE was set from `--model` arg.
 
 **"plan-phase-N complete" with PLAN_PATH:**
 1. Mark plan-phase-N task complete
-2. Store PLAN_PATH in task metadata
-3. Retrieve worktree_path from setup-worktree task metadata
+2. Store PLAN_PATH in task metadata (execute-phase-N can read this)
+3. Update execute-phase-N metadata with worktree_path from setup-worktree and plan_path
 4. Spawn phase-executor:
 ```json
 {
   "subagent_type": "tina:phase-executor",
   "team_name": "<feature-name>-orchestration",
   "name": "executor-N",
-  "prompt": "phase_num: N\nworktree_path: <WORKTREE_PATH>\nplan_path: <PLAN_PATH>\nfeature_name: <FEATURE_NAME>"
+  "prompt": "task_id: execute-phase-N"
 }
 ```
 
 **"execute-N complete" with git_range:**
 1. Mark execute-phase-N task complete
 2. Store git_range in task metadata
-3. Spawn phase-reviewer:
+3. Update review-phase-N metadata with worktree_path, design_doc_path, and git_range
+4. Spawn phase-reviewer:
 ```json
 {
   "subagent_type": "tina:phase-reviewer",
   "team_name": "<feature-name>-orchestration",
   "name": "reviewer-N",
-  "prompt": "phase_num: N\nworktree_path: <WORKTREE_PATH>\ndesign_doc_path: <DESIGN_DOC>\ngit_range: <GIT_RANGE>"
+  "prompt": "task_id: review-phase-N"
 }
 ```
 
@@ -309,7 +311,7 @@ Dependencies enforce sequencing automatically.
 | `tina:design-validator` | validate-design | Validate design doc, capture baseline metrics |
 | `tina:worktree-setup` | setup-worktree | Create worktree, install statusline config |
 | `tina:phase-planner` | plan-phase-N | Create implementation plan, validate plan |
-| `tina:phase-executor` | execute-phase-N | Start team-lead in tmux, monitor progress |
+| `tina:phase-executor` | execute-phase-N | Execute phase plan, report completion |
 | `tina:phase-reviewer` | review-phase-N | Review completed phase, report pass/fail/gaps |
 
 ## Task Metadata as State
@@ -401,8 +403,11 @@ TEAM_NAME="${FEATURE_NAME}-orchestration"
 ```json
 TaskCreate {
   "subject": "validate-design",
-  "description": "Validate design document at <DESIGN_DOC>. Run baseline commands if specified in Success Metrics section.",
-  "activeForm": "Validating design document"
+  "description": "Validate design document",
+  "activeForm": "Validating design document",
+  "metadata": {
+    "design_doc_path": "<DESIGN_DOC>"
+  }
 }
 ```
 
@@ -410,8 +415,12 @@ TaskCreate {
 ```json
 TaskCreate {
   "subject": "setup-worktree",
-  "description": "Create isolated worktree for <FEATURE_NAME>. Provision statusline config and install dependencies.",
-  "activeForm": "Setting up worktree"
+  "description": "Create isolated worktree",
+  "activeForm": "Setting up worktree",
+  "metadata": {
+    "feature_name": "<FEATURE_NAME>",
+    "design_doc_path": "<DESIGN_DOC>"
+  }
 }
 ```
 
@@ -419,20 +428,33 @@ TaskCreate {
 ```json
 TaskCreate {
   "subject": "plan-phase-<N>",
-  "description": "Create implementation plan for phase <N> of <FEATURE_NAME>.",
-  "activeForm": "Planning phase <N>"
+  "description": "Create implementation plan",
+  "activeForm": "Planning phase <N>",
+  "metadata": {
+    "phase_num": <N>,
+    "design_doc_path": "<DESIGN_DOC>",
+    "model_override": "<MODEL_OVERRIDE or empty>"
+  }
 }
 
 TaskCreate {
   "subject": "execute-phase-<N>",
-  "description": "Execute phase <N> by starting team-lead in tmux with the plan.",
-  "activeForm": "Executing phase <N>"
+  "description": "Execute phase plan",
+  "activeForm": "Executing phase <N>",
+  "metadata": {
+    "phase_num": <N>,
+    "feature_name": "<FEATURE_NAME>"
+  }
 }
 
 TaskCreate {
   "subject": "review-phase-<N>",
-  "description": "Review completed phase <N> implementation against design requirements.",
-  "activeForm": "Reviewing phase <N>"
+  "description": "Review completed phase implementation",
+  "activeForm": "Reviewing phase <N>",
+  "metadata": {
+    "phase_num": <N>,
+    "design_doc_path": "<DESIGN_DOC>"
+  }
 }
 ```
 
@@ -440,7 +462,7 @@ TaskCreate {
 ```json
 TaskCreate {
   "subject": "finalize",
-  "description": "Complete orchestration by presenting merge/PR/cleanup options.",
+  "description": "Complete orchestration",
   "activeForm": "Finalizing orchestration"
 }
 ```
@@ -483,18 +505,21 @@ Later tasks can read this metadata to get paths they need.
 
 When a task becomes unblocked (all blockedBy tasks complete), spawn the appropriate teammate.
 
-**Getting metadata from completed tasks:**
+**Spawn principle:** Tasks carry WHAT (metadata), agent definitions carry HOW (methodology), spawn prompts are minimal (just task ID).
 
-Before spawning, often need data from earlier tasks. Use TaskGet to retrieve:
+**Before spawning, update task metadata:**
+
+Propagate data from completed tasks to the task being spawned. This way the spawned agent can read everything from its own task:
 
 ```bash
-# Example: Get worktree path for executor
-WORKTREE_TASK=$(TaskGet { taskId: "setup-worktree" })
-WORKTREE_PATH=$WORKTREE_TASK.metadata.worktree_path
+# Example: Before spawning executor, update its task with paths from earlier tasks
+WORKTREE_PATH=$(TaskGet { taskId: "setup-worktree" }).metadata.worktree_path
+PLAN_PATH=$(TaskGet { taskId: "plan-phase-$N" }).metadata.plan_path
 
-# Example: Get plan path for executor
-PLAN_TASK=$(TaskGet { taskId: "plan-phase-$N" })
-PLAN_PATH=$PLAN_TASK.metadata.plan_path
+TaskUpdate {
+  taskId: "execute-phase-$N",
+  metadata: { worktree_path: WORKTREE_PATH, plan_path: PLAN_PATH }
+}
 ```
 
 **Design validator spawn:**
@@ -505,7 +530,7 @@ When: validate-design task is unblocked (always first)
   "subagent_type": "tina:design-validator",
   "team_name": "<TEAM_NAME>",
   "name": "validator",
-  "prompt": "Design doc: <DESIGN_DOC>\nOutput file: .claude/tina/validation/design-report.md\n\nValidate this design and write your report to the output file.\nReturn ONLY: VALIDATION_STATUS: Pass/Warning/Stop"
+  "prompt": "task_id: validate-design"
 }
 ```
 Then: Mark validate-design as in_progress
@@ -513,13 +538,12 @@ Then: Mark validate-design as in_progress
 **Worktree setup spawn:**
 
 When: validate-design complete with Pass or Warning
-Prerequisites: None (uses design doc path from team description)
 ```json
 {
   "subagent_type": "tina:worktree-setup",
   "team_name": "<TEAM_NAME>",
   "name": "worktree-setup",
-  "prompt": "feature_name: <FEATURE_NAME>\ndesign_doc_path: <DESIGN_DOC>\n\nCreate worktree and provision statusline config.\nReport: setup-worktree complete. worktree_path: <PATH>, branch: <BRANCH>"
+  "prompt": "task_id: setup-worktree"
 }
 ```
 Then: Mark setup-worktree as in_progress
@@ -527,59 +551,40 @@ Then: Mark setup-worktree as in_progress
 **Phase planner spawn:**
 
 When: setup-worktree complete (for phase 1) OR review-phase-(N-1) complete with pass (for phase N>1)
-Prerequisites: Need DESIGN_DOC from team description
 ```json
 {
   "subagent_type": "tina:phase-planner",
   "team_name": "<TEAM_NAME>",
   "name": "planner-<N>",
-  "prompt": "phase_num: <N>\ndesign_doc_path: <DESIGN_DOC>\nmodel_override: <MODEL_OVERRIDE or empty>\n\nCreate implementation plan for phase <N>.\nReport: plan-phase-<N> complete. PLAN_PATH: <PATH>"
+  "prompt": "task_id: plan-phase-<N>"
 }
 ```
-Include `model_override` only if set from `--model` arg.
 Then: Mark plan-phase-N as in_progress
 
 **Phase executor spawn:**
 
 When: plan-phase-N complete
-Prerequisites: Need worktree_path (from setup-worktree metadata), plan_path (from plan-phase-N metadata)
-
-Derive phase team name:
-```
-PHASE_TEAM_NAME="${FEATURE_NAME}-phase-${N}"
-```
-
+Before spawning: Update execute-phase-N metadata with worktree_path and plan_path
 ```json
 {
   "subagent_type": "tina:phase-executor",
   "team_name": "<TEAM_NAME>",
   "name": "executor-<N>",
-  "prompt": "phase_num: <N>\nworktree_path: <WORKTREE_PATH>\nplan_path: <PLAN_PATH>\nfeature_name: <FEATURE_NAME>\nphase_team_name: <PHASE_TEAM_NAME>\n\nStart team-lead in tmux and monitor until phase completes.\nReport: execute-<N> complete. Git range: <BASE>..<HEAD>"
+  "prompt": "task_id: execute-phase-<N>"
 }
 ```
-
-Store phase team name in task metadata:
-```json
-TaskUpdate {
-  "taskId": "execute-phase-N",
-  "metadata": {
-    "phase_team_name": "<PHASE_TEAM_NAME>"
-  }
-}
-```
-
 Then: Mark execute-phase-N as in_progress
 
 **Phase reviewer spawn:**
 
 When: execute-phase-N complete
-Prerequisites: Need worktree_path, design_doc, git_range (from execute-phase-N metadata)
+Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, and git_range
 ```json
 {
   "subagent_type": "tina:phase-reviewer",
   "team_name": "<TEAM_NAME>",
   "name": "reviewer-<N>",
-  "prompt": "phase_num: <N>\nworktree_path: <WORKTREE_PATH>\ndesign_doc_path: <DESIGN_DOC>\ngit_range: <GIT_RANGE>\n\nReview phase <N> implementation.\nReport: review-<N> complete (pass) OR review-<N> complete (gaps): <issue list>"
+  "prompt": "task_id: review-phase-<N>"
 }
 ```
 Then: Mark review-phase-N as in_progress
@@ -778,23 +783,39 @@ if message contains "review-N complete (gaps)":
         # Already a remediation phase (e.g., 1.5), add another .5
         REMEDIATION_PHASE = "${N}.5"
 
-    # Create remediation tasks
+    # Create remediation tasks with metadata
     TaskCreate {
         "subject": "plan-phase-${REMEDIATION_PHASE}",
-        "description": "Plan remediation for phase ${N} gaps: ${issues_joined_by_comma}",
-        "activeForm": "Planning phase ${REMEDIATION_PHASE} remediation"
+        "description": "Plan remediation",
+        "activeForm": "Planning phase ${REMEDIATION_PHASE} remediation",
+        "metadata": {
+            "phase_num": "${REMEDIATION_PHASE}",
+            "parent_phase": N,
+            "issues": [...],
+            "design_doc_path": "<DESIGN_DOC>",
+            "model_override": "<MODEL_OVERRIDE or empty>",
+            "remediation_depth": REMEDIATION_DEPTH + 1
+        }
     }
 
     TaskCreate {
         "subject": "execute-phase-${REMEDIATION_PHASE}",
-        "description": "Execute remediation plan for phase ${N} gaps",
-        "activeForm": "Executing phase ${REMEDIATION_PHASE} remediation"
+        "description": "Execute remediation plan",
+        "activeForm": "Executing phase ${REMEDIATION_PHASE} remediation",
+        "metadata": {
+            "phase_num": "${REMEDIATION_PHASE}",
+            "feature_name": "<FEATURE_NAME>"
+        }
     }
 
     TaskCreate {
         "subject": "review-phase-${REMEDIATION_PHASE}",
-        "description": "Review remediation for phase ${N} gaps",
-        "activeForm": "Reviewing phase ${REMEDIATION_PHASE} remediation"
+        "description": "Review remediation",
+        "activeForm": "Reviewing phase ${REMEDIATION_PHASE} remediation",
+        "metadata": {
+            "phase_num": "${REMEDIATION_PHASE}",
+            "design_doc_path": "<DESIGN_DOC>"
+        }
     }
 
     # Set up dependencies
@@ -808,20 +829,8 @@ if message contains "review-N complete (gaps)":
     else:
         TaskUpdate: finalize, addBlockedBy: [review-phase-${REMEDIATION_PHASE}]
 
-    # Store remediation context
-    TaskUpdate: plan-phase-${REMEDIATION_PHASE}, metadata: {
-        "parent_phase": N,
-        "issues": [...],
-        "remediation_depth": REMEDIATION_DEPTH + 1
-    }
-
-    # Spawn remediation planner
-    Spawn phase-planner with:
-        phase_num: ${REMEDIATION_PHASE}
-        design_doc_path: <DESIGN_DOC>
-        model_override: <MODEL_OVERRIDE or empty>
-        remediation_for: phase ${N}
-        issues: <issues list>
+    # Spawn remediation planner (metadata already set during TaskCreate)
+    Spawn phase-planner with task_id: plan-phase-${REMEDIATION_PHASE}
 
     Print: "Phase ${N} has gaps. Creating remediation phase ${REMEDIATION_PHASE}..."
 
@@ -890,24 +899,39 @@ issues = parse issues from "review-N complete (gaps): test coverage below 80%, m
 # Result: ["test coverage below 80%", "missing error handling"]
 ```
 
-2. **Create remediation tasks:**
+2. **Create remediation tasks with metadata:**
 ```json
 TaskCreate {
   "subject": "plan-phase-<N>.5",
-  "description": "Plan remediation for phase <N> gaps: <issues>",
-  "activeForm": "Planning phase <N>.5 remediation"
+  "description": "Plan remediation",
+  "activeForm": "Planning phase <N>.5 remediation",
+  "metadata": {
+    "phase_num": "<N>.5",
+    "parent_phase": <N>,
+    "issues": ["test coverage below 80%", "missing error handling"],
+    "design_doc_path": "<DESIGN_DOC>",
+    "model_override": "<MODEL_OVERRIDE or empty>"
+  }
 }
 
 TaskCreate {
   "subject": "execute-phase-<N>.5",
-  "description": "Execute remediation plan for phase <N>",
-  "activeForm": "Executing phase <N>.5 remediation"
+  "description": "Execute remediation plan",
+  "activeForm": "Executing phase <N>.5 remediation",
+  "metadata": {
+    "phase_num": "<N>.5",
+    "feature_name": "<FEATURE_NAME>"
+  }
 }
 
 TaskCreate {
   "subject": "review-phase-<N>.5",
-  "description": "Review remediation for phase <N>",
-  "activeForm": "Reviewing phase <N>.5 remediation"
+  "description": "Review remediation",
+  "activeForm": "Reviewing phase <N>.5 remediation",
+  "metadata": {
+    "phase_num": "<N>.5",
+    "design_doc_path": "<DESIGN_DOC>"
+  }
 }
 ```
 
@@ -927,33 +951,20 @@ else:
     TaskUpdate: finalize, addBlockedBy: [review-phase-N.5]
 ```
 
-4. **Store remediation context in metadata:**
-```json
-TaskUpdate {
-  "taskId": "plan-phase-N.5",
-  "metadata": {
-    "parent_phase": N,
-    "issues": ["test coverage below 80%", "missing error handling"],
-    "original_review_task": "review-phase-N"
-  }
-}
-```
-
-5. **Spawn remediation planner:**
+4. **Spawn remediation planner** (metadata already set during TaskCreate):
 ```json
 {
   "subagent_type": "tina:phase-planner",
   "team_name": "<TEAM_NAME>",
   "name": "planner-<N>.5",
-  "prompt": "phase_num: <N>.5\ndesign_doc_path: <DESIGN_DOC>\nmodel_override: <MODEL_OVERRIDE or empty>\nremediation_for: phase <N>\nissues: <issues list>\n\nCreate implementation plan to address these specific gaps.\nReport: plan-phase-<N>.5 complete. PLAN_PATH: <PATH>"
+  "prompt": "task_id: plan-phase-<N>.5"
 }
 ```
-Include `model_override` only if set from `--model` arg.
 
 **Remediation planner guidance:**
 
-The planner for remediation phases receives extra context:
-- `remediation_for`: The original phase number
+The planner reads remediation context from task metadata:
+- `parent_phase`: The original phase number
 - `issues`: Specific gaps to address
 
 The plan should:
@@ -1125,7 +1136,7 @@ To minimize recovery needs:
 - `tina:design-validator` - Validates design before work begins
 - `tina:worktree-setup` - Creates isolated workspace
 - `tina:phase-planner` - Creates implementation plans
-- `tina:phase-executor` - Runs team-lead in tmux
+- `tina:phase-executor` - Executes phase plans
 - `tina:phase-reviewer` - Reviews completed phases
 
 **Invokes:**

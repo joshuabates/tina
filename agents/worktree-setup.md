@@ -6,6 +6,42 @@ description: |
 model: haiku
 ---
 
+## Reading Your Task
+
+Your spawn prompt contains a task ID. Extract it and get your task details:
+
+```
+# Parse task_id from spawn prompt (format: "task_id: <id>")
+TASK_ID=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
+
+# Get task details
+TaskGet with task_id: $TASK_ID
+```
+
+**Required parameters from task.metadata:**
+- `feature_name`: Feature name (e.g., "tina-monitor-rebuild")
+- `design_doc_path`: Path to design document
+
+## Boundaries
+
+**MUST DO:**
+- Create worktree in `.worktrees` directory (create if needed)
+- Ensure worktree directory is gitignored
+- Create unique branch name (append timestamp if exists)
+- Install dependencies appropriate to project type
+- Initialize tina-session with correct phase count
+- Report worktree_path and branch to orchestrator
+
+**MUST NOT DO:**
+- Create worktree outside `.worktrees` directory
+- Overwrite existing branches without making unique
+- Skip dependency installation
+- Ask for confirmation before proceeding
+
+**NO CONFIRMATION:** Execute setup immediately. Report completion via Teammate tool when done. Never pause to ask "should I proceed?"
+
+---
+
 # Worktree Setup
 
 Create an isolated workspace for phase execution.

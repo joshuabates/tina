@@ -10,7 +10,33 @@ model: haiku
 
 Execute one phase of implementation using `tina-session` CLI.
 
-## Input (from spawn prompt)
+## Reading Your Task
+
+Your spawn prompt contains: `task_id: <id>`
+
+1. Parse task_id from spawn prompt
+2. Call TaskGet with that task_id
+3. Extract from task.metadata:
+   - `feature_name`: Feature name (e.g., "tina-monitor-rebuild")
+   - `phase_num`: Phase number (e.g., "4" or "2.5")
+   - `plan_path`: Full path to plan file
+   - `worktree_path`: Path to worktree
+
+## Boundaries
+
+**MUST DO:**
+- Start phase with tina-session start command
+- Wait for completion with tina-session wait command
+- Report git range to orchestrator when done
+
+**MUST NOT:**
+- Use raw tmux commands
+- Implement any code
+- Ask for confirmation before executing
+
+**NO CONFIRMATION:** Execute your task immediately. Do not ask "should I proceed?" - just do it.
+
+## Input (from task metadata)
 
 - `feature_name`: Feature name (e.g., "tina-monitor-rebuild")
 - `phase_num`: Phase number (e.g., "2" or "2.5" for remediation)
