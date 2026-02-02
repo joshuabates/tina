@@ -90,8 +90,17 @@ Do NOT spawn workers or reviewers yet. The team is just a container at this poin
 
 For each task in priority order:
 
-### 5.1 Spawn worker for this task
-Get the model from task metadata (via TaskGet), then spawn:
+### 5.1 Assign and spawn worker for this task
+First, assign the task to the worker:
+```json
+TaskUpdate({
+  "taskId": "<task-id>",
+  "status": "in_progress",
+  "owner": "worker"
+})
+```
+
+Then get the model from task metadata (via TaskGet), and spawn:
 ```json
 {
   "subagent_type": "tina:implementer",
@@ -396,7 +405,16 @@ For each task:
 
 **Worker spawn:**
 
-Get the model from the current task's metadata first:
+First, assign the task to the worker before spawning:
+```json
+TaskUpdate({
+  "taskId": "<current-task-id>",
+  "status": "in_progress",
+  "owner": "worker"
+})
+```
+
+Then get the model from the current task's metadata:
 ```json
 TaskGet { "taskId": "<current-task-id>" }
 # Read metadata.model from response
@@ -643,6 +661,7 @@ Note: `team-name.txt` is no longer used. Team names are passed explicitly from o
 - Update status.json at each state transition
 - Include timestamps for debugging
 - Include reasons when blocked
+- **Assign task before spawning worker:** `TaskUpdate({ taskId, status: "in_progress", owner: "worker" })`
 - Run BOTH gates (verify AND complexity) before completion
 - Set status to "blocked" with gate details if any gate fails
 - Request shutdown for worker, spec-reviewer, and code-quality-reviewer after each task

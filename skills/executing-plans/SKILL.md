@@ -157,9 +157,16 @@ for task in plan.tasks:
 
 **2. Per-Task Execution:**
 
-For each task, spawn fresh worker with context in prompt:
+For each task, assign ownership and spawn fresh worker with context in prompt:
 
 ```
+# Assign task to worker BEFORE spawning
+TaskUpdate({
+  taskId: task.id,
+  status: "in_progress",
+  owner: "worker"
+})
+
 Task tool:
   team_name: "phase-N-execution"
   name: "worker"
@@ -245,17 +252,21 @@ Then proceed to next task with fresh spawns.
 Team-lead executes tasks sequentially (one at a time):
 
 1. **Get next task:** Find first task with status = pending
-2. **Spawn worker:** Create fresh worker with full task context in prompt
-3. **Worker implements:** Worker follows TDD, commits, self-reviews
-4. **Spawn reviewers:** Based on task's review field (default: both)
-5. **Review cycle:** Worker ↔ Reviewers until both pass
-6. **Cleanup:** Shutdown worker and reviewers, mark task complete
-7. **Loop:** Return to step 1
+2. **Assign task:** `TaskUpdate({ taskId, status: "in_progress", owner: "worker" })`
+3. **Spawn worker:** Create fresh worker with full task context in prompt
+4. **Worker implements:** Worker follows TDD, commits, self-reviews
+5. **Spawn reviewers:** Based on task's review field (default: both)
+6. **Review cycle:** Worker ↔ Reviewers until both pass
+7. **Cleanup:** Shutdown worker and reviewers, mark task complete
+8. **Loop:** Return to step 1
 
 ```
 # Sequential task execution
 for task in TaskList where status = pending:
-  # Spawn worker with context (no assignment needed)
+  # Assign task to worker before spawning
+  TaskUpdate({ taskId: task.id, status: "in_progress", owner: "worker" })
+
+  # Spawn worker with context
   spawn_worker(task.full_text, task.context)
 
   # Wait for implementation
@@ -269,7 +280,7 @@ for task in TaskList where status = pending:
 
   # Cleanup this task's members
   shutdown_task_members()
-  mark_complete(task.id)
+  TaskUpdate({ taskId: task.id, status: "completed" })
 ```
 
 ### Review Tracking
@@ -582,7 +593,8 @@ Phase reviewer checks:
 
 **Team Mode Specific - Always:**
 - Create team container at phase start (holds no permanent members)
-- Spawn worker with full task context in prompt (no separate assignment)
+- **Assign task before spawning worker:** `TaskUpdate({ taskId, status: "in_progress", owner: "worker" })`
+- Spawn worker with full task context in prompt
 - Spawn reviewers after worker completes (based on review field)
 - Shutdown all task members after reviews pass
 - Wait for BOTH spec and quality reviews before shutdown
