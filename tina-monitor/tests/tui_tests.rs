@@ -115,6 +115,7 @@ fn make_test_orchestration(name: &str) -> Orchestration {
         context_percent: Some(50),
         status: OrchestrationStatus::Idle,
         tasks: vec![],
+        members: vec![],
     }
 }
 
@@ -333,7 +334,7 @@ fn test_app_field_visibility() {
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tina_monitor::data::types::{Task, TaskStatus};
-use tina_monitor::tui::{PaneFocus, ViewState};
+use tina_monitor::tui::{PaneFocus, PhaseDetailLayout, ViewState};
 
 /// Helper function to create a test task
 fn make_test_task(id: &str, status: TaskStatus) -> Task {
@@ -362,6 +363,7 @@ fn make_test_orchestration_with_tasks(name: &str, tasks: Vec<Task>) -> Orchestra
         context_percent: Some(50),
         status: OrchestrationStatus::Idle,
         tasks,
+        members: vec![],
     }
 }
 
@@ -407,6 +409,8 @@ fn test_enter_expands_to_phase_detail() {
         focus: PaneFocus::Tasks,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     // Verify the view renders correctly in PhaseDetail state
@@ -425,6 +429,7 @@ fn test_enter_expands_to_phase_detail() {
             focus,
             task_index,
             member_index,
+            ..
         } => {
             assert_eq!(focus, PaneFocus::Tasks, "Focus should be on Tasks pane");
             assert_eq!(task_index, 0, "Should start at first task");
@@ -444,6 +449,8 @@ fn test_esc_returns_to_orchestration_list() {
         focus: PaneFocus::Tasks,
         task_index: 2,
         member_index: 1,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     // Simulate Esc key to return to OrchestrationList
@@ -484,6 +491,8 @@ fn test_enter_opens_task_inspector() {
         focus: PaneFocus::Tasks,
         task_index: 1,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     // Simulate Enter on task (unit tests verify this works)
@@ -516,6 +525,8 @@ fn test_pane_focus_switches() {
         focus: PaneFocus::Tasks,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     let backend = TestBackend::new(80, 24);
@@ -532,6 +543,8 @@ fn test_pane_focus_switches() {
         focus: PaneFocus::Members,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     // Render with Members focus
@@ -558,6 +571,8 @@ fn test_log_viewer_transitions() {
         focus: PaneFocus::Members,
         task_index: 0,
         member_index: 2,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     // Open LogViewer (simulating 'l' key)
@@ -597,6 +612,8 @@ fn test_log_viewer_transitions() {
         focus: PaneFocus::Members,
         task_index: 0,
         member_index: 2,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     let result = terminal.draw(|frame| {
@@ -629,6 +646,8 @@ fn test_empty_orchestration_list_graceful_handling() {
         focus: PaneFocus::Tasks,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     let result = terminal.draw(|frame| {
         tina_monitor::tui::ui::render(frame, &mut app);
@@ -689,6 +708,8 @@ fn test_complete_navigation_flow() {
         focus: PaneFocus::Tasks,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should navigate to PhaseDetail");
@@ -698,6 +719,8 @@ fn test_complete_navigation_flow() {
         focus: PaneFocus::Members,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should switch to Members pane");
@@ -716,6 +739,8 @@ fn test_complete_navigation_flow() {
         focus: PaneFocus::Members,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should return to PhaseDetail");
@@ -725,6 +750,8 @@ fn test_complete_navigation_flow() {
         focus: PaneFocus::Tasks,
         task_index: 1,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     let _ = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
 
@@ -737,6 +764,8 @@ fn test_complete_navigation_flow() {
         focus: PaneFocus::Tasks,
         task_index: 1,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(
@@ -763,6 +792,8 @@ fn test_rendering_with_various_task_counts() {
         focus: PaneFocus::Tasks,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should render with zero tasks");
@@ -775,6 +806,8 @@ fn test_rendering_with_various_task_counts() {
         focus: PaneFocus::Tasks,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should render with one task");
@@ -791,6 +824,8 @@ fn test_rendering_with_various_task_counts() {
         focus: PaneFocus::Tasks,
         task_index: 10,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));
     assert!(result.is_ok(), "Should render with many tasks");
@@ -817,6 +852,8 @@ fn test_help_modal_in_all_views() {
         focus: PaneFocus::Tasks,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
     app.show_help = true;
     let result = terminal.draw(|frame| tina_monitor::tui::ui::render(frame, &mut app));

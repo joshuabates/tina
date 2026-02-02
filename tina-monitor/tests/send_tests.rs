@@ -8,7 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use tina_monitor::data::discovery::{Orchestration, OrchestrationStatus};
-use tina_monitor::tui::{App, PaneFocus, ViewState};
+use tina_monitor::tui::{App, PaneFocus, PhaseDetailLayout, ViewState};
 
 /// Helper function to create a test orchestration
 fn make_test_orchestration(name: &str) -> Orchestration {
@@ -22,6 +22,7 @@ fn make_test_orchestration(name: &str) -> Orchestration {
         context_percent: Some(50),
         status: OrchestrationStatus::Idle,
         tasks: vec![],
+        members: vec![],
     }
 }
 
@@ -38,6 +39,8 @@ fn test_send_dialog_flow_opens_and_closes() {
         focus: PaneFocus::Members,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     // Verify: We're in PhaseDetail view initially
@@ -77,6 +80,8 @@ fn test_send_dialog_flow_opens_and_closes() {
         focus: PaneFocus::Members,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     // Verify: Back in PhaseDetail view
@@ -381,6 +386,8 @@ fn test_send_dialog_multiple_view_state_transitions() {
         focus: PaneFocus::Members,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     app.view_state = ViewState::SendDialog {
@@ -392,6 +399,8 @@ fn test_send_dialog_multiple_view_state_transitions() {
         focus: PaneFocus::Tasks,
         task_index: 0,
         member_index: 0,
+        layout: PhaseDetailLayout::OrchPhaseTasks,
+        selected_phase: 1,
     };
 
     app.view_state = ViewState::SendDialog {

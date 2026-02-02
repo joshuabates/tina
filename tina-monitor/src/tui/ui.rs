@@ -156,7 +156,7 @@ fn render_header(frame: &mut Frame, area: Rect) {
 fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     let footer_text = match &app.view_state {
         ViewState::OrchestrationList => " j/k:nav  Enter:expand  g:goto  p:plan  r:refresh  q:quit  ?:help",
-        ViewState::PhaseDetail { .. } => " t:tasks  m:members  c:commits  d:diff  Enter:inspect  l:logs  s:send  Esc:back  ?:help",
+        ViewState::PhaseDetail { .. } => " h/l:panes  Tab:tasks/team  j/k:nav  p:plan  D:design  c:commits  d:diff  Enter:logs  s:send  Esc:back  ?:help",
         ViewState::TaskInspector { .. } => " Esc:back  ?:help",
         ViewState::LogViewer { .. } => " j/k:scroll  Esc:back  ?:help",
         ViewState::SendDialog { .. } => " Enter:send  Esc:cancel  ?:help",
@@ -228,6 +228,7 @@ mod tests {
             context_percent: Some(50),
             status: OrchestrationStatus::Idle,
             tasks: vec![],
+            members: vec![],
         };
 
         App {
@@ -349,6 +350,8 @@ mod tests {
             focus: crate::tui::app::PaneFocus::Tasks,
             task_index: 0,
             member_index: 0,
+            layout: crate::tui::app::PhaseDetailLayout::OrchPhaseTasks,
+            selected_phase: 1,
         };
 
         let result = terminal.draw(|frame| render(frame, &mut app));
@@ -414,6 +417,8 @@ mod tests {
             focus: crate::tui::app::PaneFocus::Tasks,
             task_index: 0,
             member_index: 0,
+            layout: crate::tui::app::PhaseDetailLayout::OrchPhaseTasks,
+            selected_phase: 1,
         };
         app.show_help = true;
 
@@ -542,6 +547,8 @@ mod tests {
             focus: crate::tui::app::PaneFocus::Tasks,
             task_index: 0,
             member_index: 0,
+            layout: crate::tui::app::PhaseDetailLayout::OrchPhaseTasks,
+            selected_phase: 1,
         };
 
         terminal.draw(|frame| render(frame, &mut app)).unwrap();
@@ -552,21 +559,21 @@ mod tests {
             .map(|c| c.symbol())
             .collect::<String>();
 
-        // Footer should contain phase detail hints
+        // Footer should contain phase detail hints for new two-screen layout
         assert!(
-            content.contains("t:tasks"),
-            "Footer should contain tasks hint"
+            content.contains("h/l:panes"),
+            "Footer should contain panes navigation hint"
         );
         assert!(
-            content.contains("m:members"),
-            "Footer should contain members hint"
+            content.contains("Tab:tasks/team"),
+            "Footer should contain tasks/team toggle hint"
         );
         assert!(
-            content.contains("Enter:inspect"),
-            "Footer should contain inspect hint"
+            content.contains("j/k:nav"),
+            "Footer should contain navigation hint"
         );
         assert!(
-            content.contains("l:logs"),
+            content.contains("Enter:logs"),
             "Footer should contain logs hint"
         );
         assert!(
