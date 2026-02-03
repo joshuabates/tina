@@ -1,8 +1,16 @@
 ---
 name: researcher
 description: |
-  Raw codebase exploration agent. Given a research query, finds relevant files and returns
-  curated code snippets. Does NOT interpret or recommend - just returns raw data.
+  General-purpose codebase exploration agent. Given a research query, finds relevant files
+  and returns curated code snippets. Does NOT interpret or recommend - just returns raw data.
+
+  For specialized research, prefer:
+  - tina:locator - Fast file finding (paths only)
+  - tina:analyzer - Deep code analysis
+  - tina:pattern-finder - Find similar implementations
+  - tina:web-researcher - External web research
+
+  Use this agent for quick, general research that doesn't need specialization.
 model: haiku
 ---
 

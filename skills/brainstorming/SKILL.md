@@ -16,7 +16,7 @@ Ask questions one at a time to refine the idea. Once you understand what you're 
 Integrate codebase exploration to ask better questions from the start.
 
 **When to research:**
-1. **After idea received** - Quick codebase scan for directly related files/patterns
+1. **After idea received** - Comprehensive research on the topic area
 2. **After concrete mentions** - When an answer mentions specific files, systems, or technologies
 
 **When NOT to research:**
@@ -26,22 +26,58 @@ Integrate codebase exploration to ask better questions from the start.
 
 **How to research:**
 
-Spawn researcher subagent:
+**For comprehensive research (recommended for new topics):**
+
+Use the research-swarm skill to spawn parallel specialized researchers:
+
 ```yaml
-Task tool:
-  subagent_type: tina:researcher
-  model: haiku
-  prompt: "Find files related to [topic]. Return relevant file paths and code snippets."
+# Create research team
+Teammate:
+  operation: spawnTeam
+  team_name: "research-{topic}"
+  description: "Research for brainstorming {idea}"
+
+# Create initial tasks based on the idea
+TaskCreate:
+  subject: "Locate {topic} files"
+  metadata: { type: "locate" }
+
+TaskCreate:
+  subject: "Find similar implementations"
+  metadata: { type: "patterns" }
+
+TaskCreate:
+  subject: "Analyze {key area if known}"
+  metadata: { type: "analyze" }
+
+# Spawn researchers in parallel (single message)
+Task: { subagent_type: tina:locator, team_name: "research-{topic}", name: "locator", prompt: "Claim locate tasks" }
+Task: { subagent_type: tina:analyzer, team_name: "research-{topic}", name: "analyzer", prompt: "Claim analyze tasks" }
+Task: { subagent_type: tina:pattern-finder, team_name: "research-{topic}", name: "pattern-finder", prompt: "Claim patterns tasks" }
 ```
 
-**After receiving results:**
-1. Review the raw findings
-2. Do additional targeted exploration if needed (Read files, Grep patterns)
-3. Synthesize understanding internally
-4. Provide brief summary to user (1-2 sentences): "I looked at your auth system - it uses JWT middleware."
-5. Continue with informed question
+Researchers will:
+- Work in parallel on their tasks
+- Message each other with discoveries
+- Create follow-up tasks for deeper investigation
 
-**If subagent finds nothing relevant:** Don't mention it, just proceed with the question.
+**For quick targeted research:**
+
+Spawn single researcher directly:
+```yaml
+Task:
+  subagent_type: tina:locator
+  model: haiku
+  prompt: "Find files related to [topic]. Return file paths only."
+```
+
+**After research completes:**
+1. Synthesize findings from all researchers
+2. Provide brief summary to user (1-2 sentences): "I looked at your auth system - it uses JWT middleware with decorator patterns."
+3. Continue with informed questions
+4. Cleanup research team when done
+
+**If research finds nothing relevant:** Don't mention it, just proceed with the question.
 
 ## External Research
 
