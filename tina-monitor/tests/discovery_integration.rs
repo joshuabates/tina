@@ -8,6 +8,7 @@ use std::path::Path;
 use tempfile::TempDir;
 
 /// Copy fixture to temp directory, replacing FIXTURE_ROOT placeholders with temp path
+/// Also renames "claude-data" directories to ".claude" (to work around gitignore)
 fn copy_fixture_with_replacements(
     src: &Path,
     dest: &Path,
@@ -19,7 +20,14 @@ fn copy_fixture_with_replacements(
         let entry = entry?;
         let path = entry.path();
         let file_name = entry.file_name();
-        let dest_path = dest.join(&file_name);
+
+        // Rename "claude-data" to ".claude" when copying
+        let dest_name = if file_name == "claude-data" {
+            std::ffi::OsString::from(".claude")
+        } else {
+            file_name
+        };
+        let dest_path = dest.join(&dest_name);
 
         if path.is_dir() {
             copy_fixture_with_replacements(&path, &dest_path, fixture_root)?;

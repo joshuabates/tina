@@ -1,0 +1,19 @@
+{
+  "name": "my-feature-orchestration",
+  "description": "Orchestration team for my-feature",
+  "createdAt": 1706644800000,
+  "leadAgentId": "team-lead",
+  "leadSessionId": "session-abc-123",
+  "members": [
+    {
+      "name": "team-lead",
+      "agentId": "team-lead-uuid",
+      "agentType": "orchestrator",
+      "model": "claude-opus-4",
+      "joinedAt": 1706644800000,
+      "tmuxPaneId": "%1",
+      "cwd": "/Users/joshua/Projects/tina",
+      "subscriptions": []
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "feature": "my-feature",
+  "design_doc": "docs/design.md",
+  "worktree_path": "FIXTURE_ROOT/worktree",
+  "branch": "tina/my-feature",
+  "total_phases": 3,
+  "current_phase": 2,
+  "status": "executing",
+  "orchestration_started_at": "2026-01-30T10:00:00Z",
+  "phases": {
+    "1": {
+      "plan_path": "docs/plans/phase-1.md",
+      "status": "complete",
+      "completed_at": "2026-01-30T11:00:00Z",
+      "duration_mins": 60
+    },
+    "2": {
+      "plan_path": "docs/plans/phase-2.md",
+      "status": "executing",
+      "execution_started_at": "2026-01-30T11:30:00Z"
+    }
+  }
+}

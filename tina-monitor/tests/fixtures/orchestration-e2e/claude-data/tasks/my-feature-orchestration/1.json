@@ -1,0 +1,11 @@
+{
+  "id": "1",
+  "subject": "Validate design",
+  "description": "Validate the design document",
+  "activeForm": null,
+  "status": "completed",
+  "owner": "team-lead",
+  "blocks": [],
+  "blockedBy": [],
+  "metadata": {}
+}
