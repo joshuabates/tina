@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "assertions": {
+    "phases_completed": 2,
+    "final_status": "complete",
+    "tests_pass": true,
+    "file_changes": [
+      { "path": "src/utils/mod.rs", "exists": true },
+      { "path": "src/lib.rs", "contains": "utils" },
+      { "path": "src/core/processor.rs", "contains": "is_blank" }
+    ]
+  }
+}

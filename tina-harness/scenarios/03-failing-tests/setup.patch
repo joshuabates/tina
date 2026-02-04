@@ -1,0 +1,32 @@
+diff --git a/src/core/processor.rs b/src/core/processor.rs
+index 1234567..abcdefg 100644
+--- a/src/core/processor.rs
++++ b/src/core/processor.rs
+@@ -33,7 +33,11 @@ impl Processor {
+     /// Process input text according to configuration
+     pub fn process(&self, input: &str) -> String {
+         let mut result = input.to_string();
+
++        // BUG: This panics on empty strings when uppercase is true
++        if self.config.uppercase && result.is_empty() {
++            panic!("Cannot process empty string in uppercase mode");
++        }
++
+         if self.config.trim {
+             result = result.trim().to_string();
+         }
+@@ -72,6 +76,13 @@ mod tests {
+         assert_eq!(processor.process("hello"), "HELLO");
+     }
+
++    #[test]
++    fn test_uppercase_empty_string() {
++        let processor = Processor::new(ProcessorConfig {
++            uppercase: true,
++            ..Default::default()
++        });
++        assert_eq!(processor.process(""), "");
++    }
++
+     #[test]
+     fn test_trim() {
