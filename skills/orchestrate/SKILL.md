@@ -325,8 +325,7 @@ Task metadata carries orchestration state:
 | Plan path | plan-phase-N task metadata |
 | Git range | execute-phase-N task metadata |
 | Review findings | review-phase-N task metadata |
-
-No separate supervisor-state.json needed.
+| Supervisor state | `{worktree}/.claude/tina/supervisor-state.json` (written by tina-session init)
 
 ## User Status Display
 
@@ -419,7 +418,8 @@ TaskCreate {
   "activeForm": "Setting up worktree",
   "metadata": {
     "feature_name": "<FEATURE_NAME>",
-    "design_doc_path": "<DESIGN_DOC>"
+    "design_doc_path": "<DESIGN_DOC>",
+    "total_phases": <TOTAL_PHASES>
   }
 }
 ```
@@ -1010,7 +1010,7 @@ The task list IS the recovery mechanism. All orchestration state lives in:
 - Task metadata (worktree_path, plan_path, git_range, etc.)
 - Task dependencies (blockedBy relationships)
 
-No separate supervisor-state.json needed.
+**Note:** `supervisor-state.json` is written by `tina-session init` during worktree setup. This file enables tina-monitor to discover and track orchestrations.
 
 ### Detecting Existing Orchestration
 

@@ -21,6 +21,7 @@ TaskGet with task_id: $TASK_ID
 **Required parameters from task.metadata:**
 - `feature_name`: Feature name (e.g., "tina-monitor-rebuild")
 - `design_doc_path`: Path to design document
+- `total_phases`: Number of phases in the design
 
 ## Boundaries
 
@@ -46,10 +47,11 @@ TaskGet with task_id: $TASK_ID
 
 Create an isolated workspace for phase execution.
 
-## Input (from spawn prompt)
+## Input (from task metadata)
 
 - `feature_name`: Feature name (e.g., "tina-monitor-rebuild")
 - `design_doc_path`: Path to design document
+- `total_phases`: Number of phases in the design
 
 ## Steps
 
@@ -96,9 +98,9 @@ Create `.claude/settings.local.json` with statusLine command pointing to the scr
 
 ### 5. Initialize tina-session
 
-```bash
-TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC_PATH")
+Use `total_phases` from task metadata (provided by orchestrator):
 
+```bash
 tina-session init \
   --feature "$FEATURE_NAME" \
   --cwd "$WORKTREE_PATH" \
@@ -106,6 +108,8 @@ tina-session init \
   --branch "$BRANCH_NAME" \
   --total-phases "$TOTAL_PHASES"
 ```
+
+This creates `{worktree}/.claude/tina/supervisor-state.json`, which enables tina-monitor to discover and track this orchestration.
 
 ### 6. Run Baseline Tests (optional)
 
