@@ -258,13 +258,23 @@ Initial: filesystem. Future: SQLite or remote API.
 
 ## Implementation Phases
 
-### Phase 0: Foundation
+### Phase 0a: Shared Data Layer (prerequisite)
 
-- gpui project structure
+- Create `tina-data` crate
+- Extract data modules from tina-monitor (discovery, teams, tasks, tina_state, watcher)
+- Add tina-session dependency for schema types (after test harness Phase 1)
+- Update tina-monitor to use tina-data
+- Verify tina-monitor still works
+
+Outcome: Shared data layer ready for both TUI and IDE
+
+### Phase 0b: Foundation
+
+- gpui project structure for tina-ide
 - Basic window with pane system
 - Single terminal pane working
-- Import tina-session schema
-- File watcher integration
+- Import tina-data
+- Wire up file watcher
 
 Outcome: IDE shell with working terminal
 
@@ -314,7 +324,14 @@ Outcome: full lifecycle management
 
 ## Success Metrics
 
-### Phase 0-1 (Foundation + Monitoring)
+### Phase 0a (Shared Data Layer)
+
+- tina-data crate compiles and exports all data types
+- tina-monitor depends on tina-data, all tests pass
+- No duplicate type definitions between crates
+- Data loading works identically to before extraction
+
+### Phase 0b-1 (Foundation + Monitoring)
 
 - See all active orchestrations
 - Refresh ≤ 1 second
@@ -408,8 +425,8 @@ The test harness design (`docs/plans/2026-02-03-test-harness-design.md`) is cons
 
 **Integration points:**
 
-- Entry: New `tina-ide` crate at workspace root
-- Depends on: `tina-session` (for schema), extracts data modules from `tina-monitor`
+- New crates: `tina-data` (shared data layer), `tina-ide` (GUI app)
+- Dependency graph: `tina-session` ← `tina-data` ← `tina-monitor` / `tina-ide`
 - File locations: `~/.claude/teams/`, `~/.claude/tasks/`, `{worktree}/.claude/tina/`
 - Tmux: Reuses existing pane ID tracking from team configs (`Agent.tmux_pane_id`)
 
@@ -419,26 +436,47 @@ The test harness design (`docs/plans/2026-02-03-test-harness-design.md`) is cons
 - Don't poll files directly - use file watcher pattern from `tina-monitor/src/data/watcher.rs`
 - Don't shell out for data - load JSON directly, only shell for tmux commands
 
-**New crate structure:**
+**Crate structure:**
 
 ```
-tina-ide/
-├── Cargo.toml              # depends on tina-session, gpui
+tina-data/                    # NEW: shared data layer
+├── Cargo.toml                # depends on tina-session (for schema types)
 ├── src/
-│   ├── main.rs             # gpui app entry
-│   ├── app.rs              # App state, reactive models
-│   ├── data/               # Extract from tina-monitor, use tina-session types
-│   │   ├── mod.rs
-│   │   ├── discovery.rs    # Reuse/adapt from tina-monitor
-│   │   ├── watcher.rs      # Reuse from tina-monitor
-│   │   └── projects.rs     # New: project registry
-│   ├── views/              # gpui view components
+│   ├── lib.rs
+│   ├── discovery.rs          # Extract from tina-monitor
+│   ├── teams.rs              # Extract from tina-monitor
+│   ├── tasks.rs              # Extract from tina-monitor
+│   ├── tina_state.rs         # Extract from tina-monitor
+│   ├── watcher.rs            # Extract from tina-monitor
+│   └── projects.rs           # New: project registry for IDE
+
+tina-monitor/                 # Updated: depends on tina-data
+├── Cargo.toml                # remove data modules, add tina-data dep
+├── src/
+│   ├── data/                 # Delete, replaced by tina-data
+│   └── ...                   # TUI code remains
+
+tina-ide/                     # NEW: GUI application
+├── Cargo.toml                # depends on tina-data, gpui
+├── src/
+│   ├── main.rs               # gpui app entry
+│   ├── app.rs                # App state, reactive models
+│   ├── views/                # gpui view components
 │   │   ├── mod.rs
 │   │   ├── sidebar.rs
 │   │   ├── orchestration_list.rs
 │   │   ├── phase_detail.rs
 │   │   └── terminal_pane.rs
-│   └── terminal/           # Terminal embedding
+│   └── terminal/             # Terminal embedding
 │       ├── mod.rs
 │       └── pty.rs
 ```
+
+**Extraction order:**
+
+1. Create `tina-data` crate
+2. Move `tina-monitor/src/data/*` to `tina-data/src/`
+3. Update imports, add `tina-session` dependency for schema types
+4. Update `tina-monitor` to depend on `tina-data`, delete `src/data/`
+5. Verify tina-monitor still works
+6. Then proceed with tina-ide using tina-data
