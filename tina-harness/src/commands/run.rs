@@ -9,7 +9,9 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use crate::failure::{CategorizedFailure, FailureCategory};
-use crate::scenario::{load_scenario, ExpectedState, FileAssertion, Scenario};
+use crate::scenario::{
+    load_last_passed, load_scenario, save_last_passed, ExpectedState, FileAssertion, Scenario,
+};
 
 /// Result of running a scenario
 #[derive(Debug)]
@@ -22,6 +24,8 @@ pub struct RunResult {
     pub failures: Vec<CategorizedFailure>,
     /// Working directory used
     pub work_dir: PathBuf,
+    /// Whether the scenario was skipped due to baseline
+    pub skipped: bool,
 }
 
 impl RunResult {
@@ -31,6 +35,7 @@ impl RunResult {
             passed: true,
             failures: vec![],
             work_dir,
+            skipped: false,
         }
     }
 
@@ -40,6 +45,17 @@ impl RunResult {
             passed: false,
             failures,
             work_dir,
+            skipped: false,
+        }
+    }
+
+    fn skipped(scenario_name: String, work_dir: PathBuf) -> Self {
+        Self {
+            scenario_name,
+            passed: true,
+            failures: vec![],
+            work_dir,
+            skipped: true,
         }
     }
 }
@@ -67,6 +83,15 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
 
     // Create work directory
     let scenario_work_dir = config.work_dir.join(&scenario.name);
+
+    // Check baseline skip logic (unless --force-baseline)
+    if !config.force_baseline {
+        if let Some(skip_reason) = should_skip_baseline(&scenario_dir)? {
+            eprintln!("Skipping {}: {}", scenario_name, skip_reason);
+            return Ok(RunResult::skipped(scenario.name, scenario_work_dir));
+        }
+    }
+
     if scenario_work_dir.exists() {
         fs::remove_dir_all(&scenario_work_dir)
             .with_context(|| format!("Failed to clean work directory: {}", scenario_work_dir.display()))?;
@@ -132,6 +157,10 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
     let failures = validate_outcome(&scenario_work_dir, &scenario.expected, &state);
 
     if failures.is_empty() {
+        // Save last-passed state on success
+        if let Ok(hash) = get_current_git_hash() {
+            let _ = save_last_passed(&scenario_dir, &hash);
+        }
         Ok(RunResult::success(scenario.name, scenario_work_dir))
     } else {
         Ok(RunResult::failure(scenario.name, scenario_work_dir, failures))
@@ -163,13 +192,87 @@ fn run_full_orchestration(
     work_dir: &Path,
     scenario: &Scenario,
 ) -> Result<OrchestrationState> {
-    // For Phase 3, just return an error indicating this isn't implemented
-    // Full implementation deferred to Phase 4
-    anyhow::bail!(
-        "Full orchestration not yet implemented. Work dir: {}, Scenario: {}",
-        work_dir.display(),
-        scenario.name
-    );
+    // Write the design doc to the work directory
+    let design_path = work_dir.join("design.md");
+    fs::write(&design_path, &scenario.design_doc)
+        .context("Failed to write design doc to work directory")?;
+
+    // Initialize git repo in work directory (required for orchestration)
+    let git_init = Command::new("git")
+        .args(["init"])
+        .current_dir(work_dir)
+        .output()
+        .context("Failed to initialize git repo")?;
+
+    if !git_init.status.success() {
+        anyhow::bail!(
+            "Failed to initialize git repo: {}",
+            String::from_utf8_lossy(&git_init.stderr)
+        );
+    }
+
+    // Make initial commit
+    let _ = Command::new("git")
+        .args(["add", "."])
+        .current_dir(work_dir)
+        .output();
+
+    let _ = Command::new("git")
+        .args(["commit", "-m", "Initial commit"])
+        .current_dir(work_dir)
+        .output();
+
+    // Run orchestration using claude CLI with the orchestrate skill
+    // This assumes claude is in PATH and has access to the skill
+    let output = Command::new("claude")
+        .args([
+            "--print",  // Non-interactive mode
+            "-p",
+            &format!("/tina:orchestrate {}", design_path.display()),
+        ])
+        .current_dir(work_dir)
+        .env("CLAUDE_CODE_MODEL", "haiku")  // Use haiku for fast mode
+        .output()
+        .context("Failed to invoke claude CLI for orchestration")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!(
+            "Orchestration failed:\nstderr: {}\nstdout: {}",
+            stderr,
+            stdout
+        );
+    }
+
+    // Parse orchestration result from supervisor-state.json
+    let state_path = work_dir.join(".claude/tina/supervisor-state.json");
+    if !state_path.exists() {
+        anyhow::bail!("Orchestration completed but supervisor-state.json not found");
+    }
+
+    let state_content = fs::read_to_string(&state_path)
+        .context("Failed to read supervisor-state.json")?;
+
+    // Parse the state to extract phases completed and status
+    let state: serde_json::Value = serde_json::from_str(&state_content)
+        .context("Failed to parse supervisor-state.json")?;
+
+    let phases_completed = state
+        .get("current_phase")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+
+    let status = state
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    Ok(OrchestrationState {
+        phases_completed,
+        status,
+    })
 }
 
 /// Validate the outcome against expected state
@@ -330,6 +433,79 @@ fn run_tests(work_dir: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Get the current git HEAD commit hash
+fn get_current_git_hash() -> Result<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .context("Failed to get git hash")?;
+
+    if !output.status.success() {
+        anyhow::bail!("Not in a git repository");
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Check if the scenario should be skipped based on baseline
+fn should_skip_baseline(scenario_dir: &Path) -> Result<Option<String>> {
+    let last_passed = match load_last_passed(scenario_dir) {
+        Some(lp) => lp,
+        None => return Ok(None), // No baseline, need to run
+    };
+
+    let current_hash = match get_current_git_hash() {
+        Ok(h) => h,
+        Err(_) => return Ok(None), // Not in git repo, run anyway
+    };
+
+    // If we're on the same commit, skip
+    if last_passed.commit_hash == current_hash {
+        return Ok(Some(format!(
+            "passed at commit {} on {}",
+            &current_hash[..8.min(current_hash.len())],
+            last_passed.timestamp.format("%Y-%m-%d %H:%M")
+        )));
+    }
+
+    // Check if relevant files changed since last pass
+    // For now, we check if ANY files changed - future improvement could
+    // check only files relevant to the specific scenario
+    let output = Command::new("git")
+        .args([
+            "diff",
+            "--name-only",
+            &last_passed.commit_hash,
+            &current_hash,
+            "--",
+            "tina-harness/",
+            "tina-session/",
+            "tina-monitor/",
+            "skills/",
+        ])
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let changed = String::from_utf8_lossy(&out.stdout);
+            if changed.trim().is_empty() {
+                // No relevant files changed
+                Ok(Some(format!(
+                    "no relevant changes since commit {}",
+                    &last_passed.commit_hash[..8.min(last_passed.commit_hash.len())]
+                )))
+            } else {
+                // Relevant files changed, need to run
+                Ok(None)
+            }
+        }
+        _ => {
+            // If git diff fails (e.g., commit doesn't exist), run the test
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// A parsed scenario from a scenario directory
@@ -70,9 +71,22 @@ impl FileAssertion {
     }
 }
 
+/// Last passed state for baseline skip logic
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LastPassed {
+    /// Git commit hash when the scenario last passed
+    pub commit_hash: String,
+    /// Timestamp when the scenario last passed
+    pub timestamp: DateTime<Utc>,
+    /// tina-harness version that ran the test
+    #[serde(default)]
+    pub harness_version: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
 
     #[test]
     fn test_expected_state_deserialize() {
@@ -129,5 +143,30 @@ mod tests {
 
         let state: ExpectedState = serde_json::from_str(json).unwrap();
         assert!(!state.assertions.setup_tests_failed);
+    }
+
+    #[test]
+    fn test_last_passed_serialize() {
+        let last_passed = LastPassed {
+            commit_hash: "abc123".to_string(),
+            timestamp: Utc::now(),
+            harness_version: Some("0.1.0".to_string()),
+        };
+
+        let json = serde_json::to_string(&last_passed).unwrap();
+        assert!(json.contains("abc123"));
+        assert!(json.contains("harness_version"));
+    }
+
+    #[test]
+    fn test_last_passed_deserialize() {
+        let json = r#"{
+            "commit_hash": "def456",
+            "timestamp": "2026-02-03T12:00:00Z"
+        }"#;
+
+        let last_passed: LastPassed = serde_json::from_str(json).unwrap();
+        assert_eq!(last_passed.commit_hash, "def456");
+        assert!(last_passed.harness_version.is_none());
     }
 }
