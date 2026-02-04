@@ -24,19 +24,41 @@ Entry points:
 
 ## Phase 2: Orientation
 
-**Autonomously explore structure:**
-- Schema, tables, columns, file formats
-- Understand the shape of the data
+**Spawn researcher to explore data landscape:**
 
-**Ask about domain meaning when necessary:**
+```yaml
+Task:
+  subagent_type: tina:researcher
+  prompt: |
+    Orientation for analytics on: {topic/question}
 
-You can read that a column is `status` with values 1-5. You can't know `status=3` means "canceled by admin" without asking.
+    Find:
+    - Relevant data sources (tables, files, APIs, logs)
+    - Schema/structure of data
+    - How data flows into these sources
+    - Related logging/metrics systems
+  hints: ["code-structure", "data-flow"]
+```
+
+**Researcher returns:**
+- Data sources relevant to the question
+- Schema and structure
+- Data flow paths
+- Related systems
+
+**Then ask about domain meaning when necessary:**
+
+You now know the structure. Ask about meaning:
+- "Column `status` has values 1-5. What do they mean?"
+- "Table `events` - what triggers writes here?"
 
 Ask about meaning, not structure.
 
 ## Phase 3: Active Investigation
 
 **Write and execute queries, scripts, or analysis code.**
+
+With orientation complete, do hands-on investigation:
 
 For code analysis:
 - `git log`, `git blame` - change history
@@ -47,6 +69,16 @@ For data:
 - SQL queries for databases
 - Scripts to parse CSV/JSON
 - API calls to live systems
+
+**For complex investigations, spawn additional research:**
+
+```yaml
+# If you need historical context
+Task:
+  subagent_type: tina:researcher
+  prompt: "How has {metric} changed over time? What code changes correlate?"
+  hints: ["git-history", "data-flow"]
+```
 
 Build understanding incrementally.
 

@@ -29,19 +29,33 @@ Confirm understanding before proceeding to investigation.
 
 ## Phase 2: Autonomous Investigation
 
-Explore the scoped area using Read, Grep, Glob, and subagents (Task tool with Explore).
+**Spawn researcher to explore the scoped area:**
 
-**Look for these issues in BOTH production code AND tests:**
+```yaml
+Task:
+  subagent_type: tina:researcher
+  prompt: |
+    Deep review of: {scoped area}
 
-| Issue | What to Look For |
-|-------|------------------|
-| **Duplication** | Similar logic in multiple places, copy-paste patterns |
-| **Abstraction issues** | Wrong level, leaky, or missing abstractions |
-| **Coupling** | Things that should be independent but aren't |
-| **Complexity** | Functions/modules hard to follow |
-| **Inconsistency** | Similar things done different ways |
+    Looking for:
+    - Duplication (similar logic in multiple places)
+    - Abstraction issues (wrong level, leaky, missing)
+    - Coupling (things that should be independent)
+    - Complexity (hard to follow)
+    - Inconsistency (similar things done differently)
 
-Build findings internally. Don't present everything at once.
+    Scope includes BOTH production code AND tests.
+  hints: ["code-structure", "patterns", "test-coverage"]
+```
+
+**Researcher will autonomously:**
+- Map code structure in scoped area
+- Find duplication and similar patterns
+- Identify coupling and dependencies
+- Assess test coverage and quality
+- Return findings organized by issue type
+
+**Review findings internally.** Don't present everything at once - proceed to Phase 3 to validate findings one at a time with user.
 
 ## Phase 3: Collaborative Validation
 

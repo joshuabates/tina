@@ -51,25 +51,60 @@ You MUST complete each phase before proceeding to the next.
 
 **BEFORE attempting ANY fix:**
 
-1. **Read Error Messages Carefully**
+1. **Spawn Research Team**
+
+   Launch autonomous researcher to gather context in parallel:
+
+   ```yaml
+   Task:
+     subagent_type: tina:researcher
+     prompt: |
+       Investigate: {error/symptom description}
+
+       Context:
+       - Error message: {paste error}
+       - File/area: {where it's happening}
+       - When it started: {if known}
+     hints: ["git-history", "error-context", "code-structure"]
+   ```
+
+   Researcher will autonomously:
+   - Find recent changes to affected area
+   - Locate related code and dependencies
+   - Identify error origins and handling
+   - Return unified findings
+
+2. **Review Research Findings**
+
+   Researcher returns:
+   - Recent changes (who, when, what)
+   - Error flow (where thrown, where caught)
+   - Related code paths
+   - Similar past issues if any
+
+3. **Read Error Messages Carefully**
+
+   With research context in hand:
    - Don't skip past errors or warnings
    - They often contain the exact solution
    - Read stack traces completely
    - Note line numbers, file paths, error codes
 
-2. **Reproduce Consistently**
+4. **Reproduce Consistently**
+
    - Can you trigger it reliably?
    - What are the exact steps?
-   - Does it happen every time?
+   - Does research point to specific trigger?
    - If not reproducible → gather more data, don't guess
 
-3. **Check Recent Changes**
-   - What changed that could cause this?
-   - Git diff, recent commits
-   - New dependencies, config changes
-   - Environmental differences
+5. **Form Initial Hypothesis**
 
-4. **Gather Evidence in Multi-Component Systems**
+   Based on research findings, not guessing:
+   - "Research shows X changed 2 days ago, touching Y"
+   - "Error pattern matches Z in the codebase"
+   - State clearly: "I think X is the root cause because Y"
+
+6. **Gather Evidence in Multi-Component Systems**
 
    **WHEN system has multiple components (CI → build → signing, API → service → database):**
 
@@ -86,28 +121,7 @@ You MUST complete each phase before proceeding to the next.
    THEN investigate that specific component
    ```
 
-   **Example (multi-layer system):**
-   ```bash
-   # Layer 1: Workflow
-   echo "=== Secrets available in workflow: ==="
-   echo "IDENTITY: ${IDENTITY:+SET}${IDENTITY:-UNSET}"
-
-   # Layer 2: Build script
-   echo "=== Env vars in build script: ==="
-   env | grep IDENTITY || echo "IDENTITY not in environment"
-
-   # Layer 3: Signing script
-   echo "=== Keychain state: ==="
-   security list-keychains
-   security find-identity -v
-
-   # Layer 4: Actual signing
-   codesign --sign "$IDENTITY" --verbose=4 "$APP"
-   ```
-
-   **This reveals:** Which layer fails (secrets → workflow ✓, workflow → build ✗)
-
-5. **Trace Data Flow**
+7. **Trace Data Flow**
 
    **WHEN error is deep in call stack:**
 
@@ -259,7 +273,7 @@ If you catch yourself thinking:
 
 | Phase | Key Activities | Success Criteria |
 |-------|---------------|------------------|
-| **1. Root Cause** | Read errors, reproduce, check changes, gather evidence | Understand WHAT and WHY |
+| **1. Root Cause** | Spawn researcher, read errors, reproduce, gather evidence | Understand WHAT and WHY |
 | **2. Pattern** | Find working examples, compare | Identify differences |
 | **3. Hypothesis** | Form theory, test minimally | Confirmed or new hypothesis |
 | **4. Implementation** | Create test, fix, verify | Bug resolved, tests pass |

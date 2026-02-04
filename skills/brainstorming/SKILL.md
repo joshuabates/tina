@@ -28,42 +28,28 @@ Integrate codebase exploration to ask better questions from the start.
 
 **For comprehensive research (recommended for new topics):**
 
-Use the research-swarm skill to spawn parallel specialized researchers:
-
 ```yaml
-# Create research team
-Teammate:
-  operation: spawnTeam
-  team_name: "research-{topic}"
-  description: "Research for brainstorming {idea}"
+Task:
+  subagent_type: tina:researcher
+  prompt: |
+    Research for brainstorming: {idea description}
 
-# Create initial tasks based on the idea
-TaskCreate:
-  subject: "Locate {topic} files"
-  metadata: { type: "locate" }
-
-TaskCreate:
-  subject: "Find similar implementations"
-  metadata: { type: "patterns" }
-
-TaskCreate:
-  subject: "Analyze {key area if known}"
-  metadata: { type: "analyze" }
-
-# Spawn researchers in parallel (single message)
-Task: { subagent_type: tina:locator, team_name: "research-{topic}", name: "locator", prompt: "Claim locate tasks" }
-Task: { subagent_type: tina:analyzer, team_name: "research-{topic}", name: "analyzer", prompt: "Claim analyze tasks" }
-Task: { subagent_type: tina:pattern-finder, team_name: "research-{topic}", name: "pattern-finder", prompt: "Claim patterns tasks" }
+    Find:
+    - Existing code related to this feature area
+    - Similar implementations or patterns in the codebase
+    - Integration points and dependencies
+    - How similar features are structured
+  hints: ["code-structure", "patterns"]
 ```
 
-Researchers will:
-- Work in parallel on their tasks
-- Message each other with discoveries
-- Create follow-up tasks for deeper investigation
+Researcher will autonomously:
+- Locate relevant files
+- Find similar patterns
+- Analyze structure
+- Return unified findings
 
 **For quick targeted research:**
 
-Spawn single researcher directly:
 ```yaml
 Task:
   subagent_type: tina:locator
@@ -72,10 +58,9 @@ Task:
 ```
 
 **After research completes:**
-1. Synthesize findings from all researchers
+1. Review findings
 2. Provide brief summary to user (1-2 sentences): "I looked at your auth system - it uses JWT middleware with decorator patterns."
 3. Continue with informed questions
-4. Cleanup research team when done
 
 **If research finds nothing relevant:** Don't mention it, just proceed with the question.
 
@@ -92,6 +77,11 @@ Use WebSearch for external research based on session context.
 **Skip external research when:**
 - Concrete implementation work where approach is decided
 - User has a specific solution in mind ("I want to build X using Y")
+
+For external research, add hint:
+```yaml
+hints: ["code-structure", "patterns", "external-docs"]
+```
 
 Use judgment based on session context.
 
