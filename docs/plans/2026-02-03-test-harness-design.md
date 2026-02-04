@@ -169,8 +169,10 @@ Harness fails fast on first failure, reports category clearly.
 ## Success Metrics
 
 ### Phase 1 - Schema and Validation
-- [ ] Schema types defined in tina-session
-- [ ] tina-monitor imports and uses schema types
+- [ ] Move Team, Agent, Task, ContextMetrics types to tina-session
+- [ ] Consolidate with existing SupervisorState, PhaseState types in tina-session
+- [ ] Add validation functions to schema module
+- [ ] tina-monitor depends on tina-session, imports all types (delete duplicates)
 - [ ] `tina-harness validate` command works on real orchestration output
 - [ ] State validation identifies any schema mismatches
 
@@ -229,16 +231,12 @@ Test runs should be cheap and fast. Full model runs reserved for evals where acc
 - tina-monitor would add `tina-session = { path = "../tina-session" }` to Cargo.toml
 - Existing `tina-monitor/src/data/types.rs` duplicates many types - replace with imports
 
-**Schema gap to resolve:**
-- Team, Agent, Task, ContextMetrics exist only in `tina-monitor/src/data/types.rs:9-58, 166-172`
-- These must move to tina-session's schema or a separate shared module
-- tina-session has simplified `TaskFile` at `tina-session/src/watch/status.rs:248-263` that conflicts
+**Schema consolidation (Phase 1 scope):**
+- Move Team, Agent, Task, ContextMetrics from `tina-monitor/src/data/types.rs:9-58, 166-172` to tina-session
+- Consolidate with `TaskFile` at `tina-session/src/watch/status.rs:248-263` (currently simplified version)
+- tina-session becomes single source of truth for ALL state types
+- tina-monitor imports all types from tina-session, deletes duplicates
 
 **Anti-patterns:**
 - Don't duplicate types across crates - see current state in `tina-monitor/src/data/types.rs` vs `tina-session/src/state/schema.rs`
 - Don't add CLI-only dependencies to shared schema types
-
-**Risk: Circular dependency**
-- If tina-session ever needs to read team/task files that tina-monitor defines, we'd need a third crate
-- Current design assumes tina-session owns all state types, which may not hold for Claude Code's team/task system
-- Mitigation: Team/Agent/Task types could stay separate if they're truly Claude Code concepts, not orchestration concepts
