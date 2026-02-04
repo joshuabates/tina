@@ -120,6 +120,13 @@ pub enum PhaseDetailLayout {
     TasksDetail,
 }
 
+/// Cached phase data (tasks and members for a specific phase)
+#[derive(Debug, Clone)]
+pub struct PhaseData {
+    pub tasks: Vec<crate::data::types::Task>,
+    pub members: Vec<crate::data::types::Agent>,
+}
+
 /// Main TUI application state
 pub struct App {
     /// Whether the application should quit
@@ -144,6 +151,8 @@ pub struct App {
     pub(crate) send_dialog: Option<super::views::send_dialog::SendDialog>,
     /// Command logger instance
     pub(crate) command_logger: Option<crate::logging::CommandLogger>,
+    /// Cached phase data for the selected phase (orch_index, phase_number, data)
+    pub phase_cache: Option<(usize, u32, PhaseData)>,
 }
 
 impl App {
@@ -170,6 +179,7 @@ impl App {
             log_viewer: None,
             send_dialog: None,
             command_logger,
+            phase_cache: None,
         })
     }
 
@@ -190,7 +200,32 @@ impl App {
             log_viewer: None,
             send_dialog: None,
             command_logger: None, // Don't initialize for tests
+            phase_cache: None,
         }
+    }
+
+    /// Load and cache phase data for the given phase
+    pub fn load_phase_data(&mut self, phase: u32) {
+        if self.orchestrations.is_empty() {
+            return;
+        }
+
+        // Check if already cached
+        if let Some((orch_idx, cached_phase, _)) = &self.phase_cache {
+            if *orch_idx == self.selected_index && *cached_phase == phase {
+                return; // Already cached
+            }
+        }
+
+        let orch = &self.orchestrations[self.selected_index];
+        let (tasks, members) = orch.load_phase_data(phase);
+        self.phase_cache = Some((self.selected_index, phase, PhaseData { tasks, members }));
+    }
+
+    /// Get cached phase data, or load if not cached
+    pub fn get_phase_data(&mut self, phase: u32) -> Option<&PhaseData> {
+        self.load_phase_data(phase);
+        self.phase_cache.as_ref().map(|(_, _, data)| data)
     }
 
     /// Move selection to next orchestration (wraps around)
@@ -314,6 +349,7 @@ impl App {
             KeyCode::Enter => {
                 if !self.orchestrations.is_empty() {
                     let current_phase = self.orchestrations[self.selected_index].current_phase;
+                    self.load_phase_data(current_phase);
                     self.view_state = ViewState::PhaseDetail {
                         focus: PaneFocus::Orchestrations,
                         task_index: 0,
@@ -909,10 +945,12 @@ impl App {
                         } else {
                             selected_phase + 1
                         };
+                        // Load phase data and reset indices since task/member counts may differ
+                        self.load_phase_data(new_phase);
                         self.view_state = ViewState::PhaseDetail {
                             focus,
-                            task_index,
-                            member_index,
+                            task_index: 0,
+                            member_index: 0,
                             layout,
                             selected_phase: new_phase,
                         };
@@ -923,10 +961,12 @@ impl App {
                         } else {
                             selected_phase - 1
                         };
+                        // Load phase data and reset indices since task/member counts may differ
+                        self.load_phase_data(new_phase);
                         self.view_state = ViewState::PhaseDetail {
                             focus,
-                            task_index,
-                            member_index,
+                            task_index: 0,
+                            member_index: 0,
                             layout,
                             selected_phase: new_phase,
                         };
@@ -1433,12 +1473,14 @@ mod tests {
         Orchestration {
             team_name: format!("{}-team", title),
             title: title.to_string(),
+            feature_name: title.to_string(),
             cwd: PathBuf::from("/test"),
             current_phase: 1,
             total_phases: 3,
             design_doc_path: PathBuf::from("/test/design.md"),
             context_percent: Some(50),
             status: OrchestrationStatus::Idle,
+            orchestrator_tasks: vec![],
             tasks: vec![make_test_task("1"), make_test_task("2"), make_test_task("3")],
             members: vec![],
         }
@@ -1579,6 +1621,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         app.next();
@@ -1603,6 +1646,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         app.previous();
@@ -1623,6 +1667,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         app.next();
@@ -1643,6 +1688,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         app.previous();
@@ -1663,6 +1709,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
@@ -1684,6 +1731,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
@@ -1708,6 +1756,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
@@ -1732,6 +1781,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
@@ -1753,6 +1803,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
@@ -1774,6 +1825,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         let key = KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE);
@@ -1801,6 +1853,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
@@ -1823,6 +1876,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
@@ -1844,6 +1898,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         assert_eq!(app.orchestrations.len(), 1);
@@ -1864,6 +1919,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         };
 
         // Should not panic when watcher is None
@@ -3466,6 +3522,7 @@ mod tests {
                 confirming: false,
             }),
             command_logger: Some(crate::logging::CommandLogger::new(log_path.clone())),
+            phase_cache: None,
         };
 
         // Execute send - this will fail with invalid pane, but we verify it attempts to send
@@ -3521,6 +3578,7 @@ mod tests {
                 confirming: false,
             }),
             command_logger: Some(crate::logging::CommandLogger::new(log_path.clone())),
+            phase_cache: None,
         };
 
         // Execute send
@@ -3576,6 +3634,7 @@ mod tests {
                 confirming: false,
             }),
             command_logger: Some(crate::logging::CommandLogger::new(log_path)),
+            phase_cache: None,
         };
 
         // Execute send

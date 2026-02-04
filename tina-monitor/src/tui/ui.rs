@@ -213,6 +213,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         }
     }
 
@@ -221,12 +222,14 @@ mod tests {
         let orchestration = Orchestration {
             team_name: "test-team".to_string(),
             title: "Test Project".to_string(),
+            feature_name: "test-project".to_string(),
             cwd: PathBuf::from("/test"),
             current_phase: 1,
             total_phases: 3,
             design_doc_path: PathBuf::from("/test/design.md"),
             context_percent: Some(50),
             status: OrchestrationStatus::Idle,
+            orchestrator_tasks: vec![],
             tasks: vec![],
             members: vec![],
         };
@@ -243,6 +246,7 @@ mod tests {
             log_viewer: None,
             send_dialog: None,
             command_logger: None,
+            phase_cache: None,
         }
     }
 

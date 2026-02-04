@@ -17,7 +17,7 @@ use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
 use crate::data::discovery::Orchestration;
-use crate::data::types::TaskStatus;
+use crate::data::types::{Agent, Task, TaskStatus};
 use crate::tui::app::{App, PaneFocus, PhaseDetailLayout, ViewState};
 use crate::tui::widgets::progress_bar;
 
@@ -235,8 +235,19 @@ fn render_orch_phase_tasks(
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(columns[2]);
 
-    render_tasks_pane(frame, right_chunks[0], orchestration, focus == PaneFocus::Tasks, task_index);
-    render_members_pane(frame, right_chunks[1], orchestration, focus == PaneFocus::Members, member_index);
+    // Get phase-specific tasks and members from cache, or fall back to orchestration data
+    let (tasks, members) = if let Some((orch_idx, cached_phase, phase_data)) = &app.phase_cache {
+        if *orch_idx == app.selected_index && *cached_phase == selected_phase {
+            (&phase_data.tasks, &phase_data.members)
+        } else {
+            (&orchestration.tasks, &orchestration.members)
+        }
+    } else {
+        (&orchestration.tasks, &orchestration.members)
+    };
+
+    render_tasks_pane_with_data(frame, right_chunks[0], tasks, focus == PaneFocus::Tasks, task_index, selected_phase);
+    render_members_pane_with_data(frame, right_chunks[1], members, focus == PaneFocus::Members, member_index, selected_phase);
 }
 
 /// Render Screen 2: Tasks+Team | Task Detail
@@ -528,6 +539,137 @@ fn render_members_pane(
     }
 }
 
+/// Render tasks pane with provided task list (for phase-specific data)
+fn render_tasks_pane_with_data(
+    frame: &mut Frame,
+    area: Rect,
+    tasks: &[Task],
+    is_focused: bool,
+    selected_index: usize,
+    phase: u32,
+) {
+    let items: Vec<ListItem> = tasks
+        .iter()
+        .enumerate()
+        .map(|(i, task)| {
+            let indicator = match task.status {
+                TaskStatus::Completed => "✓",
+                TaskStatus::InProgress => "▶",
+                TaskStatus::Pending if !task.blocked_by.is_empty() => "✗",
+                TaskStatus::Pending => "○",
+            };
+
+            let status_color = match task.status {
+                TaskStatus::Completed => Color::Green,
+                TaskStatus::InProgress => Color::Cyan,
+                TaskStatus::Pending if !task.blocked_by.is_empty() => Color::Red,
+                TaskStatus::Pending => Color::DarkGray,
+            };
+
+            let subject = truncate(&task.subject, area.width.saturating_sub(8) as usize);
+            let selected_marker = if i == selected_index && is_focused { "▶ " } else { "  " };
+
+            let style = if i == selected_index {
+                Style::default().add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            ListItem::new(Line::from(vec![
+                Span::raw(selected_marker),
+                Span::styled(indicator, Style::default().fg(status_color)),
+                Span::raw(" "),
+                Span::styled(subject, style),
+            ]))
+        })
+        .collect();
+
+    let border_style = border_style(is_focused);
+    let title = format!("Phase {} Tasks ({}) [Tab: switch]", phase, tasks.len());
+
+    if items.is_empty() {
+        let paragraph = Paragraph::new(Line::from(Span::styled(
+            "No tasks for this phase",
+            Style::default().fg(Color::DarkGray),
+        )))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(border_style),
+        );
+        frame.render_widget(paragraph, area);
+    } else {
+        let list = List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(border_style),
+        );
+        frame.render_widget(list, area);
+    }
+}
+
+/// Render members pane with provided member list (for phase-specific data)
+fn render_members_pane_with_data(
+    frame: &mut Frame,
+    area: Rect,
+    members: &[Agent],
+    is_focused: bool,
+    selected_index: usize,
+    phase: u32,
+) {
+    let items: Vec<ListItem> = members
+        .iter()
+        .enumerate()
+        .map(|(i, member)| {
+            let selected_marker = if i == selected_index && is_focused { "▶ " } else { "  " };
+
+            let model_short = shorten_model(&member.model);
+            let agent_type = member.agent_type.as_deref().unwrap_or("agent");
+
+            let style = if i == selected_index {
+                Style::default().add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            let name = truncate(&member.name, area.width.saturating_sub(20) as usize);
+
+            ListItem::new(Line::from(vec![
+                Span::raw(selected_marker),
+                Span::styled(name, style),
+                Span::styled(format!(" ({}/{})", agent_type, model_short), Style::default().fg(Color::DarkGray)),
+            ]))
+        })
+        .collect();
+
+    let border_style = border_style(is_focused);
+    let title = format!("Phase {} Team ({}) [Tab: switch]", phase, members.len());
+
+    if items.is_empty() {
+        let paragraph = Paragraph::new(Line::from(Span::styled(
+            "No team members for this phase",
+            Style::default().fg(Color::DarkGray),
+        )))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(border_style),
+        );
+        frame.render_widget(paragraph, area);
+    } else {
+        let list = List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(border_style),
+        );
+        frame.render_widget(list, area);
+    }
+}
+
 /// Render the task detail pane showing full task information
 fn render_task_detail_pane(
     frame: &mut Frame,
@@ -717,12 +859,14 @@ mod tests {
         Orchestration {
             team_name: "test-team".to_string(),
             title: "Test Project".to_string(),
+            feature_name: "test-project".to_string(),
             cwd: PathBuf::from("/test"),
             current_phase: 2,
             total_phases: 4,
             design_doc_path: PathBuf::from("/test/design.md"),
             context_percent: Some(65),
             status: OrchestrationStatus::Executing { phase: 2 },
+            orchestrator_tasks: vec![],
             tasks: vec![
                 make_test_task("1", "Completed task", TaskStatus::Completed, vec![]),
                 make_test_task("2", "In progress task", TaskStatus::InProgress, vec![]),

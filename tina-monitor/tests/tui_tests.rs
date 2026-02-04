@@ -108,12 +108,14 @@ fn make_test_orchestration(name: &str) -> Orchestration {
     Orchestration {
         team_name: format!("{}-team", name),
         title: name.to_string(),
+        feature_name: name.to_string(),
         cwd: PathBuf::from("/test"),
         current_phase: 1,
         total_phases: 3,
         design_doc_path: PathBuf::from("/test/design.md"),
         context_percent: Some(50),
         status: OrchestrationStatus::Idle,
+        orchestrator_tasks: vec![],
         tasks: vec![],
         members: vec![],
     }
@@ -356,12 +358,14 @@ fn make_test_orchestration_with_tasks(name: &str, tasks: Vec<Task>) -> Orchestra
     Orchestration {
         team_name: format!("{}-team", name),
         title: name.to_string(),
+        feature_name: name.to_string(),
         cwd: PathBuf::from("/test"),
         current_phase: 1,
         total_phases: 3,
         design_doc_path: PathBuf::from("/test/design.md"),
         context_percent: Some(50),
         status: OrchestrationStatus::Idle,
+        orchestrator_tasks: vec![],
         tasks,
         members: vec![],
     }

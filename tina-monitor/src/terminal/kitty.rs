@@ -99,6 +99,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Opens real kitty tab - run with `cargo test -- --ignored`
     fn test_open_tab_at_returns_success_when_kitty_available() {
         let handler = KittyHandler::new();
 
@@ -115,6 +116,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Opens real kitty tab - run with `cargo test -- --ignored`
     fn test_attach_tmux_returns_success_when_kitty_available() {
         let handler = KittyHandler::new();
 
@@ -130,6 +132,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Opens real kitty tab - run with `cargo test -- --ignored`
     fn test_attach_tmux_without_pane_id() {
         let handler = KittyHandler::new();
 

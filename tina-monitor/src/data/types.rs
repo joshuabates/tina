@@ -64,17 +64,111 @@ pub enum TaskStatus {
     Completed,
 }
 
-/// Supervisor state for an orchestration
+/// Status of an orchestration
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OrchestrationStatus {
+    Planning,
+    Executing,
+    Reviewing,
+    Complete,
+    Blocked,
+}
+
+/// Status of a phase
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PhaseStatus {
+    Planning,
+    Planned,
+    Executing,
+    Reviewing,
+    Complete,
+    Blocked,
+}
+
+/// Timing breakdown for a phase.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PhaseBreakdown {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub planning_mins: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_mins: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_mins: Option<i64>,
+}
+
+/// Gap between phases for timing analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimingGap {
+    pub after: String,
+    pub before: String,
+    pub duration_mins: i64,
+    pub timestamp: DateTime<Utc>,
+}
+
+/// Overall timing statistics.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TimingStats {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_elapsed_mins: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_mins: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idle_mins: Option<i64>,
+    #[serde(default)]
+    pub gaps: Vec<TimingGap>,
+}
+
+/// State of a single phase
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhaseState {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_path: Option<PathBuf>,
+
+    pub status: PhaseStatus,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub planning_started_at: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_started_at: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_started_at: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_mins: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git_range: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blocked_reason: Option<String>,
+
+    #[serde(default)]
+    pub breakdown: PhaseBreakdown,
+}
+
+/// Supervisor state for an orchestration (matches tina-session schema)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupervisorState {
-    pub design_doc_path: PathBuf,
+    pub version: u32,
+    pub feature: String,
+    pub design_doc: PathBuf,
     pub worktree_path: PathBuf,
-    pub branch_name: String,
+    pub branch: String,
     pub total_phases: u32,
     pub current_phase: u32,
+    pub status: OrchestrationStatus,
+    pub orchestration_started_at: DateTime<Utc>,
     #[serde(default)]
-    pub plan_paths: HashMap<u32, PathBuf>,
-    pub status: String,
+    pub phases: HashMap<String, PhaseState>,
+    #[serde(default)]
+    pub timing: TimingStats,
 }
 
 /// Context metrics from statusline
@@ -156,20 +250,24 @@ mod tests {
     #[test]
     fn test_deserialize_supervisor_state() {
         let json = r#"{
-            "design_doc_path": "docs/plans/design.md",
+            "version": 1,
+            "feature": "test-feature",
+            "design_doc": "docs/plans/design.md",
             "worktree_path": "/path/to/worktree",
-            "branch_name": "feature/test",
+            "branch": "feature/test",
             "total_phases": 3,
             "current_phase": 1,
-            "plan_paths": {},
-            "status": "executing"
+            "status": "executing",
+            "orchestration_started_at": "2026-01-30T10:00:00Z",
+            "phases": {},
+            "timing": {}
         }"#;
 
         let state: SupervisorState =
             serde_json::from_str(json).expect("Should parse supervisor state");
         assert_eq!(state.total_phases, 3);
         assert_eq!(state.current_phase, 1);
-        assert_eq!(state.status, "executing");
+        assert_eq!(state.status, OrchestrationStatus::Executing);
     }
 
     #[test]

@@ -138,9 +138,10 @@ pub fn status_orchestration(
     format: OutputFormat,
     check: Option<CheckCondition>,
 ) -> Result<i32> {
+    // Allow searching by feature name (e.g., "gray-box-303") or team name (e.g., "gray-box-303-orchestration")
     let orch = discovery::find_orchestrations()?
         .into_iter()
-        .find(|o| o.team_name == name)
+        .find(|o| o.team_name == name || o.team_name == format!("{}-orchestration", name))
         .ok_or_else(|| anyhow!("Orchestration not found: {}", name))?;
 
     let summary = tasks::TaskSummary::from_tasks(&orch.tasks);

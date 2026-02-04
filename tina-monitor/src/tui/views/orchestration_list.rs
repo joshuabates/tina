@@ -6,7 +6,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState},
+    widgets::{List, ListItem, ListState},
     Frame,
 };
 
@@ -49,11 +49,6 @@ pub fn render_orchestration_list(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
 
     let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Active Orchestrations"),
-        )
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)

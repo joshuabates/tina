@@ -25,7 +25,8 @@ This is not negotiable. This is not optional. You cannot rationalize your way ou
 - `checkpoint` - Save context at thresholds
 
 **Process** - HOW to approach work:
-- `brainstorming` - Explore requirements before implementation
+- `brainstorming` - Explore fuzzy requirements before implementation
+- `quick-plan` - Lightweight planning for clear-scope tasks (research, present once, execute)
 - `systematic-debugging` - Find root causes, not symptoms
 - `test-driven-development` - Tests first, always
 
@@ -63,7 +64,8 @@ Use the `Skill` tool. When you invoke a skill, its content is loaded and present
 3. **Implementation skills third** - Domain-specific guidance for execution
 
 "Build feature X from this design" → `orchestrate`
-"Let's add X" → `brainstorming` first
+"Let's add X" (vague) → `brainstorming` first
+"Add X to the Y system" (clear scope) → `quick-plan` first
 "Fix this bug" → `systematic-debugging` first
 "I'm done" → `verification-before-completion` first
 

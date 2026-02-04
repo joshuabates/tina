@@ -46,6 +46,45 @@ pub fn list_teams() -> Result<Vec<String>> {
     Ok(teams)
 }
 
+/// Find all teams whose members work in the given worktree path
+/// Excludes orchestration teams (which work in the main repo, not the worktree)
+pub fn find_teams_for_worktree(worktree_path: &std::path::Path) -> Result<Vec<Team>> {
+    let dir = teams_dir();
+    if !dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut teams = Vec::new();
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+
+        let config_path = entry.path().join("config.json");
+        if !config_path.exists() {
+            continue;
+        }
+
+        // Try to load and check the team
+        if let Ok(content) = fs::read_to_string(&config_path) {
+            if let Ok(team) = serde_json::from_str::<Team>(&content) {
+                // Check if first member's cwd matches the worktree
+                if let Some(member) = team.members.first() {
+                    if member.cwd == worktree_path {
+                        // Skip orchestration teams
+                        if !team.name.ends_with("-orchestration") {
+                            teams.push(team);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(teams)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -236,13 +236,16 @@ mod tests {
         let orchestrations = vec![Orchestration {
             team_name: "test-project".to_string(),
             title: "Test Project".to_string(),
+            feature_name: "test-project".to_string(),
             cwd: "/tmp/test".into(),
             current_phase: 1,
             total_phases: 3,
             design_doc_path: "/tmp/test/design.md".into(),
             context_percent: None,
             status: OrchestrationStatus::Idle,
+            orchestrator_tasks: vec![],
             tasks: vec![],
+            members: vec![],
         }];
 
         let mut app = App::new_with_orchestrations(orchestrations);

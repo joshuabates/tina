@@ -10,13 +10,19 @@ use std::path::PathBuf;
 pub struct Orchestration {
     pub team_name: String,
     pub title: String,
+    pub feature_name: String,
     pub cwd: PathBuf,
     pub current_phase: u32,
     pub total_phases: u32,
     pub design_doc_path: PathBuf,
     pub context_percent: Option<u8>,
     pub status: OrchestrationStatus,
+    /// Orchestrator tasks (validate-design, plan-phase-N, etc.)
+    pub orchestrator_tasks: Vec<Task>,
+    /// Tasks for the current phase
     pub tasks: Vec<Task>,
+    /// Members for the current phase
+    pub members: Vec<Agent>,
 }
 
 impl Orchestration {
@@ -31,6 +37,63 @@ impl Orchestration {
     /// Count total tasks
     pub fn tasks_total(&self) -> usize {
         self.tasks.len()
+    }
+
+    /// Get the path to a phase plan file
+    pub fn phase_plan_path(&self, phase: u32) -> PathBuf {
+        self.cwd
+            .join(".claude")
+            .join("tina")
+            .join(format!("phase-{}", phase))
+            .join("plan.md")
+    }
+
+    /// Load the phase plan content for a given phase
+    pub fn load_phase_plan(&self, phase: u32) -> Option<String> {
+        let path = self.phase_plan_path(phase);
+        std::fs::read_to_string(&path).ok()
+    }
+
+    /// Load tasks and members for a specific phase
+    pub fn load_phase_data(&self, phase: u32) -> (Vec<Task>, Vec<Agent>) {
+        load_phase_data_for_worktree(&self.cwd, phase)
+    }
+}
+
+/// Load tasks and members for a specific phase from all teams in the worktree
+/// Finds teams dynamically by matching the worktree path
+pub fn load_phase_data_for_worktree(worktree_path: &std::path::Path, phase: u32) -> (Vec<Task>, Vec<Agent>) {
+    // Find all teams working in this worktree
+    let worktree_teams = match teams::find_teams_for_worktree(worktree_path) {
+        Ok(teams) => teams,
+        Err(_) => return (vec![], vec![]),
+    };
+
+    // Look for a team that matches this phase (by name pattern or other heuristics)
+    let phase_str = phase.to_string();
+    for team in worktree_teams {
+        // Match teams containing the phase number (e.g., "phase-5-execution", "phase-5", etc.)
+        if team.name.contains(&format!("phase-{}", phase_str))
+           || team.name.contains(&format!("-{}-", phase_str))
+           || team.name.ends_with(&format!("-{}", phase_str)) {
+            let phase_tasks = tasks::load_tasks(&team.lead_session_id).unwrap_or_default();
+            return (phase_tasks, team.members);
+        }
+    }
+
+    (vec![], vec![])
+}
+
+/// Legacy function for backward compatibility
+pub fn load_phase_data(phase: u32) -> (Vec<Task>, Vec<Agent>) {
+    // Try the common naming pattern as fallback
+    let phase_team_name = format!("phase-{}-execution", phase);
+
+    if let Ok(phase_team) = teams::load_team(&phase_team_name) {
+        let phase_tasks = tasks::load_tasks(&phase_team.lead_session_id).unwrap_or_default();
+        (phase_tasks, phase_team.members)
+    } else {
+        (vec![], vec![])
     }
 }
 
@@ -81,15 +144,21 @@ fn try_load_orchestration(team_name: &str) -> Result<Option<Orchestration>> {
     // Load context metrics if available
     let context_metrics = tina_state::load_context_metrics(&cwd)?;
 
-    // Load tasks
-    let task_list = tasks::load_tasks(&team.lead_session_id)?;
+    // Load orchestrator tasks (high-level tasks)
+    let orchestrator_tasks = tasks::load_tasks(&team.lead_session_id)?;
+
+    // Load current phase tasks and members using the worktree path
+    let (phase_tasks, phase_members) = load_phase_data_for_worktree(
+        &supervisor_state.worktree_path,
+        supervisor_state.current_phase,
+    );
 
     // Derive status
-    let status = derive_orchestration_status(&task_list, &supervisor_state);
+    let status = derive_orchestration_status(&orchestrator_tasks, &supervisor_state);
 
     // Derive title from design doc filename
     let title = supervisor_state
-        .design_doc_path
+        .design_doc
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or(&team.name)
@@ -98,13 +167,16 @@ fn try_load_orchestration(team_name: &str) -> Result<Option<Orchestration>> {
     Ok(Some(Orchestration {
         team_name: team.name,
         title,
-        cwd,
+        feature_name: supervisor_state.feature.clone(),
+        cwd: supervisor_state.worktree_path.clone(), // Use worktree path, not main repo
         current_phase: supervisor_state.current_phase,
         total_phases: supervisor_state.total_phases,
-        design_doc_path: supervisor_state.design_doc_path,
+        design_doc_path: supervisor_state.design_doc,
         context_percent: context_metrics.map(|m| m.used_pct),
         status,
-        tasks: task_list,
+        orchestrator_tasks,
+        tasks: phase_tasks,
+        members: phase_members,
     }))
 }
 
@@ -145,6 +217,7 @@ fn derive_orchestration_status(tasks: &[Task], state: &SupervisorState) -> Orche
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
 
     fn make_task(id: &str, status: TaskStatus, blocked_by: Vec<String>) -> Task {
         Task {
@@ -162,13 +235,17 @@ mod tests {
 
     fn make_supervisor_state(phase: u32) -> SupervisorState {
         SupervisorState {
-            design_doc_path: "docs/plans/design.md".into(),
+            version: 1,
+            feature: "test-feature".to_string(),
+            design_doc: "docs/plans/design.md".into(),
             worktree_path: "/path/to/worktree".into(),
-            branch_name: "feature/test".to_string(),
+            branch: "feature/test".to_string(),
             total_phases: 3,
             current_phase: phase,
-            plan_paths: Default::default(),
-            status: "executing".to_string(),
+            status: crate::data::types::OrchestrationStatus::Executing,
+            orchestration_started_at: Utc::now(),
+            phases: Default::default(),
+            timing: Default::default(),
         }
     }
 

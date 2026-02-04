@@ -52,13 +52,17 @@ mod tests {
         let tina_dir = dir.join(".claude").join("tina");
         fs::create_dir_all(&tina_dir).unwrap();
         let state = r#"{
-            "design_doc_path": "docs/plans/design.md",
+            "version": 1,
+            "feature": "test-feature",
+            "design_doc": "docs/plans/design.md",
             "worktree_path": "/path/to/worktree",
-            "branch_name": "feature/test",
+            "branch": "feature/test",
             "total_phases": 3,
             "current_phase": 2,
-            "plan_paths": {},
-            "status": "executing"
+            "status": "executing",
+            "orchestration_started_at": "2026-01-30T10:00:00Z",
+            "phases": {},
+            "timing": {}
         }"#;
         fs::write(tina_dir.join("supervisor-state.json"), state).unwrap();
     }
@@ -80,6 +84,8 @@ mod tests {
 
     #[test]
     fn test_load_supervisor_state_exists() {
+        use crate::data::types::OrchestrationStatus;
+
         let temp_dir = TempDir::new().unwrap();
         create_supervisor_state(temp_dir.path());
 
@@ -89,7 +95,7 @@ mod tests {
         let state = state.unwrap();
         assert_eq!(state.total_phases, 3);
         assert_eq!(state.current_phase, 2);
-        assert_eq!(state.status, "executing");
+        assert_eq!(state.status, OrchestrationStatus::Executing);
     }
 
     #[test]
