@@ -93,6 +93,35 @@ All phases complete:
 - **writing-skills** - Create and test new skills
 - **using-tina** - Introduction to the skills system
 
+## Testing
+
+### tina-harness
+
+A test harness for validating tina-monitor and orchestration work correctly together:
+
+```bash
+# Validate state files against schema
+tina-harness validate /path/to/.claude/tina
+
+# Run a test scenario (mock orchestration)
+tina-harness run 01-single-phase-feature
+
+# Run with real orchestration
+tina-harness run 01-single-phase-feature --full
+
+# Generate a new scenario
+tina-harness generate-scenario --phases 2 --output scenarios/my-test/
+```
+
+**Failure categories:** Setup (compilation), Orchestration (state files), Monitor (display), Outcome (results)
+
+**Scenarios included:**
+- `01-single-phase-feature` - Add a verbose flag
+- `02-two-phase-refactor` - Extract utils module
+- `03-failing-tests` - Fix broken edge case
+
+See `skills/test-harness/SKILL.md` for full documentation.
+
 ## Agents
 
 Subagent types for the Task tool:
