@@ -6,4 +6,4 @@ mod loader;
 mod types;
 
 pub use loader::load_scenario;
-pub use types::{ExpectedState, FileAssertion, Scenario};
+pub use types::{Assertions, ExpectedState, FileAssertion, Scenario};
