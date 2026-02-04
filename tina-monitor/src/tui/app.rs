@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use super::ui;
 use crate::config::Config;
 use crate::data::discovery::{find_orchestrations, Orchestration};
-use crate::data::types::Team;
+use crate::types::Team;
 use crate::data::watcher::{FileWatcher, WatchEvent};
 use crate::terminal::{get_handler, TerminalResult};
 
@@ -123,8 +123,8 @@ pub enum PhaseDetailLayout {
 /// Cached phase data (tasks and members for a specific phase)
 #[derive(Debug, Clone)]
 pub struct PhaseData {
-    pub tasks: Vec<crate::data::types::Task>,
-    pub members: Vec<crate::data::types::Agent>,
+    pub tasks: Vec<crate::types::Task>,
+    pub members: Vec<crate::types::Agent>,
 }
 
 /// Main TUI application state
@@ -705,7 +705,7 @@ impl App {
             .join("tina")
             .join("supervisor-state.json");
         let state_content = std::fs::read_to_string(&state_path).ok()?;
-        let state: crate::data::types::SupervisorState =
+        let state: crate::types::SupervisorState =
             serde_json::from_str(&state_content).ok()?;
 
         // Read handoff to get git range
@@ -1455,13 +1455,13 @@ mod tests {
     use crate::tui::views::log_viewer::LogViewer;
     use std::path::PathBuf;
 
-    fn make_test_task(id: &str) -> crate::data::types::Task {
-        crate::data::types::Task {
+    fn make_test_task(id: &str) -> crate::types::Task {
+        crate::types::Task {
             id: id.to_string(),
             subject: format!("Task {}", id),
             description: "Test task".to_string(),
             active_form: None,
-            status: crate::data::types::TaskStatus::Pending,
+            status: crate::types::TaskStatus::Pending,
             owner: None,
             blocks: vec![],
             blocked_by: vec![],
@@ -2466,7 +2466,7 @@ mod tests {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         // Add a member to the orchestration
         app.orchestrations[0].members.push(
-            crate::data::types::Agent {
+            crate::types::Agent {
                 agent_id: "agent-1".to_string(),
                 name: "worker-1".to_string(),
                 agent_type: Some("worker".to_string()),

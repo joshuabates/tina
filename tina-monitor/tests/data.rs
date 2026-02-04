@@ -226,7 +226,9 @@ fn load_team_from_fixture() {
     let team_content = r#"{
         "name": "my-team",
         "description": "A test team",
-        "lead_agent_id": "team-lead",
+        "createdAt": 1706644800000,
+        "leadAgentId": "team-lead",
+        "leadSessionId": "session-123",
         "members": []
     }"#;
     fs::write(
@@ -270,19 +272,23 @@ fn load_tasks_from_fixture() {
         "id": "2",
         "subject": "Task Two",
         "description": "Second task",
+        "activeForm": null,
         "status": "pending",
         "owner": null,
         "blocks": [],
-        "blocked_by": []
+        "blockedBy": [],
+        "metadata": {}
     }"#;
     let task2_content = r#"{
         "id": "1",
         "subject": "Task One",
         "description": "First task",
+        "activeForm": null,
         "status": "in_progress",
         "owner": null,
         "blocks": [],
-        "blocked_by": []
+        "blockedBy": [],
+        "metadata": {}
     }"#;
     fs::write(
         fixture_path.join(".claude/tasks/my-team/2.json"),
@@ -330,10 +336,12 @@ fn load_tasks_sorts_numerically() {
             "id": "{}",
             "subject": "{}",
             "description": "",
+            "activeForm": null,
             "status": "pending",
             "owner": null,
             "blocks": [],
-            "blocked_by": []
+            "blockedBy": [],
+            "metadata": {{}}
         }}"#, id, subject);
         fs::write(
             fixture_path.join(format!(".claude/tasks/my-team/{}.json", id)),

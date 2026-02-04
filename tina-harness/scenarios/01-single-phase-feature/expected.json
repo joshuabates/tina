@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "assertions": {
+    "phases_completed": 1,
+    "final_status": "complete",
+    "tests_pass": true,
+    "file_changes": [
+      { "path": "src/main.rs", "contains": "verbose" }
+    ]
+  }
+}

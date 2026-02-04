@@ -1,0 +1,5 @@
+//! Core module - business logic
+
+pub mod processor;
+
+pub use processor::{Processor, ProcessorConfig};

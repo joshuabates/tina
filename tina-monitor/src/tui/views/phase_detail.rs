@@ -17,7 +17,7 @@ use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
 use crate::data::discovery::Orchestration;
-use crate::data::types::{Agent, Task, TaskStatus};
+use crate::types::{Agent, Task, TaskStatus};
 use crate::tui::app::{App, PaneFocus, PhaseDetailLayout, ViewState};
 use crate::tui::widgets::progress_bar;
 
@@ -832,7 +832,7 @@ fn truncate(s: &str, max_len: usize) -> String {
 mod tests {
     use super::*;
     use crate::data::discovery::{Orchestration, OrchestrationStatus};
-    use crate::data::types::{Task, TaskStatus};
+    use crate::types::{Task, TaskStatus};
     use ratatui::{backend::TestBackend, Terminal};
     use std::path::PathBuf;
 

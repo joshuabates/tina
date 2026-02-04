@@ -1,0 +1,11 @@
+{
+  "id": "2",
+  "subject": "Setup worktree",
+  "description": "Create git worktree for the feature",
+  "activeForm": null,
+  "status": "completed",
+  "owner": "team-lead",
+  "blocks": [],
+  "blockedBy": [],
+  "metadata": {}
+}

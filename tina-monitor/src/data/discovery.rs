@@ -1,8 +1,10 @@
 //! Orchestration discovery module
 
-use crate::data::{tasks, teams, tina_state, types::*};
-use anyhow::Result;
+use crate::data::{tasks, teams, tina_state};
+use crate::types::{Agent, SessionLookup, SupervisorState, Task, TaskStatus};
+use anyhow::{Context, Result};
 use serde::Serialize;
+use std::fs;
 use std::path::PathBuf;
 
 /// A discovered orchestration with all relevant data
@@ -124,28 +126,64 @@ pub fn find_orchestrations() -> Result<Vec<Orchestration>> {
     Ok(orchestrations)
 }
 
+/// Load session lookup from ~/.claude/tina-sessions/{feature}.json
+fn load_session_lookup(feature: &str) -> Result<SessionLookup> {
+    let home = dirs::home_dir().context("Could not determine home directory")?;
+    let path = home
+        .join(".claude")
+        .join("tina-sessions")
+        .join(format!("{}.json", feature));
+
+    let content = fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read session lookup: {}", path.display()))?;
+    serde_json::from_str(&content).context("Failed to parse session lookup JSON")
+}
+
+/// Find worktree path for an orchestration team
+///
+/// For orchestration teams (ending with -orchestration), the supervisor state
+/// is stored in the worktree path, not the team member's cwd. We need to:
+/// 1. Extract the feature name from the team name
+/// 2. Look up the worktree path in tina-sessions
+fn find_worktree_for_orchestration(team_name: &str, member_cwd: &PathBuf) -> PathBuf {
+    // If team name ends with -orchestration, try to find worktree via tina-sessions
+    if team_name.ends_with("-orchestration") {
+        let feature = team_name.trim_end_matches("-orchestration");
+        if let Ok(lookup) = load_session_lookup(feature) {
+            return lookup.cwd;
+        }
+    }
+
+    // Fall back to member's cwd
+    member_cwd.clone()
+}
+
 /// Try to load a team as an orchestration
 fn try_load_orchestration(team_name: &str) -> Result<Option<Orchestration>> {
     let team = teams::load_team(team_name)?;
 
     // Get cwd from first member (typically team lead)
-    let cwd = team
+    let member_cwd = team
         .members
         .first()
         .map(|m| m.cwd.clone())
         .unwrap_or_default();
 
+    // Find the worktree path - for orchestration teams, this may differ from member_cwd
+    let worktree_path = find_worktree_for_orchestration(team_name, &member_cwd);
+
     // Check for supervisor state (defines this as an orchestration)
-    let supervisor_state = match tina_state::load_supervisor_state(&cwd)? {
+    let supervisor_state = match tina_state::load_supervisor_state(&worktree_path)? {
         Some(state) => state,
         None => return Ok(None), // Not an orchestration
     };
 
-    // Load context metrics if available
-    let context_metrics = tina_state::load_context_metrics(&cwd)?;
+    // Load context metrics from the worktree path
+    let context_metrics = tina_state::load_context_metrics(&worktree_path)?;
 
-    // Load orchestrator tasks (high-level tasks)
-    let orchestrator_tasks = tasks::load_tasks(&team.lead_session_id)?;
+    // Load orchestrator tasks using team name (not session_id)
+    // Tasks are stored at ~/.claude/tasks/{team_name}/
+    let orchestrator_tasks = tasks::load_tasks(&team.name)?;
 
     // Load current phase tasks and members using the worktree path
     let (phase_tasks, phase_members) = load_phase_data_for_worktree(
@@ -242,7 +280,7 @@ mod tests {
             branch: "feature/test".to_string(),
             total_phases: 3,
             current_phase: phase,
-            status: crate::data::types::OrchestrationStatus::Executing,
+            status: crate::types::OrchestrationStatus::Executing,
             orchestration_started_at: Utc::now(),
             phases: Default::default(),
             timing: Default::default(),
@@ -335,5 +373,21 @@ mod tests {
         let complete = OrchestrationStatus::Complete;
         let json = serde_json::to_string(&complete).unwrap();
         assert!(json.contains("\"complete\""));
+    }
+
+    #[test]
+    fn test_find_worktree_for_non_orchestration_team() {
+        // Non-orchestration teams should return the member's cwd
+        let member_cwd = PathBuf::from("/path/to/project");
+        let result = find_worktree_for_orchestration("my-team", &member_cwd);
+        assert_eq!(result, member_cwd);
+    }
+
+    #[test]
+    fn test_find_worktree_for_orchestration_without_session() {
+        // Orchestration teams without session lookup should fall back to member's cwd
+        let member_cwd = PathBuf::from("/path/to/project");
+        let result = find_worktree_for_orchestration("nonexistent-orchestration", &member_cwd);
+        assert_eq!(result, member_cwd);
     }
 }

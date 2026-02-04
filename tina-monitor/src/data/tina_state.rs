@@ -1,6 +1,6 @@
 //! Tina state parsing module (supervisor state and context metrics)
 
-use crate::data::types::{ContextMetrics, SupervisorState};
+use crate::types::{ContextMetrics, SupervisorState};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_load_supervisor_state_exists() {
-        use crate::data::types::OrchestrationStatus;
+        use crate::types::OrchestrationStatus;
 
         let temp_dir = TempDir::new().unwrap();
         create_supervisor_state(temp_dir.path());

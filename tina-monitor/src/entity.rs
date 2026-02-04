@@ -3,9 +3,8 @@
 //! Entities wrap TeamMember, Task, and Commit types to provide a unified
 //! interface for actions and quicklook display.
 
-use crate::data::types::Task;
 use crate::git::commits::Commit;
-use crate::types::TeamMember;
+use crate::types::{Task, TeamMember};
 
 /// A selectable entity in the TUI
 #[derive(Debug, Clone, PartialEq)]
@@ -99,17 +98,19 @@ impl Entity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::types::TaskStatus;
+    use crate::types::TaskStatus;
     use std::path::PathBuf;
 
     fn create_team_member(name: &str, pane_id: Option<String>) -> TeamMember {
         TeamMember {
             agent_id: format!("agent-{}", name),
             name: name.to_string(),
-            agent_type: "test".to_string(),
+            agent_type: Some("test".to_string()),
             model: "claude-opus".to_string(),
+            joined_at: 0,
             tmux_pane_id: pane_id,
             cwd: PathBuf::from("/test"),
+            subscriptions: vec![],
         }
     }
 

@@ -1,6 +1,6 @@
 //! Team configuration parsing module
 
-use crate::data::types::Team;
+use crate::types::Team;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
