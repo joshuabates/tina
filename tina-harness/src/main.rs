@@ -51,6 +51,24 @@ enum Commands {
         #[arg(long)]
         work_dir: Option<PathBuf>,
     },
+    /// Generate a test scenario from parameters
+    GenerateScenario {
+        /// Number of phases in the scenario
+        #[arg(long, default_value = "1")]
+        phases: u32,
+
+        /// Include remediation phase
+        #[arg(long)]
+        include_remediation: bool,
+
+        /// Phase number where failure should occur (0 = no failure)
+        #[arg(long, default_value = "0")]
+        failure_at_phase: u32,
+
+        /// Output directory for the scenario
+        #[arg(long)]
+        output: PathBuf,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -58,6 +76,23 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Validate { path, report } => commands::validate::run(&path, report),
+        Commands::GenerateScenario {
+            phases,
+            include_remediation,
+            failure_at_phase,
+            output,
+        } => {
+            let config = commands::generate::GenerateConfig {
+                phases,
+                include_remediation,
+                failure_at_phase,
+                output_dir: output.clone(),
+            };
+
+            commands::generate::generate(&config)?;
+            println!("Generated scenario at: {}", output.display());
+            Ok(())
+        }
         Commands::Run {
             scenario,
             full,
@@ -84,7 +119,9 @@ fn main() -> anyhow::Result<()> {
             let result = commands::run::run(&scenario, &config)?;
 
             // Print result
-            if result.passed {
+            if result.skipped {
+                println!("SKIP: {}", result.scenario_name);
+            } else if result.passed {
                 println!("PASS: {}", result.scenario_name);
                 println!("  Work dir: {}", result.work_dir.display());
             } else {

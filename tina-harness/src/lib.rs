@@ -11,4 +11,4 @@ pub use tina_session::state::validation::{ValidationIssue, ValidationResult};
 
 // Re-export main types
 pub use failure::{CategorizedFailure, FailureCategory};
-pub use scenario::{ExpectedState, FileAssertion, Scenario};
+pub use scenario::{ExpectedState, FileAssertion, LastPassed, Scenario};
