@@ -1,23 +1,29 @@
 {
   "name": "test-feature",
   "description": "Test orchestration",
-  "lead_agent_id": "team-lead",
+  "createdAt": 1706644800000,
+  "leadAgentId": "team-lead",
+  "leadSessionId": "session-123",
   "members": [
     {
       "name": "team-lead",
-      "agent_id": "team-lead-uuid",
-      "agent_type": "team-lead",
+      "agentId": "team-lead-uuid",
+      "agentType": "team-lead",
       "model": "claude-opus-4",
-      "tmux_pane_id": "%1",
-      "cwd": "/path/to/work"
+      "joinedAt": 1706644800000,
+      "tmuxPaneId": "%1",
+      "cwd": "/path/to/work",
+      "subscriptions": []
     },
     {
       "name": "worker-1",
-      "agent_id": "worker-1-uuid",
-      "agent_type": "implementer",
+      "agentId": "worker-1-uuid",
+      "agentType": "implementer",
       "model": "claude-sonnet-4",
-      "tmux_pane_id": "%2",
-      "cwd": "/path/to/work"
+      "joinedAt": 1706644800000,
+      "tmuxPaneId": "%2",
+      "cwd": "/path/to/work",
+      "subscriptions": []
     }
   ]
 }

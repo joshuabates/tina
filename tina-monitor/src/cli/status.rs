@@ -1,6 +1,7 @@
 //! Status command handlers
 
-use crate::data::{discovery, tasks, teams, types::*};
+use crate::data::{discovery, tasks, teams};
+use crate::types::*;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 

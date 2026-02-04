@@ -1,7 +1,8 @@
 //! Tasks command handler
 
 use crate::cli::OutputFormat;
-use crate::data::{tasks, teams, types::TaskStatus};
+use crate::data::{tasks, teams};
+use crate::types::TaskStatus;
 use crate::TaskStatusFilter;
 use anyhow::Result;
 use serde::Serialize;

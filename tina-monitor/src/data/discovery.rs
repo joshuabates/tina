@@ -1,6 +1,7 @@
 //! Orchestration discovery module
 
-use crate::data::{tasks, teams, tina_state, types::*};
+use crate::data::{tasks, teams, tina_state};
+use crate::types::{Agent, SupervisorState, Task, TaskStatus};
 use anyhow::Result;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -242,7 +243,7 @@ mod tests {
             branch: "feature/test".to_string(),
             total_phases: 3,
             current_phase: phase,
-            status: crate::data::types::OrchestrationStatus::Executing,
+            status: crate::types::OrchestrationStatus::Executing,
             orchestration_started_at: Utc::now(),
             phases: Default::default(),
             timing: Default::default(),

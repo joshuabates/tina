@@ -45,10 +45,12 @@ mod tests {
         TeamMember {
             agent_id: format!("agent-{}", name),
             name: name.to_string(),
-            agent_type: "test-type".to_string(),
+            agent_type: Some("test-type".to_string()),
             model: "claude-opus".to_string(),
+            joined_at: 0,
             tmux_pane_id: None,
             cwd: PathBuf::from("/test"),
+            subscriptions: vec![],
         }
     }
 
@@ -200,7 +202,7 @@ mod tests {
     #[test]
     fn tasks_panel_navigates_down_within_items() {
         let mut panel = TasksPanel::new();
-        use crate::data::types::TaskStatus;
+        use crate::types::TaskStatus;
         panel.set_tasks(vec![
             crate::panels::tasks::tests::make_test_task("1", TaskStatus::Pending),
             crate::panels::tasks::tests::make_test_task("2", TaskStatus::Pending),
@@ -214,7 +216,7 @@ mod tests {
     #[test]
     fn tasks_panel_moves_focus_down_at_bottom() {
         let mut panel = TasksPanel::new();
-        use crate::data::types::TaskStatus;
+        use crate::types::TaskStatus;
         panel.set_tasks(vec![
             crate::panels::tasks::tests::make_test_task("1", TaskStatus::Pending),
             crate::panels::tasks::tests::make_test_task("2", TaskStatus::Pending),

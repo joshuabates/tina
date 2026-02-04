@@ -96,12 +96,12 @@ fn render_team_member_details(m: &crate::types::TeamMember) -> Vec<Line<'static>
     vec![
         detail_line("Name: ", m.name.clone()),
         detail_line("Model: ", m.model.clone()),
-        detail_line("Type: ", m.agent_type.clone()),
+        detail_line("Type: ", m.agent_type.clone().unwrap_or_else(|| "N/A".to_string())),
         detail_line("Pane: ", m.tmux_pane_id.clone().unwrap_or_else(|| "N/A".to_string())),
     ]
 }
 
-fn render_task_details(t: &crate::data::types::Task) -> Vec<Line<'static>> {
+fn render_task_details(t: &crate::types::Task) -> Vec<Line<'static>> {
     let mut lines = vec![
         detail_line("ID: ", t.id.clone()),
         detail_line("Subject: ", t.subject.clone()),
@@ -152,9 +152,8 @@ pub fn handle_key(state: &QuicklookState, key: KeyEvent) -> QuicklookResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::types::{Task, TaskStatus};
     use crate::git::commits::Commit;
-    use crate::types::TeamMember;
+    use crate::types::{Task, TaskStatus, TeamMember};
     use crossterm::event::KeyModifiers;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
@@ -168,10 +167,12 @@ mod tests {
         TeamMember {
             agent_id: "agent-1".to_string(),
             name: "alice".to_string(),
-            agent_type: "test".to_string(),
+            agent_type: Some("test".to_string()),
             model: "claude-opus".to_string(),
+            joined_at: 0,
             tmux_pane_id: Some("0".to_string()),
             cwd: PathBuf::from("/test"),
+            subscriptions: vec![],
         }
     }
 

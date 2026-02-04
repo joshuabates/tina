@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# Shared types with tina-session
+tina-session = { path = "../tina-session" }
 # CLI
 clap = { version = "4", features = ["derive"] }
 

@@ -225,9 +225,8 @@ impl App {
             self.grid.set_phase_team(team.members.clone());
         }
 
-        // Update tasks panel - convert from types::Task to data::types::Task
-        let tasks: Vec<_> = orchestration.tasks.iter().map(convert_task).collect();
-        self.grid.set_tasks(tasks);
+        // Update tasks panel
+        self.grid.set_tasks(orchestration.tasks.clone());
 
         // Load phase commits
         self.load_phase_commits(&orchestration)?;
@@ -269,30 +268,6 @@ impl App {
             .ok_or_else(|| anyhow!("No feature currently loaded"))?;
 
         self.load_orchestration(&feature)
-    }
-}
-
-/// Convert crate::types::Task to crate::data::types::Task
-fn convert_task(task: &crate::types::Task) -> crate::data::types::Task {
-    crate::data::types::Task {
-        id: task.id.clone(),
-        subject: task.subject.clone(),
-        description: task.description.clone(),
-        active_form: None,
-        status: convert_task_status(task.status),
-        owner: task.owner.clone(),
-        blocks: task.blocks.clone(),
-        blocked_by: task.blocked_by.clone(),
-        metadata: serde_json::Value::Null,
-    }
-}
-
-/// Convert crate::types::TaskStatus to crate::data::types::TaskStatus
-fn convert_task_status(status: crate::types::TaskStatus) -> crate::data::types::TaskStatus {
-    match status {
-        crate::types::TaskStatus::Pending => crate::data::types::TaskStatus::Pending,
-        crate::types::TaskStatus::InProgress => crate::data::types::TaskStatus::InProgress,
-        crate::types::TaskStatus::Completed => crate::data::types::TaskStatus::Completed,
     }
 }
 

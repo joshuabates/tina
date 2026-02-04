@@ -2,8 +2,10 @@
   "id": "2",
   "subject": "Execute phase 1",
   "description": "Execute phase 1 implementation plan",
+  "activeForm": null,
   "status": "in_progress",
   "owner": "worker",
   "blocks": ["3"],
-  "blocked_by": []
+  "blockedBy": [],
+  "metadata": {}
 }

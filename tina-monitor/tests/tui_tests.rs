@@ -335,7 +335,7 @@ fn test_app_field_visibility() {
 // ============================================================================
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use tina_monitor::data::types::{Task, TaskStatus};
+use tina_monitor::types::{Task, TaskStatus};
 use tina_monitor::tui::{PaneFocus, PhaseDetailLayout, ViewState};
 
 /// Helper function to create a test task

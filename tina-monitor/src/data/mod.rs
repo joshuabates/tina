@@ -4,13 +4,14 @@ pub mod discovery;
 pub mod tasks;
 pub mod teams;
 pub mod tina_state;
-pub mod types;
 pub mod watcher;
 
-use std::path::{Path, PathBuf};
 use std::fs;
-use anyhow::{Result, Context};
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result};
 use chrono::Utc;
+
 use crate::types::*;
 
 

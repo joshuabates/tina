@@ -1,6 +1,6 @@
 use crate::panel::{Panel, HandleResult, Direction};
 use crate::panels::{border_style, border_type};
-use crate::data::types::{Task, TaskStatus};
+use crate::types::{Task, TaskStatus};
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};

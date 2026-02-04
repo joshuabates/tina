@@ -2,12 +2,11 @@ use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-use crate::data::types::Task;
 use crate::entity::Entity;
 use crate::git::commits::Commit;
 use crate::panel::{Direction, HandleResult, Panel};
 use crate::panels::{CommitsPanel, TasksPanel, TeamPanel};
-use crate::types::TeamMember;
+use crate::types::{Task, TeamMember};
 
 /// Result of handling a key event in the grid
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -699,10 +698,12 @@ mod tests {
         let members = vec![TeamMember {
             agent_id: "agent-1".to_string(),
             name: "test-member".to_string(),
-            agent_type: "test".to_string(),
+            agent_type: Some("test".to_string()),
             model: "claude-haiku".to_string(),
+            joined_at: 0,
             tmux_pane_id: None,
             cwd: PathBuf::from("/test"),
+            subscriptions: vec![],
         }];
 
         grid.set_orchestrator_team(members.clone());
@@ -722,10 +723,12 @@ mod tests {
         let members = vec![TeamMember {
             agent_id: "agent-2".to_string(),
             name: "phase-member".to_string(),
-            agent_type: "test".to_string(),
+            agent_type: Some("test".to_string()),
             model: "claude-haiku".to_string(),
+            joined_at: 0,
             tmux_pane_id: None,
             cwd: PathBuf::from("/test"),
+            subscriptions: vec![],
         }];
 
         grid.set_phase_team(members.clone());
@@ -737,7 +740,7 @@ mod tests {
 
     #[test]
     fn set_tasks_updates_top_right_panel() {
-        use crate::data::types::Task;
+        use crate::types::Task;
 
         let mut grid = PanelGrid::new();
         let tasks = vec![Task {
@@ -745,7 +748,7 @@ mod tests {
             subject: "Test Task".to_string(),
             description: "Test description".to_string(),
             active_form: None,
-            status: crate::data::types::TaskStatus::Pending,
+            status: crate::types::TaskStatus::Pending,
             owner: None,
             blocks: vec![],
             blocked_by: vec![],
@@ -782,7 +785,7 @@ mod tests {
     #[test]
     fn multiple_data_updates_persist_independently() {
         use crate::types::TeamMember;
-        use crate::data::types::Task;
+        use crate::types::Task;
         use crate::git::commits::Commit;
         use std::path::PathBuf;
 
@@ -792,10 +795,12 @@ mod tests {
         let orchestrator_members = vec![TeamMember {
             agent_id: "orch-1".to_string(),
             name: "orchestrator".to_string(),
-            agent_type: "lead".to_string(),
+            agent_type: Some("lead".to_string()),
             model: "claude-opus".to_string(),
+            joined_at: 0,
             tmux_pane_id: Some("pane-1".to_string()),
             cwd: PathBuf::from("/work"),
+            subscriptions: vec![],
         }];
         grid.set_orchestrator_team(orchestrator_members);
 
@@ -803,10 +808,12 @@ mod tests {
         let phase_members = vec![TeamMember {
             agent_id: "phase-1".to_string(),
             name: "phase-worker".to_string(),
-            agent_type: "worker".to_string(),
+            agent_type: Some("worker".to_string()),
             model: "claude-sonnet".to_string(),
+            joined_at: 0,
             tmux_pane_id: None,
             cwd: PathBuf::from("/work"),
+            subscriptions: vec![],
         }];
         grid.set_phase_team(phase_members);
 
@@ -816,7 +823,7 @@ mod tests {
             subject: "Task 1".to_string(),
             description: "Desc".to_string(),
             active_form: None,
-            status: crate::data::types::TaskStatus::Pending,
+            status: crate::types::TaskStatus::Pending,
             owner: None,
             blocks: vec![],
             blocked_by: vec![],

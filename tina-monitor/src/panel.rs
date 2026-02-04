@@ -75,10 +75,12 @@ mod tests {
         let entity = Entity::TeamMember(crate::types::TeamMember {
             agent_id: "test".to_string(),
             name: "test".to_string(),
-            agent_type: "test".to_string(),
+            agent_type: Some("test".to_string()),
             model: "test".to_string(),
+            joined_at: 0,
             tmux_pane_id: None,
             cwd: std::path::PathBuf::from("/test"),
+            subscriptions: vec![],
         });
         let result = HandleResult::Quicklook(entity.clone());
         assert!(matches!(result, HandleResult::Quicklook(_)));

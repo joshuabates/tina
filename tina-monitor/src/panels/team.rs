@@ -140,10 +140,12 @@ mod tests {
         TeamMember {
             agent_id: format!("agent-{}", name),
             name: name.to_string(),
-            agent_type: "test-type".to_string(),
+            agent_type: Some("test-type".to_string()),
             model: model.to_string(),
+            joined_at: 0,
             tmux_pane_id: pane_id,
             cwd: PathBuf::from("/test"),
+            subscriptions: vec![],
         }
     }
 

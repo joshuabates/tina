@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::data::types::{Task, TaskStatus};
+use crate::types::{Task, TaskStatus};
 
 /// Render the task inspector modal
 pub fn render_task_inspector(frame: &mut Frame, task: &Task) {
