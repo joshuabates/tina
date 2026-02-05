@@ -186,7 +186,8 @@ After spawning a teammate, wait for their message. Based on the message content,
 
 **"validate complete" or "VALIDATION_STATUS: Pass/Warning":**
 1. Mark validate-design task complete
-2. Spawn worktree-setup teammate:
+2. Check for prerequisites: Read the design doc and look for a `## Prerequisites` section. If one exists, present each prerequisite to the user and ask them to confirm everything is in place before continuing. Do not proceed until the user confirms. If no prerequisites section exists, skip this check.
+3. Spawn worktree-setup teammate:
 ```json
 {
   "subagent_type": "tina:worktree-setup",
@@ -688,6 +689,15 @@ Each teammate sends a structured completion message. Parse these patterns:
 if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
     TaskUpdate: validate-design, status: completed
     TaskUpdate: validate-design, metadata: { validation_status: "pass" or "warning" }
+
+    # Check for prerequisites before proceeding
+    Read design doc, look for "## Prerequisites" section
+    If prerequisites exist:
+        Print each prerequisite to user
+        Ask: "These prerequisites must be in place before starting. Are they all set up?"
+        Wait for user confirmation before continuing
+        If user says something isn't ready, pause orchestration
+
     Spawn worktree-setup teammate
     Print: "Design validated. Setting up worktree..."
 

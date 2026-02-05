@@ -142,6 +142,11 @@ Check that the design follows expected structure:
 - Phases (at least one `## Phase N` section)
 - Architectural Context (added by architect)
 
+**Optional sections:**
+- Prerequisites (API keys, accounts, third-party config needed before implementation)
+
+If a `## Prerequisites` section exists, include it in the report so the orchestrator can verify them before starting work. Do not flag its absence -- most designs won't need one.
+
 **Flag if missing:** Warning for missing non-critical sections, Stop for missing phases
 
 ## Severity Tiers
@@ -198,6 +203,10 @@ Check that the design follows expected structure:
 - [x] Success Metrics
 - [x] Phases (N found)
 - [x] Architectural Context
+- [ ] Prerequisites (optional)
+
+**Prerequisites:**
+[If section exists, list each prerequisite. If absent, "None specified."]
 
 ### Summary
 **Status:** Pass / Warning / Stop

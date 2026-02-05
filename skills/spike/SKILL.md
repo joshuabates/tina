@@ -37,6 +37,7 @@ Extract from the spike plan:
 - **Questions** list from "## Questions" section (numbered, with TBD references)
 - **Experiments** list from "## Experiments" section (each with description and success criteria)
 - **Constraints** from "## Constraints" section
+- **Prerequisites** from "## Prerequisites" section (if present) -- things needed from user before starting (API keys, accounts, config)
 
 Store these as local variables. You will use them to create tasks.
 
@@ -96,6 +97,26 @@ Branch: <BRANCH_NAME>
 
 ---
 
+## STEP 2b: Check prerequisites
+
+If the spike plan has a `## Prerequisites` section:
+
+1. Parse each prerequisite item
+2. Present them to the user:
+```
+This spike has prerequisites that need to be in place:
+- [prerequisite 1]
+- [prerequisite 2]
+
+Are these all set up?
+```
+3. Wait for user confirmation before proceeding
+4. If the user says something isn't ready, stop and let them set it up first
+
+If no `## Prerequisites` section exists, skip this step.
+
+---
+
 ## STEP 3: Create team
 
 ```json
@@ -122,7 +143,8 @@ TaskCreate {
     "question": "<the question this experiment answers, from Questions section>",
     "experiment": "<full experiment description including setup steps and success criteria>",
     "tbd_section": "<which TBD section this resolves, from Questions section>",
-    "worktree_path": "<WORKTREE_PATH>"
+    "worktree_path": "<WORKTREE_PATH>",
+    "lead_name": "spike-lead"
   }
 }
 ```

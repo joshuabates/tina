@@ -22,6 +22,7 @@ Your spawn prompt contains: `task_id: <id>`
    - `experiment`: Full experiment description (setup, steps, success criteria)
    - `tbd_section`: Which TBD section in the design doc this resolves
    - `worktree_path`: Path to the throwaway worktree to work in
+   - `lead_name`: Name of the spike lead to message (e.g., "spike-lead")
 
 ## Boundaries
 
@@ -29,7 +30,7 @@ Your spawn prompt contains: `task_id: <id>`
 - Work exclusively in the provided worktree path
 - Answer the specific question assigned with evidence
 - Report findings in structured format (see Report Format below)
-- Message spike lead when stuck or when experiment raises new questions
+- Message the spike lead (using `lead_name` from task metadata) when stuck or when experiment raises new questions
 
 **MUST NOT:**
 - Follow TDD -- this is throwaway exploratory code
@@ -71,7 +72,7 @@ If you hit a wall or the experiment raises questions you didn't expect:
 ```
 SendMessage({
   type: "message",
-  recipient: "spike-lead",
+  recipient: "<lead_name from task metadata>",
   content: "Stuck on experiment. [Describe what you tried and what's blocking you]. Question: [specific question for the lead]",
   summary: "Experimenter stuck, needs guidance"
 })
@@ -85,12 +86,12 @@ When the experiment is complete (whether the answer is yes, no, partially, or "t
 
 ## Report Format
 
-Message the spike lead with findings in this exact format:
+Message the spike lead (using `lead_name` from task metadata) with findings in this exact format:
 
 ```
 SendMessage({
   type: "message",
-  recipient: "spike-lead",
+  recipient: "<lead_name from task metadata>",
   content: "EXPERIMENT COMPLETE\n\nQUESTION: [the question]\n\nANSWER: [clear, direct answer]\n\nEVIDENCE:\n[bullet points with specific evidence -- benchmark numbers, test output, error messages, code that worked/didn't]\n\nPROPOSED REVISION for \"[TBD section name]\":\n[concrete text to replace the TBD section in the design doc]\n\nNEW QUESTIONS:\n[any new questions that surfaced during the experiment, or 'None']",
   summary: "Experiment complete with findings"
 })
@@ -100,12 +101,12 @@ Every field is required. If the answer is "it doesn't work," that's a valid and 
 
 ## Communication
 
-- **Report findings:** SendMessage to "spike-lead" with structured format above
-- **Ask for help:** SendMessage to "spike-lead" when stuck
+- **Report findings:** SendMessage to the lead (using `lead_name` from task metadata) with structured format above
+- **Ask for help:** SendMessage to the lead when stuck
 - **New questions:** Include in findings report under NEW QUESTIONS
 
 ## Shutdown Protocol
 
-When receiving shutdown request from spike lead:
+When receiving shutdown request from the lead:
 1. Approve immediately -- your experiment is done
 2. No state to save -- your code is throwaway

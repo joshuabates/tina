@@ -103,6 +103,7 @@ Use judgment based on session context.
 - Break it into sections of 200-300 words
 - Ask after each section whether it looks right so far
 - Cover: architecture, components, data flow, error handling, testing
+- If the design requires anything from the user before implementation can start (API keys, third-party accounts, service configuration, environment setup), include a `## Prerequisites` section listing each item with what's needed and why
 - Be ready to go back and clarify if something doesn't make sense
 - When you encounter genuine unknowns during design -- things that can't be resolved through discussion or research alone (performance questions, compatibility unknowns, library evaluations) -- mark them as explicit TBD sections rather than guessing or hand-waving
 - TBD sections should state what's unknown and what information is needed to resolve it
@@ -167,6 +168,10 @@ Once the spike plan is agreed upon, write it to `docs/plans/YYYY-MM-DD-<topic>-s
 - <setup steps>
 - <what to test>
 - **Success looks like:** <criteria>
+
+## Prerequisites
+<if experiments need external resources (API keys, accounts, services, config), list them here -- omit section if none>
+- <what's needed> -- <why and how to verify it's ready>
 
 ## Constraints
 - Prototype only -- no production quality needed
