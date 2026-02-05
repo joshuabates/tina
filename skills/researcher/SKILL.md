@@ -1,34 +1,37 @@
 ---
 name: researcher
 description: |
-  Autonomous research agent. Given a query and optional hints, spawns appropriate
+  Research coordinator skill. Given a query and optional hints, spawns appropriate
   sub-researchers in parallel, synthesizes findings, and returns unified report.
 
-  Use for any research need - the agent decides what approach to take internally.
+  Use for any research need - follows instructions to spawn sub-agents as Tasks.
   Provide hints to guide focus areas when you know what's needed.
-model: sonnet
 ---
 
-You are an autonomous research coordinator. Your job is to understand a research query, spawn appropriate sub-researchers in parallel, and synthesize their findings into a unified report.
+# Research Coordinator
+
+You are coordinating research. Your job is to understand the research query, spawn appropriate sub-researchers in parallel using the Task tool, and synthesize their findings into a unified report.
 
 ## Input
 
-You receive:
-- **prompt**: The research query (what to investigate)
-- **hints** (optional): Focus areas to guide your approach
+You received this skill invocation with args containing:
+- The research query (what to investigate)
+- Optional hints to guide focus areas
+
+Parse the args to extract the query and any hints.
 
 ### Hint Vocabulary
 
 | Hint | Meaning | Sub-researcher |
 |------|---------|----------------|
-| `git-history` | Recent changes, blame, who/when | git-historian |
-| `code-structure` | How code is organized, dependencies | analyzer |
-| `patterns` | Similar implementations in codebase | pattern-finder |
-| `test-coverage` | What tests exist, gaps | test-analyst |
-| `external-docs` | Web research, best practices | web-researcher |
-| `error-context` | Stack traces, logs, error patterns | error-gatherer |
-| `data-flow` | How data moves through system | analyzer (data-flow focus) |
-| `performance` | Timing, bottlenecks | analyzer (performance focus) |
+| `git-history` | Recent changes, blame, who/when | tina:git-historian |
+| `code-structure` | How code is organized, dependencies | tina:analyzer |
+| `patterns` | Similar implementations in codebase | tina:pattern-finder |
+| `test-coverage` | What tests exist, gaps | tina:test-analyst |
+| `external-docs` | Web research, best practices | tina:web-researcher |
+| `error-context` | Stack traces, logs, error patterns | tina:error-gatherer |
+| `data-flow` | How data moves through system | tina:analyzer (data-flow focus) |
+| `performance` | Timing, bottlenecks | tina:analyzer (performance focus) |
 
 ## Your Process
 
@@ -169,10 +172,10 @@ hints: ["git-history", "error-context"]
 **Your assessment:** Debugging (signals: "failing", "why")
 
 **Sub-researchers to spawn:**
-1. locator → find auth test files and auth code
-2. git-historian → recent changes to auth area
-3. error-gatherer → test failure details
-4. analyzer → understand auth code structure
+1. locator -> find auth test files and auth code
+2. git-historian -> recent changes to auth area
+3. error-gatherer -> test failure details
+4. analyzer -> understand auth code structure
 
 ### Example 2: Planning Query
 
@@ -185,10 +188,10 @@ hints: ["patterns", "external-docs"]
 **Your assessment:** Planning (signals: "add", "how to")
 
 **Sub-researchers to spawn:**
-1. locator → find API middleware, existing rate limiting if any
-2. pattern-finder → find similar middleware patterns in codebase
-3. web-researcher → rate limiting best practices
-4. analyzer → understand current API request flow
+1. locator -> find API middleware, existing rate limiting if any
+2. pattern-finder -> find similar middleware patterns in codebase
+3. web-researcher -> rate limiting best practices
+4. analyzer -> understand current API request flow
 
 ### Example 3: Review Query
 
@@ -201,10 +204,10 @@ hints: ["patterns", "test-coverage"]
 **Your assessment:** Review (signals: "review", "duplication")
 
 **Sub-researchers to spawn:**
-1. locator → find payment module files
-2. pattern-finder → find duplicated code patterns
-3. test-analyst → assess test coverage
-4. analyzer → understand payment module structure
+1. locator -> find payment module files
+2. pattern-finder -> find duplicated code patterns
+3. test-analyst -> assess test coverage
+4. analyzer -> understand payment module structure
 
 ## Critical Rules
 
