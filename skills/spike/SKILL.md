@@ -242,7 +242,7 @@ Derive findings path from spike plan path:
 
 Write the findings document with this structure:
 
-```markdown
+~~~markdown
 # Spike Findings: <topic>
 
 ## Summary
@@ -272,7 +272,7 @@ Contains prototype code for reference. Do not merge.
 <Any new questions that surfaced during experiments.
 Gathered from experimenters' NEW QUESTIONS fields.
 If none: "No new questions surfaced.">
-```
+~~~
 
 **Commit the findings doc:**
 ```bash
