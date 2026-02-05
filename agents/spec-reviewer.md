@@ -107,27 +107,33 @@ Your spawn prompt tells you which task to review. You have no context from previ
 **If PASS:**
 
 ```
-Teammate.write({
-  target: "worker",
-  value: "Spec review passed."
+SendMessage({
+  type: "message",
+  recipient: "worker",
+  content: "Spec review passed.",
+  summary: "Spec review passed"
 })
 ```
 
 **If FAIL (issues):**
 
 ```
-Teammate.write({
-  target: "worker",
-  value: "Spec review FAILED. Issues:\n- [Issue 1]: [details]\n- [Issue 2]: [details]"
+SendMessage({
+  type: "message",
+  recipient: "worker",
+  content: "Spec review FAILED. Issues:\n- [Issue 1]: [details]\n- [Issue 2]: [details]",
+  summary: "Spec review failed with issues"
 })
 ```
 
 **If FAIL (preconditions):**
 
 ```
-Teammate.write({
-  target: "worker",
-  value: "Spec review FAILED. Preconditions unmet:\n- [Precondition]: [what's missing]"
+SendMessage({
+  type: "message",
+  recipient: "worker",
+  content: "Spec review FAILED. Preconditions unmet:\n- [Precondition]: [what's missing]",
+  summary: "Spec review failed, preconditions unmet"
 })
 ```
 

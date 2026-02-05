@@ -128,29 +128,29 @@ Request shutdown for each agent in order:
 
 1. **Worker:**
    ```json
-   {
-     "operation": "requestShutdown",
-     "target_agent_id": "worker",
-     "reason": "Task complete"
-   }
+   SendMessage({
+     type: "shutdown_request",
+     recipient: "worker",
+     content: "Task complete"
+   })
    ```
 
 2. **Spec-reviewer:**
    ```json
-   {
-     "operation": "requestShutdown",
-     "target_agent_id": "spec-reviewer",
-     "reason": "Review complete"
-   }
+   SendMessage({
+     type: "shutdown_request",
+     recipient: "spec-reviewer",
+     content: "Review complete"
+   })
    ```
 
 3. **Code-quality-reviewer:**
    ```json
-   {
-     "operation": "requestShutdown",
-     "target_agent_id": "code-quality-reviewer",
-     "reason": "Review complete"
-   }
+   SendMessage({
+     type: "shutdown_request",
+     recipient: "code-quality-reviewer",
+     content: "Review complete"
+   })
    ```
 
 **Wait for acknowledgments** from all three before proceeding.
@@ -461,15 +461,15 @@ With the ephemeral model, shutdown happens at two levels:
 After reviews pass for a task, shut down worker and reviewers:
 
 ```json
-{
-  "operation": "requestShutdown",
-  "target_agent_id": "worker",
-  "reason": "Task complete"
-}
+SendMessage({
+  type: "shutdown_request",
+  recipient: "worker",
+  content: "Task complete"
+})
 ```
 
 Repeat for each agent (worker, spec-reviewer, code-quality-reviewer if spawned).
-Monitor for Teammate messages confirming shutdown acknowledgment before spawning agents for the next task.
+Monitor for shutdown acknowledgment messages before spawning agents for the next task.
 
 **Phase-end cleanup:**
 
@@ -487,11 +487,11 @@ Shutdown is a two-step process:
 For each active agent (worker, spec-reviewer, code-quality-reviewer):
 
 ```json
-{
-  "operation": "requestShutdown",
-  "target_agent_id": "<agent-name>",
-  "reason": "Task complete"
-}
+SendMessage({
+  type: "shutdown_request",
+  recipient: "<agent-name>",
+  content: "Task complete"
+})
 ```
 
 ### Step 2: Verify Shutdown

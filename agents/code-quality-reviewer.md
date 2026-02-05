@@ -109,18 +109,22 @@ Your spawn prompt tells you which task to review. You have no context from previ
 **If PASS:**
 
 ```
-Teammate.write({
-  target: "worker",
-  value: "Code quality review PASSED.\n\n#### Simplification Opportunities\n(none)\n\n#### Complexity Violations\n(none)"
+SendMessage({
+  type: "message",
+  recipient: "worker",
+  content: "Code quality review PASSED.\n\n#### Simplification Opportunities\n(none)\n\n#### Complexity Violations\n(none)",
+  summary: "Code quality review passed"
 })
 ```
 
 **If FAIL:**
 
 ```
-Teammate.write({
-  target: "worker",
-  value: "Code quality review FAILED.\n\n#### Simplification Opportunities\n- [ ] [specific opportunity]\n\n#### Complexity Violations\n| File | Lines | Issue | Recommendation |\n|------|-------|-------|----------------|\n| file.rs | 450 | Exceeds 300 line limit | Split into modules |\n\nFix these violations before requesting re-review."
+SendMessage({
+  type: "message",
+  recipient: "worker",
+  content: "Code quality review FAILED.\n\n#### Simplification Opportunities\n- [ ] [specific opportunity]\n\n#### Complexity Violations\n| File | Lines | Issue | Recommendation |\n|------|-------|-------|----------------|\n| file.rs | 450 | Exceeds 300 line limit | Split into modules |\n\nFix these violations before requesting re-review.",
+  summary: "Code quality review failed with violations"
 })
 ```
 

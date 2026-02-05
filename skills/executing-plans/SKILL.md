@@ -207,14 +207,18 @@ Task tool:
 Worker notifies reviewers via direct message:
 
 ```
-Teammate.write({
-  target: "spec-reviewer",
-  value: "Implementation complete. Files: src/foo.ts. Git range: abc123..def456. Please review."
+SendMessage({
+  type: "message",
+  recipient: "spec-reviewer",
+  content: "Implementation complete. Files: src/foo.ts. Git range: abc123..def456. Please review.",
+  summary: "Implementation complete, ready for review"
 })
 
-Teammate.write({
-  target: "code-quality-reviewer",
-  value: "Implementation complete. Files: src/foo.ts. Git range: abc123..def456. Please review."
+SendMessage({
+  type: "message",
+  recipient: "code-quality-reviewer",
+  content: "Implementation complete. Files: src/foo.ts. Git range: abc123..def456. Please review.",
+  summary: "Implementation complete, ready for review"
 })
 ```
 
@@ -223,9 +227,11 @@ Teammate.write({
 Reviewer messages worker directly with issues:
 
 ```
-Teammate.write({
-  target: "worker",
-  value: "Spec review failed. Issues:\n- Missing validation\n- Wrong return type\nPlease fix and notify when ready."
+SendMessage({
+  type: "message",
+  recipient: "worker",
+  content: "Spec review failed. Issues:\n- Missing validation\n- Wrong return type\nPlease fix and notify when ready.",
+  summary: "Spec review failed, issues found"
 })
 ```
 
@@ -236,9 +242,9 @@ Worker fixes and re-notifies. Reviewer re-reviews.
 After both reviews pass, shutdown all task members:
 
 ```
-Teammate.requestShutdown({ target_agent_id: "worker" })
-Teammate.requestShutdown({ target_agent_id: "spec-reviewer" })
-Teammate.requestShutdown({ target_agent_id: "code-quality-reviewer" })
+SendMessage({ type: "shutdown_request", recipient: "worker", content: "Task complete" })
+SendMessage({ type: "shutdown_request", recipient: "spec-reviewer", content: "Review complete" })
+SendMessage({ type: "shutdown_request", recipient: "code-quality-reviewer", content: "Review complete" })
 
 TaskUpdate({ taskId: task.id, status: "completed" })
 ```

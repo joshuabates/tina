@@ -174,9 +174,11 @@ Watch for pattern-finding requests:
 
 Send patterns to requester:
 ```
-Teammate.write({
-  target: "[requester-name]",
-  value: "[patterns in format above]"
+SendMessage({
+  type: "message",
+  recipient: "[requester-name]",
+  content: "[patterns in format above]",
+  summary: "Pattern examples for [pattern type]"
 })
 ```
 
@@ -195,9 +197,11 @@ TaskCreate({
 
 Share relevant discoveries:
 ```
-Teammate.write({
-  target: "analyzer",
-  value: "Found 3 different error handling patterns. The one at src/services/payment.ts:45 looks most sophisticated - might be worth deep analysis."
+SendMessage({
+  type: "message",
+  recipient: "analyzer",
+  content: "Found 3 different error handling patterns. The one at src/services/payment.ts:45 looks most sophisticated - might be worth deep analysis.",
+  summary: "Found multiple error handling patterns"
 })
 ```
 

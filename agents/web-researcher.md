@@ -131,9 +131,11 @@ Watch for web research requests:
 
 Send findings to requester:
 ```
-Teammate.write({
-  target: "[requester-name]",
-  value: "[findings in format above]"
+SendMessage({
+  type: "message",
+  recipient: "[requester-name]",
+  content: "[findings in format above]",
+  summary: "Web research results for [topic]"
 })
 ```
 
@@ -152,9 +154,11 @@ TaskCreate({
 
 Share relevant discoveries:
 ```
-Teammate.write({
-  target: "pattern-finder",
-  value: "Found that the recommended pattern for [X] is [Y]. See [URL]. Might want to check if we have examples of this."
+SendMessage({
+  type: "message",
+  recipient: "pattern-finder",
+  content: "Found that the recommended pattern for [X] is [Y]. See [URL]. Might want to check if we have examples of this.",
+  summary: "Recommended pattern found for [topic]"
 })
 ```
 

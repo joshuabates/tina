@@ -90,15 +90,19 @@ You have NO context from previous tasks. This is intentional - fresh eyes on eac
 After implementation complete, notify reviewers:
 
 ```
-Teammate.write({
-  target: "spec-reviewer",
-  value: "Task complete. Files: [list]. Git range: [base]..[head]. Please review."
+SendMessage({
+  type: "message",
+  recipient: "spec-reviewer",
+  content: "Task complete. Files: [list]. Git range: [base]..[head]. Please review.",
+  summary: "Implementation complete, requesting spec review"
 })
 
 // If code-quality-reviewer exists for this task
-Teammate.write({
-  target: "code-quality-reviewer",
-  value: "Task complete. Files: [list]. Git range: [base]..[head]. Please review."
+SendMessage({
+  type: "message",
+  recipient: "code-quality-reviewer",
+  content: "Task complete. Files: [list]. Git range: [base]..[head]. Please review.",
+  summary: "Implementation complete, requesting code quality review"
 })
 ```
 

@@ -94,33 +94,36 @@ Files changed:
 
 ### Delivering Results
 
-```yaml
-Teammate.write:
-  target: "{requester}"
-  value: "{formatted history report}"
+```
+SendMessage({
+  type: "message",
+  recipient: "{requester}",
+  content: "{formatted history report}",
+  summary: "Git history report for [area]"
+})
 ```
 
 ### Creating Follow-up Tasks
 
 If you discover commits that need deeper code analysis:
 
-```yaml
-TaskCreate:
-  subject: "Analyze changes in commit {hash}"
-  description: "Commit {hash} made significant changes to {area}. Need code analysis."
-  metadata:
-    type: "analyze"
-    commit: "{hash}"
-    files: ["{changed files}"]
+```
+TaskCreate({
+  subject: "Analyze changes in commit {hash}",
+  description: "Commit {hash} made significant changes to {area}. Need code analysis.",
+  metadata: { type: "analyze", commit: "{hash}", files: ["{changed files}"] }
+})
 ```
 
 ### Messaging Other Researchers
 
-```yaml
-# If you find something relevant to another researcher
-Teammate.write:
-  target: "analyzer"
-  value: "Commit abc123 (2 days ago) rewrote src/auth/jwt.ts. You may want to analyze the new implementation."
+```
+SendMessage({
+  type: "message",
+  recipient: "analyzer",
+  content: "Commit abc123 (2 days ago) rewrote src/auth/jwt.ts. You may want to analyze the new implementation.",
+  summary: "Notable commit rewrote JWT implementation"
+})
 ```
 
 ### Shutdown Protocol

@@ -57,7 +57,7 @@ All phases complete:
 **Manual mode:** Run individual skills yourself (`/tina:write-plan`, `/tina:execute-plan`, etc.)
 **Automated mode:** `/tina:orchestrate` runs the full pipeline
 
-> **Note:** Automated mode requires [claude-sneakpeek](https://github.com/mikekelly/claude-sneakpeek) for team-based execution. A non-team mode is planned for the future.
+> **Note:** Automated mode requires the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` environment variable for team-based execution.
 
 ## Skills
 
@@ -149,7 +149,7 @@ claude plugins add tina
 
 Requires:
 - Claude Code CLI
-- [claude-sneakpeek](https://github.com/mikekelly/claude-sneakpeek) (for automated orchestration mode)
+- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` environment variable (for automated orchestration mode)
 
 ## Usage
 

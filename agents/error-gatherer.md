@@ -150,36 +150,43 @@ HTTP 401 response
 
 ### Delivering Results
 
-```yaml
-Teammate.write:
-  target: "{requester}"
-  value: "{formatted error context}"
+```
+SendMessage({
+  type: "message",
+  recipient: "{requester}",
+  content: "{formatted error context}",
+  summary: "Error context for [error type]"
+})
 ```
 
 ### Creating Follow-up Tasks
 
 If error originates from code that needs analysis:
 
-```yaml
-TaskCreate:
-  subject: "Analyze error origin at {file}:{line}"
-  description: "Error thrown at {location}. Need to understand the validation logic."
-  metadata:
-    type: "analyze"
-    files: ["{file}"]
-    line: {line}
+```
+TaskCreate({
+  subject: "Analyze error origin at {file}:{line}",
+  description: "Error thrown at {location}. Need to understand the validation logic.",
+  metadata: { type: "analyze", files: ["{file}"], line: "{line}" }
+})
 ```
 
 ### Messaging Other Researchers
 
-```yaml
-Teammate.write:
-  target: "git-historian"
-  value: "Error handling at src/api/errorHandler.ts:30 - might want to check recent changes to this file."
+```
+SendMessage({
+  type: "message",
+  recipient: "git-historian",
+  content: "Error handling at src/api/errorHandler.ts:30 - might want to check recent changes to this file.",
+  summary: "Error handler file needs history check"
+})
 
-Teammate.write:
-  target: "test-analyst"
-  value: "Found 4 throw locations for AuthenticationError. Check if all cases are tested."
+SendMessage({
+  type: "message",
+  recipient: "test-analyst",
+  content: "Found 4 throw locations for AuthenticationError. Check if all cases are tested.",
+  summary: "Verify test coverage for error locations"
+})
 ```
 
 ### Shutdown Protocol

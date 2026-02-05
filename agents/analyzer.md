@@ -109,9 +109,11 @@ Watch for messages requesting deep analysis:
 
 Send analysis to requester:
 ```
-Teammate.write({
-  target: "[requester-name]",
-  value: "[analysis in format above]"
+SendMessage({
+  type: "message",
+  recipient: "[requester-name]",
+  content: "[analysis in format above]",
+  summary: "Analysis results for [component]"
 })
 ```
 
@@ -130,9 +132,11 @@ TaskCreate({
 
 Share relevant discoveries:
 ```
-Teammate.write({
-  target: "pattern-finder",
-  value: "Found interesting pattern at src/auth/middleware.ts:23 - uses decorator pattern for validation. Might be relevant to your pattern search."
+SendMessage({
+  type: "message",
+  recipient: "pattern-finder",
+  content: "Found interesting pattern at src/auth/middleware.ts:23 - uses decorator pattern for validation. Might be relevant to your pattern search.",
+  summary: "Found decorator pattern in auth middleware"
 })
 ```
 

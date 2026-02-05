@@ -56,10 +56,10 @@ With ephemeral teams, only the current task's worker and reviewers might be acti
 
 For each active agent (check team config at ~/.claude/teams/phase-N-execution/config.json):
 
-Use the Teammate tool with:
-- operation: "requestShutdown"
-- target_agent_id: (agent name)
-- reason: "Checkpoint triggered - context management"
+Use SendMessage with:
+- type: "shutdown_request"
+- recipient: (agent name)
+- content: "Checkpoint triggered - context management"
 
 Wait for shutdown approval (up to 30 seconds). If timeout, checkpoint proceeds anyway.
 
@@ -150,7 +150,7 @@ Supervisor watches for this signal to confirm checkpoint succeeded.
 - Manual user invocation via `/checkpoint`
 
 **Uses:**
-- Teammate tool with operation "requestShutdown" - Graceful team shutdown
+- SendMessage with type "shutdown_request" - Graceful agent shutdown
 - TaskList tool - Capture current task states
 
 **State files:**

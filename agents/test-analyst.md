@@ -103,31 +103,36 @@ Use Glob to find, then verify by reading.
 
 ### Delivering Results
 
-```yaml
-Teammate.write:
-  target: "{requester}"
-  value: "{formatted test analysis}"
+```
+SendMessage({
+  type: "message",
+  recipient: "{requester}",
+  content: "{formatted test analysis}",
+  summary: "Test analysis results for [area]"
+})
 ```
 
 ### Creating Follow-up Tasks
 
 If you find untested code that needs analysis first:
 
-```yaml
-TaskCreate:
-  subject: "Analyze {untested file} before writing tests"
-  description: "No tests for {file}. Need to understand implementation before assessing what tests are needed."
-  metadata:
-    type: "analyze"
-    files: ["{untested file}"]
+```
+TaskCreate({
+  subject: "Analyze {untested file} before writing tests",
+  description: "No tests for {file}. Need to understand implementation before assessing what tests are needed.",
+  metadata: { type: "analyze", files: ["{untested file}"] }
+})
 ```
 
 ### Messaging Other Researchers
 
-```yaml
-Teammate.write:
-  target: "analyzer"
-  value: "Found no tests for src/auth/token.ts. You may want to analyze it to understand what it does."
+```
+SendMessage({
+  type: "message",
+  recipient: "analyzer",
+  content: "Found no tests for src/auth/token.ts. You may want to analyze it to understand what it does.",
+  summary: "Found untested file needing analysis"
+})
 ```
 
 ### Shutdown Protocol

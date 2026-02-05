@@ -88,9 +88,11 @@ Watch for messages with file location requests.
 
 Send results to requester:
 ```
-Teammate.write({
-  target: "[requester-name]",
-  value: "[file list in format above]"
+SendMessage({
+  type: "message",
+  recipient: "[requester-name]",
+  content: "[file list in format above]",
+  summary: "File locations for [query topic]"
 })
 ```
 
@@ -109,9 +111,11 @@ TaskCreate({
 
 If you find something relevant to another researcher's work:
 ```
-Teammate.write({
-  target: "analyzer",
-  value: "Found auth files at src/auth/. You may want to analyze src/auth/middleware.ts for the JWT validation logic."
+SendMessage({
+  type: "message",
+  recipient: "analyzer",
+  content: "Found auth files at src/auth/. You may want to analyze src/auth/middleware.ts for the JWT validation logic.",
+  summary: "Auth files found for analysis"
 })
 ```
 

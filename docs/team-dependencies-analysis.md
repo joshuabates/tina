@@ -1,11 +1,11 @@
 # Team Dependencies Analysis
 
 **Date:** 2026-01-26
-**Context:** Supersonic plugin currently uses teams/swarms (Claude Sneakpeak only). Exploring options for supporting regular Claude Code.
+**Context:** Supersonic plugin currently uses teams/swarms (mainline Claude Code (experimental) only). Exploring options for supporting regular Claude Code.
 
 ## Current State
 
-The plugin is built around team-based execution, which requires Claude Sneakpeak. Key components with team dependencies:
+The plugin is built around team-based execution, which requires mainline Claude Code (experimental). Key components with team dependencies:
 
 ### Skills with Team Dependencies
 
@@ -124,7 +124,7 @@ if (Teammate tool available) {
 ### Option D: Graceful Degradation
 
 Core skills (test-driven-development, systematic-debugging, writing-plans) work everywhere.
-Advanced orchestration (orchestrate, team-lead-init) explicitly requires Sneakpeak.
+Advanced orchestration (orchestrate, team-lead-init) explicitly requires mainline Claude Code (experimental).
 
 **Pros:**
 - Clear feature boundaries
@@ -173,5 +173,13 @@ If teams underperform or don't ship to regular Claude Code, revisit dual-mode su
 
 1. Do unused "Team Mode Behavior" sections in agent prompts degrade subagent performance?
 2. Is parallel team coordination actually better than controller-managed parallel subagents?
-3. What's the timeline for teams shipping to regular Claude Code?
+3. ~~What's the timeline for teams shipping to regular Claude Code?~~ Resolved - shipped as experimental.
 4. Would it make sense to test both approaches with same task to measure quality/speed differences?
+
+## Resolution
+
+**Date:** 2026-02-05
+
+Teams shipped in mainline Claude Code behind the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` environment variable. The `claude-sneakpeek` fork is no longer needed.
+
+**Option E (Wait and See) proved correct.** The teams API is now available in mainline Claude Code as an experimental feature, eliminating the need for dual-mode support or any of the other workarounds explored above. The plugin now targets mainline Claude Code directly.
