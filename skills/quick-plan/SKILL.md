@@ -23,12 +23,12 @@ Research thoroughly, present once, get approval, execute. For tasks where the sc
 
 ### 1. Research Phase (Silent)
 
-Spawn researcher to understand the landscape:
+Load researcher to understand the landscape:
 
 ```yaml
-Task:
-  subagent_type: tina:researcher
-  prompt: |
+Skill:
+  skill: tina:researcher
+  args: |
     Research for planning: {feature/task description}
 
     Find:
@@ -36,10 +36,11 @@ Task:
     - Similar implementations to follow as patterns
     - Integration points and dependencies
     - Test files that will need updates
-  hints: ["code-structure", "patterns"]
+
+    hints: code-structure, patterns
 ```
 
-Wait for researcher to complete. Synthesize findings internally.
+This loads researcher in your session. You then spawn sub-researchers (locator, analyzer, pattern-finder) as Tasks - only one level of nesting.
 
 ### 2. Present Plan (One Shot)
 

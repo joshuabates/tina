@@ -29,9 +29,9 @@ Integrate codebase exploration to ask better questions from the start.
 **For comprehensive research (recommended for new topics):**
 
 ```yaml
-Task:
-  subagent_type: tina:researcher
-  prompt: |
+Skill:
+  skill: tina:researcher
+  args: |
     Research for brainstorming: {idea description}
 
     Find:
@@ -39,16 +39,13 @@ Task:
     - Similar implementations or patterns in the codebase
     - Integration points and dependencies
     - How similar features are structured
-  hints: ["code-structure", "patterns"]
+
+    hints: code-structure, patterns
 ```
 
-Researcher will autonomously:
-- Locate relevant files
-- Find similar patterns
-- Analyze structure
-- Return unified findings
+This loads the researcher skill in your session. You then spawn sub-researchers (locator, analyzer, pattern-finder) as Tasks - only one level of nesting.
 
-**For quick targeted research:**
+**For quick targeted research (skip the coordinator):**
 
 ```yaml
 Task:

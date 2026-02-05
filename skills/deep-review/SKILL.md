@@ -29,12 +29,12 @@ Confirm understanding before proceeding to investigation.
 
 ## Phase 2: Autonomous Investigation
 
-**Spawn researcher to explore the scoped area:**
+**Load researcher to explore the scoped area:**
 
 ```yaml
-Task:
-  subagent_type: tina:researcher
-  prompt: |
+Skill:
+  skill: tina:researcher
+  args: |
     Deep review of: {scoped area}
 
     Looking for:
@@ -45,10 +45,13 @@ Task:
     - Inconsistency (similar things done differently)
 
     Scope includes BOTH production code AND tests.
-  hints: ["code-structure", "patterns", "test-coverage"]
+
+    hints: code-structure, patterns, test-coverage
 ```
 
-**Researcher will autonomously:**
+This loads researcher in your session. You then spawn sub-researchers as Tasks - only one level of nesting.
+
+**Sub-researchers will:**
 - Map code structure in scoped area
 - Find duplication and similar patterns
 - Identify coupling and dependencies

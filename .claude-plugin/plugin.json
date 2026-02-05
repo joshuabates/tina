@@ -1,7 +1,7 @@
 {
   "name": "tina",
   "description": "Personal skills library for Claude Code",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "author": {
     "name": "Joshua"
   },

@@ -24,12 +24,12 @@ Entry points:
 
 ## Phase 2: Orientation
 
-**Spawn researcher to explore data landscape:**
+**Load researcher to explore data landscape:**
 
 ```yaml
-Task:
-  subagent_type: tina:researcher
-  prompt: |
+Skill:
+  skill: tina:researcher
+  args: |
     Orientation for analytics on: {topic/question}
 
     Find:
@@ -37,8 +37,11 @@ Task:
     - Schema/structure of data
     - How data flows into these sources
     - Related logging/metrics systems
-  hints: ["code-structure", "data-flow"]
+
+    hints: code-structure, data-flow
 ```
+
+This loads researcher in your session. You then spawn sub-researchers as Tasks.
 
 **Researcher returns:**
 - Data sources relevant to the question
@@ -70,14 +73,14 @@ For data:
 - Scripts to parse CSV/JSON
 - API calls to live systems
 
-**For complex investigations, spawn additional research:**
+**For complex investigations, spawn targeted sub-researchers directly:**
 
 ```yaml
 # If you need historical context
 Task:
-  subagent_type: tina:researcher
+  subagent_type: tina:git-historian
+  model: haiku
   prompt: "How has {metric} changed over time? What code changes correlate?"
-  hints: ["git-history", "data-flow"]
 ```
 
 Build understanding incrementally.

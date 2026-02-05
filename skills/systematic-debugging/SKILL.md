@@ -51,24 +51,27 @@ You MUST complete each phase before proceeding to the next.
 
 **BEFORE attempting ANY fix:**
 
-1. **Spawn Research Team**
+1. **Load Research Team**
 
-   Launch autonomous researcher to gather context in parallel:
+   Load researcher skill to gather context:
 
    ```yaml
-   Task:
-     subagent_type: tina:researcher
-     prompt: |
+   Skill:
+     skill: tina:researcher
+     args: |
        Investigate: {error/symptom description}
 
        Context:
        - Error message: {paste error}
        - File/area: {where it's happening}
        - When it started: {if known}
-     hints: ["git-history", "error-context", "code-structure"]
+
+       hints: git-history, error-context, code-structure
    ```
 
-   Researcher will autonomously:
+   This loads researcher in your session. You then spawn sub-researchers (locator, git-historian, error-gatherer) as Tasks - only one level of nesting.
+
+   Sub-researchers will:
    - Find recent changes to affected area
    - Locate related code and dependencies
    - Identify error origins and handling
