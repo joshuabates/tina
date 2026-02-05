@@ -104,6 +104,8 @@ Use judgment based on session context.
 - Ask after each section whether it looks right so far
 - Cover: architecture, components, data flow, error handling, testing
 - Be ready to go back and clarify if something doesn't make sense
+- When you encounter genuine unknowns during design -- things that can't be resolved through discussion or research alone (performance questions, compatibility unknowns, library evaluations) -- mark them as explicit TBD sections rather than guessing or hand-waving
+- TBD sections should state what's unknown and what information is needed to resolve it
 
 ## After the Design
 
