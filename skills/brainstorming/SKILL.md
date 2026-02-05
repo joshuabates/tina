@@ -114,7 +114,86 @@ Use judgment based on session context.
 - Use elements-of-style:writing-clearly-and-concisely skill if available
 - Commit the design document to git
 
-**Architectural review:**
+**TBD detection:**
+- After writing the design doc, scan it for TBD sections
+- TBD sections are paragraphs that start with "TBD:" and describe an unknown that needs investigation
+- Example: `TBD: Need to determine whether Redis or in-memory caching is appropriate for our access patterns.`
+- If NO TBD sections found: proceed to architectural review (current flow, unchanged)
+- If TBD sections found: announce them to the user and offer the spike path (see below)
+
+**When TBDs are found:**
+
+Tell the user:
+
+```
+This design has [N] open question(s) marked as TBD:
+- [TBD section name]: [brief description of the unknown]
+- ...
+
+These need to be resolved before implementation. Want to brainstorm a spike plan to run experiments that answer these questions?
+```
+
+If the user says yes, continue to "Spike plan authoring" below.
+If the user says no or wants to resolve them differently, proceed to architectural review as normal.
+
+**Spike plan authoring:**
+
+When the user wants a spike plan, shift the brainstorming conversation to designing experiments. Stay in the same session -- this is a continuation of brainstorming, not a new skill invocation.
+
+Walk through each TBD section and brainstorm:
+1. What specific question does this TBD represent?
+2. What experiment would answer it? (setup, steps, success criteria)
+3. Are experiments independent or do some depend on others?
+
+Present the spike plan incrementally (same 200-300 word sections, checking after each).
+
+Once the spike plan is agreed upon, write it to `docs/plans/YYYY-MM-DD-<topic>-spike.md` using this structure:
+
+~~~markdown
+# Spike: <topic>
+
+## Design Reference
+- Design doc: `docs/plans/YYYY-MM-DD-<topic>-design.md`
+- TBD sections to resolve:
+  - "<section name>" -- <brief description>
+
+## Questions
+1. <question text>
+   -> Resolves TBD in "<section name>"
+
+## Experiments
+
+### Experiment 1: <title> (answers Q1)
+- <setup steps>
+- <what to test>
+- **Success looks like:** <criteria>
+
+## Constraints
+- Prototype only -- no production quality needed
+- Code is throwaway (will not be merged)
+
+## Output
+For each question, produce:
+1. Answer with evidence (benchmarks, test output, code that worked/didn't)
+2. Proposed revision to the specific TBD section in the design doc
+~~~
+
+Commit the spike plan:
+```bash
+git add docs/plans/YYYY-MM-DD-<topic>-spike.md
+git commit -m "docs: add spike plan for <topic>"
+```
+
+Report both artifacts:
+```
+Two artifacts created:
+1. Design doc: docs/plans/YYYY-MM-DD-<topic>-design.md (has TBD sections)
+2. Spike plan: docs/plans/YYYY-MM-DD-<topic>-spike.md (targets those TBDs)
+
+Next step: run /spike docs/plans/YYYY-MM-DD-<topic>-spike.md
+```
+
+**Architectural review (when no TBDs or after spike):**
 - Use tina:architect to review the design
 - Architect explores codebase, asks questions if unclear, adds Architectural Context section
 - Architect must approve design before proceeding
