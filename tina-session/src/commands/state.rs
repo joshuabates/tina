@@ -287,6 +287,79 @@ fn update_orchestration_status_in_sqlite(
     Ok(())
 }
 
+pub fn set_worktree(feature: &str, path: &Path, branch: Option<&str>) -> anyhow::Result<u8> {
+    let path_abs = std::fs::canonicalize(path)?;
+
+    // Create or update lookup file pointing to the worktree
+    if !SessionLookup::exists(feature) {
+        let lookup = SessionLookup::new(feature, path_abs.clone());
+        lookup.save()?;
+    } else {
+        let mut lookup = SessionLookup::load(feature)?;
+        lookup.cwd = path_abs.clone();
+        lookup.save()?;
+    }
+
+    // Create or update supervisor-state.json
+    let state_path = SupervisorState::state_path(&path_abs);
+    if state_path.exists() {
+        // Update existing state
+        let mut state = SupervisorState::load(&path_abs)?;
+        state.worktree_path = path_abs.clone();
+        if let Some(b) = branch {
+            state.branch = b.to_string();
+        }
+        state.save()?;
+    } else {
+        // Create supervisor-state.json from SQLite record (early init case)
+        let orch = load_orchestration_from_sqlite(feature)?;
+        let branch_name = branch
+            .map(|b| b.to_string())
+            .unwrap_or(orch.branch);
+        let state = SupervisorState::new(
+            feature,
+            std::path::PathBuf::from(&orch.design_doc_path),
+            path_abs.clone(),
+            &branch_name,
+            orch.total_phases as u32,
+        );
+        state.save()?;
+    }
+
+    // Update worktree_path in SQLite
+    if let Err(e) = update_worktree_in_sqlite(feature, &path_abs) {
+        eprintln!("Warning: Failed to update worktree in SQLite: {}", e);
+    }
+
+    println!("Set worktree path for '{}': {}", feature, path_abs.display());
+    Ok(0)
+}
+
+/// Load orchestration record from SQLite for a feature.
+fn load_orchestration_from_sqlite(feature: &str) -> anyhow::Result<db::orchestrations::Orchestration> {
+    let db_path = db::default_db_path();
+    let conn = db::open_or_create(&db_path)?;
+    db::migrations::migrate(&conn)?;
+
+    db::orchestrations::find_by_feature(&conn, feature)?
+        .ok_or_else(|| anyhow::anyhow!("No orchestration found for '{}' in SQLite", feature))
+}
+
+/// Update the worktree_path on the orchestration record in SQLite.
+fn update_worktree_in_sqlite(feature: &str, path: &Path) -> anyhow::Result<()> {
+    let db_path = db::default_db_path();
+    let conn = db::open_or_create(&db_path)?;
+    db::migrations::migrate(&conn)?;
+
+    let orch = match db::orchestrations::find_by_feature(&conn, feature)? {
+        Some(o) => o,
+        None => return Ok(()),
+    };
+
+    db::orchestrations::update_worktree_path(&conn, &orch.id, &path.to_string_lossy())?;
+    Ok(())
+}
+
 pub fn show(feature: &str, phase: Option<&str>, json: bool) -> anyhow::Result<u8> {
     let lookup = SessionLookup::load(feature)?;
     let state = SupervisorState::load(&lookup.cwd)?;

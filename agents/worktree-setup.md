@@ -98,18 +98,27 @@ Create `.claude/settings.local.json` with statusLine command pointing to the scr
 
 ### 5. Initialize tina-session
 
-Use `total_phases` from task metadata (provided by orchestrator):
+Try `set-worktree` first (handles the case where orchestrator already called early init). If that fails, fall back to full init:
 
 ```bash
-tina-session init \
-  --feature "$FEATURE_NAME" \
-  --cwd "$WORKTREE_PATH" \
-  --design-doc "$DESIGN_DOC_PATH" \
-  --branch "$BRANCH_NAME" \
-  --total-phases "$TOTAL_PHASES"
+# Try set-worktree first (works if orchestrator did early init)
+if ! tina-session state set-worktree \
+      --feature "$FEATURE_NAME" \
+      --path "$WORKTREE_PATH" \
+      --branch "$BRANCH_NAME" 2>/dev/null; then
+    # Fall back to full init
+    tina-session init \
+      --feature "$FEATURE_NAME" \
+      --cwd "$WORKTREE_PATH" \
+      --design-doc "$DESIGN_DOC_PATH" \
+      --branch "$BRANCH_NAME" \
+      --total-phases "$TOTAL_PHASES"
+fi
 ```
 
-This creates `{worktree}/.claude/tina/supervisor-state.json`, which enables tina-monitor to discover and track this orchestration.
+The `set-worktree` command creates the lookup file, supervisor-state.json, and updates the SQLite record with the worktree path. It reads orchestration details (design doc, branch, total phases) from the existing SQLite record.
+
+This results in `{worktree}/.claude/tina/supervisor-state.json` being created, which enables tina-monitor to discover and track this orchestration.
 
 ### 6. Run Baseline Tests (optional)
 

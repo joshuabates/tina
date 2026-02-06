@@ -47,6 +47,20 @@ If `MODEL_OVERRIDE` is set, pass it to phase-planner prompts so all tasks use th
 
 ---
 
+## STEP 1a: Check if design is pre-approved
+
+Read the design doc and check for `## Architectural Context` section. If present, the design has already been reviewed by the architect skill and can skip validation:
+
+```bash
+if grep -q "^## Architectural Context" "$DESIGN_DOC"; then
+    DESIGN_PRE_APPROVED=true
+fi
+```
+
+This flag is used in STEP 4 to skip spawning the design validator.
+
+---
+
 ## STEP 1b: Check for existing orchestration (RESUME DETECTION)
 
 Before creating a new team, check if one already exists for this design doc:
@@ -63,6 +77,22 @@ If team exists, DO NOT create new team or tasks. Instead:
 1. Skip to STEP 5b: Resume Logic
 2. Read existing task list
 3. Find current state and resume
+
+---
+
+## STEP 1c: Early orchestration tracking
+
+Before creating the team, register the orchestration in SQLite for early visibility in tina-web:
+
+```bash
+tina-session init \
+  --feature "$FEATURE_NAME" \
+  --design-doc "$DESIGN_DOC" \
+  --branch "tina/$FEATURE_NAME" \
+  --total-phases "$TOTAL_PHASES"
+```
+
+Note: `--cwd` is omitted. The worktree doesn't exist yet. The orchestration appears in tina-web immediately with worktree_path as NULL. The worktree-setup agent will call `tina-session state set-worktree` later to fill it in.
 
 ---
 
@@ -119,8 +149,20 @@ TaskUpdate: finalize, addBlockedBy: [review-phase-2]
 
 ---
 
-## STEP 4: Spawn first teammate
+## STEP 4: Spawn first teammate (or skip validation)
 
+**If `DESIGN_PRE_APPROVED` is true:**
+The design has `## Architectural Context` (added by `tina:architect` on approval). Skip validation:
+1. Auto-complete the validate-design task:
+   ```
+   TaskUpdate: validate-design, status: completed
+   TaskUpdate: validate-design, metadata: { validation_status: "pre-approved" }
+   ```
+2. Print: `"Design pre-approved (has Architectural Context). Skipping validation."`
+3. Check for `## Prerequisites` section in the design doc. If present, show prerequisites to user and ask for confirmation before continuing.
+4. Proceed directly to spawning worktree-setup (same as the "validate complete" handler in STEP 5).
+
+**If `DESIGN_PRE_APPROVED` is false:**
 The validate-design task has no blockers. Spawn the design validator:
 
 Use Task tool:
@@ -205,7 +247,9 @@ After spawning a teammate, wait for their message. Based on the message content,
 **"setup-worktree complete" with worktree_path:**
 1. Mark setup-worktree task complete
 2. Store worktree_path in task metadata
-3. Spawn phase-planner for phase 1:
+3. Check for existing plan file at `{worktree_path}/.claude/tina/phase-1/plan.md`:
+   - If plan exists: auto-complete plan-phase-1 with `plan_path` set to the existing file, print "Reusing existing plan for phase 1."
+   - If no plan: spawn phase-planner for phase 1:
 ```json
 {
   "subagent_type": "tina:phase-planner",
@@ -549,9 +593,23 @@ When: validate-design complete with Pass or Warning
 ```
 Then: Mark setup-worktree as in_progress
 
-**Phase planner spawn:**
+**Phase planner spawn (with plan reuse check):**
 
 When: setup-worktree complete (for phase 1) OR review-phase-(N-1) complete with pass (for phase N>1)
+
+Before spawning, check if a plan already exists:
+```bash
+PLAN_FILE="${WORKTREE_PATH}/.claude/tina/phase-${N}/plan.md"
+if [ -f "$PLAN_FILE" ]; then
+    # Reuse existing plan - skip planning entirely
+    TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: "$PLAN_FILE" }
+    # Proceed to spawning executor for phase N (same as "plan-phase-N complete" handler)
+else
+    # Spawn planner as normal
+fi
+```
+
+If no existing plan:
 ```json
 {
   "subagent_type": "tina:phase-planner",
@@ -766,7 +824,17 @@ if message contains "review-N complete (pass)":
     TaskUpdate: review-phase-N, metadata: { status: "pass" }
 
     if N < TOTAL_PHASES:
-        Spawn planner-(N+1) teammate
+        # Check for existing plan before spawning planner
+        NEXT_PHASE = N + 1
+        PLAN_FILE = "{worktree_path}/.claude/tina/phase-{NEXT_PHASE}/plan.md"
+        if file exists at PLAN_FILE:
+            # Reuse existing plan
+            TaskUpdate: plan-phase-{NEXT_PHASE}, status: completed
+            TaskUpdate: plan-phase-{NEXT_PHASE}, metadata: { plan_path: PLAN_FILE }
+            Print: "Reusing existing plan for phase {NEXT_PHASE}."
+            # Proceed directly to spawning executor for phase NEXT_PHASE
+        else:
+            Spawn planner-(N+1) teammate
         Print: "Phase N passed review. Planning phase N+1..."
     else:
         # Last phase - finalize

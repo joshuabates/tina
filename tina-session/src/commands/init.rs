@@ -11,20 +11,22 @@ use tina_session::state::schema::SupervisorState;
 
 pub fn run(
     feature: &str,
-    cwd: &Path,
+    cwd: Option<&Path>,
     design_doc: &Path,
     branch: &str,
     total_phases: u32,
 ) -> anyhow::Result<u8> {
-    // Validate cwd exists and is a directory
-    if !cwd.exists() {
-        anyhow::bail!(SessionError::DirectoryNotFound(cwd.display().to_string()));
-    }
-    if !cwd.is_dir() {
-        anyhow::bail!(SessionError::DirectoryNotFound(format!(
-            "{} is not a directory",
-            cwd.display()
-        )));
+    // Validate cwd if provided
+    if let Some(cwd) = cwd {
+        if !cwd.exists() {
+            anyhow::bail!(SessionError::DirectoryNotFound(cwd.display().to_string()));
+        }
+        if !cwd.is_dir() {
+            anyhow::bail!(SessionError::DirectoryNotFound(format!(
+                "{} is not a directory",
+                cwd.display()
+            )));
+        }
     }
 
     // Validate design doc exists
@@ -41,27 +43,41 @@ pub fn run(
         ));
     }
 
-    // Resolve paths to absolute
-    let cwd_abs = fs::canonicalize(cwd)?;
     let design_doc_abs = fs::canonicalize(design_doc)?;
 
-    // Create lookup file
-    let lookup = SessionLookup::new(feature, cwd_abs.clone());
-    lookup.save()?;
+    if let Some(cwd) = cwd {
+        // Full init: worktree path known, create lookup + supervisor state + SQLite
+        let cwd_abs = fs::canonicalize(cwd)?;
 
-    // Create supervisor state
-    let state = SupervisorState::new(
-        feature,
-        design_doc_abs.clone(),
-        cwd_abs.clone(),
-        branch,
-        total_phases,
-    );
-    state.save()?;
+        let lookup = SessionLookup::new(feature, cwd_abs.clone());
+        lookup.save()?;
 
-    // Write orchestration to SQLite
-    if let Err(e) = write_to_sqlite(feature, &cwd_abs, &design_doc_abs, branch, total_phases) {
-        eprintln!("Warning: Failed to write to SQLite: {}", e);
+        let state = SupervisorState::new(
+            feature,
+            design_doc_abs.clone(),
+            cwd_abs.clone(),
+            branch,
+            total_phases,
+        );
+        state.save()?;
+
+        if let Err(e) = write_to_sqlite(feature, Some(&cwd_abs), &design_doc_abs, branch, total_phases) {
+            eprintln!("Warning: Failed to write to SQLite: {}", e);
+        }
+
+        println!("Initialized orchestration for '{}'", feature);
+        println!("  Worktree: {}", cwd_abs.display());
+        println!("  State: {}", SupervisorState::state_path(&cwd_abs).display());
+        println!("  Lookup: {}", SessionLookup::lookup_path(feature).display());
+    } else {
+        // Early init: no worktree yet, create SQLite record only (for early tracking)
+        if let Err(e) = write_to_sqlite(feature, None, &design_doc_abs, branch, total_phases) {
+            eprintln!("Warning: Failed to write to SQLite: {}", e);
+        }
+
+        println!("Initialized early tracking for '{}'", feature);
+        println!("  Worktree: (pending setup)");
+        println!("  Use 'tina-session state set-worktree' after worktree creation");
     }
 
     // Auto-start daemon if not running
@@ -72,18 +88,13 @@ pub fn run(
         }
     }
 
-    println!("Initialized orchestration for '{}'", feature);
-    println!("  Worktree: {}", cwd_abs.display());
-    println!("  State: {}", SupervisorState::state_path(&cwd_abs).display());
-    println!("  Lookup: {}", SessionLookup::lookup_path(feature).display());
-
     Ok(0)
 }
 
 /// Write orchestration record to SQLite, auto-creating the project.
 fn write_to_sqlite(
     feature: &str,
-    cwd: &Path,
+    cwd: Option<&Path>,
     design_doc: &Path,
     branch: &str,
     total_phases: u32,
@@ -92,8 +103,13 @@ fn write_to_sqlite(
     let conn = db::open_or_create(&db_path)?;
     db::migrations::migrate(&conn)?;
 
-    // Find repo root from cwd
-    let repo_root = find_repo_root(cwd)?;
+    // Find repo root: from cwd if available, otherwise from current directory
+    let repo_root = if let Some(cwd) = cwd {
+        find_repo_root(cwd)?
+    } else {
+        let current_dir = std::env::current_dir()?;
+        find_repo_root(&current_dir)?
+    };
     let repo_name = repo_root
         .file_name()
         .and_then(|n| n.to_str())
@@ -112,7 +128,7 @@ fn write_to_sqlite(
         feature_name: feature.to_string(),
         design_doc_path: design_doc.to_string_lossy().to_string(),
         branch: branch.to_string(),
-        worktree_path: Some(cwd.to_string_lossy().to_string()),
+        worktree_path: cwd.map(|p| p.to_string_lossy().to_string()),
         total_phases: total_phases as i32,
         status: "planning".to_string(),
         started_at: now,
@@ -155,8 +171,8 @@ mod tests {
         // Use a unique feature name to avoid conflicts
         let feature = format!("test-init-{}", std::process::id());
 
-        // Run init
-        let result = run(&feature, cwd, &design_doc, "tina/test", 3);
+        // Run init with cwd
+        let result = run(&feature, Some(cwd), &design_doc, "tina/test", 3);
 
         // Clean up lookup file regardless of result
         let _ = SessionLookup::delete(&feature);
@@ -175,7 +191,7 @@ mod tests {
     fn test_init_validates_cwd() {
         let result = run(
             "test-bad-cwd",
-            Path::new("/nonexistent/path"),
+            Some(Path::new("/nonexistent/path")),
             Path::new("/tmp/design.md"),
             "tina/test",
             3,
@@ -188,11 +204,28 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let result = run(
             "test-bad-doc",
-            temp_dir.path(),
+            Some(temp_dir.path()),
             Path::new("/nonexistent/design.md"),
             "tina/test",
             3,
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_init_early_tracking_without_cwd() {
+        let temp_dir = TempDir::new().unwrap();
+        let design_doc = temp_dir.path().join("design.md");
+        fs::write(&design_doc, "# Design").unwrap();
+
+        let feature = format!("test-early-{}", std::process::id());
+
+        // Run init without cwd (early tracking)
+        let result = run(&feature, None, &design_doc, "tina/test", 3);
+
+        assert!(result.is_ok());
+
+        // No lookup file should exist (no cwd to look up)
+        assert!(!SessionLookup::exists(&feature));
     }
 }
