@@ -1,6 +1,6 @@
 # Claude Code Skills Tests
 
-Automated tests for superpowers skills using Claude Code CLI.
+Automated tests for TINA skills using Claude Code CLI.
 
 ## Overview
 
@@ -9,9 +9,14 @@ This test suite verifies that skills are loaded correctly and Claude follows the
 ## Requirements
 
 - Claude Code CLI installed and in PATH (`claude --version` should work)
-- Local superpowers plugin installed (see main README for installation)
+- TINA plugin installed (see main README for installation)
 
 ## Running Tests
+
+### Via mise (from project root):
+```bash
+mise run test:skills
+```
 
 ### Run all fast tests (recommended):
 ```bash

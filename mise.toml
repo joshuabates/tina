@@ -1,0 +1,155 @@
+[tools]
+node = "22"
+
+# --- Services ---
+
+[tasks.dev]
+description = "Start tina-web backend + frontend dev server"
+run = """
+trap 'kill $(jobs -p) 2>/dev/null' EXIT
+echo "Starting backend on http://localhost:3100..."
+cargo run --manifest-path tina-web/Cargo.toml &
+echo "Starting frontend on http://localhost:5173..."
+cd tina-web/frontend && npm run dev &
+wait
+"""
+
+[tasks."dev:backend"]
+description = "Start tina-web backend only"
+run = "cargo run --manifest-path tina-web/Cargo.toml"
+
+[tasks."dev:frontend"]
+description = "Start frontend dev server only"
+dir = "tina-web/frontend"
+run = "npm run dev"
+
+# --- Build ---
+
+[tasks.build]
+description = "Build all crates (release)"
+run = """
+set -e
+echo "Building tina-session..."
+cargo build --release --manifest-path tina-session/Cargo.toml
+echo "Building tina-monitor..."
+cargo build --release --manifest-path tina-monitor/Cargo.toml
+echo "Building tina-web..."
+cargo build --release --manifest-path tina-web/Cargo.toml
+echo "Building tina-harness..."
+cargo build --release --manifest-path tina-harness/Cargo.toml
+"""
+
+[tasks."build:frontend"]
+description = "Build frontend for production"
+dir = "tina-web/frontend"
+run = "npm run build"
+
+# --- Install ---
+
+[tasks.install]
+description = "Build CLIs and symlink to ~/.local/bin"
+depends = ["build"]
+run = """
+set -e
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+ln -sf "$MISE_PROJECT_ROOT/tina-session/target/release/tina-session" "$BIN_DIR/tina-session"
+ln -sf "$MISE_PROJECT_ROOT/tina-monitor/target/release/tina-monitor" "$BIN_DIR/tina-monitor"
+echo "Installed:"
+echo "  $BIN_DIR/tina-session"
+echo "  $BIN_DIR/tina-monitor"
+"""
+
+# --- Test ---
+
+[tasks.test]
+description = "Run tests across all crates"
+run = """
+set -e
+echo "Testing tina-session..."
+cargo test --manifest-path tina-session/Cargo.toml
+echo "Testing tina-data..."
+cargo test --manifest-path tina-data/Cargo.toml
+echo "Testing tina-web..."
+cargo test --manifest-path tina-web/Cargo.toml
+echo "Testing tina-monitor..."
+cargo test --manifest-path tina-monitor/Cargo.toml
+echo "Testing tina-harness..."
+cargo test --manifest-path tina-harness/Cargo.toml
+"""
+
+[tasks."test:session"]
+description = "Test tina-session only"
+run = "cargo test --manifest-path tina-session/Cargo.toml"
+
+[tasks."test:data"]
+description = "Test tina-data only"
+run = "cargo test --manifest-path tina-data/Cargo.toml"
+
+[tasks."test:web"]
+description = "Test tina-web only"
+run = "cargo test --manifest-path tina-web/Cargo.toml"
+
+[tasks."test:monitor"]
+description = "Test tina-monitor only"
+run = "cargo test --manifest-path tina-monitor/Cargo.toml"
+
+[tasks."test:harness"]
+description = "Test tina-harness only"
+run = "cargo test --manifest-path tina-harness/Cargo.toml"
+
+[tasks."test:skills"]
+description = "Run Claude Code skill tests"
+run = "./tests/claude-code/run-skill-tests.sh"
+
+# --- Check (fast compile check) ---
+
+[tasks.check]
+description = "Cargo check all crates"
+run = """
+set -e
+cargo check --manifest-path tina-session/Cargo.toml
+cargo check --manifest-path tina-data/Cargo.toml
+cargo check --manifest-path tina-web/Cargo.toml
+cargo check --manifest-path tina-monitor/Cargo.toml
+cargo check --manifest-path tina-harness/Cargo.toml
+"""
+
+# --- Harness ---
+
+[tasks.validate]
+description = "Validate orchestration state files"
+run = "cargo run --manifest-path tina-harness/Cargo.toml -- validate {{arg(name=\"path\")}}"
+
+[tasks."harness:run"]
+description = "Run a tina-harness scenario"
+run = """
+cargo run --manifest-path tina-harness/Cargo.toml -- run \
+  --scenarios-dir tina-harness/scenarios \
+  --test-project-dir tina-harness/test-project \
+  {{arg(name="scenario")}}
+"""
+
+# --- Utilities ---
+
+[tasks."analyze:tokens"]
+description = "Analyze token usage from a session file"
+run = "python3 tests/claude-code/analyze-token-usage.py {{arg(name=\"session_file\")}}"
+
+[tasks."bump:version"]
+description = "Set version across all crates"
+run = """
+set -e
+VERSION="{{arg(name=\"version\")}}"
+if [ -z "$VERSION" ]; then
+  echo "Usage: mise run bump:version <version>"
+  echo "Current versions:"
+  grep '^version' tina-session/Cargo.toml tina-data/Cargo.toml tina-web/Cargo.toml tina-monitor/Cargo.toml tina-harness/Cargo.toml
+  exit 1
+fi
+for manifest in tina-session/Cargo.toml tina-data/Cargo.toml tina-web/Cargo.toml tina-monitor/Cargo.toml tina-harness/Cargo.toml; do
+  sed -i '' "s/^version = \".*\"/version = \"$VERSION\"/" "$manifest"
+  echo "  $manifest -> $VERSION"
+done
+echo "Done. Run 'mise run check' to verify."
+"""

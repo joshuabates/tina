@@ -93,6 +93,51 @@ All phases complete:
 - **writing-skills** - Create and test new skills
 - **using-tina** - Introduction to the skills system
 
+## Development
+
+### Prerequisites
+
+- [mise](https://mise.jdx.dev) for task running and tool management
+- Rust toolchain (via rustup)
+- Claude Code CLI
+
+### Setup
+
+```bash
+mise install        # install tool versions (node, etc.)
+mise run check      # verify everything compiles
+```
+
+### Common Tasks
+
+```bash
+mise run dev                    # start tina-web backend + frontend
+mise run test                   # cargo test across all crates
+mise run check                  # fast cargo check, all crates
+mise run build                  # release build, all crates
+mise run install                # build + symlink CLIs to ~/.local/bin
+
+mise run test:web               # test a single crate
+mise run test:skills            # run skill test suite
+mise run harness:run <scenario> # run a harness scenario
+mise run validate <path>        # validate orchestration state files
+
+mise run bump:version 0.2.0    # set version across all Cargo.tomls
+mise run analyze:tokens <file>  # token usage analysis
+```
+
+Run `mise tasks` for the full list.
+
+### Project Structure
+
+| Crate | Description |
+|-------|-------------|
+| `tina-session` | Phase lifecycle CLI (init, start, wait, stop, state management) |
+| `tina-data` | Shared data layer for orchestration discovery |
+| `tina-web` | Web dashboard (Axum backend + React frontend) |
+| `tina-monitor` | TUI for monitoring orchestrations |
+| `tina-harness` | Test harness for running scenarios |
+
 ## Testing
 
 ### tina-harness
@@ -100,17 +145,9 @@ All phases complete:
 A test harness for validating tina-monitor and orchestration work correctly together:
 
 ```bash
-# Validate state files against schema
-tina-harness validate /path/to/.claude/tina
-
-# Run a test scenario (mock orchestration)
-tina-harness run 01-single-phase-feature
-
-# Run with real orchestration
-tina-harness run 01-single-phase-feature --full
-
-# Generate a new scenario
-tina-harness generate-scenario --phases 2 --output scenarios/my-test/
+mise run harness:run 01-single-phase-feature    # mock orchestration
+mise run harness:run 01-single-phase-feature -- --full  # real orchestration
+mise run validate /path/to/.claude/tina         # validate state files
 ```
 
 **Failure categories:** Setup (compilation), Orchestration (state files), Monitor (display), Outcome (results)

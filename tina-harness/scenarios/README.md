@@ -12,9 +12,19 @@ Each scenario is a directory containing:
 
 ## Running Scenarios
 
+From the project root with mise:
+
 ```bash
-# Run a specific scenario
-tina-harness run 01-single-phase-feature
+mise run harness:run 01-single-phase-feature
+mise run harness:run 01-single-phase-feature -- --full
+```
+
+Or directly:
+
+```bash
+tina-harness run 01-single-phase-feature \
+  --scenarios-dir tina-harness/scenarios \
+  --test-project-dir tina-harness/test-project
 
 # Run with full orchestration (not just mock)
 tina-harness run 01-single-phase-feature --full

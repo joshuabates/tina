@@ -1,6 +1,6 @@
-# Testing Superpowers Skills
+# Testing TINA Skills
 
-This document describes how to test Superpowers skills, particularly the integration tests for complex skills like `subagent-driven-development`.
+This document describes how to test TINA skills, particularly the integration tests for complex skills like `subagent-driven-development`.
 
 ## Overview
 
@@ -24,7 +24,10 @@ tests/
 Integration tests execute real Claude Code sessions with actual skills:
 
 ```bash
-# Run the subagent-driven-development integration test
+# Via mise (from project root)
+mise run test:skills
+
+# Or directly
 cd tests/claude-code
 ./test-subagent-driven-development-integration.sh
 ```
@@ -33,9 +36,9 @@ cd tests/claude-code
 
 ### Requirements
 
-- Must run from the **superpowers plugin directory** (not from temp directories)
+- Must run from the **tina project directory** (not from temp directories)
 - Claude Code must be installed and available as `claude` command
-- Local dev marketplace must be enabled: `"superpowers@superpowers-dev": true` in `~/.claude/settings.json`
+- TINA plugin must be installed (see main README)
 
 ## Integration Test: subagent-driven-development
 
@@ -149,8 +152,8 @@ python3 tests/claude-code/analyze-token-usage.py ~/.claude/projects/<project-dir
 Session transcripts are stored in `~/.claude/projects/` with the working directory path encoded:
 
 ```bash
-# Example for /Users/jesse/Documents/GitHub/superpowers/superpowers
-SESSION_DIR="$HOME/.claude/projects/-Users-jesse-Documents-GitHub-superpowers-superpowers"
+# Example for /Users/joshua/Projects/tina
+SESSION_DIR="$HOME/.claude/projects/-Users-joshua-Projects-tina"
 
 # Find recent sessions
 ls -lt "$SESSION_DIR"/*.jsonl | head -5
@@ -182,8 +185,8 @@ ls -lt "$SESSION_DIR"/*.jsonl | head -5
 **Problem**: Skill not found when running headless tests
 
 **Solutions**:
-1. Ensure you're running FROM the superpowers directory: `cd /path/to/superpowers && tests/...`
-2. Check `~/.claude/settings.json` has `"superpowers@superpowers-dev": true` in `enabledPlugins`
+1. Ensure you're running FROM the tina project directory: `cd /path/to/tina && tests/...`
+2. Check the TINA plugin is installed (see main README)
 3. Verify skill exists in `skills/` directory
 
 ### Permission Errors
@@ -258,7 +261,7 @@ python3 "$SCRIPT_DIR/analyze-token-usage.py" "$SESSION_FILE"
 1. **Always cleanup**: Use trap to cleanup temp directories
 2. **Parse transcripts**: Don't grep user-facing output - parse the `.jsonl` session file
 3. **Grant permissions**: Use `--permission-mode bypassPermissions` and `--add-dir`
-4. **Run from plugin dir**: Skills only load when running from the superpowers directory
+4. **Run from project dir**: Skills only load when running from the tina project directory
 5. **Show token usage**: Always include token analysis for cost visibility
 6. **Test real behavior**: Verify actual files created, tests passing, commits made
 
