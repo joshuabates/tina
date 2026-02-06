@@ -158,11 +158,11 @@ fn load_session_lookup_in(base_dir: &Path, feature: &str) -> Result<SessionLooku
 
 /// Find worktree path for an orchestration team
 #[cfg(test)]
-fn find_worktree_for_orchestration(team_name: &str, member_cwd: &PathBuf) -> PathBuf {
+fn find_worktree_for_orchestration(team_name: &str, member_cwd: &PathBuf) -> Option<PathBuf> {
     find_worktree_for_orchestration_in(None, team_name, member_cwd)
 }
 
-fn find_worktree_for_orchestration_in(base_dir: Option<&Path>, team_name: &str, member_cwd: &PathBuf) -> PathBuf {
+fn find_worktree_for_orchestration_in(base_dir: Option<&Path>, team_name: &str, member_cwd: &PathBuf) -> Option<PathBuf> {
     if team_name.ends_with("-orchestration") {
         let feature = team_name.trim_end_matches("-orchestration");
         let lookup_result = match base_dir {
@@ -172,12 +172,10 @@ fn find_worktree_for_orchestration_in(base_dir: Option<&Path>, team_name: &str, 
                 load_session_lookup_in(&home, feature)
             }
         };
-        if let Ok(lookup) = lookup_result {
-            return lookup.cwd;
-        }
+        return lookup_result.ok().map(|l| l.cwd);
     }
 
-    member_cwd.clone()
+    Some(member_cwd.clone())
 }
 
 /// Try to load a team as an orchestration from a specific base directory
@@ -192,7 +190,10 @@ fn try_load_orchestration_in(base_dir: &Path, team_name: &str) -> Result<Option<
         .map(|m| m.cwd.clone())
         .unwrap_or_default();
 
-    let worktree_path = find_worktree_for_orchestration_in(Some(base_dir), team_name, &member_cwd);
+    let worktree_path = match find_worktree_for_orchestration_in(Some(base_dir), team_name, &member_cwd) {
+        Some(path) => path,
+        None => return Ok(None),
+    };
 
     let supervisor_state = match tina_state::load_supervisor_state(&worktree_path)? {
         Some(state) => state,
@@ -397,14 +398,73 @@ mod tests {
         // Non-orchestration teams should return the member's cwd
         let member_cwd = PathBuf::from("/path/to/project");
         let result = find_worktree_for_orchestration("my-team", &member_cwd);
-        assert_eq!(result, member_cwd);
+        assert_eq!(result, Some(member_cwd));
     }
 
     #[test]
     fn test_find_worktree_for_orchestration_without_session() {
-        // Orchestration teams without session lookup should fall back to member's cwd
+        // Orchestration teams without session lookup should return None, not fall back to member_cwd
         let member_cwd = PathBuf::from("/path/to/project");
         let result = find_worktree_for_orchestration("nonexistent-orchestration", &member_cwd);
-        assert_eq!(result, member_cwd);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_orchestration_without_session_lookup_skipped() {
+        // An orchestration team without a session lookup file should not produce an Orchestration.
+        // This prevents cross-contamination where multiple teams resolve to the same stale state.
+        let temp = tempfile::TempDir::new().unwrap();
+        let base = temp.path();
+
+        // Create team directory with a team config (an -orchestration team)
+        let teams_dir = base.join(".claude").join("teams").join("foo-orchestration");
+        fs::create_dir_all(&teams_dir).unwrap();
+        let config = r#"{
+            "name": "foo-orchestration",
+            "description": "test",
+            "createdAt": 1700000000000,
+            "leadAgentId": "lead@foo-orchestration",
+            "leadSessionId": "session-1",
+            "members": [{
+                "agentId": "lead@foo-orchestration",
+                "name": "team-lead",
+                "agentType": "team-lead",
+                "model": "claude-opus-4-5-20251101",
+                "joinedAt": 1700000000000,
+                "cwd": "/some/project/dir",
+                "subscriptions": []
+            }]
+        }"#;
+        fs::write(teams_dir.join("config.json"), config).unwrap();
+
+        // Create tasks directory (empty)
+        let tasks_dir = base.join(".claude").join("tasks").join("foo-orchestration");
+        fs::create_dir_all(&tasks_dir).unwrap();
+
+        // Put a supervisor-state.json at the member_cwd to simulate the stale state bug
+        let stale_cwd = base.join("some").join("project").join("dir");
+        let tina_dir = stale_cwd.join(".claude").join("tina");
+        fs::create_dir_all(&tina_dir).unwrap();
+        let stale_state = r#"{
+            "version": 1,
+            "feature": "wrong-feature",
+            "design_doc": "docs/wrong.md",
+            "worktree_path": "/wrong/path",
+            "branch": "wrong-branch",
+            "total_phases": 1,
+            "current_phase": 1,
+            "status": "executing",
+            "orchestration_started_at": "2026-01-01T00:00:00Z",
+            "phases": {},
+            "timing": {}
+        }"#;
+        fs::write(tina_dir.join("supervisor-state.json"), stale_state).unwrap();
+
+        // Do NOT create a session lookup file for "foo"
+        // (i.e., no base/.claude/tina-sessions/foo.json)
+
+        // The orchestration should be skipped (None), not loaded with the stale state
+        let result = try_load_orchestration_in(base, "foo-orchestration").unwrap();
+        assert!(result.is_none(), "Orchestration without session lookup should be skipped, got: {:?}", result);
     }
 }
