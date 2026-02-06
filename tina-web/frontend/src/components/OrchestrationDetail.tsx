@@ -44,7 +44,7 @@ export default function OrchestrationDetail({ orchestrations }: Props) {
   }
 
   return (
-    <div className="p-4">
+    <div data-testid="orchestration-detail" className="p-4">
       <Link to="/" className="text-cyan-400 hover:underline text-sm">
         &larr; Back
       </Link>
@@ -52,14 +52,14 @@ export default function OrchestrationDetail({ orchestrations }: Props) {
       {/* Header */}
       <div className="mt-4 mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">{orch.feature_name}</h1>
-          <span className={statusBadgeClass(orch.status)}>
+          <h1 data-testid="detail-feature-name" className="text-xl font-semibold">{orch.feature_name}</h1>
+          <span data-testid="detail-status-badge" className={statusBadgeClass(orch.status)}>
             {statusLabel(orch.status)}
           </span>
         </div>
         <div className="text-sm text-gray-500 mt-1 space-x-4">
-          <span>Team: {orch.team_name}</span>
-          <span>
+          <span data-testid="detail-team-name">Team: {orch.team_name}</span>
+          <span data-testid="detail-phase">
             Phase: {orch.current_phase}/{orch.total_phases}
           </span>
           {orch.context_percent != null && (

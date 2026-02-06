@@ -14,9 +14,19 @@ pub fn tasks_dir() -> PathBuf {
         .join("tasks")
 }
 
+/// Get the tasks directory under a specific base directory
+pub fn tasks_dir_in(base: &std::path::Path) -> PathBuf {
+    base.join(".claude").join("tasks")
+}
+
 /// Load all tasks for a session
 pub fn load_tasks(session_id: &str) -> Result<Vec<Task>> {
-    let session_dir = tasks_dir().join(session_id);
+    load_tasks_in(&tasks_dir(), session_id)
+}
+
+/// Load all tasks for a session from a specific tasks directory
+pub fn load_tasks_in(tasks_dir: &std::path::Path, session_id: &str) -> Result<Vec<Task>> {
+    let session_dir = tasks_dir.join(session_id);
     if !session_dir.exists() {
         return Ok(vec![]);
     }

@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
@@ -9,6 +10,8 @@ pub struct AppState {
     orchestrations: RwLock<Vec<Orchestration>>,
     /// Broadcast channel for notifying WebSocket clients of updates
     update_tx: broadcast::Sender<()>,
+    /// Optional base directory for reading orchestration data (for testing)
+    base_dir: Option<PathBuf>,
 }
 
 impl AppState {
@@ -17,6 +20,17 @@ impl AppState {
         Arc::new(Self {
             orchestrations: RwLock::new(Vec::new()),
             update_tx,
+            base_dir: None,
+        })
+    }
+
+    /// Create AppState with a specific base directory for data loading
+    pub fn with_base_dir(base_dir: PathBuf) -> Arc<Self> {
+        let (update_tx, _) = broadcast::channel(16);
+        Arc::new(Self {
+            orchestrations: RwLock::new(Vec::new()),
+            update_tx,
+            base_dir: Some(base_dir),
         })
     }
 
@@ -37,7 +51,10 @@ impl AppState {
 
     /// Reload orchestrations from disk and notify subscribers
     pub async fn reload(&self) {
-        let orchestrations = tina_data::discovery::find_orchestrations().unwrap_or_default();
+        let orchestrations = match &self.base_dir {
+            Some(base) => tina_data::discovery::find_orchestrations_in(base).unwrap_or_default(),
+            None => tina_data::discovery::find_orchestrations().unwrap_or_default(),
+        };
         *self.orchestrations.write().await = orchestrations;
         let _ = self.update_tx.send(());
     }

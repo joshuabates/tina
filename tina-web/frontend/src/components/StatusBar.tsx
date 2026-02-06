@@ -10,9 +10,9 @@ export default function StatusBar({
   orchestrationCount,
 }: Props) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 px-4 py-1 flex items-center gap-4 text-xs text-gray-500">
+    <div data-testid="status-bar" className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 px-4 py-1 flex items-center gap-4 text-xs text-gray-500">
       <span className="flex items-center gap-1">
-        <span className={connected ? "text-green-400" : "text-red-400"}>
+        <span data-testid="ws-status" className={connected ? "text-green-400" : "text-red-400"}>
           {connected ? "\u25cf" : "\u25cb"}
         </span>
         {connected ? "Connected" : "Disconnected"}
@@ -20,7 +20,7 @@ export default function StatusBar({
       {lastUpdate && (
         <span>Updated: {lastUpdate.toLocaleTimeString()}</span>
       )}
-      <span>{orchestrationCount} orchestration{orchestrationCount !== 1 ? "s" : ""}</span>
+      <span data-testid="orchestration-count">{orchestrationCount} orchestration{orchestrationCount !== 1 ? "s" : ""}</span>
     </div>
   );
 }

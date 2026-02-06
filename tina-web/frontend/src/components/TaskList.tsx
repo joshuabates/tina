@@ -29,19 +29,19 @@ interface Props {
 
 export default function TaskList({ tasks, title = "Tasks" }: Props) {
   return (
-    <div>
+    <div data-testid={`task-list-${title.toLowerCase().replace(/\s+/g, '-')}`}>
       <h3 className="text-sm font-semibold text-gray-400 mb-2">{title}</h3>
       {tasks.length === 0 ? (
         <p className="text-gray-600 text-sm">No tasks</p>
       ) : (
         <ul className="space-y-1">
           {tasks.map((task) => (
-            <li key={task.id} className="flex items-start gap-2 text-sm">
-              <span className={`font-mono ${statusColor(task.status)}`}>
+            <li key={task.id} data-testid={`task-${task.id}`} className="flex items-start gap-2 text-sm">
+              <span data-testid="task-status" className={`font-mono ${statusColor(task.status)}`}>
                 {statusIcon(task.status)}
               </span>
               <div className="flex-1 min-w-0">
-                <span>{task.subject}</span>
+                <span data-testid="task-subject">{task.subject}</span>
                 {task.owner && (
                   <span className="text-cyan-400 ml-2">
                     &larr; {task.owner}

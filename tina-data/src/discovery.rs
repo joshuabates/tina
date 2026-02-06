@@ -5,7 +5,7 @@ use crate::{Agent, SessionLookup, SupervisorState, Task, TaskStatus};
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A discovered orchestration with all relevant data
 #[derive(Debug, Clone, Serialize)]
@@ -65,21 +65,33 @@ impl Orchestration {
 /// Load tasks and members for a specific phase from all teams in the worktree
 /// Finds teams dynamically by matching the worktree path
 pub fn load_phase_data_for_worktree(worktree_path: &std::path::Path, phase: u32) -> (Vec<Task>, Vec<Agent>) {
-    // Find all teams working in this worktree
     let worktree_teams = match teams::find_teams_for_worktree(worktree_path) {
         Ok(teams) => teams,
         Err(_) => return (vec![], vec![]),
     };
 
-    // Look for a team that matches this phase (by name pattern or other heuristics)
+    find_phase_team_data(&worktree_teams, phase, &tasks::tasks_dir())
+}
+
+/// Load tasks and members for a specific phase, searching in a specific base directory
+fn load_phase_data_for_worktree_in(base_dir: &Path, worktree_path: &std::path::Path, phase: u32) -> (Vec<Task>, Vec<Agent>) {
+    let teams_dir = teams::teams_dir_in(base_dir);
+    let worktree_teams = match teams::find_teams_for_worktree_in(&teams_dir, worktree_path) {
+        Ok(teams) => teams,
+        Err(_) => return (vec![], vec![]),
+    };
+
+    find_phase_team_data(&worktree_teams, phase, &tasks::tasks_dir_in(base_dir))
+}
+
+fn find_phase_team_data(worktree_teams: &[crate::Team], phase: u32, tasks_dir: &Path) -> (Vec<Task>, Vec<Agent>) {
     let phase_str = phase.to_string();
     for team in worktree_teams {
-        // Match teams containing the phase number (e.g., "phase-5-execution", "phase-5", etc.)
         if team.name.contains(&format!("phase-{}", phase_str))
            || team.name.contains(&format!("-{}-", phase_str))
            || team.name.ends_with(&format!("-{}", phase_str)) {
-            let phase_tasks = tasks::load_tasks(&team.lead_session_id).unwrap_or_default();
-            return (phase_tasks, team.members);
+            let phase_tasks = tasks::load_tasks_in(tasks_dir, &team.lead_session_id).unwrap_or_default();
+            return (phase_tasks, team.members.clone());
         }
     }
 
@@ -111,25 +123,30 @@ pub enum OrchestrationStatus {
 
 /// Find all orchestrations (teams with supervisor-state.json)
 pub fn find_orchestrations() -> Result<Vec<Orchestration>> {
-    let team_names = teams::list_teams()?;
+    let home = dirs::home_dir().context("Could not determine home directory")?;
+    find_orchestrations_in(&home)
+}
+
+/// Find all orchestrations within a specific base directory
+pub fn find_orchestrations_in(base_dir: &Path) -> Result<Vec<Orchestration>> {
+    let teams_dir = teams::teams_dir_in(base_dir);
+    let team_names = teams::list_teams_in(&teams_dir)?;
     let mut orchestrations = Vec::new();
 
     for name in team_names {
-        // Gracefully skip teams that fail to load (older teams without tina, schema changes, etc.)
-        match try_load_orchestration(&name) {
+        match try_load_orchestration_in(base_dir, &name) {
             Ok(Some(orch)) => orchestrations.push(orch),
-            Ok(None) => {} // Not an orchestration, skip
-            Err(_) => {}   // Failed to load, skip silently
+            Ok(None) => {}
+            Err(_) => {}
         }
     }
 
     Ok(orchestrations)
 }
 
-/// Load session lookup from ~/.claude/tina-sessions/{feature}.json
-fn load_session_lookup(feature: &str) -> Result<SessionLookup> {
-    let home = dirs::home_dir().context("Could not determine home directory")?;
-    let path = home
+/// Load session lookup from {base_dir}/.claude/tina-sessions/{feature}.json
+fn load_session_lookup_in(base_dir: &Path, feature: &str) -> Result<SessionLookup> {
+    let path = base_dir
         .join(".claude")
         .join("tina-sessions")
         .join(format!("{}.json", feature));
@@ -140,61 +157,61 @@ fn load_session_lookup(feature: &str) -> Result<SessionLookup> {
 }
 
 /// Find worktree path for an orchestration team
-///
-/// For orchestration teams (ending with -orchestration), the supervisor state
-/// is stored in the worktree path, not the team member's cwd. We need to:
-/// 1. Extract the feature name from the team name
-/// 2. Look up the worktree path in tina-sessions
+#[cfg(test)]
 fn find_worktree_for_orchestration(team_name: &str, member_cwd: &PathBuf) -> PathBuf {
-    // If team name ends with -orchestration, try to find worktree via tina-sessions
+    find_worktree_for_orchestration_in(None, team_name, member_cwd)
+}
+
+fn find_worktree_for_orchestration_in(base_dir: Option<&Path>, team_name: &str, member_cwd: &PathBuf) -> PathBuf {
     if team_name.ends_with("-orchestration") {
         let feature = team_name.trim_end_matches("-orchestration");
-        if let Ok(lookup) = load_session_lookup(feature) {
+        let lookup_result = match base_dir {
+            Some(base) => load_session_lookup_in(base, feature),
+            None => {
+                let home = dirs::home_dir().expect("Could not determine home directory");
+                load_session_lookup_in(&home, feature)
+            }
+        };
+        if let Ok(lookup) = lookup_result {
             return lookup.cwd;
         }
     }
 
-    // Fall back to member's cwd
     member_cwd.clone()
 }
 
-/// Try to load a team as an orchestration
-fn try_load_orchestration(team_name: &str) -> Result<Option<Orchestration>> {
-    let team = teams::load_team(team_name)?;
+/// Try to load a team as an orchestration from a specific base directory
+fn try_load_orchestration_in(base_dir: &Path, team_name: &str) -> Result<Option<Orchestration>> {
+    let teams_dir = teams::teams_dir_in(base_dir);
+    let tasks_dir = tasks::tasks_dir_in(base_dir);
+    let team = teams::load_team_in(&teams_dir, team_name)?;
 
-    // Get cwd from first member (typically team lead)
     let member_cwd = team
         .members
         .first()
         .map(|m| m.cwd.clone())
         .unwrap_or_default();
 
-    // Find the worktree path - for orchestration teams, this may differ from member_cwd
-    let worktree_path = find_worktree_for_orchestration(team_name, &member_cwd);
+    let worktree_path = find_worktree_for_orchestration_in(Some(base_dir), team_name, &member_cwd);
 
-    // Check for supervisor state (defines this as an orchestration)
     let supervisor_state = match tina_state::load_supervisor_state(&worktree_path)? {
         Some(state) => state,
-        None => return Ok(None), // Not an orchestration
+        None => return Ok(None),
     };
 
-    // Load context metrics from the worktree path
     let context_metrics = tina_state::load_context_metrics(&worktree_path)?;
 
-    // Load orchestrator tasks using team name (not session_id)
-    // Tasks are stored at ~/.claude/tasks/{team_name}/
-    let orchestrator_tasks = tasks::load_tasks(&team.name)?;
+    let orchestrator_tasks = tasks::load_tasks_in(&tasks_dir, &team.name)?;
 
-    // Load current phase tasks and members using the worktree path
-    let (phase_tasks, phase_members) = load_phase_data_for_worktree(
+    // For phase data, use the base_dir-aware variant
+    let (phase_tasks, phase_members) = load_phase_data_for_worktree_in(
+        base_dir,
         &supervisor_state.worktree_path,
         supervisor_state.current_phase,
     );
 
-    // Derive status
     let status = derive_orchestration_status(&orchestrator_tasks, &supervisor_state);
 
-    // Derive title from design doc filename
     let title = supervisor_state
         .design_doc
         .file_stem()
@@ -206,7 +223,7 @@ fn try_load_orchestration(team_name: &str) -> Result<Option<Orchestration>> {
         team_name: team.name,
         title,
         feature_name: supervisor_state.feature.clone(),
-        cwd: supervisor_state.worktree_path.clone(), // Use worktree path, not main repo
+        cwd: supervisor_state.worktree_path.clone(),
         current_phase: supervisor_state.current_phase,
         total_phases: supervisor_state.total_phases,
         design_doc_path: supervisor_state.design_doc,

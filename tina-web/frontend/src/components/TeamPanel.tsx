@@ -13,14 +13,14 @@ interface Props {
 
 export default function TeamPanel({ members }: Props) {
   return (
-    <div>
+    <div data-testid="team-panel">
       <h3 className="text-sm font-semibold text-gray-400 mb-2">Team</h3>
       {members.length === 0 ? (
         <p className="text-gray-600 text-sm">No members</p>
       ) : (
         <ul className="space-y-1">
           {members.map((member) => (
-            <li key={member.agentId} className="flex items-center gap-2 text-sm">
+            <li key={member.agentId} data-testid={`member-${member.name}`} className="flex items-center gap-2 text-sm">
               <span className={member.tmuxPaneId ? "text-green-400" : "text-gray-600"}>
                 {member.tmuxPaneId ? "\u25cf" : "\u25cb"}
               </span>

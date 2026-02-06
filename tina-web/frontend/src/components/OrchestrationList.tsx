@@ -33,14 +33,14 @@ interface Props {
 export default function OrchestrationList({ orchestrations }: Props) {
   if (orchestrations.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
+      <div data-testid="empty-state" className="flex items-center justify-center h-64 text-gray-500">
         No orchestrations found
       </div>
     );
   }
 
   return (
-    <div className="p-4">
+    <div data-testid="orchestration-list" className="p-4">
       <h1 className="text-xl font-semibold mb-4">Orchestrations</h1>
       <table className="w-full text-sm">
         <thead>
@@ -57,9 +57,10 @@ export default function OrchestrationList({ orchestrations }: Props) {
           {orchestrations.map((orch) => (
             <tr
               key={orch.team_name}
+              data-testid={`orchestration-row-${orch.team_name}`}
               className="border-b border-gray-900 hover:bg-gray-900/50"
             >
-              <td className="py-2 pr-4">
+              <td data-testid="orchestration-team-name" className="py-2 pr-4">
                 <Link
                   to={`/orchestration/${encodeURIComponent(orch.team_name)}`}
                   className="text-cyan-400 hover:underline"
@@ -67,15 +68,15 @@ export default function OrchestrationList({ orchestrations }: Props) {
                   {orch.team_name}
                 </Link>
               </td>
-              <td className="py-2 pr-4">{orch.feature_name}</td>
-              <td className="py-2 pr-4 font-mono">
+              <td data-testid="orchestration-feature" className="py-2 pr-4">{orch.feature_name}</td>
+              <td data-testid="orchestration-phase" className="py-2 pr-4 font-mono">
                 {orch.current_phase}/{orch.total_phases}
               </td>
-              <td className="py-2 pr-4 font-mono">{taskProgress(orch)}</td>
+              <td data-testid="orchestration-tasks" className="py-2 pr-4 font-mono">{taskProgress(orch)}</td>
               <td className="py-2 pr-4 font-mono">
                 {orch.context_percent != null ? `${orch.context_percent}%` : "--"}
               </td>
-              <td className={`py-2 ${statusColor(orch.status)}`}>
+              <td data-testid="orchestration-status" className={`py-2 ${statusColor(orch.status)}`}>
                 {statusLabel(orch.status)}
               </td>
             </tr>

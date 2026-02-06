@@ -3,7 +3,7 @@
 use crate::Team;
 use anyhow::{Context, Result};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Get the teams directory path
 pub fn teams_dir() -> PathBuf {
@@ -13,9 +13,19 @@ pub fn teams_dir() -> PathBuf {
         .join("teams")
 }
 
+/// Get the teams directory under a specific base directory
+pub fn teams_dir_in(base: &Path) -> PathBuf {
+    base.join(".claude").join("teams")
+}
+
 /// Load a team by name
 pub fn load_team(name: &str) -> Result<Team> {
-    let config_path = teams_dir().join(name).join("config.json");
+    load_team_in(&teams_dir(), name)
+}
+
+/// Load a team by name from a specific teams directory
+pub fn load_team_in(teams_dir: &Path, name: &str) -> Result<Team> {
+    let config_path = teams_dir.join(name).join("config.json");
     let content = fs::read_to_string(&config_path)
         .with_context(|| format!("Failed to read team config: {}", config_path.display()))?;
     let team: Team = serde_json::from_str(&content)
@@ -25,13 +35,17 @@ pub fn load_team(name: &str) -> Result<Team> {
 
 /// List all team names
 pub fn list_teams() -> Result<Vec<String>> {
-    let dir = teams_dir();
+    list_teams_in(&teams_dir())
+}
+
+/// List all team names from a specific teams directory
+pub fn list_teams_in(dir: &Path) -> Result<Vec<String>> {
     if !dir.exists() {
         return Ok(vec![]);
     }
 
     let mut teams = Vec::new();
-    for entry in fs::read_dir(&dir)? {
+    for entry in fs::read_dir(dir)? {
         let entry = entry?;
         if entry.file_type()?.is_dir() {
             if let Some(name) = entry.file_name().to_str() {
@@ -49,7 +63,11 @@ pub fn list_teams() -> Result<Vec<String>> {
 /// Find all teams whose members work in the given worktree path
 /// Excludes orchestration teams (which work in the main repo, not the worktree)
 pub fn find_teams_for_worktree(worktree_path: &std::path::Path) -> Result<Vec<Team>> {
-    let dir = teams_dir();
+    find_teams_for_worktree_in(&teams_dir(), worktree_path)
+}
+
+/// Find all teams whose members work in the given worktree path, searching in a specific teams directory
+pub fn find_teams_for_worktree_in(dir: &Path, worktree_path: &std::path::Path) -> Result<Vec<Team>> {
     if !dir.exists() {
         return Ok(vec![]);
     }
