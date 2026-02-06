@@ -8,7 +8,7 @@ description: Use when you have a design document with multiple phases and want f
 You are a TEAM LEAD coordinating TEAMMATES. Do not do the work yourself - spawn teammates.
 
 ## FORBIDDEN ACTIONS
-- Doing work that teammates should do (validation, worktree setup, planning, execution)
+- Doing work that teammates should do (validation, planning, execution)
 - Reading plan content (only track file paths)
 - Implementing code directly
 - Using raw tmux commands directly (use tina-session CLI instead)
@@ -80,19 +80,20 @@ If team exists, DO NOT create new team or tasks. Instead:
 
 ---
 
-## STEP 1c: Early orchestration tracking
+## STEP 1c: Initialize orchestration and create worktree
 
-Before creating the team, register the orchestration in SQLite for early visibility in tina-web:
+Before creating the team, initialize the orchestration. This creates the git worktree, statusline config, supervisor-state.json, and SQLite record all at once:
 
 ```bash
-tina-session init \
+WORKTREE_PATH=$(tina-session init \
   --feature "$FEATURE_NAME" \
+  --cwd "$PWD" \
   --design-doc "$DESIGN_DOC" \
   --branch "tina/$FEATURE_NAME" \
-  --total-phases "$TOTAL_PHASES"
+  --total-phases "$TOTAL_PHASES")
 ```
 
-Note: `--cwd` is omitted. The worktree doesn't exist yet. The orchestration appears in tina-web immediately with worktree_path as NULL. The worktree-setup agent will call `tina-session state set-worktree` later to fill it in.
+The command prints the worktree path to stdout. Capture it - you'll store it in task metadata for later tasks to use.
 
 ---
 
@@ -116,19 +117,19 @@ Create tasks representing all orchestration work. Dependencies enforce sequencin
 **Tasks to create:**
 
 1. `validate-design` - No dependencies
-2. `setup-worktree` - Blocked by: validate-design
-3. For each phase N (1 to TOTAL_PHASES):
-   - `plan-phase-N` - Blocked by: setup-worktree (if N=1) or review-phase-(N-1)
+2. For each phase N (1 to TOTAL_PHASES):
+   - `plan-phase-N` - Blocked by: validate-design (if N=1) or review-phase-(N-1)
    - `execute-phase-N` - Blocked by: plan-phase-N
    - `review-phase-N` - Blocked by: execute-phase-N
-4. `finalize` - Blocked by: review-phase-(TOTAL_PHASES)
+3. `finalize` - Blocked by: review-phase-(TOTAL_PHASES)
+
+Note: Worktree creation is handled by `tina-session init` in STEP 1c. There is no setup-worktree task.
 
 Use TaskCreate for each, then TaskUpdate to set dependencies.
 
 Example for 2-phase design:
 ```
 TaskCreate: validate-design
-TaskCreate: setup-worktree
 TaskCreate: plan-phase-1
 TaskCreate: execute-phase-1
 TaskCreate: review-phase-1
@@ -137,8 +138,7 @@ TaskCreate: execute-phase-2
 TaskCreate: review-phase-2
 TaskCreate: finalize
 
-TaskUpdate: setup-worktree, addBlockedBy: [validate-design]
-TaskUpdate: plan-phase-1, addBlockedBy: [setup-worktree]
+TaskUpdate: plan-phase-1, addBlockedBy: [validate-design]
 TaskUpdate: execute-phase-1, addBlockedBy: [plan-phase-1]
 TaskUpdate: review-phase-1, addBlockedBy: [execute-phase-1]
 TaskUpdate: plan-phase-2, addBlockedBy: [review-phase-1]
@@ -156,11 +156,11 @@ The design has `## Architectural Context` (added by `tina:architect` on approval
 1. Auto-complete the validate-design task:
    ```
    TaskUpdate: validate-design, status: completed
-   TaskUpdate: validate-design, metadata: { validation_status: "pre-approved" }
+   TaskUpdate: validate-design, metadata: { validation_status: "pre-approved", worktree_path: "$WORKTREE_PATH" }
    ```
 2. Print: `"Design pre-approved (has Architectural Context). Skipping validation."`
 3. Check for `## Prerequisites` section in the design doc. If present, show prerequisites to user and ask for confirmation before continuing.
-4. Proceed directly to spawning worktree-setup (same as the "validate complete" handler in STEP 5).
+4. Proceed directly to spawning planner for phase 1 (same as the "validate complete" handler in STEP 5). The worktree was already created by `tina-session init` in STEP 1c.
 
 **If `DESIGN_PRE_APPROVED` is false:**
 The validate-design task has no blockers. Spawn the design validator:
@@ -207,7 +207,6 @@ PENDING_UNBLOCKED = tasks where status == "pending" AND all blockedBy are comple
 
 For each task type, spawn the appropriate teammate:
 - `validate-design` in_progress → spawn design-validator
-- `setup-worktree` in_progress → spawn worktree-setup
 - `plan-phase-N` in_progress → spawn phase-planner
 - `execute-phase-N` in_progress → spawn phase-executor
 - `review-phase-N` in_progress → spawn phase-reviewer
@@ -227,27 +226,13 @@ After spawning a teammate, wait for their message. Based on the message content,
 ### Message Handlers
 
 **"validate complete" or "VALIDATION_STATUS: Pass/Warning":**
-1. Mark validate-design task complete
+1. Mark validate-design task complete, store worktree_path in metadata:
+   ```
+   TaskUpdate: validate-design, status: completed
+   TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH" }
+   ```
 2. Check for prerequisites: Read the design doc and look for a `## Prerequisites` section. If one exists, present each prerequisite to the user and ask them to confirm everything is in place before continuing. Do not proceed until the user confirms. If no prerequisites section exists, skip this check.
-3. Spawn worktree-setup teammate:
-```json
-{
-  "subagent_type": "tina:worktree-setup",
-  "team_name": "<feature-name>-orchestration",
-  "name": "worktree-setup",
-  "prompt": "task_id: setup-worktree"
-}
-```
-
-**"VALIDATION_STATUS: Stop":**
-1. Mark validate-design task complete with failure metadata
-2. Report validation failure to user
-3. Exit orchestration
-
-**"setup-worktree complete" with worktree_path:**
-1. Mark setup-worktree task complete
-2. Store worktree_path in task metadata
-3. Check for existing plan file at `{worktree_path}/.claude/tina/phase-1/plan.md`:
+3. Check for existing plan file at `{WORKTREE_PATH}/.claude/tina/phase-1/plan.md`:
    - If plan exists: auto-complete plan-phase-1 with `plan_path` set to the existing file, print "Reusing existing plan for phase 1."
    - If no plan: spawn phase-planner for phase 1:
 ```json
@@ -259,10 +244,15 @@ After spawning a teammate, wait for their message. Based on the message content,
 }
 ```
 
+**"VALIDATION_STATUS: Stop":**
+1. Mark validate-design task complete with failure metadata
+2. Report validation failure to user
+3. Exit orchestration
+
 **"plan-phase-N complete" with PLAN_PATH:**
 1. Mark plan-phase-N task complete
 2. Store PLAN_PATH in task metadata (execute-phase-N can read this)
-3. Update execute-phase-N metadata with worktree_path from setup-worktree and plan_path
+3. Update execute-phase-N metadata with worktree_path from validate-design and plan_path
 4. Spawn phase-executor:
 ```json
 {
@@ -328,7 +318,7 @@ The full skill with details follows.
 
 Automates the full development pipeline from design document to implementation using a team-based model. The orchestrator is a team lead that coordinates teammates, not a single agent doing everything.
 
-**Core principle:** Orchestrator maintains minimal context - it only sees teammate messages, not implementation details. Each teammate (validator, worktree-setup, planner, executor, reviewer) handles one specific responsibility.
+**Core principle:** Orchestrator maintains minimal context - it only sees teammate messages, not implementation details. Each teammate (validator, planner, executor, reviewer) handles one specific responsibility.
 
 **Announce at start:** "I'm using the orchestrate skill to coordinate a team for implementing this design."
 
@@ -338,14 +328,15 @@ The orchestrator creates a team (e.g., `auth-feature-orchestration`) and populat
 
 ```
 [] validate-design
-[] setup-worktree          (blocked by: validate)
-[] plan-phase-1            (blocked by: setup-worktree)
+[] plan-phase-1            (blocked by: validate-design)
 [] execute-phase-1         (blocked by: plan-1)
 [] review-phase-1          (blocked by: execute-1)
 [] plan-phase-2            (blocked by: review-1)
 ...
 [] finalize                (blocked by: review-N)
 ```
+
+Note: Worktree creation is handled by `tina-session init` before the team is created. There is no setup-worktree task.
 
 Dependencies enforce sequencing automatically.
 
@@ -354,7 +345,6 @@ Dependencies enforce sequencing automatically.
 | Agent | Claims | Responsibility |
 |-------|--------|----------------|
 | `tina:design-validator` | validate-design | Validate design doc, capture baseline metrics |
-| `tina:worktree-setup` | setup-worktree | Create worktree, install statusline config |
 | `tina:phase-planner` | plan-phase-N | Create implementation plan, validate plan |
 | `tina:phase-executor` | execute-phase-N | Execute phase plan, report completion |
 | `tina:phase-reviewer` | review-phase-N | Review completed phase, report pass/fail/gaps |
@@ -366,7 +356,7 @@ Task metadata carries orchestration state:
 | Data | Location |
 |------|----------|
 | Design doc path | Team description |
-| Worktree path | setup-worktree task metadata |
+| Worktree path | validate-design task metadata (set during init) |
 | Plan path | plan-phase-N task metadata |
 | Git range | execute-phase-N task metadata |
 | Review findings | review-phase-N task metadata |
@@ -450,26 +440,15 @@ TaskCreate {
   "description": "Validate design document",
   "activeForm": "Validating design document",
   "metadata": {
-    "design_doc_path": "<DESIGN_DOC>"
-  }
-}
-```
-
-4. **Create setup-worktree task:**
-```json
-TaskCreate {
-  "subject": "setup-worktree",
-  "description": "Create isolated worktree",
-  "activeForm": "Setting up worktree",
-  "metadata": {
-    "feature_name": "<FEATURE_NAME>",
     "design_doc_path": "<DESIGN_DOC>",
-    "total_phases": <TOTAL_PHASES>
+    "worktree_path": "<WORKTREE_PATH>"
   }
 }
 ```
 
-5. **Create phase tasks (for each phase 1 to N):**
+Note: `worktree_path` is captured from `tina-session init` output in STEP 1c. It's stored in validate-design metadata so all downstream tasks can access it.
+
+4. **Create phase tasks (for each phase 1 to N):**
 ```json
 TaskCreate {
   "subject": "plan-phase-<N>",
@@ -503,7 +482,7 @@ TaskCreate {
 }
 ```
 
-6. **Create finalize task:**
+5. **Create finalize task:**
 ```json
 TaskCreate {
   "subject": "finalize",
@@ -512,11 +491,10 @@ TaskCreate {
 }
 ```
 
-7. **Set up dependencies (all at once after task creation):**
+6. **Set up dependencies (all at once after task creation):**
 
 ```
-TaskUpdate: { taskId: "setup-worktree", addBlockedBy: ["validate-design"] }
-TaskUpdate: { taskId: "plan-phase-1", addBlockedBy: ["setup-worktree"] }
+TaskUpdate: { taskId: "plan-phase-1", addBlockedBy: ["validate-design"] }
 TaskUpdate: { taskId: "execute-phase-1", addBlockedBy: ["plan-phase-1"] }
 TaskUpdate: { taskId: "review-phase-1", addBlockedBy: ["execute-phase-1"] }
 
@@ -536,15 +514,11 @@ TaskUpdate: { taskId: "finalize", addBlockedBy: ["review-phase-<TOTAL_PHASES>"] 
 - No hidden state to track
 
 **Task metadata storage:**
-When teammates complete, store results in task metadata:
+When teammates complete, store results in task metadata. The `worktree_path` is stored in validate-design metadata from STEP 1c. Later tasks read it from there:
 ```json
-TaskUpdate {
-  "taskId": "setup-worktree",
-  "metadata": { "worktree_path": "/path/to/worktree", "branch": "tina/feature" }
-}
+TaskGet { "taskId": "validate-design" }
+// metadata.worktree_path = "/path/to/.worktrees/feature"
 ```
-
-Later tasks can read this metadata to get paths they need.
 
 ### Spawning Teammates
 
@@ -558,7 +532,7 @@ Propagate data from completed tasks to the task being spawned. This way the spaw
 
 ```bash
 # Example: Before spawning executor, update its task with paths from earlier tasks
-WORKTREE_PATH=$(TaskGet { taskId: "setup-worktree" }).metadata.worktree_path
+WORKTREE_PATH=$(TaskGet { taskId: "validate-design" }).metadata.worktree_path
 PLAN_PATH=$(TaskGet { taskId: "plan-phase-$N" }).metadata.plan_path
 
 TaskUpdate {
@@ -580,22 +554,9 @@ When: validate-design task is unblocked (always first)
 ```
 Then: Mark validate-design as in_progress
 
-**Worktree setup spawn:**
-
-When: validate-design complete with Pass or Warning
-```json
-{
-  "subagent_type": "tina:worktree-setup",
-  "team_name": "<TEAM_NAME>",
-  "name": "worktree-setup",
-  "prompt": "task_id: setup-worktree"
-}
-```
-Then: Mark setup-worktree as in_progress
-
 **Phase planner spawn (with plan reuse check):**
 
-When: setup-worktree complete (for phase 1) OR review-phase-(N-1) complete with pass (for phase N>1)
+When: validate-design complete (for phase 1) OR review-phase-(N-1) complete with pass (for phase N>1)
 
 Before spawning, check if a plan already exists:
 ```bash
@@ -709,8 +670,7 @@ Orchestration tasks store metadata for monitoring and recovery:
 
 | Task | Required Metadata |
 |------|-------------------|
-| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"` |
-| `setup-worktree` | `worktree_path`, `branch_name` |
+| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path` |
 | `plan-phase-N` | `plan_path` |
 | `execute-phase-N` | `phase_team_name`, `started_at` |
 | `execute-phase-N` (on complete) | `git_range`, `completed_at` |
@@ -735,7 +695,6 @@ Each teammate sends a structured completion message. Parse these patterns:
 | Teammate | Success Pattern | Failure Pattern |
 |----------|----------------|-----------------|
 | validator | `VALIDATION_STATUS: Pass` or `VALIDATION_STATUS: Warning` | `VALIDATION_STATUS: Stop` |
-| worktree-setup | `setup-worktree complete. worktree_path: X, branch: Y` | `setup-worktree error: X` |
 | planner-N | `plan-phase-N complete. PLAN_PATH: X` | `plan-phase-N error: X` |
 | executor-N | `execute-N complete. Git range: X..Y` | `execute-N error: X` |
 | reviewer-N | `review-N complete (pass)` or `review-N complete (gaps): X` | `review-N error: X` |
@@ -746,7 +705,7 @@ Each teammate sends a structured completion message. Parse these patterns:
 ```
 if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
     TaskUpdate: validate-design, status: completed
-    TaskUpdate: validate-design, metadata: { validation_status: "pass" or "warning" }
+    TaskUpdate: validate-design, metadata: { validation_status: "pass" or "warning", worktree_path: "$WORKTREE_PATH" }
 
     # Check for prerequisites before proceeding
     Read design doc, look for "## Prerequisites" section
@@ -756,29 +715,21 @@ if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
         Wait for user confirmation before continuing
         If user says something isn't ready, pause orchestration
 
-    Spawn worktree-setup teammate
-    Print: "Design validated. Setting up worktree..."
+    # Check for existing plan before spawning planner
+    PLAN_FILE = "{WORKTREE_PATH}/.claude/tina/phase-1/plan.md"
+    if file exists at PLAN_FILE:
+        TaskUpdate: plan-phase-1, status: completed, metadata: { plan_path: PLAN_FILE }
+        Print: "Reusing existing plan for phase 1."
+        # Proceed to spawning executor for phase 1
+    else:
+        Spawn planner-1 teammate
+    Print: "Design validated. Planning phase 1..."
 
 if message contains "VALIDATION_STATUS: Stop":
     TaskUpdate: validate-design, status: completed
     TaskUpdate: validate-design, metadata: { validation_status: "stop" }
     Print: "Design validation FAILED. See .claude/tina/validation/design-report.md"
     Exit orchestration
-```
-
-**On worktree-setup message:**
-```
-if message contains "setup-worktree complete":
-    Parse: worktree_path from "worktree_path: X"
-    Parse: branch from "branch: Y"
-    TaskUpdate: setup-worktree, status: completed
-    TaskUpdate: setup-worktree, metadata: { worktree_path: X, branch: Y }
-    Spawn planner-1 teammate
-    Print: "Worktree created at X. Planning phase 1..."
-
-if message contains "error":
-    TaskUpdate: setup-worktree, status: completed, metadata: { error: message }
-    Print error and exit
 ```
 
 **On planner-N message:**
@@ -789,8 +740,8 @@ if message contains "plan-phase-N complete":
     TaskUpdate: plan-phase-N, metadata: { plan_path: X }
 
     # Get worktree path from earlier task
-    worktree_task = TaskGet: setup-worktree
-    worktree_path = worktree_task.metadata.worktree_path
+    validate_task = TaskGet: validate-design
+    worktree_path = validate_task.metadata.worktree_path
 
     Spawn executor-N teammate with plan_path and worktree_path
     Print: "Phase N planned. Executing..."
@@ -807,8 +758,8 @@ if message contains "execute-N complete":
     TaskUpdate: execute-phase-N, metadata: { git_range: X..Y }
 
     # Get worktree path and design doc for reviewer
-    worktree_task = TaskGet: setup-worktree
-    worktree_path = worktree_task.metadata.worktree_path
+    validate_task = TaskGet: validate-design
+    worktree_path = validate_task.metadata.worktree_path
 
     Spawn reviewer-N teammate
     Print: "Phase N executed. Reviewing..."
@@ -1074,7 +1025,6 @@ If `remediation_depth >= 2` and still finding gaps, exit with error requiring hu
 |-------|-------|-----------|
 | Orchestrator | opus | Coordinates team, handles complex decisions |
 | Design Validator | opus | Analyzes feasibility, runs baseline commands |
-| Worktree Setup | haiku | Straightforward provisioning tasks |
 | Phase Planner | opus | Creates detailed plans, needs codebase understanding |
 | Phase Executor | haiku | Tmux management and file monitoring |
 | Phase Reviewer | opus | Analyzes implementation quality |
@@ -1212,7 +1162,6 @@ To minimize recovery needs:
 
 **Spawns:**
 - `tina:design-validator` - Validates design before work begins
-- `tina:worktree-setup` - Creates isolated workspace
 - `tina:phase-planner` - Creates implementation plans
 - `tina:phase-executor` - Executes phase plans
 - `tina:phase-reviewer` - Reviews completed phases
@@ -1363,7 +1312,6 @@ Use these scenarios to verify recovery and remediation work correctly.
 1. Start orchestration for 2-phase design
 2. Crash and resume at each stage:
    - After validate-design
-   - After setup-worktree
    - After plan-phase-1
    - After execute-phase-1
    - After review-phase-1 (pass)
@@ -1379,7 +1327,7 @@ Before using orchestration on real work, verify these behaviors manually:
 - [ ] Verify team created: `ls ~/.claude/teams/` shows orchestration team
 - [ ] Verify tasks created: `TaskList` shows all expected tasks with dependencies
 - [ ] Watch validator spawn and complete
-- [ ] Watch worktree-setup create worktree and install config
+- [ ] Verify worktree was created by tina-session init (before team creation)
 - [ ] Watch planner create phase-1 plan
 - [ ] Watch executor start tmux session
 - [ ] Verify tmux session exists: `tmux list-sessions`
@@ -1504,14 +1452,14 @@ Common issues and their resolutions:
 **Symptom:** Executor or reviewer fails because worktree_path is missing.
 
 **Possible causes:**
-1. Worktree-setup task completed but didn't store metadata
-2. Metadata storage failed
+1. validate-design task metadata doesn't have worktree_path
+2. `tina-session init` failed before team creation
 
 **Resolution:**
 1. Check worktree exists: `ls .worktrees/`
 2. Manually add metadata:
    ```
-   TaskUpdate { taskId: "setup-worktree", metadata: { worktree_path: ".worktrees/feature" } }
+   TaskUpdate { taskId: "validate-design", metadata: { worktree_path: ".worktrees/feature" } }
    ```
 
 ### Git range invalid or missing

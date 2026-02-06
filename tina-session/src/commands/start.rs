@@ -85,6 +85,9 @@ pub fn run(feature: &str, phase: &str, plan: &Path) -> anyhow::Result<u8> {
         }
     }
 
+    // Install dependencies if needed
+    install_dependencies(cwd);
+
     // Create tmux session (starts a shell)
     println!("Creating session '{}' in {}", name, cwd.display());
     tmux::create_session(&name, cwd, None)?;
@@ -118,3 +121,52 @@ pub fn run(feature: &str, phase: &str, plan: &Path) -> anyhow::Result<u8> {
     println!("Started phase {} execution in session '{}'", phase, name);
     Ok(0)
 }
+
+/// Detect and install project dependencies. Non-fatal on failure.
+fn install_dependencies(cwd: &Path) {
+    if cwd.join("package.json").exists() {
+        eprintln!("Installing npm dependencies...");
+        match Command::new("npm")
+            .args(["install"])
+            .current_dir(cwd)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .status()
+        {
+            Ok(status) if status.success() => eprintln!("npm install complete."),
+            Ok(status) => eprintln!("Warning: npm install exited with {}", status),
+            Err(e) => eprintln!("Warning: Failed to run npm install: {}", e),
+        }
+    }
+
+    if cwd.join("Cargo.toml").exists() {
+        eprintln!("Building Rust dependencies...");
+        match Command::new("cargo")
+            .args(["build"])
+            .current_dir(cwd)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .status()
+        {
+            Ok(status) if status.success() => eprintln!("cargo build complete."),
+            Ok(status) => eprintln!("Warning: cargo build exited with {}", status),
+            Err(e) => eprintln!("Warning: Failed to run cargo build: {}", e),
+        }
+    }
+
+    if cwd.join("requirements.txt").exists() {
+        eprintln!("Installing Python dependencies...");
+        match Command::new("pip")
+            .args(["install", "-r", "requirements.txt"])
+            .current_dir(cwd)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .status()
+        {
+            Ok(status) if status.success() => eprintln!("pip install complete."),
+            Ok(status) => eprintln!("Warning: pip install exited with {}", status),
+            Err(e) => eprintln!("Warning: Failed to run pip install: {}", e),
+        }
+    }
+}
+

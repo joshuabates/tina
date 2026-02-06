@@ -23,15 +23,15 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize orchestration (creates lookup file + supervisor-state.json)
+    /// Initialize orchestration (creates worktree, lookup file + supervisor-state.json)
     Init {
         /// Feature name (used for session naming)
         #[arg(long)]
         feature: String,
 
-        /// Working directory (worktree path). Optional for early tracking before worktree setup.
+        /// Project root directory (where .worktrees/ will be created)
         #[arg(long)]
-        cwd: Option<PathBuf>,
+        cwd: PathBuf,
 
         /// Path to design document
         #[arg(long)]
@@ -253,21 +253,6 @@ enum StateCommands {
         reason: String,
     },
 
-    /// Set the worktree path on an orchestration (after worktree setup)
-    SetWorktree {
-        /// Feature name
-        #[arg(long)]
-        feature: String,
-
-        /// Path to the worktree directory
-        #[arg(long)]
-        path: PathBuf,
-
-        /// Git branch name
-        #[arg(long)]
-        branch: Option<String>,
-    },
-
     /// Display current state
     Show {
         /// Feature name
@@ -361,7 +346,7 @@ fn run() -> anyhow::Result<u8> {
             design_doc,
             branch,
             total_phases,
-        } => commands::init::run(&feature, cwd.as_deref(), &design_doc, &branch, total_phases),
+        } => commands::init::run(&feature, &cwd, &design_doc, &branch, total_phases),
 
         Commands::Start {
             feature,
@@ -416,12 +401,6 @@ fn run() -> anyhow::Result<u8> {
                 check_phase(&phase)?;
                 commands::state::blocked(&feature, &phase, &reason)
             }
-
-            StateCommands::SetWorktree {
-                feature,
-                path,
-                branch,
-            } => commands::state::set_worktree(&feature, &path, branch.as_deref()),
 
             StateCommands::Show {
                 feature,
