@@ -185,6 +185,12 @@ enum Commands {
         team: Option<String>,
     },
 
+    /// Daemon management subcommands
+    Daemon {
+        #[command(subcommand)]
+        command: DaemonCommands,
+    },
+
     /// List active orchestrations
     List,
 
@@ -297,6 +303,21 @@ enum CheckCommands {
         #[arg(long)]
         path: PathBuf,
     },
+}
+
+#[derive(Subcommand)]
+enum DaemonCommands {
+    /// Start the daemon as a background process
+    Start,
+
+    /// Stop the running daemon
+    Stop,
+
+    /// Check if the daemon is running
+    Status,
+
+    /// Run the daemon in the foreground (used internally)
+    Run,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -447,6 +468,13 @@ fn run() -> anyhow::Result<u8> {
             check_phase(&phase)?;
             commands::status::run(&feature, &phase, team.as_deref())
         }
+
+        Commands::Daemon { command } => match command {
+            DaemonCommands::Start => commands::daemon::start(),
+            DaemonCommands::Stop => commands::daemon::stop(),
+            DaemonCommands::Status => commands::daemon::status(),
+            DaemonCommands::Run => commands::daemon::run(),
+        },
 
         Commands::List => commands::list::run(),
 

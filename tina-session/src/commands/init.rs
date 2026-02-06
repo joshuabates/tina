@@ -1,6 +1,10 @@
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
+use chrono::Utc;
+
+use tina_session::db;
 use tina_session::error::SessionError;
 use tina_session::session::lookup::SessionLookup;
 use tina_session::state::schema::SupervisorState;
@@ -48,12 +52,25 @@ pub fn run(
     // Create supervisor state
     let state = SupervisorState::new(
         feature,
-        design_doc_abs,
+        design_doc_abs.clone(),
         cwd_abs.clone(),
         branch,
         total_phases,
     );
     state.save()?;
+
+    // Write orchestration to SQLite
+    if let Err(e) = write_to_sqlite(feature, &cwd_abs, &design_doc_abs, branch, total_phases) {
+        eprintln!("Warning: Failed to write to SQLite: {}", e);
+    }
+
+    // Auto-start daemon if not running
+    if tina_session::daemon::status().is_none() {
+        match tina_session::daemon::start() {
+            Ok(pid) => eprintln!("Auto-started daemon (pid {})", pid),
+            Err(e) => eprintln!("Warning: Failed to auto-start daemon: {}", e),
+        }
+    }
 
     println!("Initialized orchestration for '{}'", feature);
     println!("  Worktree: {}", cwd_abs.display());
@@ -61,6 +78,64 @@ pub fn run(
     println!("  Lookup: {}", SessionLookup::lookup_path(feature).display());
 
     Ok(0)
+}
+
+/// Write orchestration record to SQLite, auto-creating the project.
+fn write_to_sqlite(
+    feature: &str,
+    cwd: &Path,
+    design_doc: &Path,
+    branch: &str,
+    total_phases: u32,
+) -> anyhow::Result<()> {
+    let db_path = db::default_db_path();
+    let conn = db::open_or_create(&db_path)?;
+    db::migrations::migrate(&conn)?;
+
+    // Find repo root from cwd
+    let repo_root = find_repo_root(cwd)?;
+    let repo_name = repo_root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+
+    // Find or create the project
+    let project_id =
+        db::projects::find_or_create_by_repo_path(&conn, repo_name, &repo_root.to_string_lossy())?;
+
+    // Create orchestration record
+    let now = Utc::now().to_rfc3339();
+    let orch_id = format!("{}_{}", feature, now);
+    let orch = db::orchestrations::Orchestration {
+        id: orch_id,
+        project_id,
+        feature_name: feature.to_string(),
+        design_doc_path: design_doc.to_string_lossy().to_string(),
+        branch: branch.to_string(),
+        worktree_path: Some(cwd.to_string_lossy().to_string()),
+        total_phases: total_phases as i32,
+        status: "planning".to_string(),
+        started_at: now,
+        completed_at: None,
+        total_elapsed_mins: None,
+    };
+    db::orchestrations::insert(&conn, &orch)?;
+
+    Ok(())
+}
+
+/// Find the git repo root for a given path.
+fn find_repo_root(cwd: &Path) -> anyhow::Result<std::path::PathBuf> {
+    let output = Command::new("git")
+        .args(["-C", &cwd.to_string_lossy(), "rev-parse", "--show-toplevel"])
+        .output()?;
+
+    if !output.status.success() {
+        anyhow::bail!("Not a git repository: {}", cwd.display());
+    }
+
+    let root = String::from_utf8(output.stdout)?.trim().to_string();
+    Ok(std::path::PathBuf::from(root))
 }
 
 #[cfg(test)]

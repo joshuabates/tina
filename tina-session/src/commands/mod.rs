@@ -4,6 +4,7 @@ pub mod wait;
 pub mod stop;
 pub mod state;
 pub mod check;
+pub mod daemon;
 pub mod name;
 pub mod exists;
 pub mod send;

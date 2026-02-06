@@ -2,6 +2,7 @@ use std::path::Path;
 
 use chrono::Utc;
 
+use tina_session::db;
 use tina_session::session::lookup::SessionLookup;
 use tina_session::state::schema::{PhaseStatus, SupervisorState, OrchestrationStatus, PhaseState};
 use tina_session::state::transitions::validate_transition;
@@ -88,6 +89,11 @@ pub fn update(
 
     state.save()?;
 
+    // Write phase update to SQLite
+    if let Err(e) = upsert_phase_to_sqlite(feature, phase, &state) {
+        eprintln!("Warning: Failed to write phase to SQLite: {}", e);
+    }
+
     println!("Updated phase {} status to '{}'", phase, new_status);
     Ok(0)
 }
@@ -159,6 +165,16 @@ pub fn phase_complete(feature: &str, phase: &str, git_range: &str) -> anyhow::Re
 
     state.save()?;
 
+    // Write phase completion to SQLite
+    if let Err(e) = upsert_phase_to_sqlite(feature, phase, &state) {
+        eprintln!("Warning: Failed to write phase to SQLite: {}", e);
+    }
+
+    // Update orchestration status in SQLite
+    if let Err(e) = update_orchestration_status_in_sqlite(feature, &state) {
+        eprintln!("Warning: Failed to update orchestration status in SQLite: {}", e);
+    }
+
     println!("Phase {} complete. Git range: {}", phase, git_range);
     Ok(0)
 }
@@ -195,8 +211,80 @@ pub fn blocked(feature: &str, phase: &str, reason: &str) -> anyhow::Result<u8> {
 
     state.save()?;
 
+    // Write blocked state to SQLite
+    if let Err(e) = upsert_phase_to_sqlite(feature, phase, &state) {
+        eprintln!("Warning: Failed to write phase to SQLite: {}", e);
+    }
+    if let Err(e) = update_orchestration_status_in_sqlite(feature, &state) {
+        eprintln!("Warning: Failed to update orchestration status in SQLite: {}", e);
+    }
+
     println!("Phase {} blocked: {}", phase, reason);
     Ok(0)
+}
+
+/// Upsert a phase record to SQLite, deriving values from the supervisor state.
+fn upsert_phase_to_sqlite(
+    feature: &str,
+    phase: &str,
+    state: &SupervisorState,
+) -> anyhow::Result<()> {
+    let db_path = db::default_db_path();
+    let conn = db::open_or_create(&db_path)?;
+    db::migrations::migrate(&conn)?;
+
+    let orch = match db::orchestrations::find_by_feature(&conn, feature)? {
+        Some(o) => o,
+        None => return Ok(()), // No orchestration in SQLite yet
+    };
+
+    let phase_state = match state.phases.get(phase) {
+        Some(ps) => ps,
+        None => return Ok(()),
+    };
+
+    let db_phase = db::phases::Phase {
+        id: None,
+        orchestration_id: orch.id,
+        phase_number: phase.to_string(),
+        status: phase_state.status.to_string(),
+        plan_path: phase_state.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+        git_range: phase_state.git_range.clone(),
+        planning_mins: phase_state.breakdown.planning_mins.map(|m| m as i32),
+        execution_mins: phase_state.breakdown.execution_mins.map(|m| m as i32),
+        review_mins: phase_state.breakdown.review_mins.map(|m| m as i32),
+        started_at: phase_state.planning_started_at.map(|dt| dt.to_rfc3339()),
+        completed_at: phase_state.completed_at.map(|dt| dt.to_rfc3339()),
+    };
+
+    db::phases::upsert(&conn, &db_phase)?;
+    Ok(())
+}
+
+/// Update orchestration status in SQLite to match the supervisor state.
+fn update_orchestration_status_in_sqlite(
+    feature: &str,
+    state: &SupervisorState,
+) -> anyhow::Result<()> {
+    let db_path = db::default_db_path();
+    let conn = db::open_or_create(&db_path)?;
+    db::migrations::migrate(&conn)?;
+
+    let orch = match db::orchestrations::find_by_feature(&conn, feature)? {
+        Some(o) => o,
+        None => return Ok(()),
+    };
+
+    let status_str = match state.status {
+        OrchestrationStatus::Planning => "planning",
+        OrchestrationStatus::Executing => "executing",
+        OrchestrationStatus::Reviewing => "reviewing",
+        OrchestrationStatus::Complete => "complete",
+        OrchestrationStatus::Blocked => "blocked",
+    };
+
+    db::orchestrations::update_status(&conn, &orch.id, status_str)?;
+    Ok(())
 }
 
 pub fn show(feature: &str, phase: Option<&str>, json: bool) -> anyhow::Result<u8> {
