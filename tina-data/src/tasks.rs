@@ -1,6 +1,6 @@
 //! Task file parsing module
 
-use crate::types::{Task, TaskStatus};
+use crate::{Task, TaskStatus};
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fs;

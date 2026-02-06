@@ -1,7 +1,7 @@
 //! Orchestration discovery module
 
-use crate::data::{tasks, teams, tina_state};
-use crate::types::{Agent, SessionLookup, SupervisorState, Task, TaskStatus};
+use crate::{tasks, teams, tina_state};
+use crate::{Agent, SessionLookup, SupervisorState, Task, TaskStatus};
 use anyhow::{Context, Result};
 use serde::Serialize;
 use std::fs;
@@ -99,7 +99,7 @@ pub fn load_phase_data(phase: u32) -> (Vec<Task>, Vec<Agent>) {
     }
 }
 
-/// Status of an orchestration
+/// Derived status of an orchestration (computed from task states at runtime)
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OrchestrationStatus {
@@ -280,7 +280,7 @@ mod tests {
             branch: "feature/test".to_string(),
             total_phases: 3,
             current_phase: phase,
-            status: crate::types::OrchestrationStatus::Executing,
+            status: crate::OrchestrationStatus::Executing,
             orchestration_started_at: Utc::now(),
             phases: Default::default(),
             timing: Default::default(),

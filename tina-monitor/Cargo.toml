@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 # Shared types with tina-session
 tina-session = { path = "../tina-session" }
+# Shared data layer
+tina-data = { path = "../tina-data" }
 # CLI
 clap = { version = "4", features = ["derive"] }
 

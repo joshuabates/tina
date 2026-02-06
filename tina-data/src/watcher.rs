@@ -1,4 +1,4 @@
-//! File watcher for automatic TUI refresh
+//! File watcher for automatic data refresh
 
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
@@ -104,7 +104,6 @@ mod tests {
         let result = FileWatcher::new();
 
         // Should either succeed (watching non-existent dirs) or fail gracefully
-        // For now, we'll accept either behavior
         assert!(
             result.is_ok() || result.is_err(),
             "Should handle missing directories without panicking"

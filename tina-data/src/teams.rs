@@ -1,6 +1,6 @@
 //! Team configuration parsing module
 
-use crate::types::Team;
+use crate::Team;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
@@ -135,8 +135,6 @@ mod tests {
     #[test]
     fn test_list_teams_empty_dir() {
         let temp_dir = TempDir::new().unwrap();
-        // Empty dir - but we can't test list_teams directly since it uses fixed path
-        // This tests the logic pattern
         let mut teams = Vec::new();
         for entry in fs::read_dir(temp_dir.path()).unwrap() {
             let entry = entry.unwrap();
@@ -179,7 +177,7 @@ mod tests {
         fs::write(team_dir.join("config.json"), "{ invalid json }").unwrap();
 
         let content = fs::read_to_string(team_dir.join("config.json")).unwrap();
-        let result: Result<Team, _> = serde_json::from_str(&content);
+        let result: std::result::Result<Team, _> = serde_json::from_str(&content);
         assert!(result.is_err());
     }
 }

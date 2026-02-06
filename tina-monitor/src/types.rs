@@ -2,32 +2,23 @@
 //!
 //! Re-exports canonical types from tina-session.
 
-use std::path::PathBuf;
-
 // Re-export all schema types from tina-session
 pub use tina_session::state::schema::{
     Agent, ContextMetrics, OrchestrationStatus, PhaseBreakdown, PhaseState, PhaseStatus,
     SessionLookup, SupervisorState, Task, TaskStatus, Team, TimingGap, TimingStats,
 };
 
+// Re-export OrchestrationSummary from tina-data
+pub use tina_data::OrchestrationSummary;
+
 /// TeamMember is a type alias for Agent for backward compatibility.
 pub type TeamMember = Agent;
-
-/// Summary of an orchestration for display in finder.
-#[derive(Debug, Clone)]
-pub struct OrchestrationSummary {
-    pub feature: String,
-    pub worktree_path: PathBuf,
-    pub status: OrchestrationStatus,
-    pub current_phase: u32,
-    pub total_phases: u32,
-    pub elapsed_mins: i64,
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::Utc;
+    use std::path::PathBuf;
 
     // ====================================================================
     // SessionLookup Tests
