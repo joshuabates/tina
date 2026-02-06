@@ -1,29 +1,51 @@
 import { Link } from "react-router-dom";
-import type { Orchestration, OrchestrationStatus } from "../types";
+import type { Orchestration } from "../types";
 
-function statusLabel(status: OrchestrationStatus): string {
-  if (status === "complete") return "Complete";
-  if (status === "idle") return "Idle";
-  if (typeof status === "object") {
-    if ("executing" in status) return `Executing (phase ${status.executing.phase})`;
-    if ("blocked" in status) return `Blocked (phase ${status.blocked.phase})`;
+function statusLabel(status: string): string {
+  switch (status) {
+    case "complete": return "Complete";
+    case "planning": return "Planning";
+    case "executing": return "Executing";
+    case "reviewing": return "Reviewing";
+    case "blocked": return "Blocked";
+    default: return status;
   }
-  return "Unknown";
 }
 
-function statusColor(status: OrchestrationStatus): string {
-  if (status === "complete") return "text-blue-400";
-  if (status === "idle") return "text-gray-500";
-  if (typeof status === "object") {
-    if ("executing" in status) return "text-green-400";
-    if ("blocked" in status) return "text-red-400";
+function statusColor(status: string): string {
+  switch (status) {
+    case "complete": return "text-blue-400";
+    case "executing": return "text-green-400";
+    case "reviewing": return "text-yellow-400";
+    case "blocked": return "text-red-400";
+    case "planning": return "text-cyan-400";
+    default: return "text-gray-400";
   }
-  return "text-gray-400";
 }
 
-function taskProgress(orch: Orchestration): string {
-  const completed = orch.tasks.filter((t) => t.status === "completed").length;
-  return `${completed}/${orch.tasks.length}`;
+function relativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const diffMs = now - then;
+  if (diffMs < 0) return "just now";
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function formatDuration(orch: Orchestration): string {
+  if (orch.total_elapsed_mins != null) {
+    return `${orch.total_elapsed_mins}m`;
+  }
+  if (orch.status !== "complete" && orch.completed_at == null) {
+    const mins = Math.floor((Date.now() - new Date(orch.started_at).getTime()) / 60_000);
+    return `${mins}m`;
+  }
+  return "--";
 }
 
 interface Props {
@@ -45,36 +67,40 @@ export default function OrchestrationList({ orchestrations }: Props) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-800 text-gray-400 text-left">
-            <th className="pb-2 pr-4">Team</th>
             <th className="pb-2 pr-4">Feature</th>
-            <th className="pb-2 pr-4">Phase</th>
-            <th className="pb-2 pr-4">Tasks</th>
-            <th className="pb-2 pr-4">Context</th>
+            <th className="pb-2 pr-4">Branch</th>
+            <th className="pb-2 pr-4">Phases</th>
+            <th className="pb-2 pr-4">Started</th>
+            <th className="pb-2 pr-4">Duration</th>
             <th className="pb-2">Status</th>
           </tr>
         </thead>
         <tbody>
           {orchestrations.map((orch) => (
             <tr
-              key={orch.team_name}
-              data-testid={`orchestration-row-${orch.team_name}`}
+              key={orch.id}
+              data-testid={`orchestration-row-${orch.id}`}
               className="border-b border-gray-900 hover:bg-gray-900/50"
             >
-              <td data-testid="orchestration-team-name" className="py-2 pr-4">
+              <td data-testid="orchestration-feature" className="py-2 pr-4">
                 <Link
-                  to={`/orchestration/${encodeURIComponent(orch.team_name)}`}
+                  to={`/orchestrations/${encodeURIComponent(orch.id)}`}
                   className="text-cyan-400 hover:underline"
                 >
-                  {orch.team_name}
+                  {orch.feature_name}
                 </Link>
               </td>
-              <td data-testid="orchestration-feature" className="py-2 pr-4">{orch.feature_name}</td>
-              <td data-testid="orchestration-phase" className="py-2 pr-4 font-mono">
-                {orch.current_phase}/{orch.total_phases}
+              <td data-testid="orchestration-branch" className="py-2 pr-4 font-mono text-gray-400">
+                {orch.branch}
               </td>
-              <td data-testid="orchestration-tasks" className="py-2 pr-4 font-mono">{taskProgress(orch)}</td>
-              <td className="py-2 pr-4 font-mono">
-                {orch.context_percent != null ? `${orch.context_percent}%` : "--"}
+              <td data-testid="orchestration-phases" className="py-2 pr-4 font-mono">
+                {orch.total_phases}
+              </td>
+              <td data-testid="orchestration-started" className="py-2 pr-4 text-gray-400">
+                {relativeTime(orch.started_at)}
+              </td>
+              <td data-testid="orchestration-duration" className="py-2 pr-4 font-mono">
+                {formatDuration(orch)}
               </td>
               <td data-testid="orchestration-status" className={`py-2 ${statusColor(orch.status)}`}>
                 {statusLabel(orch.status)}

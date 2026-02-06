@@ -1,6 +1,7 @@
-import type { Task } from "../types";
+import { Link } from "react-router-dom";
+import type { TaskEvent } from "../types";
 
-function statusIcon(status: Task["status"]): string {
+function statusIcon(status: string): string {
   switch (status) {
     case "completed":
       return "[x]";
@@ -8,10 +9,12 @@ function statusIcon(status: Task["status"]): string {
       return "[>]";
     case "pending":
       return "[ ]";
+    default:
+      return "[?]";
   }
 }
 
-function statusColor(status: Task["status"]): string {
+function statusColor(status: string): string {
   switch (status) {
     case "completed":
       return "text-green-400";
@@ -19,15 +22,18 @@ function statusColor(status: Task["status"]): string {
       return "text-yellow-400";
     case "pending":
       return "text-gray-500";
+    default:
+      return "text-gray-500";
   }
 }
 
 interface Props {
-  tasks: Task[];
+  tasks: TaskEvent[];
   title?: string;
+  orchestrationId?: string;
 }
 
-export default function TaskList({ tasks, title = "Tasks" }: Props) {
+export default function TaskList({ tasks, title = "Tasks", orchestrationId }: Props) {
   return (
     <div data-testid={`task-list-${title.toLowerCase().replace(/\s+/g, '-')}`}>
       <h3 className="text-sm font-semibold text-gray-400 mb-2">{title}</h3>
@@ -36,18 +42,27 @@ export default function TaskList({ tasks, title = "Tasks" }: Props) {
       ) : (
         <ul className="space-y-1">
           {tasks.map((task) => (
-            <li key={task.id} data-testid={`task-${task.id}`} className="flex items-start gap-2 text-sm">
+            <li key={task.task_id} data-testid={`task-${task.task_id}`} className="flex items-start gap-2 text-sm">
               <span data-testid="task-status" className={`font-mono ${statusColor(task.status)}`}>
                 {statusIcon(task.status)}
               </span>
               <div className="flex-1 min-w-0">
-                <span data-testid="task-subject">{task.subject}</span>
+                {orchestrationId ? (
+                  <Link
+                    to={`/orchestrations/${encodeURIComponent(orchestrationId)}/tasks/${encodeURIComponent(task.task_id)}`}
+                    className="hover:underline"
+                  >
+                    <span data-testid="task-subject">{task.subject}</span>
+                  </Link>
+                ) : (
+                  <span data-testid="task-subject">{task.subject}</span>
+                )}
                 {task.owner && (
                   <span className="text-cyan-400 ml-2">
                     &larr; {task.owner}
                   </span>
                 )}
-                {task.blockedBy.length > 0 && (
+                {task.blocked_by && (
                   <span className="text-red-400 ml-2">(blocked)</span>
                 )}
               </div>

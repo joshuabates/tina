@@ -1,59 +1,71 @@
-// Matches tina-data/src/discovery.rs::OrchestrationStatus
-// Tagged enum serialization (serde rename_all = "snake_case")
-export type OrchestrationStatus =
-  | { executing: { phase: number } }
-  | { blocked: { phase: number; reason: string } }
-  | "complete"
-  | "idle";
+// Matches tina-session db types (Serialize derives)
 
-// Matches tina-session Task (serde rename)
-export interface Task {
-  id: string;
-  subject: string;
-  description: string;
-  activeForm: string | null;
-  status: "pending" | "in_progress" | "completed";
-  owner: string | null;
-  blocks: string[];
-  blockedBy: string[];
-  metadata: unknown;
-}
-
-// Matches tina-session Agent (serde rename)
-export interface Agent {
-  agentId: string;
+export interface Project {
+  id: number;
   name: string;
-  agentType: string | null;
-  model: string;
-  joinedAt: number;
-  tmuxPaneId: string | null;
-  cwd: string;
-  subscriptions: string[];
+  repo_path: string;
+  created_at: string;
+  orchestration_count: number;
 }
 
-// Matches tina-data/src/discovery.rs::Orchestration
 export interface Orchestration {
-  team_name: string;
-  title: string;
+  id: string;
+  project_id: number;
   feature_name: string;
-  cwd: string;
-  current_phase: number;
-  total_phases: number;
   design_doc_path: string;
-  context_percent: number | null;
-  status: OrchestrationStatus;
-  orchestrator_tasks: Task[];
-  tasks: Task[];
-  members: Agent[];
+  branch: string;
+  worktree_path: string | null;
+  total_phases: number;
+  status: string;
+  started_at: string;
+  completed_at: string | null;
+  total_elapsed_mins: number | null;
 }
 
-// Matches tina-data/src/tasks.rs::TaskSummary
-export interface TaskSummary {
-  total: number;
-  completed: number;
-  in_progress: number;
-  pending: number;
-  blocked: number;
+export interface Phase {
+  id: number | null;
+  orchestration_id: string;
+  phase_number: string;
+  status: string;
+  plan_path: string | null;
+  git_range: string | null;
+  planning_mins: number | null;
+  execution_mins: number | null;
+  review_mins: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface TaskEvent {
+  id: number | null;
+  orchestration_id: string;
+  phase_number: string | null;
+  task_id: string;
+  subject: string;
+  description: string | null;
+  status: string;
+  owner: string | null;
+  blocked_by: string | null;
+  metadata: string | null;
+  recorded_at: string;
+}
+
+export interface TeamMember {
+  id: number | null;
+  orchestration_id: string;
+  phase_number: string;
+  agent_name: string;
+  agent_type: string | null;
+  model: string | null;
+  joined_at: string | null;
+  recorded_at: string;
+}
+
+export interface OrchestrationDetail {
+  orchestration: Orchestration;
+  phases: Phase[];
+  tasks: TaskEvent[];
+  members: TeamMember[];
 }
 
 // WebSocket message from server

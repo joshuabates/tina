@@ -14,6 +14,14 @@ export function useOrchestrations() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const listenersRef = useRef<Set<() => void>>(new Set());
+
+  const onUpdate = useCallback((listener: () => void) => {
+    listenersRef.current.add(listener);
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -31,6 +39,7 @@ export function useOrchestrations() {
         if (msg.type === "orchestrations_updated") {
           setOrchestrations(msg.data);
           setLastUpdate(new Date());
+          listenersRef.current.forEach((fn) => fn());
         }
       } catch {
         // Ignore malformed messages
@@ -56,5 +65,5 @@ export function useOrchestrations() {
     };
   }, [connect]);
 
-  return { orchestrations, connected, lastUpdate };
+  return { orchestrations, connected, lastUpdate, onUpdate };
 }
