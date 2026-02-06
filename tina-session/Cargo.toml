@@ -28,6 +28,9 @@ thiserror = "1"
 # Paths
 dirs = "5"
 
+# Database
+rusqlite = { version = "0.31", features = ["bundled"] }
+
 [dev-dependencies]
 tempfile = "3"
 assert_cmd = "2"

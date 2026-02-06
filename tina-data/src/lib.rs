@@ -4,6 +4,7 @@
 //! for orchestration state. Used by both tina-monitor (TUI) and
 //! tina-web (web dashboard).
 
+pub mod db;
 pub mod discovery;
 pub mod tasks;
 pub mod teams;

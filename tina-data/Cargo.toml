@@ -18,5 +18,8 @@ anyhow = "1"
 dirs = "5"
 notify = "6"
 
+# Database (for Connection type re-export)
+rusqlite = { version = "0.31", features = ["bundled"] }
+
 [dev-dependencies]
 tempfile = "3"
