@@ -4,9 +4,11 @@ use tokio::net::TcpListener;
 
 use tina_web::state::AppState;
 
-/// Start the server on a random port and return the address
+/// Start the server on a random port with a temp database
 async fn start_test_server() -> SocketAddr {
-    let state = AppState::new();
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.keep().join("test.db");
+    let state = AppState::open(&db_path);
     let app = tina_web::build_router(state);
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -117,4 +119,22 @@ async fn test_nonexistent_phases_returns_404() {
         .unwrap();
 
     assert_eq!(response.status(), 404);
+}
+
+#[tokio::test]
+async fn test_projects_returns_empty_array() {
+    let addr = start_test_server().await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("http://{}/api/projects", addr))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 200);
+
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert!(body.is_array());
+    assert_eq!(body.as_array().unwrap().len(), 0);
 }

@@ -3,11 +3,9 @@ pub mod state;
 pub mod ws;
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use axum::routing::get;
+use axum::routing::{get, put};
 use axum::Router;
-use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
@@ -17,6 +15,14 @@ use crate::state::AppState;
 pub fn build_router(state: Arc<AppState>) -> Router {
     let api_routes = Router::new()
         .route("/health", get(api::health))
+        // Projects
+        .route("/projects", get(api::list_projects).post(api::create_project))
+        .route(
+            "/projects/{id}/orchestrations",
+            get(api::list_project_orchestrations),
+        )
+        .route("/projects/{id}", put(api::rename_project))
+        // Orchestrations
         .route("/orchestrations", get(api::list_orchestrations))
         .route("/orchestrations/{id}", get(api::get_orchestration))
         .route(
@@ -30,6 +36,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route(
             "/orchestrations/{id}/phases",
             get(api::get_orchestration_phases),
+        )
+        .route(
+            "/orchestrations/{id}/tasks/{task_id}/events",
+            get(api::get_task_events),
         );
 
     Router::new()
@@ -43,6 +53,14 @@ pub fn build_router(state: Arc<AppState>) -> Router {
 pub fn build_router_with_static(state: Arc<AppState>, static_dir: &str) -> Router {
     let api_routes = Router::new()
         .route("/health", get(api::health))
+        // Projects
+        .route("/projects", get(api::list_projects).post(api::create_project))
+        .route(
+            "/projects/{id}/orchestrations",
+            get(api::list_project_orchestrations),
+        )
+        .route("/projects/{id}", put(api::rename_project))
+        // Orchestrations
         .route("/orchestrations", get(api::list_orchestrations))
         .route("/orchestrations/{id}", get(api::get_orchestration))
         .route(
@@ -56,6 +74,10 @@ pub fn build_router_with_static(state: Arc<AppState>, static_dir: &str) -> Route
         .route(
             "/orchestrations/{id}/phases",
             get(api::get_orchestration_phases),
+        )
+        .route(
+            "/orchestrations/{id}/tasks/{task_id}/events",
+            get(api::get_task_events),
         );
 
     Router::new()
@@ -66,40 +88,6 @@ pub fn build_router_with_static(state: Arc<AppState>, static_dir: &str) -> Route
         .with_state(state)
 }
 
-/// Start the file watcher that triggers state reloads on file changes
-pub fn start_file_watcher(state: Arc<AppState>) -> anyhow::Result<RecommendedWatcher> {
-    let watcher_state = state.clone();
-
-    let mut watcher = RecommendedWatcher::new(
-        move |res: Result<Event, notify::Error>| {
-            if res.is_ok() {
-                let state = watcher_state.clone();
-                tokio::spawn(async move {
-                    state.reload().await;
-                });
-            }
-        },
-        Config::default().with_poll_interval(Duration::from_secs(2)),
-    )?;
-
-    let home_dir = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
-    let claude_dir = home_dir.join(".claude");
-
-    // Watch teams directory
-    let teams_dir = claude_dir.join("teams");
-    if teams_dir.exists() {
-        watcher.watch(&teams_dir, RecursiveMode::Recursive)?;
-    }
-
-    // Watch tasks directory
-    let tasks_dir = claude_dir.join("tasks");
-    if tasks_dir.exists() {
-        watcher.watch(&tasks_dir, RecursiveMode::Recursive)?;
-    }
-
-    Ok(watcher)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,9 +95,15 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
 
+    fn test_state() -> Arc<AppState> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.keep().join("test.db");
+        AppState::open(&db_path)
+    }
+
     #[tokio::test]
     async fn test_health_endpoint() {
-        let state = AppState::new();
+        let state = test_state();
         let app = build_router(state);
 
         let response = app
@@ -127,7 +121,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_orchestrations_endpoint() {
-        let state = AppState::new();
+        let state = test_state();
         let app = build_router(state);
 
         let response = app
@@ -145,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_nonexistent_orchestration_endpoint() {
-        let state = AppState::new();
+        let state = test_state();
         let app = build_router(state);
 
         let response = app
@@ -163,7 +157,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_orchestration_tasks_endpoint() {
-        let state = AppState::new();
+        let state = test_state();
         let app = build_router(state);
 
         let response = app
@@ -181,7 +175,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_orchestration_team_endpoint() {
-        let state = AppState::new();
+        let state = test_state();
         let app = build_router(state);
 
         let response = app
@@ -199,7 +193,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_orchestration_phases_endpoint() {
-        let state = AppState::new();
+        let state = test_state();
         let app = build_router(state);
 
         let response = app
@@ -217,7 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_response_body() {
-        let state = AppState::new();
+        let state = test_state();
         let app = build_router(state);
 
         let response = app
@@ -235,5 +229,59 @@ mod tests {
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn test_list_projects_endpoint() {
+        let state = test_state();
+        let app = build_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/projects")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json.as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_project_endpoint() {
+        let state = test_state();
+        let app = build_router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/projects")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::to_string(&serde_json::json!({
+                            "name": "test-project",
+                            "repo_path": "/test/repo"
+                        }))
+                        .unwrap(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["name"], "test-project");
     }
 }

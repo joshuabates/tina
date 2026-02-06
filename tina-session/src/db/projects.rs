@@ -1,6 +1,7 @@
 use rusqlite::{params, Connection};
+use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Project {
     pub id: i64,
     pub name: String,

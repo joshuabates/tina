@@ -16,9 +16,9 @@ pub use tina_session::db::task_events::TaskEvent;
 pub use tina_session::db::team_members::TeamMember;
 
 // Read-only query functions
-pub use tina_session::db::orchestrations::{find_by_feature, list_by_project};
+pub use tina_session::db::orchestrations::{find_by_feature, list_all as list_orchestrations, list_by_project};
 pub use tina_session::db::phases::list_by_orchestration as list_phases;
-pub use tina_session::db::projects::list as list_projects;
+pub use tina_session::db::projects::{find_or_create_by_repo_path, list as list_projects, rename as rename_project};
 pub use tina_session::db::queries::orchestration_detail;
 pub use tina_session::db::task_events::{history_for_task, latest_per_task};
 pub use tina_session::db::team_members::list_by_orchestration as list_team_members;

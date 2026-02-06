@@ -6,7 +6,7 @@ use axum::response::IntoResponse;
 use futures::{SinkExt, StreamExt};
 use serde::Serialize;
 
-use tina_data::discovery::Orchestration;
+use tina_data::db;
 
 use crate::state::AppState;
 
@@ -14,7 +14,7 @@ use crate::state::AppState;
 #[serde(tag = "type", content = "data")]
 enum WsMessage {
     #[serde(rename = "orchestrations_updated")]
-    OrchestrationsUpdated(Vec<Orchestration>),
+    OrchestrationsUpdated(Vec<db::Orchestration>),
 }
 
 pub async fn ws_handler(
@@ -28,7 +28,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
 
     // Send initial state
-    let orchestrations = state.get_orchestrations().await;
+    let orchestrations = {
+        let conn = state.conn().await;
+        db::list_orchestrations(&conn).unwrap_or_default()
+    };
     let msg = WsMessage::OrchestrationsUpdated(orchestrations);
     if let Ok(json) = serde_json::to_string(&msg) {
         if sender.send(Message::Text(json.into())).await.is_err() {
@@ -43,7 +46,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let send_state = state.clone();
     let mut send_task = tokio::spawn(async move {
         while update_rx.recv().await.is_ok() {
-            let orchestrations = send_state.get_orchestrations().await;
+            let orchestrations = {
+                let conn = send_state.conn().await;
+                db::list_orchestrations(&conn).unwrap_or_default()
+            };
             let msg = WsMessage::OrchestrationsUpdated(orchestrations);
             if let Ok(json) = serde_json::to_string(&msg) {
                 if sender.send(Message::Text(json.into())).await.is_err() {

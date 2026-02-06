@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use tracing_subscriber;
 
-use tina_web::state::AppState;
+use tina_web::state::{self, AppState};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -10,11 +10,8 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState::new();
 
-    // Load initial data
-    state.reload().await;
-
-    // Start file watcher (keep handle alive)
-    let _watcher = tina_web::start_file_watcher(state.clone())?;
+    // Start SQLite polling for change detection
+    let _poller = state::start_poller(state.clone());
 
     // Check for built frontend in frontend/dist
     let static_dir = std::env::current_dir()?.join("frontend").join("dist");

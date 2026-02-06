@@ -1,168 +1,135 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use tempfile::TempDir;
+use std::sync::Arc;
 
-/// Creates a complete orchestration fixture in a temp directory.
-/// The TempDir must be kept alive for the duration of the test.
+use tempfile::TempDir;
+use tina_web::state::AppState;
+
+/// Creates a complete orchestration fixture backed by a temp SQLite database.
+#[allow(dead_code)]
 pub struct FixtureBuilder {
+    /// Kept alive to prevent temp directory cleanup
     dir: TempDir,
+    state: Arc<AppState>,
 }
 
 impl FixtureBuilder {
     pub fn new() -> Self {
-        Self {
-            dir: TempDir::new().unwrap(),
-        }
+        let dir = TempDir::new().unwrap();
+        let db_path = dir.path().join("test.db");
+        let state = AppState::open(&db_path);
+
+        Self { dir, state }
     }
 
-    /// Get the base directory path (equivalent to home dir)
-    pub fn base_dir(&self) -> PathBuf {
-        self.dir.path().to_path_buf()
+    pub fn state(&self) -> Arc<AppState> {
+        self.state.clone()
     }
 
-    /// Create a team with config.json
-    pub fn add_team(
+    /// Insert a project into the database. Returns project id.
+    pub async fn add_project(&self, name: &str, repo_path: &str) -> i64 {
+        let conn = self.state.conn().await;
+        tina_data::db::find_or_create_by_repo_path(&conn, name, repo_path).unwrap()
+    }
+
+    /// Insert an orchestration into the database.
+    pub async fn add_orchestration(
         &self,
-        team_name: &str,
-        worktree_path: &Path,
-        members: &[(&str, &str)], // (name, agent_type)
-    ) -> &Self {
-        let team_dir = self
-            .dir
-            .path()
-            .join(".claude")
-            .join("teams")
-            .join(team_name);
-        fs::create_dir_all(&team_dir).unwrap();
-
-        let members_json: Vec<String> = members
-            .iter()
-            .map(|(name, agent_type)| {
-                format!(
-                    r#"{{
-                        "agentId": "{}@{}",
-                        "name": "{}",
-                        "agentType": "{}",
-                        "model": "claude-opus-4-5-20251101",
-                        "joinedAt": 1706644800000,
-                        "tmuxPaneId": null,
-                        "cwd": "{}",
-                        "subscriptions": []
-                    }}"#,
-                    name,
-                    team_name,
-                    name,
-                    agent_type,
-                    worktree_path.display()
-                )
-            })
-            .collect();
-
-        let lead_name = members.first().map(|(n, _)| *n).unwrap_or("leader");
-        let config = format!(
-            r#"{{
-                "name": "{}",
-                "description": "Test team",
-                "createdAt": 1706644800000,
-                "leadAgentId": "{}@{}",
-                "leadSessionId": "{}",
-                "members": [{}]
-            }}"#,
-            team_name,
-            lead_name,
-            team_name,
-            team_name,
-            members_json.join(",")
-        );
-        fs::write(team_dir.join("config.json"), config).unwrap();
-        self
-    }
-
-    /// Create a supervisor-state.json in a worktree
-    pub fn add_supervisor_state(
-        &self,
-        worktree_path: &Path,
-        feature: &str,
-        total_phases: u32,
-        current_phase: u32,
+        id: &str,
+        project_id: i64,
+        feature_name: &str,
+        total_phases: i32,
         status: &str,
     ) -> &Self {
-        let tina_dir = worktree_path.join(".claude").join("tina");
-        fs::create_dir_all(&tina_dir).unwrap();
-
-        let state = format!(
-            r#"{{
-                "version": 1,
-                "feature": "{}",
-                "design_doc": "docs/plans/design.md",
-                "worktree_path": "{}",
-                "branch": "feature/{}",
-                "total_phases": {},
-                "current_phase": {},
-                "status": "{}",
-                "orchestration_started_at": "2026-01-30T10:00:00Z",
-                "phases": {{}},
-                "timing": {{}}
-            }}"#,
-            feature,
-            worktree_path.display(),
-            feature,
+        let conn = self.state.conn().await;
+        let orch = tina_data::db::Orchestration {
+            id: id.to_string(),
+            project_id,
+            feature_name: feature_name.to_string(),
+            design_doc_path: format!("docs/plans/{}.md", feature_name),
+            branch: format!("feature/{}", feature_name),
+            worktree_path: None,
             total_phases,
-            current_phase,
-            status
-        );
-        fs::write(tina_dir.join("supervisor-state.json"), state).unwrap();
+            status: status.to_string(),
+            started_at: "2026-01-30T10:00:00Z".to_string(),
+            completed_at: None,
+            total_elapsed_mins: None,
+        };
+        tina_session::db::orchestrations::insert(&conn, &orch).unwrap();
         self
     }
 
-    /// Create a session lookup in {base}/.claude/tina-sessions/
-    pub fn add_session_lookup(&self, feature: &str, worktree_path: &Path) -> &Self {
-        let sessions_dir = self.dir.path().join(".claude").join("tina-sessions");
-        fs::create_dir_all(&sessions_dir).unwrap();
-
-        let lookup = format!(
-            r#"{{
-                "feature": "{}",
-                "cwd": "{}",
-                "created_at": "2026-01-30T10:00:00Z"
-            }}"#,
-            feature,
-            worktree_path.display()
-        );
-        fs::write(sessions_dir.join(format!("{}.json", feature)), lookup).unwrap();
-        self
-    }
-
-    /// Create task files for a team
-    pub fn add_tasks(
+    /// Insert a phase record.
+    #[allow(dead_code)]
+    pub async fn add_phase(
         &self,
-        session_id: &str,
-        tasks: &[(&str, &str, &str)], // (id, subject, status)
+        orchestration_id: &str,
+        phase_number: &str,
+        status: &str,
     ) -> &Self {
-        let tasks_dir = self
-            .dir
-            .path()
-            .join(".claude")
-            .join("tasks")
-            .join(session_id);
-        fs::create_dir_all(&tasks_dir).unwrap();
+        let conn = self.state.conn().await;
+        let phase = tina_data::db::Phase {
+            id: None,
+            orchestration_id: orchestration_id.to_string(),
+            phase_number: phase_number.to_string(),
+            status: status.to_string(),
+            plan_path: None,
+            git_range: None,
+            planning_mins: None,
+            execution_mins: None,
+            review_mins: None,
+            started_at: Some("2026-01-30T10:00:00Z".to_string()),
+            completed_at: None,
+        };
+        tina_session::db::phases::upsert(&conn, &phase).unwrap();
+        self
+    }
 
-        for (id, subject, status) in tasks {
-            let task_json = format!(
-                r#"{{
-                    "id": "{}",
-                    "subject": "{}",
-                    "description": "Test task",
-                    "activeForm": "Working on {}",
-                    "status": "{}",
-                    "owner": null,
-                    "blocks": [],
-                    "blockedBy": [],
-                    "metadata": {{}}
-                }}"#,
-                id, subject, subject, status
-            );
-            fs::write(tasks_dir.join(format!("{}.json", id)), task_json).unwrap();
+    /// Insert task events.
+    pub async fn add_task_events(
+        &self,
+        orchestration_id: &str,
+        phase_number: Option<&str>,
+        tasks: &[(&str, &str, &str)], // (task_id, subject, status)
+    ) -> &Self {
+        let conn = self.state.conn().await;
+        for (task_id, subject, status) in tasks {
+            let event = tina_data::db::TaskEvent {
+                id: None,
+                orchestration_id: orchestration_id.to_string(),
+                phase_number: phase_number.map(|s| s.to_string()),
+                task_id: task_id.to_string(),
+                subject: subject.to_string(),
+                description: Some("Test task".to_string()),
+                status: status.to_string(),
+                owner: None,
+                blocked_by: None,
+                metadata: None,
+                recorded_at: "2026-01-30T10:00:00Z".to_string(),
+            };
+            tina_session::db::task_events::insert_event(&conn, &event).unwrap();
+        }
+        self
+    }
+
+    /// Insert team members.
+    pub async fn add_team_members(
+        &self,
+        orchestration_id: &str,
+        phase_number: &str,
+        members: &[(&str, &str)], // (agent_name, agent_type)
+    ) -> &Self {
+        let conn = self.state.conn().await;
+        for (agent_name, agent_type) in members {
+            let member = tina_data::db::TeamMember {
+                id: None,
+                orchestration_id: orchestration_id.to_string(),
+                phase_number: phase_number.to_string(),
+                agent_name: agent_name.to_string(),
+                agent_type: Some(agent_type.to_string()),
+                model: Some("claude-opus-4-6".to_string()),
+                joined_at: Some("2026-01-30T10:00:00Z".to_string()),
+                recorded_at: "2026-01-30T10:00:00Z".to_string(),
+            };
+            tina_session::db::team_members::upsert(&conn, &member).unwrap();
         }
         self
     }
@@ -172,51 +139,25 @@ impl FixtureBuilder {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_fixture_creates_files() {
+    #[tokio::test]
+    async fn test_fixture_creates_project() {
         let fixture = FixtureBuilder::new();
-        let worktree = fixture.base_dir().join("worktrees").join("test-project");
-        fixture.add_team(
-            "test-orchestration",
-            &worktree,
-            &[("leader", "team-lead")],
-        );
-        fixture.add_supervisor_state(&worktree, "test-feature", 3, 2, "executing");
-
-        assert!(fixture
-            .base_dir()
-            .join(".claude/teams/test-orchestration/config.json")
-            .exists());
-        assert!(worktree
-            .join(".claude/tina/supervisor-state.json")
-            .exists());
+        let id = fixture.add_project("test-proj", "/path/to/repo").await;
+        assert!(id > 0);
     }
 
-    #[test]
-    fn test_fixture_creates_tasks() {
+    #[tokio::test]
+    async fn test_fixture_creates_orchestration() {
         let fixture = FixtureBuilder::new();
-        fixture.add_tasks(
-            "test-team",
-            &[
-                ("1", "Task one", "completed"),
-                ("2", "Task two", "in_progress"),
-            ],
-        );
+        let pid = fixture.add_project("proj", "/repo").await;
+        fixture
+            .add_orchestration("feat_2026", pid, "feat", 3, "executing")
+            .await;
 
-        let tasks_dir = fixture.base_dir().join(".claude/tasks/test-team");
-        assert!(tasks_dir.join("1.json").exists());
-        assert!(tasks_dir.join("2.json").exists());
-    }
-
-    #[test]
-    fn test_fixture_creates_session_lookup() {
-        let fixture = FixtureBuilder::new();
-        let worktree = fixture.base_dir().join("worktrees").join("my-feature");
-        fixture.add_session_lookup("my-feature", &worktree);
-
-        assert!(fixture
-            .base_dir()
-            .join(".claude/tina-sessions/my-feature.json")
-            .exists());
+        let state = fixture.state();
+        let conn = state.conn().await;
+        let orchs = tina_data::db::list_orchestrations(&conn).unwrap();
+        assert_eq!(orchs.len(), 1);
+        assert_eq!(orchs[0].feature_name, "feat");
     }
 }

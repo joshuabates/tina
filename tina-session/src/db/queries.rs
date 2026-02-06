@@ -1,4 +1,5 @@
 use rusqlite::Connection;
+use serde::Serialize;
 
 use super::orchestrations::{self, Orchestration};
 use super::phases::{self, Phase};
@@ -6,7 +7,7 @@ use super::task_events::{self, TaskEvent};
 use super::team_members::{self, TeamMember};
 
 /// Full orchestration detail with phases, latest tasks, and team members.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct OrchestrationDetail {
     pub orchestration: Orchestration,
     pub phases: Vec<Phase>,

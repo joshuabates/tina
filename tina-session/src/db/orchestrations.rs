@@ -1,6 +1,7 @@
 use rusqlite::{params, Connection};
+use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Orchestration {
     pub id: String,
     pub project_id: i64,
@@ -73,6 +74,16 @@ pub fn list_by_project(conn: &Connection, project_id: i64) -> rusqlite::Result<V
          FROM orchestrations WHERE project_id = ?1 ORDER BY started_at DESC",
     )?;
     let rows = stmt.query_map(params![project_id], row_to_orchestration)?;
+    rows.collect()
+}
+
+/// List all orchestrations, most recent first.
+pub fn list_all(conn: &Connection) -> rusqlite::Result<Vec<Orchestration>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, project_id, feature_name, design_doc_path, branch, worktree_path, total_phases, status, started_at, completed_at, total_elapsed_mins
+         FROM orchestrations ORDER BY started_at DESC",
+    )?;
+    let rows = stmt.query_map([], row_to_orchestration)?;
     rows.collect()
 }
 
