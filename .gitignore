@@ -4,3 +4,8 @@
 
 # Rust compilation artifacts
 **/target/
+
+# Node.js
+**/node_modules/
+**/dist/
+*.tsbuildinfo
