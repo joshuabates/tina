@@ -302,6 +302,7 @@ mod tests {
             orchestration_started_at: Utc::now(),
             phases: Default::default(),
             timing: Default::default(),
+            model_policy: Default::default(),
         }
     }
 

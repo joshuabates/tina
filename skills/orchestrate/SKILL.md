@@ -256,10 +256,11 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 
 | Action | What to Do |
 |--------|------------|
-| `spawn_validator` | Spawn `tina:design-validator` teammate |
-| `spawn_planner` | Spawn `tina:phase-planner` for `.phase` |
-| `spawn_executor` | Spawn `tina:phase-executor` for `.phase` (plan at `.plan_path`) |
-| `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`) |
+| `spawn_validator` | Spawn `tina:design-validator` teammate (model from `.model` if present) |
+| `spawn_planner` | Spawn `tina:phase-planner` for `.phase` (model from `.model` if present) |
+| `spawn_executor` | Spawn `tina:phase-executor` for `.phase` (plan at `.plan_path`, model from `.model` if present) |
+| `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`, model from `.model` if present) |
+| `consensus_disagreement` | Surface to user: "Reviewers disagree on phase `.phase`. Verdict 1: `.verdict_1`, Verdict 2: `.verdict_2`. Please resolve manually." |
 | `reuse_plan` | Skip planning, auto-complete plan task, dispatch executor |
 | `finalize` | Invoke `tina:finishing-a-development-branch` |
 | `complete` | Report orchestration complete |
@@ -621,6 +622,21 @@ Before spawning: Update review-phase-N metadata with worktree_path, design_doc_p
 ```
 Then: Mark review-phase-N as in_progress
 
+**Model override from CLI:**
+
+If the action response includes a `model` field, pass it to the spawn:
+```json
+{
+  "subagent_type": "tina:phase-planner",
+  "team_name": "<TEAM_NAME>",
+  "name": "planner-<N>",
+  "model": "<model from action>",
+  "prompt": "task_id: plan-phase-<N>"
+}
+```
+
+If no `model` field is present, omit it and the agent definition's default model will be used.
+
 **Teammate lifecycle:**
 
 1. Spawn teammate with Task tool
@@ -791,6 +807,22 @@ if message contains "error":
     # If can_retry: respawn reviewer; else escalate
 ```
 
+**On consensus disagreement (from CLI):**
+```
+if NEXT_ACTION is "consensus_disagreement":
+    Print:
+    ---------------------------------------------------------------
+    REVIEW CONSENSUS DISAGREEMENT: Phase <phase>
+      Reviewer 1: <verdict_1>
+      Reviewer 2: <verdict_2>
+      Issues: <issues>
+
+    Please resolve manually:
+      - To accept as pass: TaskUpdate review-phase-N, status: completed, metadata: { status: "pass" }
+      - To accept as gaps: TaskUpdate review-phase-N, status: completed, metadata: { status: "gaps", issues: [...] }
+    ---------------------------------------------------------------
+```
+
 **Error handling and retry tracking:**
 
 Track retries in task metadata:
@@ -937,13 +969,17 @@ If `remediation_depth >= 2` and still finding gaps, exit with error requiring hu
 
 ## Model Policy
 
-| Agent | Model | Rationale |
-|-------|-------|-----------|
+Model assignments come from `model_policy` in `supervisor-state.json`. Defaults:
+
+| Agent | Default Model | Rationale |
+|-------|---------------|-----------|
 | Orchestrator | opus | Coordinates team, handles complex decisions |
 | Design Validator | opus | Analyzes feasibility, runs baseline commands |
 | Phase Planner | opus | Creates detailed plans, needs codebase understanding |
 | Phase Executor | haiku | Tmux management and file monitoring |
 | Phase Reviewer | opus | Analyzes implementation quality |
+
+To override, set `model_policy` in `supervisor-state.json` before starting orchestration, or pass `--model <model>` to override all agents.
 
 ## Recovery
 

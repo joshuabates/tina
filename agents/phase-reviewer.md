@@ -337,6 +337,18 @@ review-1 complete (gaps): add unit tests for error paths, fix unconnected API ha
 review-2 complete (pass)
 ```
 
+## Consensus Mode
+
+When `review_consensus: true` is set in the orchestration model policy, the orchestrator will run two independent reviews of the same phase. The orchestrator (not you) handles spawning the second reviewer and comparing results.
+
+Your behavior does NOT change in consensus mode. Write your review report and send your completion message exactly as documented above. The orchestrator compares your verdict with the second reviewer's verdict:
+
+- **Both pass:** Phase passes.
+- **Both gaps:** Orchestrator merges issue lists and creates remediation.
+- **Disagree (one pass, one gaps):** Orchestrator flags disagreement to user for manual resolution.
+
+You do not need to know whether consensus mode is active. Just do your job.
+
 **For remediation phases (N.5, N.5.5):**
 
 Check ONLY the specific issues from the remediation plan:

@@ -156,7 +156,7 @@ fn sync_to_sqlite(
 
 fn event_from_action(phase: &str, action: &Action) -> (String, String, Option<String>) {
     match action {
-        Action::SpawnValidator => (
+        Action::SpawnValidator { .. } => (
             "phase_started".to_string(),
             "Design validation requested".to_string(),
             None,
@@ -176,7 +176,7 @@ fn event_from_action(phase: &str, action: &Action) -> (String, String, Option<St
             format!("Design validation failed - {}", reason),
             None,
         ),
-        Action::SpawnExecutor { phase: p, plan_path } => (
+        Action::SpawnExecutor { phase: p, plan_path, .. } => (
             "phase_completed".to_string(),
             format!("Phase {} planning completed", p),
             Some(serde_json::json!({"plan_path": plan_path}).to_string()),
@@ -186,12 +186,12 @@ fn event_from_action(phase: &str, action: &Action) -> (String, String, Option<St
             format!("Phase {} planning completed (reused plan)", p),
             Some(serde_json::json!({"plan_path": plan_path}).to_string()),
         ),
-        Action::SpawnReviewer { phase: p, git_range } => (
+        Action::SpawnReviewer { phase: p, git_range, .. } => (
             "phase_completed".to_string(),
             format!("Phase {} execution completed", p),
             Some(serde_json::json!({"git_range": git_range}).to_string()),
         ),
-        Action::SpawnPlanner { phase: p } => (
+        Action::SpawnPlanner { phase: p, .. } => (
             "phase_completed".to_string(),
             format!("Phase {} review passed", p),
             None,
@@ -215,6 +215,11 @@ fn event_from_action(phase: &str, action: &Action) -> (String, String, Option<St
             "error".to_string(),
             format!("Phase {} error: {}", p, reason),
             Some(serde_json::json!({"retry_count": retry_count, "can_retry": can_retry}).to_string()),
+        ),
+        Action::ConsensusDisagreement { phase: p, verdict_1, verdict_2, issues } => (
+            "error".to_string(),
+            format!("Phase {} review consensus disagreement", p),
+            Some(serde_json::json!({"verdict_1": verdict_1, "verdict_2": verdict_2, "issues": issues}).to_string()),
         ),
     }
 }

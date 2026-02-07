@@ -173,14 +173,7 @@ The orchestrator parses the PLAN_PATH from this message.
 
 ## Quality Standards
 
-Before reporting completion, verify:
-
-1. **Task structure:** Each task has Files, Steps with code, Run commands with expected output
-2. **Granularity:** Steps are 2-5 minute actions
-3. **Completeness:** All phase scope is covered
-4. **Phase Estimates:** Section exists with metrics table and ROI expectation
-5. **Model specification:** Every task has `**Model:** <haiku|opus>` line
-6. **Complexity Budget:** Section exists with table specifying limits
+Before reporting completion, run plan lint (see Plan Lint section below). All error-severity rules must pass.
 
 ### Required Complexity Budget Format
 
@@ -201,6 +194,53 @@ Every plan MUST include a Complexity Budget section with this structure:
 - **Max total implementation lines:** Set based on phase scope (typical: 500-2000)
 
 Plans without this section will fail validation.
+
+## Plan Lint
+
+Before reporting completion, validate the plan against these lint rules. If any rule fails, fix the plan before committing.
+
+### Required Fields per Task
+
+Every task in the plan MUST have:
+- `**Files:**` - List of files to modify
+- `**Model:** <haiku|opus>` - Model assignment
+- `**review:** <spec-only|full>` - Review level
+- At least one step with a `Run:` command and `Expected:` output
+
+### Lint Rules
+
+| Rule | Check | Severity |
+|------|-------|----------|
+| model-tag | Every task has `**Model:**` line | error |
+| review-tag | Every task has `**review:**` line | error |
+| complexity-budget | `### Complexity Budget` section exists | error |
+| phase-estimates | `## Phase Estimates` section exists | error |
+| file-list | Every task has `**Files:**` section | warning |
+| run-command | Every task has at least one `Run:` block | warning |
+| expected-output | Every `Run:` block has `Expected:` | warning |
+
+### Lint Output
+
+After running lint, append a lint report to the plan file:
+
+```markdown
+## Lint Report
+
+| Rule | Status |
+|------|--------|
+| model-tag | pass |
+| review-tag | pass |
+| complexity-budget | pass |
+| phase-estimates | pass |
+| file-list | pass |
+| run-command | pass |
+| expected-output | pass |
+
+**Result:** pass
+```
+
+If any `error`-severity rule fails, do NOT report completion. Fix the plan first.
+If only `warning`-severity rules fail, report completion but include warnings in the lint report.
 
 ## Error Handling
 

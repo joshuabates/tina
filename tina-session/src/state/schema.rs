@@ -203,6 +203,10 @@ pub struct PhaseState {
 
     #[serde(default)]
     pub breakdown: PhaseBreakdown,
+
+    /// Collected review verdicts for consensus mode.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub review_verdicts: Vec<ReviewVerdict>,
 }
 
 impl PhaseState {
@@ -219,6 +223,7 @@ impl PhaseState {
             git_range: None,
             blocked_reason: None,
             breakdown: PhaseBreakdown::default(),
+            review_verdicts: Vec::new(),
         }
     }
 }
@@ -251,6 +256,65 @@ pub struct TimingStats {
     pub gaps: Vec<TimingGap>,
 }
 
+/// Model routing policy for orchestration agents.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelPolicy {
+    /// Model for the design validator agent. Default: "opus".
+    #[serde(default = "default_opus")]
+    pub validator: String,
+
+    /// Model for phase planner agents. Default: "opus".
+    #[serde(default = "default_opus")]
+    pub planner: String,
+
+    /// Model for phase executor agents. Default: "haiku".
+    #[serde(default = "default_haiku")]
+    pub executor: String,
+
+    /// Model for phase reviewer agents. Default: "opus".
+    #[serde(default = "default_opus")]
+    pub reviewer: String,
+
+    /// If true, design validation uses dual-model consensus (validator runs twice
+    /// with different models and results must agree). Default: false.
+    #[serde(default)]
+    pub dual_validation: bool,
+
+    /// If true, phase reviews require consensus from a second model before
+    /// marking review as pass. Default: false.
+    #[serde(default)]
+    pub review_consensus: bool,
+}
+
+fn default_opus() -> String {
+    "opus".to_string()
+}
+
+fn default_haiku() -> String {
+    "haiku".to_string()
+}
+
+impl Default for ModelPolicy {
+    fn default() -> Self {
+        Self {
+            validator: default_opus(),
+            planner: default_opus(),
+            executor: default_haiku(),
+            reviewer: default_opus(),
+            dual_validation: false,
+            review_consensus: false,
+        }
+    }
+}
+
+/// A single review verdict for consensus tracking.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewVerdict {
+    pub result: String, // "pass" or "gaps"
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub issues: Vec<String>,
+}
+
 /// The main supervisor state file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupervisorState {
@@ -269,6 +333,9 @@ pub struct SupervisorState {
 
     #[serde(default)]
     pub timing: TimingStats,
+
+    #[serde(default)]
+    pub model_policy: ModelPolicy,
 }
 
 impl SupervisorState {
@@ -292,6 +359,7 @@ impl SupervisorState {
             orchestration_started_at: Utc::now(),
             phases: HashMap::new(),
             timing: TimingStats::default(),
+            model_policy: ModelPolicy::default(),
         }
     }
 
@@ -538,6 +606,39 @@ mod tests {
     // ====================================================================
     // ContextMetrics Tests
     // ====================================================================
+
+    #[test]
+    fn test_model_policy_default() {
+        let policy = ModelPolicy::default();
+        assert_eq!(policy.validator, "opus");
+        assert_eq!(policy.planner, "opus");
+        assert_eq!(policy.executor, "haiku");
+        assert_eq!(policy.reviewer, "opus");
+        assert!(!policy.dual_validation);
+        assert!(!policy.review_consensus);
+    }
+
+    #[test]
+    fn test_model_policy_deserializes_with_defaults() {
+        let json = r#"{}"#;
+        let policy: ModelPolicy = serde_json::from_str(json).unwrap();
+        assert_eq!(policy.validator, "opus");
+        assert_eq!(policy.executor, "haiku");
+        assert!(!policy.dual_validation);
+    }
+
+    #[test]
+    fn test_supervisor_state_with_model_policy() {
+        let state = SupervisorState::new(
+            "test",
+            PathBuf::from("/docs/design.md"),
+            PathBuf::from("/worktree"),
+            "tina/test",
+            2,
+        );
+        assert_eq!(state.model_policy.validator, "opus");
+        assert_eq!(state.model_policy.executor, "haiku");
+    }
 
     #[test]
     fn test_context_metrics_serializes() {

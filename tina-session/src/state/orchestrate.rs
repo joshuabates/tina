@@ -11,7 +11,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 use crate::state::schema::{
-    OrchestrationStatus, PhaseState, PhaseStatus, SupervisorState,
+    OrchestrationStatus, PhaseState, PhaseStatus, ReviewVerdict, SupervisorState,
 };
 use crate::state::timing::duration_mins;
 
@@ -20,23 +20,32 @@ use crate::state::timing::duration_mins;
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Action {
     /// Spawn the design validator.
-    SpawnValidator,
+    SpawnValidator {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+    },
 
     /// Spawn a phase planner.
     SpawnPlanner {
         phase: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
     },
 
     /// Spawn a phase executor.
     SpawnExecutor {
         phase: String,
         plan_path: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
     },
 
     /// Spawn a phase reviewer.
     SpawnReviewer {
         phase: String,
         git_range: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
     },
 
     /// Reuse an existing plan (skip planning).
@@ -68,6 +77,14 @@ pub enum Action {
     Remediate {
         phase: String,
         remediation_phase: String,
+        issues: Vec<String>,
+    },
+
+    /// Review consensus disagreement - requires human resolution.
+    ConsensusDisagreement {
+        phase: String,
+        verdict_1: String,
+        verdict_2: String,
         issues: Vec<String>,
     },
 }
@@ -108,6 +125,15 @@ pub enum OrchestrateError {
 
 type Result<T> = std::result::Result<T, OrchestrateError>;
 
+/// Return Some(model) only if it differs from the default for that agent type.
+fn non_default_model(model: &str, default: &str) -> Option<String> {
+    if model != default {
+        Some(model.to_string())
+    } else {
+        None
+    }
+}
+
 /// Determine the next action based on current supervisor state.
 ///
 /// This examines the phases in order and returns the appropriate action
@@ -127,7 +153,9 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                 // Phase hasn't started yet. Check if previous phase is complete.
                 if phase_num == 1 {
                     // First phase - need validation first
-                    return Ok(Action::SpawnValidator);
+                    return Ok(Action::SpawnValidator {
+                        model: non_default_model(&state.model_policy.validator, "opus"),
+                    });
                 }
                 let prev_key = (phase_num - 1).to_string();
                 let prev_complete = state
@@ -140,14 +168,20 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                 let remediation_complete = check_remediations_complete(state, phase_num - 1);
 
                 if prev_complete && remediation_complete {
-                    return Ok(Action::SpawnPlanner { phase: key });
+                    return Ok(Action::SpawnPlanner {
+                        phase: key,
+                        model: non_default_model(&state.model_policy.planner, "opus"),
+                    });
                 }
                 // Previous phase not done yet, skip
                 break;
             }
             Some(phase_state) => match phase_state.status {
                 PhaseStatus::Planning => {
-                    return Ok(Action::SpawnPlanner { phase: key });
+                    return Ok(Action::SpawnPlanner {
+                        phase: key,
+                        model: non_default_model(&state.model_policy.planner, "opus"),
+                    });
                 }
                 PhaseStatus::Planned => {
                     let plan_path = phase_state
@@ -158,6 +192,7 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                     return Ok(Action::SpawnExecutor {
                         phase: key,
                         plan_path,
+                        model: non_default_model(&state.model_policy.executor, "haiku"),
                     });
                 }
                 PhaseStatus::Executing => {
@@ -169,6 +204,7 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                     return Ok(Action::SpawnExecutor {
                         phase: key,
                         plan_path,
+                        model: non_default_model(&state.model_policy.executor, "haiku"),
                     });
                 }
                 PhaseStatus::Reviewing => {
@@ -176,6 +212,7 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                     return Ok(Action::SpawnReviewer {
                         phase: key,
                         git_range,
+                        model: non_default_model(&state.model_policy.reviewer, "opus"),
                     });
                 }
                 PhaseStatus::Blocked => {
@@ -247,7 +284,10 @@ pub fn advance_state(
                 });
             }
 
-            Ok(Action::SpawnPlanner { phase: phase_key })
+            Ok(Action::SpawnPlanner {
+                phase: phase_key,
+                model: non_default_model(&state.model_policy.planner, "opus"),
+            })
         }
 
         AdvanceEvent::ValidationStop => {
@@ -273,6 +313,7 @@ pub fn advance_state(
             Ok(Action::SpawnExecutor {
                 phase: phase.to_string(),
                 plan_path: plan_str,
+                model: non_default_model(&state.model_policy.executor, "haiku"),
             })
         }
 
@@ -297,6 +338,7 @@ pub fn advance_state(
             Ok(Action::SpawnReviewer {
                 phase: phase.to_string(),
                 git_range,
+                model: non_default_model(&state.model_policy.reviewer, "opus"),
             })
         }
 
@@ -305,6 +347,38 @@ pub fn advance_state(
                 .phases
                 .get_mut(phase)
                 .ok_or_else(|| OrchestrateError::PhaseNotFound(phase.to_string()))?;
+
+            // Consensus mode: collect verdict before deciding
+            if state.model_policy.review_consensus && phase_state.review_verdicts.len() < 1 {
+                // First verdict - store and spawn second reviewer
+                phase_state.review_verdicts.push(ReviewVerdict {
+                    result: "pass".to_string(),
+                    issues: vec![],
+                });
+                let git_range = phase_state.git_range.clone().unwrap_or_default();
+                return Ok(Action::SpawnReviewer {
+                    phase: phase.to_string(),
+                    git_range,
+                    model: Some("haiku".to_string()),
+                });
+            }
+
+            // Consensus mode: second verdict arrived
+            if state.model_policy.review_consensus && phase_state.review_verdicts.len() == 1 {
+                let first = &phase_state.review_verdicts[0];
+                if first.result == "pass" {
+                    // Both pass - proceed normally
+                } else {
+                    // Disagreement: first was gaps, second is pass
+                    let issues = first.issues.clone();
+                    return Ok(Action::ConsensusDisagreement {
+                        phase: phase.to_string(),
+                        verdict_1: first.result.clone(),
+                        verdict_2: "pass".to_string(),
+                        issues,
+                    });
+                }
+            }
 
             phase_state.status = PhaseStatus::Complete;
             phase_state.completed_at = Some(now);
@@ -348,7 +422,10 @@ pub fn advance_state(
                         });
                     }
 
-                    Ok(Action::SpawnPlanner { phase: next_key })
+                    Ok(Action::SpawnPlanner {
+                        phase: next_key,
+                        model: non_default_model(&state.model_policy.planner, "opus"),
+                    })
                 }
                 None => {
                     state.status = OrchestrationStatus::Complete;
@@ -363,40 +440,46 @@ pub fn advance_state(
                 .get_mut(phase)
                 .ok_or_else(|| OrchestrateError::PhaseNotFound(phase.to_string()))?;
 
-            phase_state.status = PhaseStatus::Complete;
-            phase_state.completed_at = Some(now);
-            if let Some(start) = phase_state.review_started_at {
-                phase_state.breakdown.review_mins = Some(duration_mins(start, now));
-            }
-
-            // Calculate remediation phase number
-            let remediation_phase = compute_remediation_phase(phase);
-            let depth = remediation_depth(&remediation_phase);
-
-            if depth > 2 {
-                return Ok(Action::Error {
+            // Consensus mode: collect verdict before deciding
+            if state.model_policy.review_consensus && phase_state.review_verdicts.len() < 1 {
+                // First verdict - store and spawn second reviewer
+                phase_state.review_verdicts.push(ReviewVerdict {
+                    result: "gaps".to_string(),
+                    issues: issues.clone(),
+                });
+                let git_range = phase_state.git_range.clone().unwrap_or_default();
+                return Ok(Action::SpawnReviewer {
                     phase: phase.to_string(),
-                    reason: format!(
-                        "Phase {} has failed review after 2 remediation attempts",
-                        phase
-                    ),
-                    retry_count: depth,
-                    can_retry: false,
+                    git_range,
+                    model: Some("haiku".to_string()),
                 });
             }
 
-            // Create remediation phase state
-            ensure_phase(state, &remediation_phase);
-            let rem_state = state.phases.get_mut(&remediation_phase).unwrap();
-            rem_state.planning_started_at = Some(now);
-            rem_state.status = PhaseStatus::Planning;
-            state.status = OrchestrationStatus::Planning;
+            // Consensus mode: second verdict arrived
+            if state.model_policy.review_consensus && phase_state.review_verdicts.len() == 1 {
+                let first = &phase_state.review_verdicts[0];
+                if first.result == "pass" {
+                    // Disagreement: first was pass, second is gaps
+                    return Ok(Action::ConsensusDisagreement {
+                        phase: phase.to_string(),
+                        verdict_1: first.result.clone(),
+                        verdict_2: "gaps".to_string(),
+                        issues,
+                    });
+                }
+                // Both gaps - merge issues and proceed with remediation
+                let mut merged = first.issues.clone();
+                for issue in &issues {
+                    if !merged.contains(issue) {
+                        merged.push(issue.clone());
+                    }
+                }
+                // Fall through to normal remediation with merged issues
+                // (re-assign issues for the rest of the handler)
+                return handle_review_gaps(state, phase, now, merged);
+            }
 
-            Ok(Action::Remediate {
-                phase: phase.to_string(),
-                remediation_phase,
-                issues,
-            })
+            handle_review_gaps(state, phase, now, issues)
         }
 
         AdvanceEvent::Error { reason } => {
@@ -415,6 +498,54 @@ pub fn advance_state(
             })
         }
     }
+}
+
+/// Handle review gaps: create remediation or error if depth exceeded.
+fn handle_review_gaps(
+    state: &mut SupervisorState,
+    phase: &str,
+    now: chrono::DateTime<Utc>,
+    issues: Vec<String>,
+) -> Result<Action> {
+    let phase_state = state
+        .phases
+        .get_mut(phase)
+        .ok_or_else(|| OrchestrateError::PhaseNotFound(phase.to_string()))?;
+
+    phase_state.status = PhaseStatus::Complete;
+    phase_state.completed_at = Some(now);
+    if let Some(start) = phase_state.review_started_at {
+        phase_state.breakdown.review_mins = Some(duration_mins(start, now));
+    }
+
+    // Calculate remediation phase number
+    let remediation_phase = compute_remediation_phase(phase);
+    let depth = remediation_depth(&remediation_phase);
+
+    if depth > 2 {
+        return Ok(Action::Error {
+            phase: phase.to_string(),
+            reason: format!(
+                "Phase {} has failed review after 2 remediation attempts",
+                phase
+            ),
+            retry_count: depth,
+            can_retry: false,
+        });
+    }
+
+    // Create remediation phase state
+    ensure_phase(state, &remediation_phase);
+    let rem_state = state.phases.get_mut(&remediation_phase).unwrap();
+    rem_state.planning_started_at = Some(now);
+    rem_state.status = PhaseStatus::Planning;
+    state.status = OrchestrationStatus::Planning;
+
+    Ok(Action::Remediate {
+        phase: phase.to_string(),
+        remediation_phase,
+        issues,
+    })
 }
 
 /// Ensure a phase entry exists in the state.
@@ -474,6 +605,7 @@ fn find_remediation_action(state: &SupervisorState, phase_num: u32) -> Result<Ac
             return match phase_state.status {
                 PhaseStatus::Planning => Ok(Action::SpawnPlanner {
                     phase: key.clone(),
+                    model: non_default_model(&state.model_policy.planner, "opus"),
                 }),
                 PhaseStatus::Planned | PhaseStatus::Executing => {
                     let plan_path = phase_state
@@ -484,6 +616,7 @@ fn find_remediation_action(state: &SupervisorState, phase_num: u32) -> Result<Ac
                     Ok(Action::SpawnExecutor {
                         phase: key.clone(),
                         plan_path,
+                        model: non_default_model(&state.model_policy.executor, "haiku"),
                     })
                 }
                 PhaseStatus::Reviewing => {
@@ -491,6 +624,7 @@ fn find_remediation_action(state: &SupervisorState, phase_num: u32) -> Result<Ac
                     Ok(Action::SpawnReviewer {
                         phase: key.clone(),
                         git_range,
+                        model: non_default_model(&state.model_policy.reviewer, "opus"),
                     })
                 }
                 PhaseStatus::Blocked => {
@@ -532,7 +666,7 @@ mod tests {
     fn test_next_action_fresh_state() {
         let state = test_state(3);
         let action = next_action(&state).unwrap();
-        assert_eq!(action, Action::SpawnValidator);
+        assert!(matches!(action, Action::SpawnValidator { .. }));
     }
 
     #[test]
@@ -547,7 +681,7 @@ mod tests {
             },
         );
         let action = next_action(&state).unwrap();
-        assert!(matches!(action, Action::SpawnPlanner { phase } if phase == "1"));
+        assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "1"));
     }
 
     #[test]
@@ -564,7 +698,7 @@ mod tests {
         );
         let action = next_action(&state).unwrap();
         assert!(
-            matches!(action, Action::SpawnExecutor { phase, plan_path } if phase == "1" && plan_path == "/tmp/plan.md")
+            matches!(action, Action::SpawnExecutor { ref phase, ref plan_path, .. } if phase == "1" && plan_path == "/tmp/plan.md")
         );
     }
 
@@ -582,7 +716,7 @@ mod tests {
         );
         let action = next_action(&state).unwrap();
         assert!(
-            matches!(action, Action::SpawnReviewer { phase, git_range } if phase == "1" && git_range == "abc..def")
+            matches!(action, Action::SpawnReviewer { ref phase, ref git_range, .. } if phase == "1" && git_range == "abc..def")
         );
     }
 
@@ -599,7 +733,7 @@ mod tests {
             },
         );
         let action = next_action(&state).unwrap();
-        assert!(matches!(action, Action::SpawnPlanner { phase } if phase == "2"));
+        assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "2"));
     }
 
     #[test]
@@ -639,7 +773,7 @@ mod tests {
     fn test_advance_validation_pass() {
         let mut state = test_state(3);
         let action = advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
-        assert!(matches!(action, Action::SpawnPlanner { phase } if phase == "1"));
+        assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "1"));
         assert_eq!(state.status, OrchestrationStatus::Planning);
         assert!(state.phases.contains_key("1"));
         assert_eq!(state.phases["1"].status, PhaseStatus::Planning);
@@ -667,7 +801,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(matches!(action, Action::SpawnExecutor { phase, .. } if phase == "1"));
+        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "1"));
         assert_eq!(state.phases["1"].status, PhaseStatus::Planned);
         assert_eq!(
             state.phases["1"].plan_path,
@@ -695,7 +829,7 @@ mod tests {
         )
         .unwrap();
         assert!(
-            matches!(action, Action::SpawnReviewer { phase, git_range } if phase == "1" && git_range == "abc..def")
+            matches!(action, Action::SpawnReviewer { ref phase, ref git_range, .. } if phase == "1" && git_range == "abc..def")
         );
         assert_eq!(state.phases["1"].status, PhaseStatus::Reviewing);
         assert_eq!(state.status, OrchestrationStatus::Reviewing);
@@ -714,7 +848,7 @@ mod tests {
             },
         );
         let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
-        assert!(matches!(action, Action::SpawnPlanner { phase } if phase == "2"));
+        assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "2"));
         assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
         assert_eq!(state.status, OrchestrationStatus::Planning);
         assert_eq!(state.current_phase, 2);
@@ -900,5 +1034,133 @@ mod tests {
             },
         );
         assert!(check_remediations_complete(&state, 1));
+    }
+
+    #[test]
+    fn test_review_consensus_first_verdict_spawns_second_reviewer() {
+        let mut state = test_state(2);
+        state.model_policy.review_consensus = true;
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Reviewing,
+                git_range: Some("abc..def".to_string()),
+                planning_started_at: Some(Utc::now()),
+                review_started_at: Some(Utc::now()),
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
+        // First verdict should spawn second reviewer
+        assert!(matches!(action, Action::SpawnReviewer { .. }));
+        assert_eq!(state.phases["1"].review_verdicts.len(), 1);
+        assert_eq!(state.phases["1"].review_verdicts[0].result, "pass");
+    }
+
+    #[test]
+    fn test_review_consensus_both_pass() {
+        let mut state = test_state(2);
+        state.model_policy.review_consensus = true;
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Reviewing,
+                git_range: Some("abc..def".to_string()),
+                planning_started_at: Some(Utc::now()),
+                review_started_at: Some(Utc::now()),
+                review_verdicts: vec![ReviewVerdict {
+                    result: "pass".to_string(),
+                    issues: vec![],
+                }],
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
+        // Both pass -> advance to next phase
+        assert!(matches!(action, Action::SpawnPlanner { .. }));
+    }
+
+    #[test]
+    fn test_review_consensus_disagreement() {
+        let mut state = test_state(2);
+        state.model_policy.review_consensus = true;
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Reviewing,
+                git_range: Some("abc..def".to_string()),
+                planning_started_at: Some(Utc::now()),
+                review_started_at: Some(Utc::now()),
+                review_verdicts: vec![ReviewVerdict {
+                    result: "pass".to_string(),
+                    issues: vec![],
+                }],
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ReviewGaps {
+                issues: vec!["missing tests".to_string()],
+            },
+        )
+        .unwrap();
+        // Disagreement -> surface to user
+        assert!(matches!(action, Action::ConsensusDisagreement { .. }));
+    }
+
+    #[test]
+    fn test_review_consensus_both_gaps_merges_issues() {
+        let mut state = test_state(2);
+        state.model_policy.review_consensus = true;
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Reviewing,
+                git_range: Some("abc..def".to_string()),
+                planning_started_at: Some(Utc::now()),
+                review_started_at: Some(Utc::now()),
+                review_verdicts: vec![ReviewVerdict {
+                    result: "gaps".to_string(),
+                    issues: vec!["missing tests".to_string()],
+                }],
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ReviewGaps {
+                issues: vec!["error handling".to_string()],
+            },
+        )
+        .unwrap();
+        // Both gaps -> remediation with merged issues
+        assert!(matches!(action, Action::Remediate { .. }));
+        if let Action::Remediate { issues, .. } = &action {
+            assert!(issues.contains(&"missing tests".to_string()));
+            assert!(issues.contains(&"error handling".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_review_no_consensus_mode_unchanged() {
+        // Default state has review_consensus = false
+        let mut state = test_state(2);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Reviewing,
+                planning_started_at: Some(Utc::now()),
+                review_started_at: Some(Utc::now()),
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
+        // Without consensus, should go straight to next phase
+        assert!(matches!(action, Action::SpawnPlanner { .. }));
+        // No verdicts stored
+        assert!(state.phases["1"].review_verdicts.is_empty());
     }
 }
