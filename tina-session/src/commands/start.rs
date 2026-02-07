@@ -38,7 +38,7 @@ fn detect_claude_binary() -> &'static str {
     "claude"
 }
 
-pub fn run(feature: &str, phase: &str, plan: &Path) -> anyhow::Result<u8> {
+pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyhow::Result<u8> {
     // Load lookup to get cwd
     let lookup = SessionLookup::load(feature)?;
     let cwd = &lookup.cwd;
@@ -85,8 +85,10 @@ pub fn run(feature: &str, phase: &str, plan: &Path) -> anyhow::Result<u8> {
         }
     }
 
-    // Install dependencies if needed
-    install_dependencies(cwd);
+    // Install dependencies only if explicitly requested
+    if install_deps {
+        install_dependencies(cwd);
+    }
 
     // Create tmux session (starts a shell)
     println!("Creating session '{}' in {}", name, cwd.display());

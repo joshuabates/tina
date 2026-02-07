@@ -761,8 +761,16 @@ if message contains "plan-phase-N complete":
     Spawn executor-N teammate with plan_path and worktree_path
     Print: "Phase N planned. Executing..."
 
-if message contains "error":
-    Retry once, then exit with error
+if message contains "plan-phase-N error":
+    plan_task = TaskGet: plan-phase-N
+    retry_count = plan_task.metadata.retry_count or 0
+    if retry_count < 1:
+        TaskUpdate: plan-phase-N, metadata: { retry_count: retry_count + 1, last_error: "<error text>" }
+        Print: "Planner error, retrying (attempt ${retry_count + 1})..."
+        Respawn planner-N teammate
+    else:
+        Print: "Planner failed after retry. Error: <error text>"
+        # Graceful exit (see error handling section below)
 ```
 
 **On executor-N message:**
@@ -784,8 +792,16 @@ if message contains "execute-N complete":
     Spawn reviewer-N teammate
     Print: "Phase N executed. Reviewing..."
 
-if message contains "session_died" or "error":
-    Retry once, then exit with error
+if message contains "execute-N error" or "session_died":
+    exec_task = TaskGet: execute-phase-N
+    retry_count = exec_task.metadata.retry_count or 0
+    if retry_count < 1:
+        TaskUpdate: execute-phase-N, metadata: { retry_count: retry_count + 1, last_error: "<error text>" }
+        Print: "Executor error, retrying (attempt ${retry_count + 1})..."
+        Respawn executor-N teammate
+    else:
+        Print: "Executor failed after retry. Error: <error text>"
+        # Graceful exit (see error handling section below)
 ```
 
 **On reviewer-N message:**
@@ -884,8 +900,16 @@ if message contains "review-N complete (gaps)":
 
     Print: "Phase ${N} has gaps. Creating remediation phase ${REMEDIATION_PHASE}..."
 
-if message contains "error":
-    Exit with error
+if message contains "review-N error":
+    review_task = TaskGet: review-phase-N
+    retry_count = review_task.metadata.retry_count or 0
+    if retry_count < 1:
+        TaskUpdate: review-phase-N, metadata: { retry_count: retry_count + 1, last_error: "<error text>" }
+        Print: "Reviewer error, retrying (attempt ${retry_count + 1})..."
+        Respawn reviewer-N teammate
+    else:
+        Print: "Reviewer failed after retry. Error: <error text>"
+        # Graceful exit (see error handling section below)
 ```
 
 **Error handling:**

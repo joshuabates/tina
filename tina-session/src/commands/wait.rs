@@ -1,4 +1,5 @@
 use tina_session::session::lookup::SessionLookup;
+use tina_session::session::naming::session_name;
 use tina_session::watch;
 
 pub fn run(
@@ -32,6 +33,9 @@ pub fn run(
         }
     };
 
+    // Derive tmux session name for health checking
+    let tmux_session = session_name(feature, phase);
+
     // Use streaming or simple wait based on interval
     let result = if let Some(interval) = stream_interval {
         if let Some(t) = team_name {
@@ -39,9 +43,16 @@ pub fn run(
         } else {
             eprintln!("Streaming updates every {}s", interval);
         }
-        watch::watch_status_streaming(&status_path, cwd, team_name, timeout, interval)
+        watch::watch_status_streaming(
+            &status_path,
+            cwd,
+            team_name,
+            timeout,
+            interval,
+            Some(&tmux_session),
+        )
     } else {
-        watch::watch_status(&status_path, timeout)
+        watch::watch_status(&status_path, timeout, Some(&tmux_session))
     };
 
     match result {
@@ -55,6 +66,7 @@ pub fn run(
             match result.status.as_str() {
                 "complete" => Ok(0),
                 "blocked" => Ok(1),
+                "session_died" => Ok(3),
                 _ => Ok(1),
             }
         }

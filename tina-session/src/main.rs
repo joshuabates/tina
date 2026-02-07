@@ -59,6 +59,10 @@ enum Commands {
         /// Path to plan file
         #[arg(long)]
         plan: PathBuf,
+
+        /// Install project dependencies before starting (npm, cargo, pip)
+        #[arg(long, default_value = "false")]
+        install_deps: bool,
     },
 
     /// Wait for phase completion
@@ -352,9 +356,10 @@ fn run() -> anyhow::Result<u8> {
             feature,
             phase,
             plan,
+            install_deps,
         } => {
             check_phase(&phase)?;
-            commands::start::run(&feature, &phase, &plan)
+            commands::start::run(&feature, &phase, &plan, install_deps)
         }
 
         Commands::Wait {

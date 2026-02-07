@@ -4,6 +4,7 @@ use std::process::Command;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use chrono::{DateTime, Utc};
 use notify::{Event, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 
@@ -54,10 +55,32 @@ struct PhaseStatusFile {
     git_range: Option<String>,
     #[serde(default)]
     blocked_reason: Option<String>,
+    /// ISO 8601 timestamp updated periodically while phase is active.
+    /// Used to detect stale/dead sessions.
+    #[serde(default)]
+    #[allow(dead_code)]
+    heartbeat_at: Option<DateTime<Utc>>,
+}
+
+/// Default threshold for considering a heartbeat stale (seconds).
+pub const HEARTBEAT_STALE_SECS: i64 = 300;
+
+/// Check if a heartbeat timestamp is stale (older than threshold).
+pub fn is_heartbeat_stale(heartbeat: &DateTime<Utc>, threshold_secs: i64) -> bool {
+    let elapsed = Utc::now().signed_duration_since(*heartbeat);
+    elapsed.num_seconds() > threshold_secs
 }
 
 /// Watch a status file for completion.
-pub fn watch_status(status_path: &Path, timeout_secs: Option<u64>) -> Result<WaitResult> {
+///
+/// If `session_name` is provided, periodically checks whether the tmux session
+/// is still alive. Returns a `session_died` result if the session disappears
+/// while the phase status is not yet complete.
+pub fn watch_status(
+    status_path: &Path,
+    timeout_secs: Option<u64>,
+    session_name: Option<&str>,
+) -> Result<WaitResult> {
     let start = Instant::now();
     let timeout = timeout_secs.map(Duration::from_secs);
 
@@ -109,6 +132,17 @@ pub fn watch_status(status_path: &Path, timeout_secs: Option<u64>) -> Result<Wai
             return Ok(result);
         }
 
+        // Check tmux session health
+        if let Some(name) = session_name {
+            if !crate::tmux::session_exists(name) {
+                return Ok(WaitResult {
+                    status: "session_died".to_string(),
+                    git_range: None,
+                    reason: Some(format!("tmux session '{}' no longer exists", name)),
+                });
+            }
+        }
+
         // Wait for file change or timeout
         let wait_timeout = Duration::from_secs(5); // Check every 5s even without events
         let _ = rx.recv_timeout(wait_timeout);
@@ -121,12 +155,14 @@ pub fn watch_status(status_path: &Path, timeout_secs: Option<u64>) -> Result<Wai
 /// Returns the final result when complete or blocked.
 ///
 /// `team_name` is used to find the task list for progress tracking.
+/// `session_name` is used to detect tmux session death during the wait.
 pub fn watch_status_streaming(
     status_path: &Path,
     worktree_path: &Path,
     team_name: Option<&str>,
     timeout_secs: Option<u64>,
     interval_secs: u64,
+    session_name: Option<&str>,
 ) -> Result<WaitResult> {
     let start = Instant::now();
     let timeout = timeout_secs.map(Duration::from_secs);
@@ -224,6 +260,29 @@ pub fn watch_status_streaming(
             };
             println!("{}", serde_json::to_string(&update).unwrap_or_default());
             return Ok(result);
+        }
+
+        // Check tmux session health
+        if let Some(name) = session_name {
+            if !crate::tmux::session_exists(name) {
+                let result = WaitResult {
+                    status: "session_died".to_string(),
+                    git_range: None,
+                    reason: Some(format!("tmux session '{}' no longer exists", name)),
+                };
+                let update = StatusUpdate {
+                    elapsed_secs: start.elapsed().as_secs(),
+                    status: result.status.clone(),
+                    tasks_complete: None,
+                    tasks_total: None,
+                    current_task: None,
+                    last_commit: None,
+                    git_range: None,
+                    blocked_reason: result.reason.clone(),
+                };
+                println!("{}", serde_json::to_string(&update).unwrap_or_default());
+                return Ok(result);
+            }
         }
 
         // Wait for file change or interval
@@ -405,5 +464,47 @@ mod tests {
 
         // Should return None for executing status
         assert!(check_status_file(&status_path).is_none());
+    }
+
+    #[test]
+    fn test_check_status_file_with_heartbeat() {
+        let temp = TempDir::new().unwrap();
+        let status_path = temp.path().join("status.json");
+
+        fs::write(
+            &status_path,
+            r#"{"status": "executing", "heartbeat_at": "2026-02-07T12:00:00Z"}"#,
+        )
+        .unwrap();
+
+        // Executing status should still return None (not terminal)
+        assert!(check_status_file(&status_path).is_none());
+    }
+
+    #[test]
+    fn test_heartbeat_stale_detection() {
+        use chrono::Duration;
+
+        let recent = Utc::now() - Duration::seconds(10);
+        assert!(!is_heartbeat_stale(&recent, HEARTBEAT_STALE_SECS));
+
+        let old = Utc::now() - Duration::seconds(600);
+        assert!(is_heartbeat_stale(&old, HEARTBEAT_STALE_SECS));
+    }
+
+    #[test]
+    fn test_check_status_file_complete_ignores_heartbeat() {
+        let temp = TempDir::new().unwrap();
+        let status_path = temp.path().join("status.json");
+
+        fs::write(
+            &status_path,
+            r#"{"status": "complete", "git_range": "abc..def", "heartbeat_at": "2026-02-07T12:00:00Z"}"#,
+        )
+        .unwrap();
+
+        let result = check_status_file(&status_path).unwrap();
+        assert_eq!(result.status, "complete");
+        assert_eq!(result.git_range, Some("abc..def".to_string()));
     }
 }

@@ -70,6 +70,14 @@ This streams status updates every 30 seconds while waiting. Output format (JSON 
 
 The command automatically tracks the team `{feature}-phase-{phase}` for task progress.
 
+**Exit codes:**
+- `0` = complete (success)
+- `1` = blocked
+- `2` = timeout
+- `3` = session_died (tmux session disappeared)
+
+Check the exit code to determine the error type. A `session_died` (exit 3) means the tmux session was killed or crashed mid-execution.
+
 Do NOT use raw tmux commands or manual polling. The wait command handles everything.
 
 ## Step 3: Report Completion
