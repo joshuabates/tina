@@ -245,6 +245,7 @@ ACTION=$(echo "$NEXT_ACTION" | jq -r '.action')
 | `VALIDATION_STATUS: Warning` | `validation_warning` | |
 | `VALIDATION_STATUS: Stop` | `validation_stop` | |
 | `plan-phase-N complete. PLAN_PATH: X` | `plan_complete` | `--plan-path X` |
+| `execute-N started` | `execute_started` | |
 | `execute-N complete. Git range: X..Y` | `execute_complete` | `--git-range X..Y` |
 | `review-N complete (pass)` | `review_pass` | |
 | `review-N complete (gaps): issues` | `review_gaps` | `--issues "issue1,issue2"` |
@@ -262,6 +263,7 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 | `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`, model from `.model` if present) |
 | `consensus_disagreement` | Surface to user: "Reviewers disagree on phase `.phase`. Verdict 1: `.verdict_1`, Verdict 2: `.verdict_2`. Please resolve manually." |
 | `reuse_plan` | Skip planning, auto-complete plan task, dispatch executor |
+| `wait` | No action required; keep waiting for teammate updates |
 | `finalize` | Invoke `tina:finishing-a-development-branch` |
 | `complete` | Report orchestration complete |
 | `stopped` | Report validation failure and exit |
@@ -285,9 +287,10 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 
 **On executor-N message:**
 1. Parse git_range from message
-2. Call: `tina-session orchestrate advance --feature X --phase N --event execute_complete --git-range R`
-3. Mark execute-phase-N task complete, store git_range in metadata
-4. Dispatch returned action (spawn reviewer)
+2. If message is `execute-N started`: call `tina-session orchestrate advance --feature X --phase N --event execute_started` and dispatch returned action (likely `wait`)
+3. If message is `execute-N complete`: call `tina-session orchestrate advance --feature X --phase N --event execute_complete --git-range R`
+4. Mark execute-phase-N task complete, store git_range in metadata
+5. Dispatch returned action (spawn reviewer)
 
 **On reviewer-N message:**
 1. Determine if pass or gaps

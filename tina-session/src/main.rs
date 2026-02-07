@@ -350,7 +350,7 @@ enum OrchestrateCommands {
         phase: String,
 
         /// Event type: validation_pass, validation_warning, validation_stop,
-        /// plan_complete, execute_complete, review_pass, review_gaps, error
+        /// plan_complete, execute_started, execute_complete, review_pass, review_gaps, retry, error
         #[arg(long)]
         event: String,
 

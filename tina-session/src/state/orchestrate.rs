@@ -5,7 +5,8 @@
 //! `tina-session orchestrate` command exposes and that the `/tina:orchestrate`
 //! skill delegates to.
 
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -87,6 +88,11 @@ pub enum Action {
         verdict_2: String,
         issues: Vec<String>,
     },
+
+    /// No immediate action required.
+    Wait {
+        reason: String,
+    },
 }
 
 /// Events that advance the orchestration state machine.
@@ -102,10 +108,14 @@ pub enum AdvanceEvent {
     PlanComplete { plan_path: PathBuf },
     /// Phase execution completed.
     ExecuteComplete { git_range: String },
+    /// Phase execution started (executor successfully launched).
+    ExecuteStarted,
     /// Phase review passed.
     ReviewPass,
     /// Phase review found gaps.
     ReviewGaps { issues: Vec<String> },
+    /// Retry a blocked phase.
+    Retry { reason: String },
     /// An error occurred during the phase.
     Error { reason: String },
 }
@@ -132,6 +142,60 @@ fn non_default_model(model: &str, default: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Find a plan file in docs/plans following the naming convention.
+fn find_plan_in_docs(worktree_path: &Path, feature: &str, phase: &str) -> Option<PathBuf> {
+    let plans_dir = worktree_path.join("docs").join("plans");
+    let suffix = format!("-{}-phase-{}.md", feature, phase);
+    let entries = fs::read_dir(&plans_dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.ends_with(&suffix) {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn reuse_plan_if_present(
+    state: &mut SupervisorState,
+    phase_key: &str,
+    phase_state: &mut PhaseState,
+    now: chrono::DateTime<Utc>,
+) -> Option<Action> {
+    if let Some(existing) = phase_state.plan_path.as_ref() {
+        if existing.exists() {
+            let plan_path = existing.to_string_lossy().to_string();
+            phase_state.status = PhaseStatus::Planned;
+            if let Some(start) = phase_state.planning_started_at {
+                phase_state.breakdown.planning_mins = Some(duration_mins(start, now));
+            }
+            return Some(Action::ReusePlan {
+                phase: phase_key.to_string(),
+                plan_path,
+            });
+        }
+    }
+
+    if let Some(found) = find_plan_in_docs(&state.worktree_path, &state.feature, phase_key) {
+        let plan_path = found.to_string_lossy().to_string();
+        phase_state.plan_path = Some(found);
+        phase_state.status = PhaseStatus::Planned;
+        if let Some(start) = phase_state.planning_started_at {
+            phase_state.breakdown.planning_mins = Some(duration_mins(start, now));
+        }
+        return Some(Action::ReusePlan {
+            phase: phase_key.to_string(),
+            plan_path,
+        });
+    }
+
+    None
 }
 
 /// Determine the next action based on current supervisor state.
@@ -196,15 +260,8 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                     });
                 }
                 PhaseStatus::Executing => {
-                    let plan_path = phase_state
-                        .plan_path
-                        .as_ref()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    return Ok(Action::SpawnExecutor {
-                        phase: key,
-                        plan_path,
-                        model: non_default_model(&state.model_policy.executor, "haiku"),
+                    return Ok(Action::Wait {
+                        reason: format!("phase {} executing", key),
                     });
                 }
                 PhaseStatus::Reviewing => {
@@ -224,7 +281,7 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                         phase: key,
                         reason,
                         retry_count: 0,
-                        can_retry: true,
+                        can_retry: !reason.contains("consensus disagreement"),
                     });
                 }
                 PhaseStatus::Complete => {
@@ -264,24 +321,8 @@ pub fn advance_state(
             state.status = OrchestrationStatus::Planning;
             state.current_phase = 1;
 
-            // Check for existing plan
-            let plan_file = state
-                .worktree_path
-                .join(".claude")
-                .join("tina")
-                .join("phase-1")
-                .join("plan.md");
-            if plan_file.exists() {
-                let plan_path = plan_file.to_string_lossy().to_string();
-                phase_state.plan_path = Some(plan_file.clone());
-                phase_state.status = PhaseStatus::Planned;
-                if let Some(start) = phase_state.planning_started_at {
-                    phase_state.breakdown.planning_mins = Some(duration_mins(start, now));
-                }
-                return Ok(Action::ReusePlan {
-                    phase: phase_key,
-                    plan_path,
-                });
+            if let Some(action) = reuse_plan_if_present(state, &phase_key, phase_state, now) {
+                return Ok(action);
             }
 
             Ok(Action::SpawnPlanner {
@@ -314,6 +355,27 @@ pub fn advance_state(
                 phase: phase.to_string(),
                 plan_path: plan_str,
                 model: non_default_model(&state.model_policy.executor, "haiku"),
+            })
+        }
+
+        AdvanceEvent::ExecuteStarted => {
+            let phase_state = state
+                .phases
+                .get_mut(phase)
+                .ok_or_else(|| OrchestrateError::PhaseNotFound(phase.to_string()))?;
+
+            phase_state.status = PhaseStatus::Executing;
+            if phase_state.execution_started_at.is_none() {
+                phase_state.execution_started_at = Some(now);
+            }
+            state.status = OrchestrationStatus::Executing;
+
+            if let Ok(num) = phase.parse::<u32>() {
+                state.current_phase = num;
+            }
+
+            Ok(Action::Wait {
+                reason: "execute_started".to_string(),
             })
         }
 
@@ -371,6 +433,9 @@ pub fn advance_state(
                 } else {
                     // Disagreement: first was gaps, second is pass
                     let issues = first.issues.clone();
+                    phase_state.status = PhaseStatus::Blocked;
+                    phase_state.blocked_reason = Some("review consensus disagreement".to_string());
+                    state.status = OrchestrationStatus::Blocked;
                     return Ok(Action::ConsensusDisagreement {
                         phase: phase.to_string(),
                         verdict_1: first.result.clone(),
@@ -401,25 +466,8 @@ pub fn advance_state(
                     state.status = OrchestrationStatus::Planning;
                     state.current_phase = next;
 
-                    // Check for existing plan
-                    let plan_file = state
-                        .worktree_path
-                        .join(".claude")
-                        .join("tina")
-                        .join(format!("phase-{}", next))
-                        .join("plan.md");
-                    if plan_file.exists() {
-                        let plan_path = plan_file.to_string_lossy().to_string();
-                        let ns = state.phases.get_mut(&next_key).unwrap();
-                        ns.plan_path = Some(plan_file);
-                        ns.status = PhaseStatus::Planned;
-                        if let Some(start) = ns.planning_started_at {
-                            ns.breakdown.planning_mins = Some(duration_mins(start, now));
-                        }
-                        return Ok(Action::ReusePlan {
-                            phase: next_key,
-                            plan_path,
-                        });
+                    if let Some(action) = reuse_plan_if_present(state, &next_key, next_state, now) {
+                        return Ok(action);
                     }
 
                     Ok(Action::SpawnPlanner {
@@ -460,6 +508,9 @@ pub fn advance_state(
                 let first = &phase_state.review_verdicts[0];
                 if first.result == "pass" {
                     // Disagreement: first was pass, second is gaps
+                    phase_state.status = PhaseStatus::Blocked;
+                    phase_state.blocked_reason = Some("review consensus disagreement".to_string());
+                    state.status = OrchestrationStatus::Blocked;
                     return Ok(Action::ConsensusDisagreement {
                         phase: phase.to_string(),
                         verdict_1: first.result.clone(),
@@ -480,6 +531,78 @@ pub fn advance_state(
             }
 
             handle_review_gaps(state, phase, now, issues)
+        }
+
+        AdvanceEvent::Retry { reason: _reason } => {
+            let phase_state = state
+                .phases
+                .get_mut(phase)
+                .ok_or_else(|| OrchestrateError::PhaseNotFound(phase.to_string()))?;
+
+            if phase_state.status != PhaseStatus::Blocked {
+                return Err(OrchestrateError::UnexpectedState(format!(
+                    "Phase {} is not blocked (status: {})",
+                    phase, phase_state.status
+                )));
+            }
+
+            let blocked_reason = phase_state.blocked_reason.clone().unwrap_or_default();
+            if blocked_reason.contains("consensus disagreement") {
+                return Ok(Action::Error {
+                    phase: phase.to_string(),
+                    reason: blocked_reason,
+                    retry_count: 0,
+                    can_retry: false,
+                });
+            }
+
+            phase_state.blocked_reason = None;
+
+            if let Ok(num) = phase.parse::<u32>() {
+                state.current_phase = num;
+            }
+
+            if phase_state.plan_path.is_none() {
+                phase_state.status = PhaseStatus::Planning;
+                if phase_state.planning_started_at.is_none() {
+                    phase_state.planning_started_at = Some(now);
+                }
+                state.status = OrchestrationStatus::Planning;
+                return Ok(Action::SpawnPlanner {
+                    phase: phase.to_string(),
+                    model: non_default_model(&state.model_policy.planner, "opus"),
+                });
+            }
+
+            if phase_state.git_range.is_some() {
+                phase_state.status = PhaseStatus::Reviewing;
+                if phase_state.review_started_at.is_none() {
+                    phase_state.review_started_at = Some(now);
+                }
+                state.status = OrchestrationStatus::Reviewing;
+                let git_range = phase_state.git_range.clone().unwrap_or_default();
+                return Ok(Action::SpawnReviewer {
+                    phase: phase.to_string(),
+                    git_range,
+                    model: non_default_model(&state.model_policy.reviewer, "opus"),
+                });
+            }
+
+            phase_state.status = PhaseStatus::Executing;
+            if phase_state.execution_started_at.is_none() {
+                phase_state.execution_started_at = Some(now);
+            }
+            state.status = OrchestrationStatus::Executing;
+            let plan_path = phase_state
+                .plan_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+            Ok(Action::SpawnExecutor {
+                phase: phase.to_string(),
+                plan_path,
+                model: non_default_model(&state.model_policy.executor, "haiku"),
+            })
         }
 
         AdvanceEvent::Error { reason } => {
@@ -607,7 +730,7 @@ fn find_remediation_action(state: &SupervisorState, phase_num: u32) -> Result<Ac
                     phase: key.clone(),
                     model: non_default_model(&state.model_policy.planner, "opus"),
                 }),
-                PhaseStatus::Planned | PhaseStatus::Executing => {
+                PhaseStatus::Planned => {
                     let plan_path = phase_state
                         .plan_path
                         .as_ref()
@@ -619,6 +742,9 @@ fn find_remediation_action(state: &SupervisorState, phase_num: u32) -> Result<Ac
                         model: non_default_model(&state.model_policy.executor, "haiku"),
                     })
                 }
+                PhaseStatus::Executing => Ok(Action::Wait {
+                    reason: format!("phase {} executing", key),
+                }),
                 PhaseStatus::Reviewing => {
                     let git_range = phase_state.git_range.clone().unwrap_or_default();
                     Ok(Action::SpawnReviewer {
@@ -700,6 +826,22 @@ mod tests {
         assert!(
             matches!(action, Action::SpawnExecutor { ref phase, ref plan_path, .. } if phase == "1" && plan_path == "/tmp/plan.md")
         );
+    }
+
+    #[test]
+    fn test_next_action_executing_phase_waits() {
+        let mut state = test_state(3);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Executing,
+                plan_path: Some(PathBuf::from("/tmp/plan.md")),
+                execution_started_at: Some(Utc::now()),
+                ..PhaseState::default()
+            },
+        );
+        let action = next_action(&state).unwrap();
+        assert!(matches!(action, Action::Wait { .. }));
     }
 
     #[test]
@@ -833,6 +975,25 @@ mod tests {
         );
         assert_eq!(state.phases["1"].status, PhaseStatus::Reviewing);
         assert_eq!(state.status, OrchestrationStatus::Reviewing);
+    }
+
+    #[test]
+    fn test_advance_execute_started_sets_executing() {
+        let mut state = test_state(3);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Planned,
+                planning_started_at: Some(Utc::now()),
+                ..PhaseState::default()
+            },
+        );
+        let action =
+            advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
+        assert!(matches!(action, Action::Wait { .. }));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Executing);
+        assert_eq!(state.status, OrchestrationStatus::Executing);
+        assert!(state.phases["1"].execution_started_at.is_some());
     }
 
     #[test]
@@ -978,6 +1139,106 @@ mod tests {
         assert!(matches!(action, Action::Error { can_retry: true, .. }));
         assert_eq!(state.phases["1"].status, PhaseStatus::Blocked);
         assert_eq!(state.status, OrchestrationStatus::Blocked);
+    }
+
+    #[test]
+    fn test_retry_blocked_planning_spawns_planner() {
+        let mut state = test_state(3);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Blocked,
+                blocked_reason: Some("planner failed".to_string()),
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::Retry {
+                reason: "manual retry".to_string(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "1"));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Planning);
+        assert!(state.phases["1"].blocked_reason.is_none());
+    }
+
+    #[test]
+    fn test_retry_blocked_executing_spawns_executor() {
+        let mut state = test_state(3);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Blocked,
+                plan_path: Some(PathBuf::from("/tmp/plan.md")),
+                blocked_reason: Some("session died".to_string()),
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::Retry {
+                reason: "manual retry".to_string(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "1"));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Executing);
+        assert!(state.phases["1"].blocked_reason.is_none());
+    }
+
+    #[test]
+    fn test_retry_blocked_reviewing_spawns_reviewer() {
+        let mut state = test_state(3);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Blocked,
+                plan_path: Some(PathBuf::from("/tmp/plan.md")),
+                git_range: Some("abc..def".to_string()),
+                blocked_reason: Some("reviewer failed".to_string()),
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::Retry {
+                reason: "manual retry".to_string(),
+            },
+        )
+        .unwrap();
+        assert!(
+            matches!(action, Action::SpawnReviewer { ref phase, ref git_range, .. } if phase == "1" && git_range == "abc..def")
+        );
+        assert_eq!(state.phases["1"].status, PhaseStatus::Reviewing);
+        assert!(state.phases["1"].blocked_reason.is_none());
+    }
+
+    #[test]
+    fn test_retry_consensus_disagreement_blocked() {
+        let mut state = test_state(3);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Blocked,
+                blocked_reason: Some("review consensus disagreement".to_string()),
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::Retry {
+                reason: "manual retry".to_string(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::Error { can_retry: false, .. }));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Blocked);
     }
 
     #[test]

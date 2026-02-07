@@ -55,6 +55,12 @@ This command handles everything - session creation, Claude startup, and initiali
 
 If the command fails, message the orchestrator and exit.
 
+After a successful start, immediately notify the orchestrator:
+
+```
+execute-N started
+```
+
 ## Step 2: Wait for Completion with Streaming
 
 ```bash

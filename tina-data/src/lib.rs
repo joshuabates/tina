@@ -122,8 +122,11 @@ impl DataSource {
         // Load phase team if available (legacy field, kept for backward compat)
         let phase_team = None;
 
-        // Load tasks for the orchestration team
-        let tasks = self.load_tasks(&format!("{}-orchestration", feature)).unwrap_or_default();
+        // Load tasks for the orchestration team (using lead_session_id)
+        let tasks = orchestrator_team
+            .as_ref()
+            .and_then(|team| self.load_tasks(&team.lead_session_id).ok())
+            .unwrap_or_default();
 
         // Store the loaded orchestration
         self.current = Some(LoadedOrchestration {

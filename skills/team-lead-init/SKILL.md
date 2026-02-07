@@ -33,6 +33,29 @@ Example: `docs/plans/2026-01-26-feature-phase-1.5.md` -> PHASE_NUM = 1.5
 
 ---
 
+## STEP 1b: Resolve worktree path
+
+Define `WORKTREE_PATH` before running any gates or CLI commands.
+
+If `.claude/tina/supervisor-state.json` exists in the current directory, use its `worktree_path`. Otherwise default to the current directory.
+
+```bash
+if [ -f ".claude/tina/supervisor-state.json" ]; then
+  WORKTREE_PATH="$(python3 - <<'PY'
+import json
+with open(".claude/tina/supervisor-state.json") as f:
+    print(json.load(f).get("worktree_path", ""))
+PY
+)"
+fi
+
+if [ -z "$WORKTREE_PATH" ]; then
+  WORKTREE_PATH="$(pwd)"
+fi
+```
+
+---
+
 ## STEP 2: Initialize status file
 
 ```bash

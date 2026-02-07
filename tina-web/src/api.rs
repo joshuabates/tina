@@ -316,40 +316,13 @@ pub async fn retry_phase(
         .ok_or(StatusCode::NOT_FOUND)?;
     drop(conn);
 
-    // Determine the appropriate retry event based on phase status
-    let phase_state = detail
-        .phases
-        .iter()
-        .find(|p| p.phase_number == phase)
-        .ok_or(StatusCode::NOT_FOUND)?;
-
-    let event = match phase_state.status.as_str() {
-        "blocked" | "planning" => "validation_pass",
-        "planned" | "executing" => "plan_complete",
-        "reviewing" => "execute_complete",
-        _ => return Err(StatusCode::BAD_REQUEST),
-    };
-
-    let mut args = vec![
+    let args = vec![
         "orchestrate".to_string(),
         "advance".to_string(),
         detail.orchestration.feature_name.clone(),
         phase.clone(),
-        event.to_string(),
+        "retry".to_string(),
     ];
-
-    // Add required args for specific events
-    if event == "plan_complete" {
-        if let Some(ref plan_path) = phase_state.plan_path {
-            args.push("--plan-path".to_string());
-            args.push(plan_path.clone());
-        }
-    } else if event == "execute_complete" {
-        if let Some(ref git_range) = phase_state.git_range {
-            args.push("--git-range".to_string());
-            args.push(git_range.clone());
-        }
-    }
 
     let output = Command::new("tina-session")
         .args(&args)

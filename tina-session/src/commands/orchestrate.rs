@@ -27,12 +27,12 @@ pub fn advance(
     let mut state = tina_session::state::schema::SupervisorState::load(&lookup.cwd)?;
 
     let event = parse_event(event, plan_path, git_range, issues)?;
-    let action = advance_state(&mut state, phase, event)?;
+    let action = advance_state(&mut state, phase, event.clone())?;
 
     state.save()?;
 
     // Sync to SQLite (non-fatal)
-    if let Err(e) = sync_to_sqlite(feature, &state, phase, &action) {
+    if let Err(e) = sync_to_sqlite(feature, &state, phase, &action, Some(&event)) {
         eprintln!("Warning: Failed to sync to SQLite: {}", e);
     }
 
@@ -54,6 +54,7 @@ fn parse_event(
                 plan_path: path.to_path_buf(),
             })
         }
+        "execute_started" => Ok(AdvanceEvent::ExecuteStarted),
         "execute_complete" => {
             let range = git_range
                 .ok_or_else(|| anyhow::anyhow!("--git-range is required for execute_complete event"))?;
@@ -71,6 +72,12 @@ fn parse_event(
             };
             Ok(AdvanceEvent::ReviewGaps { issues: issue_list })
         }
+        "retry" => {
+            let reason = issues.unwrap_or("manual retry");
+            Ok(AdvanceEvent::Retry {
+                reason: reason.to_string(),
+            })
+        }
         "validation_pass" => Ok(AdvanceEvent::ValidationPass),
         "validation_warning" => Ok(AdvanceEvent::ValidationWarning),
         "validation_stop" => Ok(AdvanceEvent::ValidationStop),
@@ -82,8 +89,8 @@ fn parse_event(
         }
         _ => anyhow::bail!(
             "Unknown event '{}'. Valid events: plan_complete, execute_complete, \
-             review_pass, review_gaps, validation_pass, validation_warning, \
-             validation_stop, error",
+             execute_started, review_pass, review_gaps, retry, validation_pass, \
+             validation_warning, validation_stop, error",
             event
         ),
     }
@@ -94,6 +101,7 @@ fn sync_to_sqlite(
     state: &tina_session::state::schema::SupervisorState,
     phase: &str,
     action: &Action,
+    event: Option<&AdvanceEvent>,
 ) -> anyhow::Result<()> {
     let db_path = tina_session::db::default_db_path();
     let conn = tina_session::db::open_or_create(&db_path)?;
@@ -138,7 +146,7 @@ fn sync_to_sqlite(
     }
 
     // Record orchestration event
-    let (event_type, summary, detail) = event_from_action(phase, action);
+    let (event_type, summary, detail) = event_from_action(phase, action, event);
     let event = OrchestrationEvent {
         id: None,
         orchestration_id: orch.id.clone(),
@@ -154,7 +162,19 @@ fn sync_to_sqlite(
     Ok(())
 }
 
-fn event_from_action(phase: &str, action: &Action) -> (String, String, Option<String>) {
+fn event_from_action(
+    phase: &str,
+    action: &Action,
+    event: Option<&AdvanceEvent>,
+) -> (String, String, Option<String>) {
+    if let Some(AdvanceEvent::Retry { reason }) = event {
+        return (
+            "retry".to_string(),
+            format!("Phase {} retry requested", phase),
+            Some(serde_json::json!({"reason": reason}).to_string()),
+        );
+    }
+
     match action {
         Action::SpawnValidator { .. } => (
             "phase_started".to_string(),
@@ -220,6 +240,11 @@ fn event_from_action(phase: &str, action: &Action) -> (String, String, Option<St
             "error".to_string(),
             format!("Phase {} review consensus disagreement", p),
             Some(serde_json::json!({"verdict_1": verdict_1, "verdict_2": verdict_2, "issues": issues}).to_string()),
+        ),
+        Action::Wait { reason } => (
+            "info".to_string(),
+            format!("Waiting: {}", reason),
+            None,
         ),
     }
 }
