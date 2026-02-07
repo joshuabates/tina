@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { Orchestration, Project } from "../types";
 import OrchestrationList from "./OrchestrationList";
 import AddProjectForm from "./AddProjectForm";
+import StuckTaskAlert from "./StuckTaskAlert";
 
 function statusColor(status: string): string {
   switch (status) {
@@ -22,7 +23,12 @@ interface Props {
 
 export default function Dashboard({ projects, orchestrations, onProjectCreated }: Props) {
   if (projects.length === 0) {
-    return <OrchestrationList orchestrations={orchestrations} />;
+    return (
+      <>
+        <StuckTaskAlert />
+        <OrchestrationList orchestrations={orchestrations} />
+      </>
+    );
   }
 
   // Build a map from project_id to most recent orchestration
@@ -36,6 +42,7 @@ export default function Dashboard({ projects, orchestrations, onProjectCreated }
 
   return (
     <div data-testid="dashboard" className="p-4">
+      <StuckTaskAlert />
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold">Projects</h1>
         <span className="text-sm text-gray-500">

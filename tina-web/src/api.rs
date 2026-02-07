@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::Json;
 use serde::{Deserialize, Serialize};
+use tokio::process::Command;
 
 use tina_data::db;
 
@@ -177,6 +178,194 @@ pub async fn get_task_events(
     Ok(Json(events))
 }
 
+// --- Orchestration Events ---
+
+#[derive(Deserialize)]
+pub struct EventsQuery {
+    pub since: Option<i64>,
+}
+
+pub async fn get_orchestration_events(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Query(query): Query<EventsQuery>,
+) -> Result<Json<Vec<db::OrchestrationEvent>>, StatusCode> {
+    let conn = state.conn().await;
+
+    // Verify orchestration exists
+    db::orchestration_detail(&conn, &id)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let events = match query.since {
+        Some(since_id) => db::list_orchestration_events_since(&conn, &id, since_id),
+        None => db::list_orchestration_events(&conn, &id),
+    };
+
+    events.map(Json).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+#[derive(Deserialize)]
+pub struct StuckTasksQuery {
+    pub threshold: Option<i64>,
+}
+
+pub async fn get_stuck_tasks(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<StuckTasksQuery>,
+) -> Result<Json<Vec<db::StuckTask>>, StatusCode> {
+    let conn = state.conn().await;
+    let threshold = query.threshold.unwrap_or(15);
+    db::stuck_tasks(&conn, threshold)
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+pub async fn get_phase_events(
+    State(state): State<Arc<AppState>>,
+    Path((id, phase_number)): Path<(String, String)>,
+) -> Result<Json<Vec<db::OrchestrationEvent>>, StatusCode> {
+    let conn = state.conn().await;
+
+    // Verify orchestration exists
+    db::orchestration_detail(&conn, &id)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    db::list_phase_events(&conn, &id, &phase_number)
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+// --- Operator Controls ---
+
+pub async fn pause_orchestration(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let conn = state.conn().await;
+    let detail = db::orchestration_detail(&conn, &id)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    drop(conn);
+
+    let orch = &detail.orchestration;
+    // Determine current phase from status/phases
+    let current_phase = detail
+        .phases
+        .iter()
+        .find(|p| p.status != "complete")
+        .map(|p| p.phase_number.clone())
+        .unwrap_or_else(|| "1".to_string());
+
+    let output = Command::new("tina-session")
+        .args([
+            "orchestrate",
+            "advance",
+            &orch.feature_name,
+            &current_phase,
+            "error",
+            "--issues",
+            "paused by operator",
+        ])
+        .output()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !output.status.success() {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json))
+}
+
+pub async fn resume_orchestration(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let conn = state.conn().await;
+    let detail = db::orchestration_detail(&conn, &id)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    drop(conn);
+
+    let output = Command::new("tina-session")
+        .args(["orchestrate", "next", &detail.orchestration.feature_name])
+        .output()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !output.status.success() {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json))
+}
+
+pub async fn retry_phase(
+    State(state): State<Arc<AppState>>,
+    Path((id, phase)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let conn = state.conn().await;
+    let detail = db::orchestration_detail(&conn, &id)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    drop(conn);
+
+    // Determine the appropriate retry event based on phase status
+    let phase_state = detail
+        .phases
+        .iter()
+        .find(|p| p.phase_number == phase)
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let event = match phase_state.status.as_str() {
+        "blocked" | "planning" => "validation_pass",
+        "planned" | "executing" => "plan_complete",
+        "reviewing" => "execute_complete",
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    let mut args = vec![
+        "orchestrate".to_string(),
+        "advance".to_string(),
+        detail.orchestration.feature_name.clone(),
+        phase.clone(),
+        event.to_string(),
+    ];
+
+    // Add required args for specific events
+    if event == "plan_complete" {
+        if let Some(ref plan_path) = phase_state.plan_path {
+            args.push("--plan-path".to_string());
+            args.push(plan_path.clone());
+        }
+    } else if event == "execute_complete" {
+        if let Some(ref git_range) = phase_state.git_range {
+            args.push("--git-range".to_string());
+            args.push(git_range.clone());
+        }
+    }
+
+    let output = Command::new("tina-session")
+        .args(&args)
+        .output()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !output.status.success() {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(json))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,5 +465,54 @@ mod tests {
 
         let projects = list_projects(State(state)).await.unwrap();
         assert_eq!(projects.0[0].project.name, "new-name");
+    }
+
+    #[tokio::test]
+    async fn test_get_events_nonexistent_returns_404() {
+        let state = test_state();
+        let query = EventsQuery { since: None };
+        let result = get_orchestration_events(
+            State(state),
+            Path("nonexistent".to_string()),
+            Query(query),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_get_phase_events_nonexistent_returns_404() {
+        let state = test_state();
+        let result = get_phase_events(
+            State(state),
+            Path(("nonexistent".to_string(), "1".to_string())),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_pause_nonexistent_returns_404() {
+        let state = test_state();
+        let result = pause_orchestration(State(state), Path("nonexistent".to_string())).await;
+        assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_resume_nonexistent_returns_404() {
+        let state = test_state();
+        let result = resume_orchestration(State(state), Path("nonexistent".to_string())).await;
+        assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_retry_nonexistent_returns_404() {
+        let state = test_state();
+        let result = retry_phase(
+            State(state),
+            Path(("nonexistent".to_string(), "1".to_string())),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
     }
 }

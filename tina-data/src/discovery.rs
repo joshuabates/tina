@@ -162,7 +162,7 @@ fn find_worktree_for_orchestration(team_name: &str, member_cwd: &PathBuf) -> Opt
     find_worktree_for_orchestration_in(None, team_name, member_cwd)
 }
 
-fn find_worktree_for_orchestration_in(base_dir: Option<&Path>, team_name: &str, member_cwd: &PathBuf) -> Option<PathBuf> {
+fn find_worktree_for_orchestration_in(base_dir: Option<&Path>, team_name: &str, member_cwd: &Path) -> Option<PathBuf> {
     if team_name.ends_with("-orchestration") {
         let feature = team_name.trim_end_matches("-orchestration");
         let lookup_result = match base_dir {
@@ -175,7 +175,7 @@ fn find_worktree_for_orchestration_in(base_dir: Option<&Path>, team_name: &str, 
         return lookup_result.ok().map(|l| l.cwd);
     }
 
-    Some(member_cwd.clone())
+    Some(member_cwd.to_path_buf())
 }
 
 /// Try to load a team as an orchestration from a specific base directory

@@ -1,4 +1,5 @@
 pub mod migrations;
+pub mod orchestration_events;
 pub mod orchestrations;
 pub mod phases;
 pub mod projects;

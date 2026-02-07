@@ -73,7 +73,7 @@ pub fn find_teams_for_worktree_in(dir: &Path, worktree_path: &std::path::Path) -
     }
 
     let mut teams = Vec::new();
-    for entry in fs::read_dir(&dir)? {
+    for entry in fs::read_dir(dir)? {
         let entry = entry?;
         if !entry.file_type()?.is_dir() {
             continue;

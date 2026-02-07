@@ -68,6 +68,27 @@ export interface OrchestrationDetail {
   members: TeamMember[];
 }
 
+export interface OrchestrationEvent {
+  id: number;
+  orchestration_id: string;
+  phase_number: string | null;
+  event_type: string;
+  source: string;
+  summary: string;
+  detail: string | null;
+  recorded_at: string;
+}
+
+export interface StuckTask {
+  orchestration_id: string;
+  task_id: string;
+  subject: string;
+  owner: string | null;
+  status: string;
+  last_event_at: string;
+  stuck_minutes: number;
+}
+
 // WebSocket message from server
 export interface WsMessage {
   type: "orchestrations_updated";

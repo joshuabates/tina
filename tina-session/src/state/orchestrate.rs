@@ -284,9 +284,9 @@ pub fn advance_state(
 
             phase_state.git_range = Some(git_range.clone());
             phase_state.status = PhaseStatus::Reviewing;
-            phase_state.execution_started_at.map(|start| {
+            if let Some(start) = phase_state.execution_started_at {
                 phase_state.breakdown.execution_mins = Some(duration_mins(start, now));
-            });
+            }
             phase_state.review_started_at = Some(now);
             state.status = OrchestrationStatus::Reviewing;
 

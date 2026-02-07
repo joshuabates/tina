@@ -1,7 +1,8 @@
 use std::path::Path;
 
+use tina_session::db::orchestration_events::OrchestrationEvent;
 use tina_session::session::lookup::SessionLookup;
-use tina_session::state::orchestrate::{advance_state, next_action, AdvanceEvent};
+use tina_session::state::orchestrate::{advance_state, next_action, Action, AdvanceEvent};
 
 /// Determine the next action to take based on current orchestration state.
 pub fn next(feature: &str) -> anyhow::Result<u8> {
@@ -31,7 +32,7 @@ pub fn advance(
     state.save()?;
 
     // Sync to SQLite (non-fatal)
-    if let Err(e) = sync_to_sqlite(feature, &state) {
+    if let Err(e) = sync_to_sqlite(feature, &state, phase, &action) {
         eprintln!("Warning: Failed to sync to SQLite: {}", e);
     }
 
@@ -91,6 +92,8 @@ fn parse_event(
 fn sync_to_sqlite(
     feature: &str,
     state: &tina_session::state::schema::SupervisorState,
+    phase: &str,
+    action: &Action,
 ) -> anyhow::Result<()> {
     let db_path = tina_session::db::default_db_path();
     let conn = tina_session::db::open_or_create(&db_path)?;
@@ -134,5 +137,84 @@ fn sync_to_sqlite(
         tina_session::db::phases::upsert(&conn, &db_phase)?;
     }
 
+    // Record orchestration event
+    let (event_type, summary, detail) = event_from_action(phase, action);
+    let event = OrchestrationEvent {
+        id: None,
+        orchestration_id: orch.id.clone(),
+        phase_number: if phase == "validation" { None } else { Some(phase.to_string()) },
+        event_type,
+        source: "tina-session orchestrate".to_string(),
+        summary,
+        detail,
+        recorded_at: chrono::Utc::now().to_rfc3339(),
+    };
+    tina_session::db::orchestration_events::insert(&conn, &event)?;
+
     Ok(())
+}
+
+fn event_from_action(phase: &str, action: &Action) -> (String, String, Option<String>) {
+    match action {
+        Action::SpawnValidator => (
+            "phase_started".to_string(),
+            "Design validation requested".to_string(),
+            None,
+        ),
+        Action::SpawnPlanner { .. } if phase == "validation" => (
+            "phase_started".to_string(),
+            "Design validation passed".to_string(),
+            None,
+        ),
+        Action::ReusePlan { phase: p, plan_path } if phase == "validation" => (
+            "phase_started".to_string(),
+            "Design validation passed with warnings".to_string(),
+            Some(serde_json::json!({"plan_path": plan_path, "phase": p}).to_string()),
+        ),
+        Action::Stopped { reason } => (
+            "error".to_string(),
+            format!("Design validation failed - {}", reason),
+            None,
+        ),
+        Action::SpawnExecutor { phase: p, plan_path } => (
+            "phase_completed".to_string(),
+            format!("Phase {} planning completed", p),
+            Some(serde_json::json!({"plan_path": plan_path}).to_string()),
+        ),
+        Action::ReusePlan { phase: p, plan_path } => (
+            "phase_completed".to_string(),
+            format!("Phase {} planning completed (reused plan)", p),
+            Some(serde_json::json!({"plan_path": plan_path}).to_string()),
+        ),
+        Action::SpawnReviewer { phase: p, git_range } => (
+            "phase_completed".to_string(),
+            format!("Phase {} execution completed", p),
+            Some(serde_json::json!({"git_range": git_range}).to_string()),
+        ),
+        Action::SpawnPlanner { phase: p } => (
+            "phase_completed".to_string(),
+            format!("Phase {} review passed", p),
+            None,
+        ),
+        Action::Finalize => (
+            "phase_completed".to_string(),
+            format!("Phase {} review passed - all phases complete", phase),
+            None,
+        ),
+        Action::Complete => (
+            "phase_completed".to_string(),
+            "Orchestration complete".to_string(),
+            None,
+        ),
+        Action::Remediate { phase: p, remediation_phase, issues } => (
+            "retry".to_string(),
+            format!("Phase {} review found gaps", p),
+            Some(serde_json::json!({"remediation_phase": remediation_phase, "issues": issues}).to_string()),
+        ),
+        Action::Error { phase: p, reason, retry_count, can_retry } => (
+            "error".to_string(),
+            format!("Phase {} error: {}", p, reason),
+            Some(serde_json::json!({"retry_count": retry_count, "can_retry": can_retry}).to_string()),
+        ),
+    }
 }

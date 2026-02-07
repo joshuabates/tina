@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,7 +25,7 @@ impl AppState {
     }
 
     /// Create AppState from a specific database path.
-    pub fn open(db_path: &PathBuf) -> Arc<Self> {
+    pub fn open(db_path: &Path) -> Arc<Self> {
         let conn = tina_data::db::open_or_create(db_path)
             .expect("Failed to open SQLite database");
         tina_session::db::migrations::migrate(&conn)

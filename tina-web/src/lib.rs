@@ -4,7 +4,7 @@ pub mod ws;
 
 use std::sync::Arc;
 
-use axum::routing::{get, put};
+use axum::routing::{get, post, put};
 use axum::Router;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
@@ -40,6 +40,27 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route(
             "/orchestrations/{id}/tasks/{task_id}/events",
             get(api::get_task_events),
+        )
+        .route(
+            "/orchestrations/{id}/events",
+            get(api::get_orchestration_events),
+        )
+        .route(
+            "/orchestrations/{id}/phases/{phase_number}/events",
+            get(api::get_phase_events),
+        )
+        .route("/alerts/stuck-tasks", get(api::get_stuck_tasks))
+        .route(
+            "/orchestrations/{id}/pause",
+            post(api::pause_orchestration),
+        )
+        .route(
+            "/orchestrations/{id}/resume",
+            post(api::resume_orchestration),
+        )
+        .route(
+            "/orchestrations/{id}/phases/{phase}/retry",
+            post(api::retry_phase),
         );
 
     Router::new()
@@ -78,6 +99,27 @@ pub fn build_router_with_static(state: Arc<AppState>, static_dir: &str) -> Route
         .route(
             "/orchestrations/{id}/tasks/{task_id}/events",
             get(api::get_task_events),
+        )
+        .route(
+            "/orchestrations/{id}/events",
+            get(api::get_orchestration_events),
+        )
+        .route(
+            "/orchestrations/{id}/phases/{phase_number}/events",
+            get(api::get_phase_events),
+        )
+        .route("/alerts/stuck-tasks", get(api::get_stuck_tasks))
+        .route(
+            "/orchestrations/{id}/pause",
+            post(api::pause_orchestration),
+        )
+        .route(
+            "/orchestrations/{id}/resume",
+            post(api::resume_orchestration),
+        )
+        .route(
+            "/orchestrations/{id}/phases/{phase}/retry",
+            post(api::retry_phase),
         );
 
     Router::new()

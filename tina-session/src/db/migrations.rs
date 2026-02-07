@@ -10,6 +10,33 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         migrate_v0_to_v1(conn)?;
     }
 
+    if version < 2 {
+        migrate_v1_to_v2(conn)?;
+    }
+
+    Ok(())
+}
+
+fn migrate_v1_to_v2(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "
+        CREATE TABLE orchestration_events (
+            id                  INTEGER PRIMARY KEY,
+            orchestration_id    TEXT NOT NULL REFERENCES orchestrations,
+            phase_number        TEXT,
+            event_type          TEXT NOT NULL,
+            source              TEXT NOT NULL,
+            summary             TEXT NOT NULL,
+            detail              TEXT,
+            recorded_at         TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_orch_events_orchestration ON orchestration_events(orchestration_id);
+        CREATE INDEX idx_orch_events_recorded ON orchestration_events(orchestration_id, recorded_at);
+
+        PRAGMA user_version = 2;
+        ",
+    )?;
     Ok(())
 }
 
@@ -100,11 +127,11 @@ mod tests {
 
         migrate(&conn).expect("migration should succeed");
 
-        // user_version should be 1
+        // user_version should be 2
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
 
         // All tables should exist
         let tables: Vec<String> = conn
@@ -120,6 +147,7 @@ mod tests {
         assert!(tables.contains(&"phases".to_string()));
         assert!(tables.contains(&"task_events".to_string()));
         assert!(tables.contains(&"team_members".to_string()));
+        assert!(tables.contains(&"orchestration_events".to_string()));
 
         // All indexes should exist
         let indexes: Vec<String> = conn
@@ -135,6 +163,8 @@ mod tests {
         assert!(indexes.contains(&"idx_task_events_orchestration".to_string()));
         assert!(indexes.contains(&"idx_task_events_task".to_string()));
         assert!(indexes.contains(&"idx_team_members_orchestration".to_string()));
+        assert!(indexes.contains(&"idx_orch_events_orchestration".to_string()));
+        assert!(indexes.contains(&"idx_orch_events_recorded".to_string()));
     }
 
     #[test]
@@ -148,6 +178,56 @@ mod tests {
         let version: u32 = conn
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .unwrap();
+        assert_eq!(version, 2);
+    }
+
+    #[test]
+    fn test_migrate_from_v1() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.pragma_update(None, "foreign_keys", "ON").unwrap();
+
+        // Apply only v1 migration
+        migrate_v0_to_v1(&conn).expect("v1 migration should succeed");
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
         assert_eq!(version, 1);
+
+        // Now run full migrate - should apply v2
+        migrate(&conn).expect("v2 migration should succeed");
+
+        let version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+
+        // orchestration_events table should exist
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(tables.contains(&"orchestration_events".to_string()));
+
+        // Verify columns exist by inserting a row (need orchestrations table first)
+        conn.execute(
+            "INSERT INTO projects (name, repo_path, created_at) VALUES ('test', '/repo', '2026-01-01')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO orchestrations (id, project_id, feature_name, design_doc_path, branch, total_phases, status, started_at)
+             VALUES ('orch-1', 1, 'feat', '/docs/d.md', 'main', 1, 'planning', '2026-01-01')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO orchestration_events (orchestration_id, phase_number, event_type, source, summary, detail, recorded_at)
+             VALUES ('orch-1', '1', 'phase_started', 'test', 'Phase 1 started', NULL, '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
     }
 }

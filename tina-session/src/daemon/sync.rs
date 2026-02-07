@@ -202,11 +202,9 @@ fn list_team_names(teams_dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut names = Vec::new();
     for entry in fs::read_dir(teams_dir)? {
         let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            if entry.path().join("config.json").exists() {
-                if let Some(name) = entry.file_name().to_str() {
-                    names.push(name.to_string());
-                }
+        if entry.file_type()?.is_dir() && entry.path().join("config.json").exists() {
+            if let Some(name) = entry.file_name().to_str() {
+                names.push(name.to_string());
             }
         }
     }

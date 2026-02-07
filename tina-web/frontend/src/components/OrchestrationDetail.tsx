@@ -1,6 +1,10 @@
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { fetchOrchestrationEvents } from "../api";
 import { useOrchestrationDetail } from "../hooks/useOrchestrationDetail";
-import type { Phase } from "../types";
+import type { OrchestrationEvent, Phase } from "../types";
+import EventTimeline from "./EventTimeline";
+import OrchestrationControls from "./OrchestrationControls";
 import TaskList from "./TaskList";
 import TeamPanel from "./TeamPanel";
 
@@ -37,6 +41,23 @@ interface Props {
 export default function OrchestrationDetail({ onUpdate }: Props) {
   const { id } = useParams<{ id: string }>();
   const { detail, loading, error } = useOrchestrationDetail(id!, onUpdate);
+  const [events, setEvents] = useState<OrchestrationEvent[]>([]);
+
+  const loadEvents = useCallback(() => {
+    if (!id) return;
+    fetchOrchestrationEvents(id)
+      .then(setEvents)
+      .catch(() => setEvents([]));
+  }, [id]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  useEffect(() => {
+    if (!onUpdate) return;
+    return onUpdate(loadEvents);
+  }, [onUpdate, loadEvents]);
 
   if (loading) {
     return (
@@ -69,6 +90,12 @@ export default function OrchestrationDetail({ onUpdate }: Props) {
           <span data-testid="detail-status-badge" className={statusBadgeClass(orch.status)}>
             {orch.status}
           </span>
+          <OrchestrationControls
+            orchestrationId={orch.id}
+            status={orch.status}
+            phases={detail.phases}
+            onAction={loadEvents}
+          />
         </div>
         <div className="text-sm text-gray-500 mt-1 space-x-4">
           <span data-testid="detail-branch" className="font-mono">{orch.branch}</span>
@@ -126,6 +153,12 @@ export default function OrchestrationDetail({ onUpdate }: Props) {
         <div className="bg-gray-900 rounded-lg p-4">
           <TeamPanel members={detail.members} />
         </div>
+      </div>
+
+      {/* Event Log */}
+      <div className="mt-6 bg-gray-900 rounded-lg p-4">
+        <h2 className="text-sm font-semibold text-gray-400 mb-3">Event Log</h2>
+        <EventTimeline events={events} />
       </div>
     </div>
   );
