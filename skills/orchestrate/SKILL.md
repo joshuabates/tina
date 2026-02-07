@@ -232,7 +232,7 @@ After spawning a teammate, wait for their message. Based on the message content,
    TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH" }
    ```
 2. Check for prerequisites: Read the design doc and look for a `## Prerequisites` section. If one exists, present each prerequisite to the user and ask them to confirm everything is in place before continuing. Do not proceed until the user confirms. If no prerequisites section exists, skip this check.
-3. Check for existing plan file at `{WORKTREE_PATH}/.claude/tina/phase-1/plan.md`:
+3. Check for existing plan file matching `{WORKTREE_PATH}/docs/plans/*-phase-1.md` (glob):
    - If plan exists: auto-complete plan-phase-1 with `plan_path` set to the existing file, print "Reusing existing plan for phase 1."
    - If no plan: spawn phase-planner for phase 1:
 ```json
@@ -441,7 +441,8 @@ TaskCreate {
   "activeForm": "Validating design document",
   "metadata": {
     "design_doc_path": "<DESIGN_DOC>",
-    "worktree_path": "<WORKTREE_PATH>"
+    "worktree_path": "<WORKTREE_PATH>",
+    "output_path": "<WORKTREE_PATH>/.claude/tina/validation/design-report.md"
   }
 }
 ```
@@ -477,7 +478,8 @@ TaskCreate {
   "activeForm": "Reviewing phase <N>",
   "metadata": {
     "phase_num": <N>,
-    "design_doc_path": "<DESIGN_DOC>"
+    "design_doc_path": "<DESIGN_DOC>",
+    "output_path": "<WORKTREE_PATH>/.claude/tina/phase-<N>/review-report.md"
   }
 }
 ```
@@ -560,8 +562,9 @@ When: validate-design complete (for phase 1) OR review-phase-(N-1) complete with
 
 Before spawning, check if a plan already exists:
 ```bash
-PLAN_FILE="${WORKTREE_PATH}/.claude/tina/phase-${N}/plan.md"
-if [ -f "$PLAN_FILE" ]; then
+# Plans are written to docs/plans/*-phase-N.md by the planner
+PLAN_FILE=$(ls ${WORKTREE_PATH}/docs/plans/*-phase-${N}.md 2>/dev/null | head -1)
+if [ -n "$PLAN_FILE" ]; then
     # Reuse existing plan - skip planning entirely
     TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: "$PLAN_FILE" }
     # Proceed to spawning executor for phase N (same as "plan-phase-N complete" handler)
@@ -598,7 +601,17 @@ Then: Mark execute-phase-N as in_progress
 **Phase reviewer spawn:**
 
 When: execute-phase-N complete
-Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, and git_range
+Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, plan_path, git_range, and output_path
+
+```bash
+# Get plan_path from completed plan task
+PLAN_PATH=$(TaskGet { taskId: "plan-phase-$N" }).metadata.plan_path
+
+TaskUpdate {
+  taskId: "review-phase-$N",
+  metadata: { worktree_path: WORKTREE_PATH, plan_path: PLAN_PATH, git_range: GIT_RANGE }
+}
+```
 ```json
 {
   "subagent_type": "tina:phase-reviewer",
@@ -670,11 +683,12 @@ Orchestration tasks store metadata for monitoring and recovery:
 
 | Task | Required Metadata |
 |------|-------------------|
-| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path` |
-| `plan-phase-N` | `plan_path` |
-| `execute-phase-N` | `phase_team_name`, `started_at` |
+| `validate-design` | `design_doc_path`, `worktree_path`, `output_path`, `validation_status` |
+| `plan-phase-N` | `phase_num`, `design_doc_path`, `plan_path` (set on complete) |
+| `execute-phase-N` | `phase_num`, `feature_name`, `plan_path`, `worktree_path`, `phase_team_name`, `started_at` |
 | `execute-phase-N` (on complete) | `git_range`, `completed_at` |
-| `review-phase-N` | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
+| `review-phase-N` | `phase_num`, `design_doc_path`, `plan_path`, `git_range`, `worktree_path`, `output_path` |
+| `review-phase-N` (on complete) | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
 
 The `phase_team_name` field links the orchestrator's task to the phase execution team. This enables:
 - TUI to show nested task progress
@@ -716,8 +730,9 @@ if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
         If user says something isn't ready, pause orchestration
 
     # Check for existing plan before spawning planner
-    PLAN_FILE = "{WORKTREE_PATH}/.claude/tina/phase-1/plan.md"
-    if file exists at PLAN_FILE:
+    # Plans are written to docs/plans/*-phase-N.md by the planner
+    PLAN_FILE = glob("{WORKTREE_PATH}/docs/plans/*-phase-1.md") (first match or empty)
+    if PLAN_FILE exists:
         TaskUpdate: plan-phase-1, status: completed, metadata: { plan_path: PLAN_FILE }
         Print: "Reusing existing plan for phase 1."
         # Proceed to spawning executor for phase 1
@@ -757,9 +772,14 @@ if message contains "execute-N complete":
     TaskUpdate: execute-phase-N, status: completed
     TaskUpdate: execute-phase-N, metadata: { git_range: X..Y }
 
-    # Get worktree path and design doc for reviewer
+    # Get worktree path, plan path, and design doc for reviewer
     validate_task = TaskGet: validate-design
     worktree_path = validate_task.metadata.worktree_path
+    plan_task = TaskGet: plan-phase-N
+    plan_path = plan_task.metadata.plan_path
+
+    # Propagate metadata to review task
+    TaskUpdate: review-phase-N, metadata: { worktree_path: worktree_path, plan_path: plan_path, git_range: X..Y }
 
     Spawn reviewer-N teammate
     Print: "Phase N executed. Reviewing..."
@@ -777,8 +797,9 @@ if message contains "review-N complete (pass)":
     if N < TOTAL_PHASES:
         # Check for existing plan before spawning planner
         NEXT_PHASE = N + 1
-        PLAN_FILE = "{worktree_path}/.claude/tina/phase-{NEXT_PHASE}/plan.md"
-        if file exists at PLAN_FILE:
+        # Plans are written to docs/plans/*-phase-N.md by the planner
+        PLAN_FILE = glob("{worktree_path}/docs/plans/*-phase-{NEXT_PHASE}.md") (first match or empty)
+        if PLAN_FILE exists:
             # Reuse existing plan
             TaskUpdate: plan-phase-{NEXT_PHASE}, status: completed
             TaskUpdate: plan-phase-{NEXT_PHASE}, metadata: { plan_path: PLAN_FILE }

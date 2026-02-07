@@ -113,8 +113,13 @@ pub fn run(feature: &str, phase: &str, plan: &Path) -> anyhow::Result<u8> {
         }
     }
 
-    // Send the team-lead-init skill command
-    let skill_cmd = format!("/tina:team-lead-init {}", plan_abs.display());
+    // Send the team-lead-init skill command with team_name
+    let team_name = format!("{}-phase-{}", feature, phase);
+    let skill_cmd = format!(
+        "/tina:team-lead-init team_name: {} plan_path: {}",
+        team_name,
+        plan_abs.display()
+    );
     println!("Sending: {}", skill_cmd);
     tmux::send_keys(&name, &skill_cmd)?;
 

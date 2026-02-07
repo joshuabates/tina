@@ -86,6 +86,34 @@ Get git range from the final status update output.
 
 Use Teammate tool with `operation: write` and `target_agent_id: team-lead`.
 
+## Error Handling
+
+All errors MUST be reported to the orchestrator using this exact format:
+
+```
+execute-N error: <reason>
+```
+
+**Examples:**
+```
+execute-1 error: tina-session start failed with exit code 1
+```
+```
+execute-2 error: session_died
+```
+```
+execute-1 error: timeout after 1800 seconds
+```
+
+**tina-session start fails:**
+- Message orchestrator: `execute-N error: tina-session start failed with exit code <code>`
+
+**tina-session wait reports session died:**
+- Message orchestrator: `execute-N error: session_died`
+
+**tina-session wait times out:**
+- Message orchestrator: `execute-N error: timeout after <seconds> seconds`
+
 ## Important
 
 - **Never use raw tmux commands** - use tina-session CLI only

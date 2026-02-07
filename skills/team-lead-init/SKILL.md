@@ -292,7 +292,7 @@ Initialize a team-lead session for phase execution. Reads the plan, sets up phas
 Called by supervisor when spawning team-lead in tmux:
 
 ```
-/team-lead-init docs/plans/2026-01-26-feature-phase-1.md
+/tina:team-lead-init team_name: feature-phase-1 plan_path: docs/plans/2026-01-26-feature-phase-1.md
 ```
 
 ## Phase Number Extraction

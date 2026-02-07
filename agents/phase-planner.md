@@ -204,13 +204,26 @@ Plans without this section will fail validation.
 
 ## Error Handling
 
+All errors MUST be reported to the orchestrator using this exact format:
+
+```
+plan-phase-N error: <reason>
+```
+
+**Examples:**
+```
+plan-phase-1 error: design document not found at docs/plans/feature-design.md
+```
+```
+plan-phase-2 error: phase 2 section not found in design document (available: Phase 1, Phase 3)
+```
+
 **Design doc not found:**
-- Message orchestrator with error
+- Message orchestrator: `plan-phase-N error: design document not found at <path>`
 - Exit without creating plan
 
 **Phase section not found:**
-- Message orchestrator with error
-- Include available phase sections in error
+- Message orchestrator: `plan-phase-N error: phase N section not found in design document (available: <list>)`
 - Exit without creating plan
 
 **Codebase exploration fails:**

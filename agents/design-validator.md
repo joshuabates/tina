@@ -222,6 +222,40 @@ If a `## Prerequisites` section exists, include it in the report so the orchestr
 2. [Another change needed]
 ```
 
+## Completion Message Format
+
+After writing your report to the output path, send a completion message to the orchestrator via Teammate tool.
+
+**Message format:**
+```
+VALIDATION_STATUS: <Pass|Warning|Stop>
+```
+
+**Examples:**
+```
+VALIDATION_STATUS: Pass
+```
+```
+VALIDATION_STATUS: Warning
+```
+```
+VALIDATION_STATUS: Stop
+```
+
+Send exactly one of these three values. The orchestrator parses this message to determine next steps:
+- `Pass` or `Warning`: Orchestrator proceeds to planning phase 1
+- `Stop`: Orchestrator halts orchestration and reports failure to user
+
+**Error format:**
+```
+validate-design error: <reason>
+```
+
+Example:
+```
+validate-design error: design document not found at docs/plans/feature-design.md
+```
+
 ## Critical Rules
 
 **DO:**
@@ -231,6 +265,7 @@ If a `## Prerequisites` section exists, include it in the report so the orchestr
 - Give specific feedback on what's missing or wrong
 - Write baseline metrics to `.claude/tina/baseline-metrics.json`
 - Output clear severity tier
+- Send completion message via Teammate tool after writing report
 
 **DON'T:**
 - Approve designs without measurable success criteria
