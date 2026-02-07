@@ -202,7 +202,7 @@ fn try_load_orchestration_in(base_dir: &Path, team_name: &str) -> Result<Option<
 
     let context_metrics = tina_state::load_context_metrics(&worktree_path)?;
 
-    let orchestrator_tasks = tasks::load_tasks_in(&tasks_dir, &team.name)?;
+    let orchestrator_tasks = tasks::load_tasks_in(&tasks_dir, &team.lead_session_id)?;
 
     // For phase data, use the base_dir-aware variant
     let (phase_tasks, phase_members) = load_phase_data_for_worktree_in(

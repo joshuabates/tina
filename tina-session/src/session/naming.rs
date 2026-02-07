@@ -1,3 +1,13 @@
+/// Canonical orchestration team name: {feature}-orchestration
+pub fn orchestration_team_name(feature: &str) -> String {
+    format!("{}-orchestration", feature)
+}
+
+/// Extract feature name from an orchestration team name
+pub fn feature_from_team_name(team_name: &str) -> Option<&str> {
+    team_name.strip_suffix("-orchestration")
+}
+
 /// Validate phase format.
 ///
 /// Valid formats:
@@ -74,6 +84,20 @@ pub fn session_name(feature: &str, phase: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_orchestration_team_name() {
+        assert_eq!(orchestration_team_name("auth"), "auth-orchestration");
+        assert_eq!(orchestration_team_name("api-refactor"), "api-refactor-orchestration");
+    }
+
+    #[test]
+    fn test_feature_from_team_name() {
+        assert_eq!(feature_from_team_name("auth-orchestration"), Some("auth"));
+        assert_eq!(feature_from_team_name("api-refactor-orchestration"), Some("api-refactor"));
+        assert_eq!(feature_from_team_name("random-team"), None);
+        assert_eq!(feature_from_team_name("orchestration"), None);
+    }
 
     #[test]
     fn test_session_name() {

@@ -100,14 +100,14 @@ fn test_discover_orchestration_from_worktree_path() {
     );
 }
 
-/// Test that tasks are loaded using team name, not session_id
+/// Test that tasks are loaded using lead_session_id (how Claude stores them)
 #[test]
-fn test_tasks_loaded_by_team_name() {
+fn test_tasks_loaded_by_session_id() {
     let (_temp_dir, fixture_path) = setup_fixture("orchestration-e2e");
     let ds = tina_monitor::data::DataSource::new(Some(fixture_path));
 
-    // Load tasks for the orchestration team
-    let tasks = ds.load_tasks("my-feature-orchestration");
+    // Load tasks using the lead_session_id (as stored by Claude)
+    let tasks = ds.load_tasks("session-abc-123");
     assert!(tasks.is_ok(), "load_tasks should succeed: {:?}", tasks);
 
     let tasks = tasks.unwrap();

@@ -94,11 +94,11 @@ fn test_load_team() {
     let (_temp_dir, fixture_path) = setup_fixture();
     let ds = DataSource::new(Some(fixture_path));
 
-    let result = ds.load_team("test-feature");
+    let result = ds.load_team("test-feature-orchestration");
     assert!(result.is_ok());
 
     let team = result.unwrap();
-    assert_eq!(team.name, "test-feature");
+    assert_eq!(team.name, "test-feature-orchestration");
     assert_eq!(team.lead_agent_id, "team-lead");
     assert_eq!(team.members.len(), 2);
 }
@@ -108,7 +108,7 @@ fn test_load_tasks() {
     let (_temp_dir, fixture_path) = setup_fixture();
     let ds = DataSource::new(Some(fixture_path));
 
-    let result = ds.load_tasks("test-feature");
+    let result = ds.load_tasks("test-feature-orchestration");
     assert!(result.is_ok());
 
     let tasks = result.unwrap();

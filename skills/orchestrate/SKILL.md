@@ -66,7 +66,7 @@ This flag is used in STEP 4 to skip spawning the design validator.
 Before creating a new team, check if one already exists for this design doc:
 
 ```bash
-TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}.json"
+TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}/config.json"
 if [ -f "$TEAM_CONFIG" ]; then
     echo "Found existing orchestration team: $TEAM_NAME"
     # SKIP TO STEP 5b (Resume Logic) below
@@ -924,7 +924,7 @@ To resume after fixing the issue:
   /tina:orchestrate <design-doc-path>
 
 To reset and start fresh:
-  rm -rf ~/.claude/teams/${TEAM_NAME}.json
+  rm -rf ~/.claude/teams/${TEAM_NAME}/
   rm -rf ~/.claude/tasks/${TEAM_NAME}/
   /tina:orchestrate <design-doc-path>
 
@@ -1071,7 +1071,7 @@ FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
 TEAM_NAME="${FEATURE_NAME}-orchestration"
 
 # Check if team config exists
-TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}.json"
+TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}/config.json"
 if [ -f "$TEAM_CONFIG" ]; then
     echo "Found existing orchestration team: $TEAM_NAME"
     # Resume from task list
@@ -1165,8 +1165,8 @@ TaskUpdate { taskId: "review-phase-1", status: "completed", metadata: { manual_s
 
 4. **Clean up and restart:**
 ```
-# Delete team config and task directory
-rm -rf ~/.claude/teams/${TEAM_NAME}.json
+# Delete team directory and task directory
+rm -rf ~/.claude/teams/${TEAM_NAME}/
 rm -rf ~/.claude/tasks/${TEAM_NAME}/
 # Then rerun orchestrate for fresh start
 ```
@@ -1370,7 +1370,7 @@ Before using orchestration on real work, verify these behaviors manually:
 - [ ] If third would be needed, verify orchestration exits with error
 
 **Cleanup:**
-- [ ] After testing: `rm -rf ~/.claude/teams/minimal-orchestration-test-orchestration.json`
+- [ ] After testing: `rm -rf ~/.claude/teams/minimal-orchestration-test-orchestration/`
 - [ ] After testing: `rm -rf ~/.claude/tasks/minimal-orchestration-test-orchestration/`
 - [ ] After testing: `rm -rf .worktrees/minimal-orchestration-test/`
 
@@ -1419,7 +1419,7 @@ Common issues and their resolutions:
 1. If resuming: skip team creation, go to STEP 5b (Resume Logic)
 2. If starting fresh: clean up first:
    ```bash
-   rm -rf ~/.claude/teams/<team-name>.json
+   rm -rf ~/.claude/teams/<team-name>/
    rm -rf ~/.claude/tasks/<team-name>/
    ```
 

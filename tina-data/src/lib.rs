@@ -117,13 +117,13 @@ impl DataSource {
         let state = self.load_supervisor_state(&tina_dir)?;
 
         // Load orchestrator team if available
-        let orchestrator_team = self.load_team(&format!("{}-orchestrator", feature)).ok();
+        let orchestrator_team = self.load_team(&format!("{}-orchestration", feature)).ok();
 
-        // Load phase team if available
-        let phase_team = self.load_team(&format!("{}-phase", feature)).ok();
+        // Load phase team if available (legacy field, kept for backward compat)
+        let phase_team = None;
 
-        // Load tasks for the feature team
-        let tasks = self.load_tasks(feature).unwrap_or_default();
+        // Load tasks for the orchestration team
+        let tasks = self.load_tasks(&format!("{}-orchestration", feature)).unwrap_or_default();
 
         // Store the loaded orchestration
         self.current = Some(LoadedOrchestration {
