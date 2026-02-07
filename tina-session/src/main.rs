@@ -60,7 +60,7 @@ enum Commands {
         #[arg(long)]
         plan: PathBuf,
 
-        /// Install project dependencies before starting (npm, cargo, pip)
+        /// Install dependencies before starting (npm, cargo, pip)
         #[arg(long, default_value = "false")]
         install_deps: bool,
     },
@@ -204,6 +204,12 @@ enum Commands {
         #[arg(long)]
         feature: String,
     },
+
+    /// Orchestration state machine subcommands
+    Orchestrate {
+        #[command(subcommand)]
+        command: OrchestrateCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -322,6 +328,44 @@ enum DaemonCommands {
 
     /// Run the daemon in the foreground (used internally)
     Run,
+}
+
+#[derive(Subcommand)]
+enum OrchestrateCommands {
+    /// Determine the next action based on current orchestration state
+    Next {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+    },
+
+    /// Record a phase event and get the next action
+    Advance {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Phase identifier (e.g., "1", "2", "1.5")
+        #[arg(long)]
+        phase: String,
+
+        /// Event type: validation_pass, validation_warning, validation_stop,
+        /// plan_complete, execute_complete, review_pass, review_gaps, error
+        #[arg(long)]
+        event: String,
+
+        /// Plan path (required for plan_complete event)
+        #[arg(long)]
+        plan_path: Option<PathBuf>,
+
+        /// Git range (required for execute_complete event)
+        #[arg(long)]
+        git_range: Option<String>,
+
+        /// Issues or error reason (comma-separated for review_gaps)
+        #[arg(long)]
+        issues: Option<String>,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -484,5 +528,29 @@ fn run() -> anyhow::Result<u8> {
         Commands::List => commands::list::run(),
 
         Commands::Cleanup { feature } => commands::cleanup::run(&feature),
+
+        Commands::Orchestrate { command } => match command {
+            OrchestrateCommands::Next { feature } => {
+                commands::orchestrate::next(&feature)
+            }
+
+            OrchestrateCommands::Advance {
+                feature,
+                phase,
+                event,
+                plan_path,
+                git_range,
+                issues,
+            } => {
+                commands::orchestrate::advance(
+                    &feature,
+                    &phase,
+                    &event,
+                    plan_path.as_deref(),
+                    git_range.as_deref(),
+                    issues.as_deref(),
+                )
+            }
+        },
     }
 }

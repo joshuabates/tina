@@ -66,7 +66,7 @@ This flag is used in STEP 4 to skip spawning the design validator.
 Before creating a new team, check if one already exists for this design doc:
 
 ```bash
-TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}/config.json"
+TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}.json"
 if [ -f "$TEAM_CONFIG" ]; then
     echo "Found existing orchestration team: $TEAM_NAME"
     # SKIP TO STEP 5b (Resume Logic) below
@@ -181,126 +181,138 @@ The agent reads task metadata to get design_doc_path and other parameters. Agent
 
 ## STEP 5b: Resume Logic (when existing team found)
 
-When team already exists, resume from current state:
+When team already exists, resume from current state using the CLI:
 
-**Step 5b.1: Read task list**
+**Step 5b.1: Query CLI for next action**
+```bash
+NEXT_ACTION=$(tina-session orchestrate next --feature "$FEATURE_NAME")
+```
+
+The CLI examines `supervisor-state.json` and returns the correct action based on current phase states.
+
+**Step 5b.2: Also check task list for consistency**
 ```
 TaskList
 ```
+Compare task statuses with the CLI action. The CLI (supervisor-state.json) is authoritative for phase state.
 
-**Step 5b.2: Categorize tasks**
-```
-COMPLETED_TASKS = tasks where status == "completed"
-IN_PROGRESS_TASKS = tasks where status == "in_progress"
-PENDING_UNBLOCKED = tasks where status == "pending" AND all blockedBy are completed
-```
+**Step 5b.3: Dispatch the action**
 
-**Step 5b.3: Determine action based on state**
+Parse the returned JSON and dispatch the action using the Action Dispatch table in STEP 5.
 
-| State | Action |
-|-------|--------|
-| Has in_progress task | Respawn teammate for that task |
-| No in_progress, has pending unblocked | Spawn teammate for first unblocked |
-| All tasks complete | Report completion, exit |
+For example, if the CLI returns `{"action": "spawn_executor", "phase": "2", "plan_path": "/path/to/plan.md"}`, then:
+1. Update execute-phase-2 task metadata with plan_path
+2. Spawn `tina:phase-executor` for execute-phase-2
+3. Continue to the event loop (STEP 5)
 
-**Step 5b.4: Respawn teammate for in_progress task**
-
-For each task type, spawn the appropriate teammate:
-- `validate-design` in_progress → spawn design-validator
-- `plan-phase-N` in_progress → spawn phase-planner
-- `execute-phase-N` in_progress → spawn phase-executor
-- `review-phase-N` in_progress → spawn phase-reviewer
-
-Use TaskGet to retrieve any metadata needed from completed tasks (worktree_path, plan_path, etc.)
-
-**Step 5b.5: Continue to STEP 5 (Event loop)**
+**Step 5b.4: Continue to STEP 5 (Event loop)**
 
 After spawning the resumed teammate, continue with normal event loop processing.
 
 ---
 
-## STEP 5: Event loop - React to teammate messages
+## STEP 5: Event loop - React to teammate messages (CLI-delegated)
 
-After spawning a teammate, wait for their message. Based on the message content, take the appropriate action:
+After spawning a teammate, wait for their message. When a message arrives:
 
-### Message Handlers
+1. **Parse the message** to determine the event type
+2. **Call the CLI** to advance state and get the next action
+3. **Dispatch** the action (spawn teammate, create tasks, etc.)
 
-**"validate complete" or "VALIDATION_STATUS: Pass/Warning":**
-1. Mark validate-design task complete, store worktree_path in metadata:
-   ```
-   TaskUpdate: validate-design, status: completed
-   TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH" }
-   ```
-2. Check for prerequisites: Read the design doc and look for a `## Prerequisites` section. If one exists, present each prerequisite to the user and ask them to confirm everything is in place before continuing. Do not proceed until the user confirms. If no prerequisites section exists, skip this check.
-3. Check for existing plan file matching `{WORKTREE_PATH}/docs/plans/*-phase-1.md` (glob):
-   - If plan exists: auto-complete plan-phase-1 with `plan_path` set to the existing file, print "Reusing existing plan for phase 1."
-   - If no plan: spawn phase-planner for phase 1:
-```json
-{
-  "subagent_type": "tina:phase-planner",
-  "team_name": "<feature-name>-orchestration",
-  "name": "planner-1",
-  "prompt": "task_id: plan-phase-1"
-}
+### CLI Delegation Pattern
+
+Instead of computing state transitions yourself, delegate to the CLI:
+
+```bash
+# After receiving a teammate message, advance the state machine:
+NEXT_ACTION=$(tina-session orchestrate advance \
+  --feature "$FEATURE_NAME" \
+  --phase "$PHASE" \
+  --event "$EVENT_TYPE" \
+  [--plan-path "$PLAN_PATH"] \
+  [--git-range "$GIT_RANGE"] \
+  [--issues "$ISSUES"])
+
+# Parse the JSON response and dispatch
+ACTION=$(echo "$NEXT_ACTION" | jq -r '.action')
 ```
 
-**"VALIDATION_STATUS: Stop":**
-1. Mark validate-design task complete with failure metadata
-2. Report validation failure to user
-3. Exit orchestration
+### Message-to-Event Mapping
 
-**"plan-phase-N complete" with PLAN_PATH:**
-1. Mark plan-phase-N task complete
-2. Store PLAN_PATH in task metadata (execute-phase-N can read this)
-3. Update execute-phase-N metadata with worktree_path from validate-design and plan_path
-4. Spawn phase-executor:
-```json
-{
-  "subagent_type": "tina:phase-executor",
-  "team_name": "<feature-name>-orchestration",
-  "name": "executor-N",
-  "prompt": "task_id: execute-phase-N"
-}
+| Teammate Message | CLI Event | Extra Args |
+|------------------|-----------|------------|
+| `VALIDATION_STATUS: Pass` | `validation_pass` | |
+| `VALIDATION_STATUS: Warning` | `validation_warning` | |
+| `VALIDATION_STATUS: Stop` | `validation_stop` | |
+| `plan-phase-N complete. PLAN_PATH: X` | `plan_complete` | `--plan-path X` |
+| `execute-N complete. Git range: X..Y` | `execute_complete` | `--git-range X..Y` |
+| `review-N complete (pass)` | `review_pass` | |
+| `review-N complete (gaps): issues` | `review_gaps` | `--issues "issue1,issue2"` |
+| `error: reason` or `session_died` | `error` | `--issues "reason"` |
+
+### Action Dispatch
+
+The CLI returns a JSON object with an `action` field. Dispatch based on action type:
+
+| Action | What to Do |
+|--------|------------|
+| `spawn_validator` | Spawn `tina:design-validator` teammate |
+| `spawn_planner` | Spawn `tina:phase-planner` for `.phase` |
+| `spawn_executor` | Spawn `tina:phase-executor` for `.phase` (plan at `.plan_path`) |
+| `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`) |
+| `reuse_plan` | Skip planning, auto-complete plan task, dispatch executor |
+| `finalize` | Invoke `tina:finishing-a-development-branch` |
+| `complete` | Report orchestration complete |
+| `stopped` | Report validation failure and exit |
+| `error` | If `.can_retry`, retry once; else escalate to user |
+| `remediate` | Create remediation tasks and spawn planner for `.remediation_phase` |
+
+### Handling Each Message
+
+**On validator message:**
+1. Determine event: `validation_pass`, `validation_warning`, or `validation_stop`
+2. Check for prerequisites in design doc before calling advance (ask user to confirm)
+3. Call: `tina-session orchestrate advance --feature X --phase validation --event <event>`
+4. Mark validate-design task complete
+5. Dispatch returned action
+
+**On planner-N message:**
+1. Parse PLAN_PATH from message
+2. Call: `tina-session orchestrate advance --feature X --phase N --event plan_complete --plan-path P`
+3. Mark plan-phase-N task complete, store plan_path in metadata
+4. Dispatch returned action (spawn executor)
+
+**On executor-N message:**
+1. Parse git_range from message
+2. Call: `tina-session orchestrate advance --feature X --phase N --event execute_complete --git-range R`
+3. Mark execute-phase-N task complete, store git_range in metadata
+4. Dispatch returned action (spawn reviewer)
+
+**On reviewer-N message:**
+1. Determine if pass or gaps
+2. Call: `tina-session orchestrate advance --feature X --phase N --event review_pass` (or `review_gaps --issues "..."`)
+3. Mark review-phase-N task complete
+4. Dispatch returned action (spawn next planner, finalize, or create remediation)
+
+**On error message:**
+1. Call: `tina-session orchestrate advance --feature X --phase N --event error --issues "reason"`
+2. If action says `can_retry: true`, re-spawn the teammate
+3. If `can_retry: false`, escalate to user
+
+### Resume via CLI
+
+When resuming (existing team found in STEP 1b), use:
+```bash
+NEXT_ACTION=$(tina-session orchestrate next --feature "$FEATURE_NAME")
 ```
 
-**"execute-N complete" with git_range:**
-1. Mark execute-phase-N task complete
-2. Store git_range in task metadata
-3. Update review-phase-N metadata with worktree_path, design_doc_path, and git_range
-4. Spawn phase-reviewer:
-```json
-{
-  "subagent_type": "tina:phase-reviewer",
-  "team_name": "<feature-name>-orchestration",
-  "name": "reviewer-N",
-  "prompt": "task_id: review-phase-N"
-}
-```
-
-**"review-N complete (pass)":**
-1. Mark review-phase-N task complete with status: pass
-2. If more phases remain: spawn planner for phase N+1
-3. If last phase: mark finalize task as in_progress, invoke finishing workflow
-
-**"review-N complete (gaps)" with issues:**
-1. Mark review-phase-N task complete with status: gaps, issues in metadata
-2. Create remediation tasks:
-   - plan-phase-N.5
-   - execute-phase-N.5
-   - review-phase-N.5
-3. Update dependencies: review-N.5 blocks plan-(N+1)
-4. Spawn planner for phase N.5
-
-**"error: X":**
-1. Log error details
-2. Attempt one retry (re-spawn teammate)
-3. If still fails: escalate to user
+This examines supervisor-state.json and returns the correct action to take (spawn whichever teammate is needed for the current state).
 
 ---
 
 ## STEP 6: Finalize
 
-When finalize task becomes unblocked (all reviews passed):
+When the CLI returns `{"action": "finalize"}`:
 
 1. Invoke `tina:finishing-a-development-branch` skill
 2. Present merge/PR/cleanup options to user
@@ -441,8 +453,7 @@ TaskCreate {
   "activeForm": "Validating design document",
   "metadata": {
     "design_doc_path": "<DESIGN_DOC>",
-    "worktree_path": "<WORKTREE_PATH>",
-    "output_path": "<WORKTREE_PATH>/.claude/tina/validation/design-report.md"
+    "worktree_path": "<WORKTREE_PATH>"
   }
 }
 ```
@@ -478,8 +489,7 @@ TaskCreate {
   "activeForm": "Reviewing phase <N>",
   "metadata": {
     "phase_num": <N>,
-    "design_doc_path": "<DESIGN_DOC>",
-    "output_path": "<WORKTREE_PATH>/.claude/tina/phase-<N>/review-report.md"
+    "design_doc_path": "<DESIGN_DOC>"
   }
 }
 ```
@@ -562,9 +572,8 @@ When: validate-design complete (for phase 1) OR review-phase-(N-1) complete with
 
 Before spawning, check if a plan already exists:
 ```bash
-# Plans are written to docs/plans/*-phase-N.md by the planner
-PLAN_FILE=$(ls ${WORKTREE_PATH}/docs/plans/*-phase-${N}.md 2>/dev/null | head -1)
-if [ -n "$PLAN_FILE" ]; then
+PLAN_FILE="${WORKTREE_PATH}/.claude/tina/phase-${N}/plan.md"
+if [ -f "$PLAN_FILE" ]; then
     # Reuse existing plan - skip planning entirely
     TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: "$PLAN_FILE" }
     # Proceed to spawning executor for phase N (same as "plan-phase-N complete" handler)
@@ -601,17 +610,7 @@ Then: Mark execute-phase-N as in_progress
 **Phase reviewer spawn:**
 
 When: execute-phase-N complete
-Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, plan_path, git_range, and output_path
-
-```bash
-# Get plan_path from completed plan task
-PLAN_PATH=$(TaskGet { taskId: "plan-phase-$N" }).metadata.plan_path
-
-TaskUpdate {
-  taskId: "review-phase-$N",
-  metadata: { worktree_path: WORKTREE_PATH, plan_path: PLAN_PATH, git_range: GIT_RANGE }
-}
-```
+Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, and git_range
 ```json
 {
   "subagent_type": "tina:phase-reviewer",
@@ -683,12 +682,11 @@ Orchestration tasks store metadata for monitoring and recovery:
 
 | Task | Required Metadata |
 |------|-------------------|
-| `validate-design` | `design_doc_path`, `worktree_path`, `output_path`, `validation_status` |
-| `plan-phase-N` | `phase_num`, `design_doc_path`, `plan_path` (set on complete) |
-| `execute-phase-N` | `phase_num`, `feature_name`, `plan_path`, `worktree_path`, `phase_team_name`, `started_at` |
+| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path` |
+| `plan-phase-N` | `plan_path` |
+| `execute-phase-N` | `phase_team_name`, `started_at` |
 | `execute-phase-N` (on complete) | `git_range`, `completed_at` |
-| `review-phase-N` | `phase_num`, `design_doc_path`, `plan_path`, `git_range`, `worktree_path`, `output_path` |
-| `review-phase-N` (on complete) | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
+| `review-phase-N` | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
 
 The `phase_team_name` field links the orchestrator's task to the phase execution team. This enables:
 - TUI to show nested task progress
@@ -713,37 +711,32 @@ Each teammate sends a structured completion message. Parse these patterns:
 | executor-N | `execute-N complete. Git range: X..Y` | `execute-N error: X` |
 | reviewer-N | `review-N complete (pass)` or `review-N complete (gaps): X` | `review-N error: X` |
 
-**Event handlers:**
+**Event handlers (CLI-delegated):**
+
+For each teammate message, parse the event type, then call the CLI to advance state:
 
 **On validator message:**
 ```
 if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
-    TaskUpdate: validate-design, status: completed
-    TaskUpdate: validate-design, metadata: { validation_status: "pass" or "warning", worktree_path: "$WORKTREE_PATH" }
+    EVENT = "validation_pass" (or "validation_warning")
 
-    # Check for prerequisites before proceeding
+    # Check for prerequisites BEFORE advancing state
     Read design doc, look for "## Prerequisites" section
     If prerequisites exist:
         Print each prerequisite to user
         Ask: "These prerequisites must be in place before starting. Are they all set up?"
         Wait for user confirmation before continuing
-        If user says something isn't ready, pause orchestration
 
-    # Check for existing plan before spawning planner
-    # Plans are written to docs/plans/*-phase-N.md by the planner
-    PLAN_FILE = glob("{WORKTREE_PATH}/docs/plans/*-phase-1.md") (first match or empty)
-    if PLAN_FILE exists:
-        TaskUpdate: plan-phase-1, status: completed, metadata: { plan_path: PLAN_FILE }
-        Print: "Reusing existing plan for phase 1."
-        # Proceed to spawning executor for phase 1
-    else:
-        Spawn planner-1 teammate
-    Print: "Design validated. Planning phase 1..."
+    # Advance state via CLI
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase validation --event $EVENT
+    TaskUpdate: validate-design, status: completed
+    TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH" }
+    # Dispatch NEXT_ACTION (see Action Dispatch table above)
 
 if message contains "VALIDATION_STATUS: Stop":
-    TaskUpdate: validate-design, status: completed
-    TaskUpdate: validate-design, metadata: { validation_status: "stop" }
-    Print: "Design validation FAILED. See .claude/tina/validation/design-report.md"
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase validation --event validation_stop
+    TaskUpdate: validate-design, status: completed, metadata: { validation_status: "stop" }
+    Print: "Design validation FAILED."
     Exit orchestration
 ```
 
@@ -751,176 +744,54 @@ if message contains "VALIDATION_STATUS: Stop":
 ```
 if message contains "plan-phase-N complete":
     Parse: PLAN_PATH from "PLAN_PATH: X"
-    TaskUpdate: plan-phase-N, status: completed
-    TaskUpdate: plan-phase-N, metadata: { plan_path: X }
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event plan_complete --plan-path $PLAN_PATH
+    TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: $PLAN_PATH }
+    # Dispatch NEXT_ACTION (spawn executor)
 
-    # Get worktree path from earlier task
-    validate_task = TaskGet: validate-design
-    worktree_path = validate_task.metadata.worktree_path
-
-    Spawn executor-N teammate with plan_path and worktree_path
-    Print: "Phase N planned. Executing..."
-
-if message contains "plan-phase-N error":
-    plan_task = TaskGet: plan-phase-N
-    retry_count = plan_task.metadata.retry_count or 0
-    if retry_count < 1:
-        TaskUpdate: plan-phase-N, metadata: { retry_count: retry_count + 1, last_error: "<error text>" }
-        Print: "Planner error, retrying (attempt ${retry_count + 1})..."
-        Respawn planner-N teammate
-    else:
-        Print: "Planner failed after retry. Error: <error text>"
-        # Graceful exit (see error handling section below)
+if message contains "error":
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
+    # If can_retry: respawn planner; else escalate
 ```
 
 **On executor-N message:**
 ```
 if message contains "execute-N complete":
     Parse: git_range from "Git range: X..Y"
-    TaskUpdate: execute-phase-N, status: completed
-    TaskUpdate: execute-phase-N, metadata: { git_range: X..Y }
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event execute_complete --git-range $GIT_RANGE
+    TaskUpdate: execute-phase-N, status: completed, metadata: { git_range: $GIT_RANGE }
+    # Dispatch NEXT_ACTION (spawn reviewer)
 
-    # Get worktree path, plan path, and design doc for reviewer
-    validate_task = TaskGet: validate-design
-    worktree_path = validate_task.metadata.worktree_path
-    plan_task = TaskGet: plan-phase-N
-    plan_path = plan_task.metadata.plan_path
-
-    # Propagate metadata to review task
-    TaskUpdate: review-phase-N, metadata: { worktree_path: worktree_path, plan_path: plan_path, git_range: X..Y }
-
-    Spawn reviewer-N teammate
-    Print: "Phase N executed. Reviewing..."
-
-if message contains "execute-N error" or "session_died":
-    exec_task = TaskGet: execute-phase-N
-    retry_count = exec_task.metadata.retry_count or 0
-    if retry_count < 1:
-        TaskUpdate: execute-phase-N, metadata: { retry_count: retry_count + 1, last_error: "<error text>" }
-        Print: "Executor error, retrying (attempt ${retry_count + 1})..."
-        Respawn executor-N teammate
-    else:
-        Print: "Executor failed after retry. Error: <error text>"
-        # Graceful exit (see error handling section below)
+if message contains "session_died" or "error":
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
+    # If can_retry: respawn executor; else escalate
 ```
 
 **On reviewer-N message:**
 ```
 if message contains "review-N complete (pass)":
-    TaskUpdate: review-phase-N, status: completed
-    TaskUpdate: review-phase-N, metadata: { status: "pass" }
-
-    if N < TOTAL_PHASES:
-        # Check for existing plan before spawning planner
-        NEXT_PHASE = N + 1
-        # Plans are written to docs/plans/*-phase-N.md by the planner
-        PLAN_FILE = glob("{worktree_path}/docs/plans/*-phase-{NEXT_PHASE}.md") (first match or empty)
-        if PLAN_FILE exists:
-            # Reuse existing plan
-            TaskUpdate: plan-phase-{NEXT_PHASE}, status: completed
-            TaskUpdate: plan-phase-{NEXT_PHASE}, metadata: { plan_path: PLAN_FILE }
-            Print: "Reusing existing plan for phase {NEXT_PHASE}."
-            # Proceed directly to spawning executor for phase NEXT_PHASE
-        else:
-            Spawn planner-(N+1) teammate
-        Print: "Phase N passed review. Planning phase N+1..."
-    else:
-        # Last phase - finalize
-        Mark finalize as in_progress
-        Invoke tina:finishing-a-development-branch
-        Print: "All phases complete. Ready for merge/PR workflow."
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event review_pass
+    TaskUpdate: review-phase-N, status: completed, metadata: { status: "pass" }
+    # Dispatch NEXT_ACTION (spawn next planner, finalize, or complete)
 
 if message contains "review-N complete (gaps)":
-    Parse: issues list from message
-    TaskUpdate: review-phase-N, status: completed
-    TaskUpdate: review-phase-N, metadata: { status: "gaps", issues: [...] }
+    Parse: issues from message
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event review_gaps --issues "issue1,issue2"
+    TaskUpdate: review-phase-N, status: completed, metadata: { status: "gaps", issues: [...] }
 
-    # Check remediation depth (max 2 remediation cycles)
-    REMEDIATION_DEPTH = count of ".5" in phase number (e.g., "1.5" = 1, "1.5.5" = 2)
-    if REMEDIATION_DEPTH >= 2:
-        Print: "ERROR: Phase N has failed review after 2 remediation attempts"
-        Print: "Manual intervention required. Issues: <issues list>"
-        Exit orchestration
+    # If NEXT_ACTION is "remediate":
+    #   Create remediation tasks (plan/execute/review for .remediation_phase)
+    #   Set up dependencies
+    #   Spawn planner for .remediation_phase
+    # If NEXT_ACTION is "error" with can_retry: false:
+    #   Print: "ERROR: Phase N failed after 2 remediation attempts"
+    #   Exit orchestration
 
-    # Calculate remediation phase number
-    if N is integer:
-        REMEDIATION_PHASE = "${N}.5"
-    else:
-        # Already a remediation phase (e.g., 1.5), add another .5
-        REMEDIATION_PHASE = "${N}.5"
-
-    # Create remediation tasks with metadata
-    TaskCreate {
-        "subject": "plan-phase-${REMEDIATION_PHASE}",
-        "description": "Plan remediation",
-        "activeForm": "Planning phase ${REMEDIATION_PHASE} remediation",
-        "metadata": {
-            "phase_num": "${REMEDIATION_PHASE}",
-            "parent_phase": N,
-            "issues": [...],
-            "design_doc_path": "<DESIGN_DOC>",
-            "model_override": "<MODEL_OVERRIDE or empty>",
-            "remediation_depth": REMEDIATION_DEPTH + 1
-        }
-    }
-
-    TaskCreate {
-        "subject": "execute-phase-${REMEDIATION_PHASE}",
-        "description": "Execute remediation plan",
-        "activeForm": "Executing phase ${REMEDIATION_PHASE} remediation",
-        "metadata": {
-            "phase_num": "${REMEDIATION_PHASE}",
-            "feature_name": "<FEATURE_NAME>"
-        }
-    }
-
-    TaskCreate {
-        "subject": "review-phase-${REMEDIATION_PHASE}",
-        "description": "Review remediation",
-        "activeForm": "Reviewing phase ${REMEDIATION_PHASE} remediation",
-        "metadata": {
-            "phase_num": "${REMEDIATION_PHASE}",
-            "design_doc_path": "<DESIGN_DOC>"
-        }
-    }
-
-    # Set up dependencies
-    TaskUpdate: execute-phase-${REMEDIATION_PHASE}, addBlockedBy: [plan-phase-${REMEDIATION_PHASE}]
-    TaskUpdate: review-phase-${REMEDIATION_PHASE}, addBlockedBy: [execute-phase-${REMEDIATION_PHASE}]
-
-    # Find the next main phase (or finalize) and add remediation as blocker
-    NEXT_PHASE = ceiling of N + 1  # e.g., 1.5 -> plan-phase-2, 2 -> plan-phase-3
-    if NEXT_PHASE <= TOTAL_PHASES:
-        TaskUpdate: plan-phase-${NEXT_PHASE}, addBlockedBy: [review-phase-${REMEDIATION_PHASE}]
-    else:
-        TaskUpdate: finalize, addBlockedBy: [review-phase-${REMEDIATION_PHASE}]
-
-    # Spawn remediation planner (metadata already set during TaskCreate)
-    Spawn phase-planner with task_id: plan-phase-${REMEDIATION_PHASE}
-
-    Print: "Phase ${N} has gaps. Creating remediation phase ${REMEDIATION_PHASE}..."
-
-if message contains "review-N error":
-    review_task = TaskGet: review-phase-N
-    retry_count = review_task.metadata.retry_count or 0
-    if retry_count < 1:
-        TaskUpdate: review-phase-N, metadata: { retry_count: retry_count + 1, last_error: "<error text>" }
-        Print: "Reviewer error, retrying (attempt ${retry_count + 1})..."
-        Respawn reviewer-N teammate
-    else:
-        Print: "Reviewer failed after retry. Error: <error text>"
-        # Graceful exit (see error handling section below)
+if message contains "error":
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
+    # If can_retry: respawn reviewer; else escalate
 ```
 
-**Error handling:**
-
-For any error message:
-1. Log the full error
-2. Check if this is first retry (look at task metadata.retry_count)
-3. If first retry: respawn the teammate
-4. If second failure: graceful exit with cleanup instructions
-
-**Retry tracking:**
+**Error handling and retry tracking:**
 
 Track retries in task metadata:
 ```json
@@ -948,7 +819,7 @@ To resume after fixing the issue:
   /tina:orchestrate <design-doc-path>
 
 To reset and start fresh:
-  rm -rf ~/.claude/teams/${TEAM_NAME}/
+  rm -rf ~/.claude/teams/${TEAM_NAME}.json
   rm -rf ~/.claude/tasks/${TEAM_NAME}/
   /tina:orchestrate <design-doc-path>
 
@@ -1095,7 +966,7 @@ FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
 TEAM_NAME="${FEATURE_NAME}-orchestration"
 
 # Check if team config exists
-TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}/config.json"
+TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}.json"
 if [ -f "$TEAM_CONFIG" ]; then
     echo "Found existing orchestration team: $TEAM_NAME"
     # Resume from task list
@@ -1189,8 +1060,8 @@ TaskUpdate { taskId: "review-phase-1", status: "completed", metadata: { manual_s
 
 4. **Clean up and restart:**
 ```
-# Delete team directory and task directory
-rm -rf ~/.claude/teams/${TEAM_NAME}/
+# Delete team config and task directory
+rm -rf ~/.claude/teams/${TEAM_NAME}.json
 rm -rf ~/.claude/tasks/${TEAM_NAME}/
 # Then rerun orchestrate for fresh start
 ```
@@ -1394,7 +1265,7 @@ Before using orchestration on real work, verify these behaviors manually:
 - [ ] If third would be needed, verify orchestration exits with error
 
 **Cleanup:**
-- [ ] After testing: `rm -rf ~/.claude/teams/minimal-orchestration-test-orchestration/`
+- [ ] After testing: `rm -rf ~/.claude/teams/minimal-orchestration-test-orchestration.json`
 - [ ] After testing: `rm -rf ~/.claude/tasks/minimal-orchestration-test-orchestration/`
 - [ ] After testing: `rm -rf .worktrees/minimal-orchestration-test/`
 
@@ -1443,7 +1314,7 @@ Common issues and their resolutions:
 1. If resuming: skip team creation, go to STEP 5b (Resume Logic)
 2. If starting fresh: clean up first:
    ```bash
-   rm -rf ~/.claude/teams/<team-name>/
+   rm -rf ~/.claude/teams/<team-name>.json
    rm -rf ~/.claude/tasks/<team-name>/
    ```
 
