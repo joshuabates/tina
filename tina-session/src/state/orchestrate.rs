@@ -163,7 +163,8 @@ fn find_plan_in_docs(worktree_path: &Path, feature: &str, phase: &str) -> Option
 }
 
 fn reuse_plan_if_present(
-    state: &mut SupervisorState,
+    worktree_path: &Path,
+    feature: &str,
     phase_key: &str,
     phase_state: &mut PhaseState,
     now: chrono::DateTime<Utc>,
@@ -182,7 +183,7 @@ fn reuse_plan_if_present(
         }
     }
 
-    if let Some(found) = find_plan_in_docs(&state.worktree_path, &state.feature, phase_key) {
+    if let Some(found) = find_plan_in_docs(worktree_path, feature, phase_key) {
         let plan_path = found.to_string_lossy().to_string();
         phase_state.plan_path = Some(found);
         phase_state.status = PhaseStatus::Planned;
@@ -277,11 +278,12 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                         .blocked_reason
                         .clone()
                         .unwrap_or_else(|| "unknown".to_string());
+                    let can_retry = !reason.contains("consensus disagreement");
                     return Ok(Action::Error {
                         phase: key,
                         reason,
                         retry_count: 0,
-                        can_retry: !reason.contains("consensus disagreement"),
+                        can_retry,
                     });
                 }
                 PhaseStatus::Complete => {
@@ -315,13 +317,17 @@ pub fn advance_state(
             // Validation passed - start phase 1 planning
             let phase_key = "1".to_string();
             ensure_phase(state, &phase_key);
+            let worktree_path = state.worktree_path.clone();
+            let feature = state.feature.clone();
             let phase_state = state.phases.get_mut(&phase_key).unwrap();
             phase_state.planning_started_at = Some(now);
             phase_state.status = PhaseStatus::Planning;
             state.status = OrchestrationStatus::Planning;
             state.current_phase = 1;
 
-            if let Some(action) = reuse_plan_if_present(state, &phase_key, phase_state, now) {
+            if let Some(action) =
+                reuse_plan_if_present(&worktree_path, &feature, &phase_key, phase_state, now)
+            {
                 return Ok(action);
             }
 
@@ -460,13 +466,17 @@ pub fn advance_state(
                 Some(next) => {
                     let next_key = next.to_string();
                     ensure_phase(state, &next_key);
+                    let worktree_path = state.worktree_path.clone();
+                    let feature = state.feature.clone();
                     let next_state = state.phases.get_mut(&next_key).unwrap();
                     next_state.planning_started_at = Some(now);
                     next_state.status = PhaseStatus::Planning;
                     state.status = OrchestrationStatus::Planning;
                     state.current_phase = next;
 
-                    if let Some(action) = reuse_plan_if_present(state, &next_key, next_state, now) {
+                    if let Some(action) =
+                        reuse_plan_if_present(&worktree_path, &feature, &next_key, next_state, now)
+                    {
                         return Ok(action);
                     }
 
