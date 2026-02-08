@@ -80,6 +80,8 @@ pub struct RunConfig {
     pub full: bool,
     /// Force re-run even if baseline exists
     pub force_baseline: bool,
+    /// Skip binary rebuild (use existing binaries)
+    pub skip_build: bool,
 }
 
 /// Run the command with the given config
@@ -88,6 +90,25 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
     let scenario_dir = config.scenarios_dir.join(scenario_name);
     let scenario = load_scenario(&scenario_dir)
         .with_context(|| format!("Failed to load scenario: {}", scenario_name))?;
+
+    // Rebuild binaries unless --skip-build
+    if !config.skip_build {
+        // Project root is two levels up from scenarios_dir:
+        // scenarios_dir = <root>/tina-harness/scenarios
+        let project_root = config
+            .scenarios_dir
+            .parent() // tina-harness/
+            .and_then(|p| p.parent()) // <root>/
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Cannot determine project root from scenarios_dir: {}",
+                    config.scenarios_dir.display()
+                )
+            })?;
+        rebuild_binaries(project_root)?;
+    } else {
+        eprintln!("Skipping binary rebuild (--skip-build)");
+    }
 
     // Create work directory
     let scenario_work_dir = config.work_dir.join(&scenario.name);
@@ -325,6 +346,70 @@ fn detect_claude_binary() -> &'static str {
 
     // Default to claude and let it fail with a clear error
     "claude"
+}
+
+/// Rebuild tina-session and tina-daemon binaries from source.
+///
+/// Each crate is built individually since there is no workspace Cargo.toml.
+/// The symlinks at `~/.local/bin/` point to `target/debug/`, so a debug
+/// build is sufficient to update the binaries on PATH.
+///
+/// If tina-daemon is running, it is restarted after the rebuild so it
+/// picks up the new binary.
+fn rebuild_binaries(project_root: &Path) -> Result<()> {
+    eprintln!("Rebuilding tina binaries...");
+
+    // Build tina-session
+    let session_dir = project_root.join("tina-session");
+    eprintln!("  Building tina-session...");
+    let output = Command::new("cargo")
+        .args(["build"])
+        .current_dir(&session_dir)
+        .output()
+        .context("Failed to run cargo build for tina-session")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "tina-session build failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    // Build tina-daemon
+    let daemon_dir = project_root.join("tina-daemon");
+    eprintln!("  Building tina-daemon...");
+    let output = Command::new("cargo")
+        .args(["build"])
+        .current_dir(&daemon_dir)
+        .output()
+        .context("Failed to run cargo build for tina-daemon")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "tina-daemon build failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    // Restart daemon if running so it picks up the new binary
+    if check_daemon_running() {
+        eprintln!("  Restarting tina-daemon with new binary...");
+        let _ = Command::new("tina-daemon").arg("stop").output();
+        std::thread::sleep(Duration::from_millis(500));
+        let _ = Command::new("tina-daemon").arg("start").output();
+    }
+
+    eprintln!("Binary rebuild complete.");
+    Ok(())
+}
+
+/// Check if tina-daemon is running by looking for the process.
+fn check_daemon_running() -> bool {
+    Command::new("pgrep")
+        .args(["-f", "tina-daemon"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 /// Clean up stale state from a previous orchestration run for this feature.
@@ -816,5 +901,25 @@ mod tests {
         let failures = validate_outcome(temp.path(), &expected, &state);
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].category, FailureCategory::Outcome);
+    }
+
+    #[test]
+    fn test_rebuild_binaries_fails_with_bad_path() {
+        let bad_path = Path::new("/tmp/nonexistent-tina-project");
+        let result = rebuild_binaries(bad_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_run_config_has_skip_build() {
+        let config = RunConfig {
+            scenarios_dir: PathBuf::from("/tmp"),
+            test_project_dir: PathBuf::from("/tmp"),
+            work_dir: PathBuf::from("/tmp"),
+            full: false,
+            force_baseline: false,
+            skip_build: true,
+        };
+        assert!(config.skip_build);
     }
 }

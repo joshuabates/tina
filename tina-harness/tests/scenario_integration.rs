@@ -151,6 +151,7 @@ fn test_run_scenario_passes_without_file_checks() {
         work_dir,
         full: false,
         force_baseline: false,
+        skip_build: true,
     };
 
     let result = run("01-pass", &config).unwrap();
@@ -184,6 +185,7 @@ fn test_run_scenario_fails_on_missing_content() {
         work_dir,
         full: false,
         force_baseline: false,
+        skip_build: true,
     };
 
     let result = run("01-fail", &config).unwrap();
@@ -221,6 +223,7 @@ fn test_run_scenario_fails_on_phase_mismatch() {
         work_dir,
         full: false,
         force_baseline: false,
+        skip_build: true,
     };
 
     let result = run("01-phases", &config).unwrap();
@@ -264,6 +267,7 @@ edition = "2021"
         work_dir,
         full: false,
         force_baseline: false,
+        skip_build: true,
     };
 
     let result = run("01-broken", &config).unwrap();

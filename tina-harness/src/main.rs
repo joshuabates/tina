@@ -43,6 +43,10 @@ enum Commands {
         #[arg(long)]
         force_baseline: bool,
 
+        /// Skip binary rebuild (use existing binaries)
+        #[arg(long)]
+        skip_build: bool,
+
         /// Path to scenarios directory (default: ./scenarios)
         #[arg(long)]
         scenarios_dir: Option<PathBuf>,
@@ -119,6 +123,7 @@ fn main() -> anyhow::Result<()> {
             full,
             verify,
             force_baseline,
+            skip_build,
             scenarios_dir,
             test_project_dir,
             work_dir,
@@ -136,6 +141,7 @@ fn main() -> anyhow::Result<()> {
                 work_dir,
                 full,
                 force_baseline,
+                skip_build,
             };
 
             let result = commands::run::run(&scenario, &config)?;
