@@ -28,6 +28,9 @@ fn node_registration_to_args(reg: &NodeRegistration) -> BTreeMap<String, Value> 
 pub fn orchestration_to_args(orch: &OrchestrationRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("nodeId".into(), Value::from(orch.node_id.as_str()));
+    if let Some(ref pid) = orch.project_id {
+        args.insert("projectId".into(), Value::from(pid.as_str()));
+    }
     args.insert(
         "featureName".into(),
         Value::from(orch.feature_name.as_str()),
@@ -249,6 +252,7 @@ fn value_as_id(map: &BTreeMap<String, Value>, key: &str) -> String {
 fn extract_orchestration_record(obj: &BTreeMap<String, Value>) -> OrchestrationRecord {
     OrchestrationRecord {
         node_id: value_as_id(obj, "nodeId"),
+        project_id: value_as_opt_str(obj, "projectId"),
         feature_name: value_as_str(obj, "featureName"),
         design_doc_path: value_as_str(obj, "designDocPath"),
         branch: value_as_str(obj, "branch"),
@@ -429,6 +433,22 @@ impl TinaConvexClient {
         extract_unit(result)
     }
 
+    /// Find or create a project by repo path.
+    pub async fn find_or_create_project(
+        &mut self,
+        name: &str,
+        repo_path: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("name".into(), Value::from(name));
+        args.insert("repoPath".into(), Value::from(repo_path));
+        let result = self
+            .client
+            .mutation("projects:findOrCreateByRepoPath", args)
+            .await?;
+        extract_id(result)
+    }
+
     /// Create or update an orchestration record.
     pub async fn upsert_orchestration(&mut self, orch: &OrchestrationRecord) -> Result<String> {
         let args = orchestration_to_args(orch);
@@ -571,6 +591,7 @@ mod tests {
     fn test_orchestration_to_args_all_fields() {
         let orch = OrchestrationRecord {
             node_id: "node-123".to_string(),
+            project_id: None,
             feature_name: "auth-system".to_string(),
             design_doc_path: "docs/auth.md".to_string(),
             branch: "tina/auth-system".to_string(),
@@ -618,6 +639,7 @@ mod tests {
     fn test_orchestration_to_args_optional_fields_omitted() {
         let orch = OrchestrationRecord {
             node_id: "node-123".to_string(),
+            project_id: None,
             feature_name: "auth".to_string(),
             design_doc_path: "docs/auth.md".to_string(),
             branch: "tina/auth".to_string(),

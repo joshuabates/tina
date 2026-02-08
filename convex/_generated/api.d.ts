@@ -13,6 +13,8 @@ import type * as events from "../events.js";
 import type * as nodes from "../nodes.js";
 import type * as orchestrations from "../orchestrations.js";
 import type * as phases from "../phases.js";
+import type * as projects from "../projects.js";
+import type * as supervisorStates from "../supervisorStates.js";
 import type * as tasks from "../tasks.js";
 import type * as teamMembers from "../teamMembers.js";
 
@@ -28,6 +30,8 @@ declare const fullApi: ApiFromModules<{
   nodes: typeof nodes;
   orchestrations: typeof orchestrations;
   phases: typeof phases;
+  projects: typeof projects;
+  supervisorStates: typeof supervisorStates;
   tasks: typeof tasks;
   teamMembers: typeof teamMembers;
 }>;

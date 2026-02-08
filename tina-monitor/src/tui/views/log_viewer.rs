@@ -239,6 +239,7 @@ mod tests {
             node_name: "macbook".to_string(),
             record: tina_data::OrchestrationRecord {
                 node_id: "node-1".to_string(),
+                project_id: None,
                 feature_name: "test-project".to_string(),
                 design_doc_path: "design.md".to_string(),
                 branch: "tina/test-project".to_string(),

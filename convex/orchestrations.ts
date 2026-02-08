@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export const upsertOrchestration = mutation({
   args: {
     nodeId: v.id("nodes"),
+    projectId: v.optional(v.id("projects")),
     featureName: v.string(),
     designDocPath: v.string(),
     branch: v.string(),
@@ -23,7 +24,7 @@ export const upsertOrchestration = mutation({
       .first();
 
     if (existing) {
-      await ctx.db.patch(existing._id, {
+      const patch: Record<string, unknown> = {
         designDocPath: args.designDocPath,
         branch: args.branch,
         worktreePath: args.worktreePath,
@@ -33,7 +34,11 @@ export const upsertOrchestration = mutation({
         startedAt: args.startedAt,
         completedAt: args.completedAt,
         totalElapsedMins: args.totalElapsedMins,
-      });
+      };
+      if (args.projectId !== undefined) {
+        patch.projectId = args.projectId;
+      }
+      await ctx.db.patch(existing._id, patch);
       return existing._id;
     }
 
@@ -45,6 +50,34 @@ export const listOrchestrations = query({
   args: {},
   handler: async (ctx) => {
     const orchestrations = await ctx.db.query("orchestrations").collect();
+
+    const results = await Promise.all(
+      orchestrations.map(async (orch) => {
+        const node = await ctx.db.get(orch.nodeId);
+        return {
+          ...orch,
+          nodeName: node?.name ?? "unknown",
+        };
+      }),
+    );
+
+    return results.sort((a, b) => {
+      if (a.startedAt > b.startedAt) return -1;
+      if (a.startedAt < b.startedAt) return 1;
+      return 0;
+    });
+  },
+});
+
+export const listByProject = query({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, args) => {
+    const orchestrations = await ctx.db
+      .query("orchestrations")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
 
     const results = await Promise.all(
       orchestrations.map(async (orch) => {

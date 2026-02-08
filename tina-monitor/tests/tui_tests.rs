@@ -110,6 +110,7 @@ fn make_test_orchestration(name: &str) -> MonitorOrchestration {
         node_name: "test".to_string(),
         record: tina_data::OrchestrationRecord {
             node_id: "node-1".to_string(),
+            project_id: None,
             feature_name: name.to_string(),
             design_doc_path: "/test/design.md".to_string(),
             branch: format!("tina/{}", name),

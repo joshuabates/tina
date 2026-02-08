@@ -1,9 +1,21 @@
 import type { Id } from "@convex/_generated/dataModel";
 
+export interface Project {
+  _id: Id<"projects">;
+  _creationTime: number;
+  name: string;
+  repoPath: string;
+  createdAt: string;
+  orchestrationCount: number;
+  latestFeature: string | null;
+  latestStatus: string | null;
+}
+
 export interface Orchestration {
   _id: Id<"orchestrations">;
   _creationTime: number;
   nodeId: Id<"nodes">;
+  projectId?: Id<"projects">;
   featureName: string;
   designDocPath: string;
   branch: string;

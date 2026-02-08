@@ -12,6 +12,7 @@ pub struct NodeRegistration {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationRecord {
     pub node_id: String,
+    pub project_id: Option<String>,
     pub feature_name: String,
     pub design_doc_path: String,
     pub branch: String,

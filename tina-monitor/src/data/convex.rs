@@ -430,6 +430,7 @@ mod tests {
             node_name: "macbook".to_string(),
             record: tina_data::OrchestrationRecord {
                 node_id: "node-1".to_string(),
+                project_id: None,
                 feature_name: "auth-system".to_string(),
                 design_doc_path: "docs/auth.md".to_string(),
                 branch: "tina/auth".to_string(),
@@ -459,6 +460,7 @@ mod tests {
             node_name: "macbook".to_string(),
             record: tina_data::OrchestrationRecord {
                 node_id: "node-1".to_string(),
+                project_id: None,
                 feature_name: "test".to_string(),
                 design_doc_path: "docs/test.md".to_string(),
                 branch: "tina/test".to_string(),
@@ -548,6 +550,7 @@ mod tests {
             node_name: "macbook".to_string(),
             record: tina_data::OrchestrationRecord {
                 node_id: "node-1".to_string(),
+                project_id: None,
                 feature_name: "auth-system".to_string(),
                 design_doc_path: "docs/auth.md".to_string(),
                 branch: "tina/auth".to_string(),
