@@ -25,7 +25,7 @@ fn node_registration_to_args(reg: &NodeRegistration) -> BTreeMap<String, Value> 
     args
 }
 
-fn orchestration_to_args(orch: &OrchestrationRecord) -> BTreeMap<String, Value> {
+pub fn orchestration_to_args(orch: &OrchestrationRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("nodeId".into(), Value::from(orch.node_id.as_str()));
     args.insert(
@@ -53,7 +53,7 @@ fn orchestration_to_args(orch: &OrchestrationRecord) -> BTreeMap<String, Value> 
     args
 }
 
-fn phase_to_args(phase: &PhaseRecord) -> BTreeMap<String, Value> {
+pub fn phase_to_args(phase: &PhaseRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert(
         "orchestrationId".into(),
@@ -119,7 +119,7 @@ fn task_event_to_args(event: &TaskEventRecord) -> BTreeMap<String, Value> {
     args
 }
 
-fn orchestration_event_to_args(event: &OrchestrationEventRecord) -> BTreeMap<String, Value> {
+pub fn orchestration_event_to_args(event: &OrchestrationEventRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert(
         "orchestrationId".into(),
@@ -223,14 +223,6 @@ fn value_as_opt_str(map: &BTreeMap<String, Value>, key: &str) -> Option<String> 
     }
 }
 
-fn value_as_i64(map: &BTreeMap<String, Value>, key: &str) -> i64 {
-    match map.get(key) {
-        Some(Value::Int64(n)) => *n,
-        Some(Value::Float64(f)) => *f as i64,
-        _ => 0,
-    }
-}
-
 fn value_as_f64(map: &BTreeMap<String, Value>, key: &str) -> f64 {
     match map.get(key) {
         Some(Value::Float64(f)) => *f,
@@ -254,21 +246,27 @@ fn value_as_id(map: &BTreeMap<String, Value>, key: &str) -> String {
     }
 }
 
-fn extract_orchestration_from_obj(obj: &BTreeMap<String, Value>) -> OrchestrationListEntry {
-    OrchestrationListEntry {
-        id: value_as_id(obj, "_id"),
+fn extract_orchestration_record(obj: &BTreeMap<String, Value>) -> OrchestrationRecord {
+    OrchestrationRecord {
         node_id: value_as_id(obj, "nodeId"),
-        node_name: value_as_str(obj, "nodeName"),
         feature_name: value_as_str(obj, "featureName"),
         design_doc_path: value_as_str(obj, "designDocPath"),
         branch: value_as_str(obj, "branch"),
         worktree_path: value_as_opt_str(obj, "worktreePath"),
-        total_phases: value_as_i64(obj, "totalPhases"),
-        current_phase: value_as_i64(obj, "currentPhase"),
+        total_phases: value_as_f64(obj, "totalPhases"),
+        current_phase: value_as_f64(obj, "currentPhase"),
         status: value_as_str(obj, "status"),
         started_at: value_as_str(obj, "startedAt"),
         completed_at: value_as_opt_str(obj, "completedAt"),
         total_elapsed_mins: value_as_opt_f64(obj, "totalElapsedMins"),
+    }
+}
+
+fn extract_orchestration_from_obj(obj: &BTreeMap<String, Value>) -> OrchestrationListEntry {
+    OrchestrationListEntry {
+        id: value_as_id(obj, "_id"),
+        node_name: value_as_str(obj, "nodeName"),
+        record: extract_orchestration_record(obj),
     }
 }
 
@@ -371,18 +369,8 @@ fn extract_orchestration_detail(result: FunctionResult) -> Result<Option<Orchest
 
             Ok(Some(OrchestrationDetailResponse {
                 id: value_as_id(&obj, "_id"),
-                node_id: value_as_id(&obj, "nodeId"),
                 node_name: value_as_str(&obj, "nodeName"),
-                feature_name: value_as_str(&obj, "featureName"),
-                design_doc_path: value_as_str(&obj, "designDocPath"),
-                branch: value_as_str(&obj, "branch"),
-                worktree_path: value_as_opt_str(&obj, "worktreePath"),
-                total_phases: value_as_i64(&obj, "totalPhases"),
-                current_phase: value_as_i64(&obj, "currentPhase"),
-                status: value_as_str(&obj, "status"),
-                started_at: value_as_str(&obj, "startedAt"),
-                completed_at: value_as_opt_str(&obj, "completedAt"),
-                total_elapsed_mins: value_as_opt_f64(&obj, "totalElapsedMins"),
+                record: extract_orchestration_record(&obj),
                 phases,
                 tasks,
                 team_members,
@@ -587,8 +575,8 @@ mod tests {
             design_doc_path: "docs/auth.md".to_string(),
             branch: "tina/auth-system".to_string(),
             worktree_path: Some("/path/to/worktree".to_string()),
-            total_phases: 3,
-            current_phase: 2,
+            total_phases: 3.0,
+            current_phase: 2.0,
             status: "executing".to_string(),
             started_at: "2026-02-07T10:00:00Z".to_string(),
             completed_at: Some("2026-02-07T12:00:00Z".to_string()),
@@ -608,8 +596,8 @@ mod tests {
             args.get("worktreePath"),
             Some(&Value::from("/path/to/worktree"))
         );
-        assert_eq!(args.get("totalPhases"), Some(&Value::from(3i64)));
-        assert_eq!(args.get("currentPhase"), Some(&Value::from(2i64)));
+        assert_eq!(args.get("totalPhases"), Some(&Value::from(3.0f64)));
+        assert_eq!(args.get("currentPhase"), Some(&Value::from(2.0f64)));
         assert_eq!(args.get("status"), Some(&Value::from("executing")));
         assert_eq!(
             args.get("startedAt"),
@@ -634,8 +622,8 @@ mod tests {
             design_doc_path: "docs/auth.md".to_string(),
             branch: "tina/auth".to_string(),
             worktree_path: None,
-            total_phases: 1,
-            current_phase: 1,
+            total_phases: 1.0,
+            current_phase: 1.0,
             status: "planning".to_string(),
             started_at: "2026-02-07T10:00:00Z".to_string(),
             completed_at: None,

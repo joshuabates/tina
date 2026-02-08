@@ -330,8 +330,8 @@ pub fn supervisor_state_to_orchestration_record(
         design_doc_path: state.design_doc.display().to_string(),
         branch: state.branch.clone(),
         worktree_path: Some(state.worktree_path.display().to_string()),
-        total_phases: state.total_phases as i64,
-        current_phase: state.current_phase as i64,
+        total_phases: state.total_phases as f64,
+        current_phase: state.current_phase as f64,
         status: format!("{:?}", state.status).to_lowercase(),
         started_at: state.orchestration_started_at.to_rfc3339(),
         completed_at: None,
@@ -681,8 +681,8 @@ mod tests {
         assert_eq!(record.design_doc_path, "docs/auth.md");
         assert_eq!(record.branch, "tina/auth-system");
         assert_eq!(record.worktree_path, Some("/worktrees/auth-system".to_string()));
-        assert_eq!(record.total_phases, 3);
-        assert_eq!(record.current_phase, 1);
+        assert_eq!(record.total_phases, 3.0);
+        assert_eq!(record.current_phase, 1.0);
         assert_eq!(record.status, "planning");
         assert!(record.completed_at.is_none());
         assert!(record.total_elapsed_mins.is_none());

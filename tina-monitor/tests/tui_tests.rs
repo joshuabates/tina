@@ -107,18 +107,20 @@ fn test_empty_state_navigation() {
 fn make_test_orchestration(name: &str) -> MonitorOrchestration {
     MonitorOrchestration::from_list_entry(OrchestrationListEntry {
         id: format!("orch-{}", name),
-        node_id: "node-1".to_string(),
         node_name: "test".to_string(),
-        feature_name: name.to_string(),
-        design_doc_path: "/test/design.md".to_string(),
-        branch: format!("tina/{}", name),
-        worktree_path: Some("/test".to_string()),
-        total_phases: 3,
-        current_phase: 1,
-        status: "idle".to_string(),
-        started_at: "2026-02-07T10:00:00Z".to_string(),
-        completed_at: None,
-        total_elapsed_mins: None,
+        record: tina_data::OrchestrationRecord {
+            node_id: "node-1".to_string(),
+            feature_name: name.to_string(),
+            design_doc_path: "/test/design.md".to_string(),
+            branch: format!("tina/{}", name),
+            worktree_path: Some("/test".to_string()),
+            total_phases: 3.0,
+            current_phase: 1.0,
+            status: "idle".to_string(),
+            started_at: "2026-02-07T10:00:00Z".to_string(),
+            completed_at: None,
+            total_elapsed_mins: None,
+        },
     })
 }
 

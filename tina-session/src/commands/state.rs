@@ -217,6 +217,39 @@ pub fn blocked(feature: &str, phase: &str, reason: &str) -> anyhow::Result<u8> {
 }
 
 /// Upsert a single phase record to Convex.
+/// Build an OrchestrationRecord from SupervisorState (no node_id - filled by writer).
+fn state_to_orch_args(feature: &str, state: &SupervisorState) -> convex_writes::OrchestrationArgs {
+    convex_writes::OrchestrationArgs {
+        node_id: String::new(), // filled by writer
+        feature_name: feature.to_string(),
+        design_doc_path: state.design_doc.to_string_lossy().to_string(),
+        branch: state.branch.clone(),
+        worktree_path: Some(state.worktree_path.to_string_lossy().to_string()),
+        total_phases: state.total_phases as f64,
+        current_phase: state.current_phase as f64,
+        status: orch_status_str(state.status).to_string(),
+        started_at: state.orchestration_started_at.to_rfc3339(),
+        completed_at: None,
+        total_elapsed_mins: None,
+    }
+}
+
+/// Build a PhaseRecord from PhaseState (orchestration_id filled after upsert).
+fn phase_state_to_args(phase_key: &str, ps: &PhaseState) -> convex_writes::PhaseArgs {
+    convex_writes::PhaseArgs {
+        orchestration_id: String::new(), // filled after upsert
+        phase_number: phase_key.to_string(),
+        status: ps.status.to_string(),
+        plan_path: ps.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+        git_range: ps.git_range.clone(),
+        planning_mins: ps.breakdown.planning_mins.map(|m| m as f64),
+        execution_mins: ps.breakdown.execution_mins.map(|m| m as f64),
+        review_mins: ps.breakdown.review_mins.map(|m| m as f64),
+        started_at: ps.planning_started_at.map(|dt| dt.to_rfc3339()),
+        completed_at: ps.completed_at.map(|dt| dt.to_rfc3339()),
+    }
+}
+
 fn upsert_phase_to_convex(
     feature: &str,
     phase: &str,
@@ -227,43 +260,14 @@ fn upsert_phase_to_convex(
         None => return Ok(()),
     };
 
-    let feature = feature.to_string();
-    let design_doc = state.design_doc.to_string_lossy().to_string();
-    let branch = state.branch.clone();
-    let worktree = state.worktree_path.to_string_lossy().to_string();
-    let started_at = state.orchestration_started_at.to_rfc3339();
-    let status_str = orch_status_str(state.status).to_string();
-    let total_phases = state.total_phases as i64;
-    let current_phase = state.current_phase as i64;
-
-    let phase_key = phase.to_string();
-    let phase_status = phase_state.status.to_string();
-    let plan_path = phase_state.plan_path.as_ref().map(|p| p.to_string_lossy().to_string());
-    let git_range = phase_state.git_range.clone();
-    let planning_mins = phase_state.breakdown.planning_mins;
-    let execution_mins = phase_state.breakdown.execution_mins;
-    let review_mins = phase_state.breakdown.review_mins;
-    let sa = phase_state.planning_started_at.map(|dt| dt.to_rfc3339());
-    let ca = phase_state.completed_at.map(|dt| dt.to_rfc3339());
+    let mut orch = state_to_orch_args(feature, state);
+    let mut phase_args = phase_state_to_args(phase, phase_state);
 
     convex_writes::run_convex_write(|mut writer| async move {
-        let orch_id = writer
-            .upsert_orchestration(
-                &feature, &design_doc, &branch, Some(&worktree),
-                total_phases, current_phase, &status_str, &started_at,
-                None, None,
-            )
-            .await?;
-
-        writer
-            .upsert_phase(
-                &orch_id, &phase_key, &phase_status,
-                plan_path.as_deref(), git_range.as_deref(),
-                planning_mins, execution_mins, review_mins,
-                sa.as_deref(), ca.as_deref(),
-            )
-            .await?;
-
+        orch.node_id = writer.node_id().to_string();
+        let orch_id = writer.upsert_orchestration(&orch).await?;
+        phase_args.orchestration_id = orch_id;
+        writer.upsert_phase(&phase_args).await?;
         Ok(())
     })
 }
@@ -274,49 +278,16 @@ fn sync_state_to_convex(
     phase: &str,
     state: &SupervisorState,
 ) -> anyhow::Result<()> {
-    let feature = feature.to_string();
-    let design_doc = state.design_doc.to_string_lossy().to_string();
-    let branch = state.branch.clone();
-    let worktree = state.worktree_path.to_string_lossy().to_string();
-    let started_at = state.orchestration_started_at.to_rfc3339();
-    let status_str = orch_status_str(state.status).to_string();
-    let total_phases = state.total_phases as i64;
-    let current_phase = state.current_phase as i64;
-
-    let phase_key = phase.to_string();
-    let phase_data = state.phases.get(phase).map(|ps| {
-        (
-            ps.status.to_string(),
-            ps.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-            ps.git_range.clone(),
-            ps.breakdown.planning_mins,
-            ps.breakdown.execution_mins,
-            ps.breakdown.review_mins,
-            ps.planning_started_at.map(|dt| dt.to_rfc3339()),
-            ps.completed_at.map(|dt| dt.to_rfc3339()),
-        )
-    });
+    let mut orch = state_to_orch_args(feature, state);
+    let phase_args = state.phases.get(phase).map(|ps| phase_state_to_args(phase, ps));
 
     convex_writes::run_convex_write(|mut writer| async move {
-        let orch_id = writer
-            .upsert_orchestration(
-                &feature, &design_doc, &branch, Some(&worktree),
-                total_phases, current_phase, &status_str, &started_at,
-                None, None,
-            )
-            .await?;
+        orch.node_id = writer.node_id().to_string();
+        let orch_id = writer.upsert_orchestration(&orch).await?;
 
-        if let Some((status, plan_path, git_range, plan_mins, exec_mins, rev_mins, sa, ca)) =
-            &phase_data
-        {
-            writer
-                .upsert_phase(
-                    &orch_id, &phase_key, status,
-                    plan_path.as_deref(), git_range.as_deref(),
-                    *plan_mins, *exec_mins, *rev_mins,
-                    sa.as_deref(), ca.as_deref(),
-                )
-                .await?;
+        if let Some(mut pa) = phase_args {
+            pa.orchestration_id = orch_id;
+            writer.upsert_phase(&pa).await?;
         }
 
         Ok(())

@@ -114,29 +114,34 @@ fn sync_to_convex(
         OrchestrationStatus::Blocked => "blocked",
     };
 
-    let feature = feature.to_string();
-    let design_doc = state.design_doc.to_string_lossy().to_string();
-    let branch = state.branch.clone();
-    let worktree = state.worktree_path.to_string_lossy().to_string();
-    let started_at = state.orchestration_started_at.to_rfc3339();
-    let total_phases = state.total_phases as i64;
-    let current_phase = state.current_phase as i64;
-    let status_str = status_str.to_string();
-    let phases: Vec<_> = state
+    let mut orch = convex_writes::OrchestrationArgs {
+        node_id: String::new(), // filled by writer
+        feature_name: feature.to_string(),
+        design_doc_path: state.design_doc.to_string_lossy().to_string(),
+        branch: state.branch.clone(),
+        worktree_path: Some(state.worktree_path.to_string_lossy().to_string()),
+        total_phases: state.total_phases as f64,
+        current_phase: state.current_phase as f64,
+        status: status_str.to_string(),
+        started_at: state.orchestration_started_at.to_rfc3339(),
+        completed_at: None,
+        total_elapsed_mins: None,
+    };
+
+    let phase_args_list: Vec<_> = state
         .phases
         .iter()
-        .map(|(k, ps)| {
-            (
-                k.clone(),
-                ps.status.to_string(),
-                ps.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-                ps.git_range.clone(),
-                ps.breakdown.planning_mins,
-                ps.breakdown.execution_mins,
-                ps.breakdown.review_mins,
-                ps.planning_started_at.map(|dt| dt.to_rfc3339()),
-                ps.completed_at.map(|dt| dt.to_rfc3339()),
-            )
+        .map(|(k, ps)| convex_writes::PhaseArgs {
+            orchestration_id: String::new(), // filled after upsert
+            phase_number: k.clone(),
+            status: ps.status.to_string(),
+            plan_path: ps.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+            git_range: ps.git_range.clone(),
+            planning_mins: ps.breakdown.planning_mins.map(|m| m as f64),
+            execution_mins: ps.breakdown.execution_mins.map(|m| m as f64),
+            review_mins: ps.breakdown.review_mins.map(|m| m as f64),
+            started_at: ps.planning_started_at.map(|dt| dt.to_rfc3339()),
+            completed_at: ps.completed_at.map(|dt| dt.to_rfc3339()),
         })
         .collect();
 
@@ -148,51 +153,24 @@ fn sync_to_convex(
     };
 
     convex_writes::run_convex_write(|mut writer| async move {
-        // Upsert orchestration status
-        let orch_id = writer
-            .upsert_orchestration(
-                &feature,
-                &design_doc,
-                &branch,
-                Some(&worktree),
-                total_phases,
-                current_phase,
-                &status_str,
-                &started_at,
-                None,
-                None,
-            )
-            .await?;
+        orch.node_id = writer.node_id().to_string();
+        let orch_id = writer.upsert_orchestration(&orch).await?;
 
-        // Upsert all phase records
-        for (key, status, plan_path, git_range, plan_mins, exec_mins, rev_mins, sa, ca) in &phases {
-            writer
-                .upsert_phase(
-                    &orch_id,
-                    key,
-                    status,
-                    plan_path.as_deref(),
-                    git_range.as_deref(),
-                    *plan_mins,
-                    *exec_mins,
-                    *rev_mins,
-                    sa.as_deref(),
-                    ca.as_deref(),
-                )
-                .await?;
+        for mut pa in phase_args_list {
+            pa.orchestration_id = orch_id.clone();
+            writer.upsert_phase(&pa).await?;
         }
 
-        // Record orchestration event
-        writer
-            .record_event(
-                &orch_id,
-                phase_number.as_deref(),
-                &event_type,
-                "tina-session orchestrate",
-                &summary,
-                detail.as_deref(),
-            )
-            .await?;
+        let event = convex_writes::EventArgs {
+            orchestration_id: orch_id,
+            phase_number,
+            event_type,
+            source: "tina-session orchestrate".to_string(),
+            summary,
+            detail,
+            recorded_at: chrono::Utc::now().to_rfc3339(),
+        };
+        writer.record_event(&event).await?;
 
         Ok(())
     })

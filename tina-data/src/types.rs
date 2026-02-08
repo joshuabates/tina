@@ -16,8 +16,8 @@ pub struct OrchestrationRecord {
     pub design_doc_path: String,
     pub branch: String,
     pub worktree_path: Option<String>,
-    pub total_phases: i64,
-    pub current_phase: i64,
+    pub total_phases: f64,
+    pub current_phase: f64,
     pub status: String,
     pub started_at: String,
     pub completed_at: Option<String>,
@@ -115,36 +115,18 @@ pub struct NodeRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationListEntry {
     pub id: String,
-    pub node_id: String,
     pub node_name: String,
-    pub feature_name: String,
-    pub design_doc_path: String,
-    pub branch: String,
-    pub worktree_path: Option<String>,
-    pub total_phases: i64,
-    pub current_phase: i64,
-    pub status: String,
-    pub started_at: String,
-    pub completed_at: Option<String>,
-    pub total_elapsed_mins: Option<f64>,
+    #[serde(flatten)]
+    pub record: OrchestrationRecord,
 }
 
 /// Full orchestration detail as returned by `getOrchestrationDetail` query.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationDetailResponse {
     pub id: String,
-    pub node_id: String,
     pub node_name: String,
-    pub feature_name: String,
-    pub design_doc_path: String,
-    pub branch: String,
-    pub worktree_path: Option<String>,
-    pub total_phases: i64,
-    pub current_phase: i64,
-    pub status: String,
-    pub started_at: String,
-    pub completed_at: Option<String>,
-    pub total_elapsed_mins: Option<f64>,
+    #[serde(flatten)]
+    pub record: OrchestrationRecord,
     pub phases: Vec<PhaseRecord>,
     pub tasks: Vec<TaskEventRecord>,
     pub team_members: Vec<TeamMemberRecord>,

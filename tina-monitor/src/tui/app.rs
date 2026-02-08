@@ -1477,18 +1477,20 @@ mod tests {
     fn make_test_orchestration(title: &str) -> MonitorOrchestration {
         let entry = OrchestrationListEntry {
             id: format!("orch-{}", title),
-            node_id: "node-1".to_string(),
             node_name: "macbook".to_string(),
-            feature_name: title.to_string(),
-            design_doc_path: "design.md".to_string(),
-            branch: format!("tina/{}", title),
-            worktree_path: Some("/test".to_string()),
-            total_phases: 3,
-            current_phase: 1,
-            status: "idle".to_string(),
-            started_at: "2026-02-07T10:00:00Z".to_string(),
-            completed_at: None,
-            total_elapsed_mins: None,
+            record: tina_data::OrchestrationRecord {
+                node_id: "node-1".to_string(),
+                feature_name: title.to_string(),
+                design_doc_path: "design.md".to_string(),
+                branch: format!("tina/{}", title),
+                worktree_path: Some("/test".to_string()),
+                total_phases: 3.0,
+                current_phase: 1.0,
+                status: "idle".to_string(),
+                started_at: "2026-02-07T10:00:00Z".to_string(),
+                completed_at: None,
+                total_elapsed_mins: None,
+            },
         };
         let mut orch = MonitorOrchestration::from_list_entry(entry);
         orch.tasks = vec![make_test_task("1"), make_test_task("2"), make_test_task("3")];

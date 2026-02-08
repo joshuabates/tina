@@ -125,6 +125,7 @@ impl MonitorOrchestration {
     /// Create from a list entry (minimal data, no tasks/members/phases).
     pub fn from_list_entry(entry: OrchestrationListEntry) -> Self {
         let cwd = entry
+            .record
             .worktree_path
             .as_deref()
             .map(PathBuf::from)
@@ -132,18 +133,18 @@ impl MonitorOrchestration {
 
         Self {
             id: entry.id,
-            node_id: entry.node_id,
+            node_id: entry.record.node_id,
             node_name: entry.node_name,
-            feature_name: entry.feature_name,
+            feature_name: entry.record.feature_name,
             cwd,
-            current_phase: entry.current_phase as u32,
-            total_phases: entry.total_phases as u32,
-            design_doc_path: PathBuf::from(&entry.design_doc_path),
-            status: MonitorOrchestrationStatus::from_str(&entry.status),
-            started_at: entry.started_at,
-            completed_at: entry.completed_at,
-            total_elapsed_mins: entry.total_elapsed_mins,
-            branch: entry.branch,
+            current_phase: entry.record.current_phase as u32,
+            total_phases: entry.record.total_phases as u32,
+            design_doc_path: PathBuf::from(&entry.record.design_doc_path),
+            status: MonitorOrchestrationStatus::from_str(&entry.record.status),
+            started_at: entry.record.started_at,
+            completed_at: entry.record.completed_at,
+            total_elapsed_mins: entry.record.total_elapsed_mins,
+            branch: entry.record.branch,
             phases: vec![],
             tasks: vec![],
             orchestrator_tasks: vec![],
@@ -154,6 +155,7 @@ impl MonitorOrchestration {
     /// Create from a full detail response.
     pub fn from_detail(detail: OrchestrationDetailResponse) -> Self {
         let cwd = detail
+            .record
             .worktree_path
             .as_deref()
             .map(PathBuf::from)
@@ -173,18 +175,18 @@ impl MonitorOrchestration {
 
         Self {
             id: detail.id,
-            node_id: detail.node_id,
+            node_id: detail.record.node_id,
             node_name: detail.node_name,
-            feature_name: detail.feature_name,
+            feature_name: detail.record.feature_name,
             cwd,
-            current_phase: detail.current_phase as u32,
-            total_phases: detail.total_phases as u32,
-            design_doc_path: PathBuf::from(&detail.design_doc_path),
-            status: MonitorOrchestrationStatus::from_str(&detail.status),
-            started_at: detail.started_at,
-            completed_at: detail.completed_at,
-            total_elapsed_mins: detail.total_elapsed_mins,
-            branch: detail.branch,
+            current_phase: detail.record.current_phase as u32,
+            total_phases: detail.record.total_phases as u32,
+            design_doc_path: PathBuf::from(&detail.record.design_doc_path),
+            status: MonitorOrchestrationStatus::from_str(&detail.record.status),
+            started_at: detail.record.started_at,
+            completed_at: detail.record.completed_at,
+            total_elapsed_mins: detail.record.total_elapsed_mins,
+            branch: detail.record.branch,
             phases: detail.phases,
             tasks,
             orchestrator_tasks: vec![],
@@ -425,18 +427,20 @@ mod tests {
     fn monitor_orchestration_from_list_entry() {
         let entry = OrchestrationListEntry {
             id: "orch-1".to_string(),
-            node_id: "node-1".to_string(),
             node_name: "macbook".to_string(),
-            feature_name: "auth-system".to_string(),
-            design_doc_path: "docs/auth.md".to_string(),
-            branch: "tina/auth".to_string(),
-            worktree_path: Some("/path/to/worktree".to_string()),
-            total_phases: 3,
-            current_phase: 2,
-            status: "executing".to_string(),
-            started_at: "2026-02-07T10:00:00Z".to_string(),
-            completed_at: None,
-            total_elapsed_mins: Some(45.0),
+            record: tina_data::OrchestrationRecord {
+                node_id: "node-1".to_string(),
+                feature_name: "auth-system".to_string(),
+                design_doc_path: "docs/auth.md".to_string(),
+                branch: "tina/auth".to_string(),
+                worktree_path: Some("/path/to/worktree".to_string()),
+                total_phases: 3.0,
+                current_phase: 2.0,
+                status: "executing".to_string(),
+                started_at: "2026-02-07T10:00:00Z".to_string(),
+                completed_at: None,
+                total_elapsed_mins: Some(45.0),
+            },
         };
 
         let orch = MonitorOrchestration::from_list_entry(entry);
@@ -452,18 +456,20 @@ mod tests {
     fn tasks_completed_counts_correctly() {
         let entry = OrchestrationListEntry {
             id: "orch-1".to_string(),
-            node_id: "node-1".to_string(),
             node_name: "macbook".to_string(),
-            feature_name: "test".to_string(),
-            design_doc_path: "docs/test.md".to_string(),
-            branch: "tina/test".to_string(),
-            worktree_path: None,
-            total_phases: 1,
-            current_phase: 1,
-            status: "executing".to_string(),
-            started_at: "2026-02-07T10:00:00Z".to_string(),
-            completed_at: None,
-            total_elapsed_mins: None,
+            record: tina_data::OrchestrationRecord {
+                node_id: "node-1".to_string(),
+                feature_name: "test".to_string(),
+                design_doc_path: "docs/test.md".to_string(),
+                branch: "tina/test".to_string(),
+                worktree_path: None,
+                total_phases: 1.0,
+                current_phase: 1.0,
+                status: "executing".to_string(),
+                started_at: "2026-02-07T10:00:00Z".to_string(),
+                completed_at: None,
+                total_elapsed_mins: None,
+            },
         };
 
         let mut orch = MonitorOrchestration::from_list_entry(entry);
@@ -539,18 +545,20 @@ mod tests {
     fn orchestration_summary_from_monitor_orchestration() {
         let entry = OrchestrationListEntry {
             id: "orch-1".to_string(),
-            node_id: "node-1".to_string(),
             node_name: "macbook".to_string(),
-            feature_name: "auth-system".to_string(),
-            design_doc_path: "docs/auth.md".to_string(),
-            branch: "tina/auth".to_string(),
-            worktree_path: Some("/path/to/worktree".to_string()),
-            total_phases: 3,
-            current_phase: 2,
-            status: "executing".to_string(),
-            started_at: "2026-02-07T10:00:00Z".to_string(),
-            completed_at: None,
-            total_elapsed_mins: Some(45.0),
+            record: tina_data::OrchestrationRecord {
+                node_id: "node-1".to_string(),
+                feature_name: "auth-system".to_string(),
+                design_doc_path: "docs/auth.md".to_string(),
+                branch: "tina/auth".to_string(),
+                worktree_path: Some("/path/to/worktree".to_string()),
+                total_phases: 3.0,
+                current_phase: 2.0,
+                status: "executing".to_string(),
+                started_at: "2026-02-07T10:00:00Z".to_string(),
+                completed_at: None,
+                total_elapsed_mins: Some(45.0),
+            },
         };
 
         let orch = MonitorOrchestration::from_list_entry(entry);

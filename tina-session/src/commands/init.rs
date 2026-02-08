@@ -223,26 +223,22 @@ fn write_to_convex(
     total_phases: u32,
 ) -> anyhow::Result<()> {
     let now = chrono::Utc::now().to_rfc3339();
-    let wp = worktree_path.to_string_lossy().to_string();
-    let ddp = design_doc.to_string_lossy().to_string();
-    let feature = feature.to_string();
-    let branch = branch.to_string();
 
     convex_writes::run_convex_write(|mut writer| async move {
-        writer
-            .upsert_orchestration(
-                &feature,
-                &ddp,
-                &branch,
-                Some(&wp),
-                total_phases as i64,
-                1,
-                "planning",
-                &now,
-                None,
-                None,
-            )
-            .await?;
+        let orch = convex_writes::OrchestrationArgs {
+            node_id: writer.node_id().to_string(),
+            feature_name: feature.to_string(),
+            design_doc_path: design_doc.to_string_lossy().to_string(),
+            branch: branch.to_string(),
+            worktree_path: Some(worktree_path.to_string_lossy().to_string()),
+            total_phases: total_phases as f64,
+            current_phase: 1.0,
+            status: "planning".to_string(),
+            started_at: now,
+            completed_at: None,
+            total_elapsed_mins: None,
+        };
+        writer.upsert_orchestration(&orch).await?;
         Ok(())
     })
 }

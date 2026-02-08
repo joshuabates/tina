@@ -221,18 +221,20 @@ mod tests {
         use crate::tui::app::ViewState;
         let entry = OrchestrationListEntry {
             id: "orch-1".to_string(),
-            node_id: "node-1".to_string(),
             node_name: "macbook".to_string(),
-            feature_name: "test-project".to_string(),
-            design_doc_path: "design.md".to_string(),
-            branch: "tina/test-project".to_string(),
-            worktree_path: Some("/test".to_string()),
-            total_phases: 3,
-            current_phase: 1,
-            status: "idle".to_string(),
-            started_at: "2026-02-07T10:00:00Z".to_string(),
-            completed_at: None,
-            total_elapsed_mins: None,
+            record: tina_data::OrchestrationRecord {
+                node_id: "node-1".to_string(),
+                feature_name: "test-project".to_string(),
+                design_doc_path: "design.md".to_string(),
+                branch: "tina/test-project".to_string(),
+                worktree_path: Some("/test".to_string()),
+                total_phases: 3.0,
+                current_phase: 1.0,
+                status: "idle".to_string(),
+                started_at: "2026-02-07T10:00:00Z".to_string(),
+                completed_at: None,
+                total_elapsed_mins: None,
+            },
         };
         let orchestration = MonitorOrchestration::from_list_entry(entry);
 

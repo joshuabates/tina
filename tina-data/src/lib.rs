@@ -15,4 +15,5 @@ pub use tina_session::state::schema::{
 };
 
 pub use convex_client::TinaConvexClient;
+pub use convex_client::{orchestration_event_to_args, orchestration_to_args, phase_to_args};
 pub use types::*;
