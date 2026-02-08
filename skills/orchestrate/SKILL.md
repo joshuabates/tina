@@ -82,10 +82,10 @@ If team exists, DO NOT create new team or tasks. Instead:
 
 ## STEP 1c: Initialize orchestration and create worktree
 
-Before creating the team, initialize the orchestration. This creates the git worktree, statusline config, supervisor-state.json, and SQLite record all at once:
+Before creating the team, initialize the orchestration. This creates the git worktree, statusline config, supervisor-state.json, and writes the orchestration record to Convex:
 
 ```bash
-WORKTREE_PATH=$(tina-session init \
+INIT_JSON=$(tina-session init \
   --feature "$FEATURE_NAME" \
   --cwd "$PWD" \
   --design-doc "$DESIGN_DOC" \
@@ -93,7 +93,14 @@ WORKTREE_PATH=$(tina-session init \
   --total-phases "$TOTAL_PHASES")
 ```
 
-The command prints the worktree path to stdout. Capture it - you'll store it in task metadata for later tasks to use.
+The command outputs JSON to stdout: `{orchestration_id, worktree_path, feature, branch, design_doc, total_phases}`. Parse it to extract the values you need:
+
+```bash
+ORCHESTRATION_ID=$(echo "$INIT_JSON" | jq -r '.orchestration_id')
+WORKTREE_PATH=$(echo "$INIT_JSON" | jq -r '.worktree_path')
+```
+
+Store both `orchestration_id` and `worktree_path` in task metadata for later tasks to use.
 
 ---
 
@@ -462,7 +469,7 @@ TaskCreate {
 }
 ```
 
-Note: `worktree_path` is captured from `tina-session init` output in STEP 1c. It's stored in validate-design metadata so all downstream tasks can access it.
+Note: `worktree_path` and `orchestration_id` are captured from `tina-session init` JSON output in STEP 1c. They're stored in validate-design metadata so all downstream tasks can access them.
 
 4. **Create phase tasks (for each phase 1 to N):**
 ```json
