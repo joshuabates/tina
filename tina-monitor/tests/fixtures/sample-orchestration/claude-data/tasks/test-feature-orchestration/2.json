@@ -1,0 +1,11 @@
+{
+    "id": "2",
+    "subject": "Execute phase 1",
+    "description": "Execute the implementation plan for phase 1",
+    "activeForm": null,
+    "status": "in_progress",
+    "owner": "worker-1",
+    "blocks": [],
+    "blockedBy": [],
+    "metadata": {}
+}

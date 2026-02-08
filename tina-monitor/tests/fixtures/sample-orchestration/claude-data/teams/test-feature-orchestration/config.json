@@ -1,0 +1,25 @@
+{
+    "name": "test-feature-orchestration",
+    "description": "Test orchestration team",
+    "createdAt": 1706644800000,
+    "leadAgentId": "team-lead",
+    "leadSessionId": "session-abc-123",
+    "members": [
+        {
+            "name": "team-lead",
+            "agentId": "agent-001",
+            "agentType": "general-purpose",
+            "model": "claude-sonnet-4-5-20250929",
+            "joinedAt": 1706644800000,
+            "cwd": "FIXTURE_ROOT/test-feature"
+        },
+        {
+            "name": "worker-1",
+            "agentId": "agent-002",
+            "agentType": "general-purpose",
+            "model": "claude-sonnet-4-5-20250929",
+            "joinedAt": 1706644860000,
+            "cwd": "FIXTURE_ROOT/test-feature"
+        }
+    ]
+}

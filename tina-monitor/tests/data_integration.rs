@@ -4,7 +4,7 @@ use tempfile::TempDir;
 use tina_monitor::data::DataSource;
 use tina_monitor::types::*;
 
-/// Copy fixture to temp directory, replacing FIXTURE_ROOT placeholders with temp path
+/// Setup fixture in a temp directory
 fn setup_fixture() -> (TempDir, PathBuf) {
     // Get the current working directory and navigate to fixture
     let cwd = std::env::current_dir().expect("Failed to get current directory");
@@ -29,18 +29,23 @@ fn setup_fixture() -> (TempDir, PathBuf) {
     (temp_dir, dest_fixture)
 }
 
-/// Copy fixture directory recursively, replacing FIXTURE_ROOT placeholders in JSON files
-/// fixture_root is used for FIXTURE_ROOT placeholder replacement
+/// Copy fixture directory recursively, replacing FIXTURE_ROOT placeholders in JSON files.
+/// Also renames "claude-data" directories to ".claude" (to work around gitignore).
 fn copy_fixture_with_replacements(src: &Path, dest: &Path, fixture_root: &Path) -> std::io::Result<()> {
-    // Create destination directory
     fs::create_dir_all(dest)?;
 
-    // Recursively copy all files
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let path = entry.path();
         let file_name = entry.file_name();
-        let dest_path = dest.join(&file_name);
+
+        // Rename "claude-data" to ".claude" when copying (to work around gitignore)
+        let dest_name = if file_name == "claude-data" {
+            std::ffi::OsString::from(".claude")
+        } else {
+            file_name
+        };
+        let dest_path = dest.join(&dest_name);
 
         if path.is_dir() {
             copy_fixture_with_replacements(&path, &dest_path, fixture_root)?;
@@ -66,9 +71,11 @@ fn test_list_orchestrations() {
     let result = ds.list_orchestrations();
     assert!(result.is_ok());
 
-    // The result may be empty since list_orchestrations tries to use worktree paths
-    // This test verifies the function doesn't error on fixture structure
-    let _orchestrations = result.unwrap();
+    let orchestrations = result.unwrap();
+    assert_eq!(orchestrations.len(), 1, "Should find one orchestration");
+    assert_eq!(orchestrations[0].feature, "test-feature");
+    assert_eq!(orchestrations[0].current_phase, 2);
+    assert_eq!(orchestrations[0].total_phases, 3);
 }
 
 #[test]
@@ -76,8 +83,8 @@ fn test_load_orchestration() {
     let (_temp_dir, fixture_path) = setup_fixture();
     let ds = DataSource::new(Some(fixture_path.clone()));
 
-    let worktree_path = fixture_path.join("worktree").join(".claude").join("tina");
-    let result = ds.load_supervisor_state(&worktree_path);
+    let tina_dir = fixture_path.join("test-feature").join(".claude").join("tina");
+    let result = ds.load_supervisor_state(&tina_dir);
 
     assert!(result.is_ok());
     let state = result.unwrap();

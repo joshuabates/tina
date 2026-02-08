@@ -1,0 +1,13 @@
+{
+    "version": 1,
+    "feature": "test-feature",
+    "design_doc": "FIXTURE_ROOT/docs/design.md",
+    "worktree_path": "FIXTURE_ROOT/test-feature",
+    "branch": "tina/test-feature",
+    "total_phases": 3,
+    "current_phase": 2,
+    "status": "executing",
+    "orchestration_started_at": "2026-01-30T10:00:00Z",
+    "phases": {},
+    "timing": {}
+}
