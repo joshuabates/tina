@@ -1,0 +1,55 @@
+[package]
+name = "tina-daemon"
+version = "0.1.0"
+edition = "2021"
+description = "Always-on daemon that syncs local orchestration state to Convex"
+
+[dependencies]
+tina-data = { path = "../tina-data" }
+tina-session = { path = "../tina-session" }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# File watching
+notify = "6"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+anyhow = "1"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Paths
+dirs = "5"
+
+# Auth token hashing
+sha2 = "0.10"
+hex = "0.4"
+
+# Hostname detection
+hostname = "0.4"
+
+# Stream utilities
+futures = "0.3"
+
+# Convex (for types used in main.rs)
+convex = "0.10"
+
+# Signal handling
+tokio-util = "0.7"
+
+[dev-dependencies]
+tempfile = "3"
