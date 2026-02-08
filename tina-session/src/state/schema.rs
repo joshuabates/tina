@@ -17,6 +17,9 @@ pub struct SessionLookup {
     pub worktree_path: PathBuf,
     pub repo_root: PathBuf,
     pub created_at: DateTime<Utc>,
+    /// Convex orchestration doc ID (populated after init writes to Convex)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub orchestration_id: Option<String>,
 }
 
 // ====================================================================
@@ -461,6 +464,7 @@ mod tests {
             worktree_path: PathBuf::from("/path/to/worktree"),
             repo_root: PathBuf::from("/path/to/repo"),
             created_at: Utc::now(),
+            orchestration_id: None,
         };
 
         let json = serde_json::to_string(&lookup).expect("serialize");

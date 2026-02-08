@@ -5,6 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::session::naming;
 use crate::state::schema::{SessionLookup, SupervisorState, Task, Team};
 
 /// A validation error or warning.
@@ -145,12 +146,12 @@ pub fn validate_supervisor_state(path: &Path) -> ValidationResult {
 
     // Validate phase states
     for (key, phase) in &state.phases {
-        // Validate phase key is a number
-        if key.parse::<u32>().is_err() {
+        // Validate phase key format (integers like "1" or remediation decimals like "1.5", "1.5.5")
+        if let Err(msg) = naming::validate_phase(key) {
             result.add_error(
                 path,
                 &format!("phases.{}", key),
-                "Phase key is not a valid number",
+                &msg,
             );
         }
 
@@ -484,6 +485,89 @@ mod tests {
 
         let result = validate_session_lookup(&path);
         assert!(result.is_valid());
+    }
+
+    #[test]
+    fn test_phase_key_integer_valid() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("state.json");
+        let json = r#"{
+            "version": 1, "feature": "test", "design_doc": "/tmp/d.md",
+            "worktree_path": "/tmp/w", "branch": "b", "total_phases": 3,
+            "current_phase": 1, "status": "executing",
+            "orchestration_started_at": "2026-01-30T10:00:00Z",
+            "phases": {
+                "1": {"status": "executing", "plan_path": null},
+                "2": {"status": "planning", "plan_path": null}
+            },
+            "timing": {}
+        }"#;
+        fs::write(&path, json).unwrap();
+        let result = validate_supervisor_state(&path);
+        let phase_errors: Vec<_> = result.errors.iter().filter(|e| e.field.starts_with("phases.")).collect();
+        assert!(phase_errors.is_empty(), "Integer keys should be valid: {:?}", phase_errors);
+    }
+
+    #[test]
+    fn test_phase_key_remediation_valid() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("state.json");
+        let json = r#"{
+            "version": 1, "feature": "test", "design_doc": "/tmp/d.md",
+            "worktree_path": "/tmp/w", "branch": "b", "total_phases": 3,
+            "current_phase": 1, "status": "executing",
+            "orchestration_started_at": "2026-01-30T10:00:00Z",
+            "phases": {
+                "1": {"status": "complete", "plan_path": null},
+                "1.5": {"status": "executing", "plan_path": null},
+                "1.5.5": {"status": "planning", "plan_path": null}
+            },
+            "timing": {}
+        }"#;
+        fs::write(&path, json).unwrap();
+        let result = validate_supervisor_state(&path);
+        let phase_errors: Vec<_> = result.errors.iter().filter(|e| e.field.starts_with("phases.")).collect();
+        assert!(phase_errors.is_empty(), "Remediation keys '1.5' and '1.5.5' should be valid: {:?}", phase_errors);
+    }
+
+    #[test]
+    fn test_phase_key_invalid_alpha() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("state.json");
+        let json = r#"{
+            "version": 1, "feature": "test", "design_doc": "/tmp/d.md",
+            "worktree_path": "/tmp/w", "branch": "b", "total_phases": 3,
+            "current_phase": 1, "status": "executing",
+            "orchestration_started_at": "2026-01-30T10:00:00Z",
+            "phases": {
+                "abc": {"status": "executing", "plan_path": null}
+            },
+            "timing": {}
+        }"#;
+        fs::write(&path, json).unwrap();
+        let result = validate_supervisor_state(&path);
+        let phase_errors: Vec<_> = result.errors.iter().filter(|e| e.field.starts_with("phases.")).collect();
+        assert!(!phase_errors.is_empty(), "Key 'abc' should be invalid");
+    }
+
+    #[test]
+    fn test_phase_key_invalid_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let path = temp_dir.path().join("state.json");
+        let json = r#"{
+            "version": 1, "feature": "test", "design_doc": "/tmp/d.md",
+            "worktree_path": "/tmp/w", "branch": "b", "total_phases": 3,
+            "current_phase": 1, "status": "executing",
+            "orchestration_started_at": "2026-01-30T10:00:00Z",
+            "phases": {
+                "": {"status": "executing", "plan_path": null}
+            },
+            "timing": {}
+        }"#;
+        fs::write(&path, json).unwrap();
+        let result = validate_supervisor_state(&path);
+        let phase_errors: Vec<_> = result.errors.iter().filter(|e| e.field.starts_with("phases.")).collect();
+        assert!(!phase_errors.is_empty(), "Empty key should be invalid");
     }
 
     #[test]

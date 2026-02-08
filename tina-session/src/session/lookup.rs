@@ -13,6 +13,9 @@ pub struct SessionLookup {
     pub worktree_path: PathBuf,
     pub repo_root: PathBuf,
     pub created_at: DateTime<Utc>,
+    /// Convex orchestration doc ID (populated after init writes to Convex)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub orchestration_id: Option<String>,
 }
 
 impl SessionLookup {
@@ -23,6 +26,7 @@ impl SessionLookup {
             worktree_path,
             repo_root,
             created_at: Utc::now(),
+            orchestration_id: None,
         }
     }
 

@@ -9,6 +9,7 @@
     ],
     "convex": {
       "has_orchestration": true,
+      "expected_status": "complete",
       "min_phases": 1,
       "min_tasks": 1,
       "min_team_members": 1

@@ -17,6 +17,18 @@ pub fn verify_detail(
 ) -> Vec<CategorizedFailure> {
     let mut failures = Vec::new();
 
+    if let Some(ref expected_status) = assertions.expected_status {
+        if detail.record.status != *expected_status {
+            failures.push(CategorizedFailure::new(
+                FailureCategory::Orchestration,
+                format!(
+                    "Expected orchestration status '{}', found '{}'",
+                    expected_status, detail.record.status
+                ),
+            ));
+        }
+    }
+
     if let Some(min) = assertions.min_phases {
         let actual = detail.phases.len() as u32;
         if actual < min {
@@ -191,6 +203,7 @@ mod tests {
 
         let assertions = ConvexAssertions {
             has_orchestration: true,
+            expected_status: None,
             min_phases: Some(1),
             min_tasks: Some(2),
             min_team_members: Some(2),
@@ -201,11 +214,46 @@ mod tests {
     }
 
     #[test]
+    fn test_verify_detail_status_match() {
+        let detail = make_detail(vec![], vec![], vec![]);
+
+        let assertions = ConvexAssertions {
+            has_orchestration: true,
+            expected_status: Some("complete".to_string()),
+            min_phases: None,
+            min_tasks: None,
+            min_team_members: None,
+        };
+
+        let failures = verify_detail(&detail, &assertions);
+        assert!(failures.is_empty(), "Expected no failures, got: {:?}", failures);
+    }
+
+    #[test]
+    fn test_verify_detail_status_mismatch() {
+        let detail = make_detail(vec![], vec![], vec![]);
+
+        let assertions = ConvexAssertions {
+            has_orchestration: true,
+            expected_status: Some("planning".to_string()),
+            min_phases: None,
+            min_tasks: None,
+            min_team_members: None,
+        };
+
+        let failures = verify_detail(&detail, &assertions);
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].message.contains("planning"));
+        assert!(failures[0].message.contains("complete"));
+    }
+
+    #[test]
     fn test_verify_detail_insufficient_phases() {
         let detail = make_detail(vec![], vec![], vec![]);
 
         let assertions = ConvexAssertions {
             has_orchestration: true,
+            expected_status: None,
             min_phases: Some(1),
             min_tasks: None,
             min_team_members: None,
@@ -227,6 +275,7 @@ mod tests {
 
         let assertions = ConvexAssertions {
             has_orchestration: true,
+            expected_status: None,
             min_phases: None,
             min_tasks: Some(3),
             min_team_members: None,
@@ -243,6 +292,7 @@ mod tests {
 
         let assertions = ConvexAssertions {
             has_orchestration: true,
+            expected_status: None,
             min_phases: None,
             min_tasks: None,
             min_team_members: Some(2),
@@ -259,6 +309,7 @@ mod tests {
 
         let assertions = ConvexAssertions {
             has_orchestration: true,
+            expected_status: None,
             min_phases: Some(1),
             min_tasks: Some(3),
             min_team_members: Some(2),
@@ -274,6 +325,7 @@ mod tests {
 
         let assertions = ConvexAssertions {
             has_orchestration: true,
+            expected_status: None,
             min_phases: None,
             min_tasks: None,
             min_team_members: None,
@@ -338,6 +390,7 @@ mod tests {
     fn test_convex_assertions_deserialize() {
         let json = r#"{
             "has_orchestration": true,
+            "expected_status": "complete",
             "min_phases": 1,
             "min_tasks": 3,
             "min_team_members": 2
@@ -345,6 +398,7 @@ mod tests {
 
         let assertions: ConvexAssertions = serde_json::from_str(json).unwrap();
         assert!(assertions.has_orchestration);
+        assert_eq!(assertions.expected_status, Some("complete".to_string()));
         assert_eq!(assertions.min_phases, Some(1));
         assert_eq!(assertions.min_tasks, Some(3));
         assert_eq!(assertions.min_team_members, Some(2));
@@ -356,6 +410,7 @@ mod tests {
 
         let assertions: ConvexAssertions = serde_json::from_str(json).unwrap();
         assert!(assertions.has_orchestration); // default_true
+        assert!(assertions.expected_status.is_none());
         assert!(assertions.min_phases.is_none());
         assert!(assertions.min_tasks.is_none());
         assert!(assertions.min_team_members.is_none());

@@ -109,7 +109,7 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
                 "advance".to_string(),
                 feature.to_string(),
                 phase.to_string(),
-                "pass".to_string(),
+                "review_pass".to_string(),
             ])
         }
         "reject_plan" => {
@@ -122,7 +122,7 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
                 "advance".to_string(),
                 feature.to_string(),
                 phase.to_string(),
-                "gaps".to_string(),
+                "review_gaps".to_string(),
             ];
             if let Some(ref feedback) = payload.feedback.as_ref().or(payload.issues.as_ref()) {
                 args.push("--issues".to_string());
@@ -186,7 +186,7 @@ mod tests {
         let args = build_cli_args("approve_plan", &p).unwrap();
         assert_eq!(
             args,
-            vec!["orchestrate", "advance", "auth", "1", "pass"]
+            vec!["orchestrate", "advance", "auth", "1", "review_pass"]
         );
     }
 
@@ -206,7 +206,7 @@ mod tests {
                 "advance",
                 "auth",
                 "2",
-                "gaps",
+                "review_gaps",
                 "--issues",
                 "needs error handling"
             ]
@@ -219,7 +219,7 @@ mod tests {
         let args = build_cli_args("reject_plan", &p).unwrap();
         assert_eq!(
             args,
-            vec!["orchestrate", "advance", "auth", "1", "gaps"]
+            vec!["orchestrate", "advance", "auth", "1", "review_gaps"]
         );
     }
 
@@ -303,7 +303,7 @@ mod tests {
                 "advance",
                 "auth",
                 "1",
-                "gaps",
+                "review_gaps",
                 "--issues",
                 "missing tests"
             ]

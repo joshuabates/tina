@@ -111,6 +111,14 @@ fn sync_to_convex(
         OrchestrationStatus::Blocked => "blocked",
     };
 
+    let (completed_at, total_elapsed_mins) = if state.status == OrchestrationStatus::Complete {
+        let now = chrono::Utc::now();
+        let elapsed = tina_session::state::timing::duration_mins(state.orchestration_started_at, now);
+        (Some(now.to_rfc3339()), Some(elapsed as f64))
+    } else {
+        (None, None)
+    };
+
     let mut orch = convex::OrchestrationArgs {
         node_id: String::new(), // filled by writer
         project_id: None,
@@ -122,8 +130,8 @@ fn sync_to_convex(
         current_phase: state.current_phase as f64,
         status: status_str.to_string(),
         started_at: state.orchestration_started_at.to_rfc3339(),
-        completed_at: None,
-        total_elapsed_mins: None,
+        completed_at,
+        total_elapsed_mins,
     };
 
     let phase_args_list: Vec<_> = state

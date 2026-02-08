@@ -15,7 +15,7 @@ export default defineSchema({
     lastHeartbeat: v.number(),
     registeredAt: v.number(),
     authTokenHash: v.string(),
-  }),
+  }).index("by_name_auth", ["name", "authTokenHash"]),
 
   orchestrations: defineTable({
     nodeId: v.id("nodes"),

@@ -55,6 +55,9 @@ pub struct ConvexAssertions {
     /// Orchestration record must exist
     #[serde(default = "default_true")]
     pub has_orchestration: bool,
+    /// Expected orchestration status (e.g., "complete")
+    #[serde(default)]
+    pub expected_status: Option<String>,
     /// Minimum number of phases expected
     #[serde(default)]
     pub min_phases: Option<u32>,

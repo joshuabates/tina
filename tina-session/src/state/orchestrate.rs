@@ -1434,4 +1434,372 @@ mod tests {
         // No verdicts stored
         assert!(state.phases["1"].review_verdicts.is_empty());
     }
+
+    // ====================================================================
+    // Full Lifecycle Tests
+    // ====================================================================
+
+    #[test]
+    fn test_full_lifecycle_single_phase() {
+        let mut state = test_state(1);
+
+        // 1) Fresh state -> SpawnValidator
+        let action = next_action(&state).unwrap();
+        assert!(matches!(action, Action::SpawnValidator { .. }));
+
+        // 2) ValidationPass -> Planning phase 1
+        let action =
+            advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
+        assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "1"));
+        assert_eq!(state.status, OrchestrationStatus::Planning);
+        assert_eq!(state.phases["1"].status, PhaseStatus::Planning);
+
+        // 3) PlanComplete -> SpawnExecutor
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::PlanComplete {
+                plan_path: PathBuf::from("/tmp/plan-1.md"),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "1"));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Planned);
+
+        // 4) ExecuteStarted -> Wait
+        let action = advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
+        assert!(matches!(action, Action::Wait { .. }));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Executing);
+        assert_eq!(state.status, OrchestrationStatus::Executing);
+
+        // 5) ExecuteComplete -> SpawnReviewer
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "abc..def".to_string(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnReviewer { ref phase, .. } if phase == "1"));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Reviewing);
+        assert_eq!(state.status, OrchestrationStatus::Reviewing);
+
+        // 6) ReviewPass on last phase -> Finalize + status=Complete
+        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
+        assert!(matches!(action, Action::Finalize));
+        assert_eq!(state.status, OrchestrationStatus::Complete);
+        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
+        assert!(state.phases["1"].completed_at.is_some());
+        assert!(state.phases["1"].breakdown.planning_mins.is_some());
+        assert!(state.phases["1"].breakdown.execution_mins.is_some());
+        assert!(state.phases["1"].breakdown.review_mins.is_some());
+
+        // 7) After finalize, next_action -> Complete
+        let action = next_action(&state).unwrap();
+        assert!(matches!(action, Action::Complete));
+    }
+
+    #[test]
+    fn test_full_lifecycle_multi_phase() {
+        let mut state = test_state(2);
+
+        // Validation
+        let action =
+            advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
+        assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "1"));
+
+        // Phase 1: plan -> execute -> review
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::PlanComplete {
+                plan_path: PathBuf::from("/tmp/plan-1.md"),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "1"));
+
+        let action = advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
+        assert!(matches!(action, Action::Wait { .. }));
+
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "abc..def".to_string(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnReviewer { ref phase, .. } if phase == "1"));
+
+        // ReviewPass on phase 1 (not last) -> advance to phase 2 planning
+        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
+        assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "2"));
+        assert_eq!(state.status, OrchestrationStatus::Planning);
+        assert_eq!(state.current_phase, 2);
+        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
+        assert_eq!(state.phases["2"].status, PhaseStatus::Planning);
+
+        // Phase 2: plan -> execute -> review
+        let action = advance_state(
+            &mut state,
+            "2",
+            AdvanceEvent::PlanComplete {
+                plan_path: PathBuf::from("/tmp/plan-2.md"),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "2"));
+
+        let action = advance_state(&mut state, "2", AdvanceEvent::ExecuteStarted).unwrap();
+        assert!(matches!(action, Action::Wait { .. }));
+
+        let action = advance_state(
+            &mut state,
+            "2",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "ghi..jkl".to_string(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnReviewer { ref phase, .. } if phase == "2"));
+
+        // ReviewPass on phase 2 (last) -> Finalize + Complete
+        let action = advance_state(&mut state, "2", AdvanceEvent::ReviewPass).unwrap();
+        assert!(matches!(action, Action::Finalize));
+        assert_eq!(state.status, OrchestrationStatus::Complete);
+        assert_eq!(state.phases["2"].status, PhaseStatus::Complete);
+
+        // next_action confirms Complete
+        let action = next_action(&state).unwrap();
+        assert!(matches!(action, Action::Complete));
+    }
+
+    #[test]
+    fn test_full_lifecycle_with_remediation() {
+        let mut state = test_state(1);
+
+        // Validation + Plan + Execute
+        advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
+        advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::PlanComplete {
+                plan_path: PathBuf::from("/tmp/plan-1.md"),
+            },
+        )
+        .unwrap();
+        advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
+        advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "abc..def".to_string(),
+            },
+        )
+        .unwrap();
+
+        // Review finds gaps -> remediation phase 1.5
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ReviewGaps {
+                issues: vec!["missing tests".to_string()],
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            action,
+            Action::Remediate {
+                ref phase,
+                ref remediation_phase,
+                ..
+            } if phase == "1" && remediation_phase == "1.5"
+        ));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
+        assert_eq!(state.phases["1.5"].status, PhaseStatus::Planning);
+
+        // Remediation phase 1.5: plan -> execute -> review pass
+        let action = advance_state(
+            &mut state,
+            "1.5",
+            AdvanceEvent::PlanComplete {
+                plan_path: PathBuf::from("/tmp/plan-1.5.md"),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "1.5"));
+
+        advance_state(&mut state, "1.5", AdvanceEvent::ExecuteStarted).unwrap();
+
+        advance_state(
+            &mut state,
+            "1.5",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "def..ghi".to_string(),
+            },
+        )
+        .unwrap();
+
+        // ReviewPass on remediation of last phase -> Finalize + Complete
+        let action = advance_state(&mut state, "1.5", AdvanceEvent::ReviewPass).unwrap();
+        assert!(matches!(action, Action::Finalize));
+        assert_eq!(state.status, OrchestrationStatus::Complete);
+        assert_eq!(state.phases["1.5"].status, PhaseStatus::Complete);
+
+        let action = next_action(&state).unwrap();
+        assert!(matches!(action, Action::Complete));
+    }
+
+    #[test]
+    fn test_next_action_matches_advance_state_throughout_lifecycle() {
+        // Verify that next_action and advance_state agree at each step
+        let mut state = test_state(1);
+
+        // Before validation: next_action says SpawnValidator
+        let na = next_action(&state).unwrap();
+        assert!(matches!(na, Action::SpawnValidator { .. }));
+
+        // Advance through validation
+        advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
+
+        // After validation, next_action should say SpawnPlanner for phase 1
+        // (but phase is already in Planning from advance_state)
+        let na = next_action(&state).unwrap();
+        assert!(matches!(na, Action::SpawnPlanner { ref phase, .. } if phase == "1"));
+
+        // Plan complete
+        advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::PlanComplete {
+                plan_path: PathBuf::from("/tmp/plan.md"),
+            },
+        )
+        .unwrap();
+        let na = next_action(&state).unwrap();
+        assert!(matches!(na, Action::SpawnExecutor { ref phase, .. } if phase == "1"));
+
+        // Execute started
+        advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
+        let na = next_action(&state).unwrap();
+        assert!(matches!(na, Action::Wait { .. }));
+
+        // Execute complete
+        advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "a..b".to_string(),
+            },
+        )
+        .unwrap();
+        let na = next_action(&state).unwrap();
+        assert!(matches!(na, Action::SpawnReviewer { ref phase, .. } if phase == "1"));
+
+        // Review pass (last phase)
+        advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
+        let na = next_action(&state).unwrap();
+        assert!(matches!(na, Action::Complete));
+    }
+
+    #[test]
+    fn test_convex_sync_fields_correct_at_completion() {
+        // Verify the state has all the fields needed for Convex sync
+        let mut state = test_state(1);
+
+        advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
+        advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::PlanComplete {
+                plan_path: PathBuf::from("/tmp/plan.md"),
+            },
+        )
+        .unwrap();
+        advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
+        advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "a..b".to_string(),
+            },
+        )
+        .unwrap();
+        advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
+
+        // Verify fields sync_to_convex relies on
+        assert_eq!(state.status, OrchestrationStatus::Complete);
+        assert_eq!(state.current_phase, 1);
+        assert_eq!(state.total_phases, 1);
+
+        let phase = &state.phases["1"];
+        assert_eq!(phase.status, PhaseStatus::Complete);
+        assert!(phase.plan_path.is_some());
+        assert!(phase.git_range.is_some());
+        assert!(phase.planning_started_at.is_some());
+        assert!(phase.execution_started_at.is_some());
+        assert!(phase.review_started_at.is_some());
+        assert!(phase.completed_at.is_some());
+        assert!(phase.duration_mins.is_some());
+        assert!(phase.breakdown.planning_mins.is_some());
+        assert!(phase.breakdown.execution_mins.is_some());
+        assert!(phase.breakdown.review_mins.is_some());
+    }
+
+    #[test]
+    fn test_error_recovery_then_complete() {
+        // Full lifecycle with an error + retry in the middle
+        let mut state = test_state(1);
+
+        advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
+        advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::PlanComplete {
+                plan_path: PathBuf::from("/tmp/plan.md"),
+            },
+        )
+        .unwrap();
+        advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
+
+        // Error during execution
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::Error {
+                reason: "session crashed".to_string(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::Error { can_retry: true, .. }));
+        assert_eq!(state.status, OrchestrationStatus::Blocked);
+        assert_eq!(state.phases["1"].status, PhaseStatus::Blocked);
+
+        // Retry - has plan_path but no git_range, so re-executes
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::Retry {
+                reason: "manual".to_string(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "1"));
+        assert_eq!(state.status, OrchestrationStatus::Executing);
+
+        // Complete execution and review
+        advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "a..b".to_string(),
+            },
+        )
+        .unwrap();
+        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
+        assert!(matches!(action, Action::Finalize));
+        assert_eq!(state.status, OrchestrationStatus::Complete);
+    }
 }

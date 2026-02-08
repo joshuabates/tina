@@ -176,6 +176,7 @@ fn main() -> anyhow::Result<()> {
                     .convex
                     .unwrap_or(tina_harness::ConvexAssertions {
                         has_orchestration: true,
+                        expected_status: None,
                         min_phases: Some(1),
                         min_tasks: Some(1),
                         min_team_members: Some(1),
@@ -218,6 +219,7 @@ fn main() -> anyhow::Result<()> {
 
             let assertions = tina_harness::ConvexAssertions {
                 has_orchestration: true,
+                expected_status: None,
                 min_phases,
                 min_tasks,
                 min_team_members,

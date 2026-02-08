@@ -75,7 +75,7 @@ pub fn run(
     write_statusline_config(&worktree_path)?;
 
     // Create SessionLookup pointing to the worktree and repo root
-    let lookup = SessionLookup::new(feature, worktree_path.clone(), cwd_abs.clone());
+    let mut lookup = SessionLookup::new(feature, worktree_path.clone(), cwd_abs.clone());
     lookup.save()?;
 
     // Create supervisor state in Convex
@@ -89,7 +89,7 @@ pub fn run(
     state.save()?;
 
     // Write orchestration record to Convex (non-fatal)
-    if let Err(e) = write_to_convex(
+    match write_to_convex(
         feature,
         &worktree_path,
         &design_doc_abs,
@@ -97,7 +97,15 @@ pub fn run(
         total_phases,
         &cwd_abs,
     ) {
-        eprintln!("Warning: Failed to write to Convex: {}", e);
+        Ok(orch_id) => {
+            lookup.orchestration_id = Some(orch_id);
+            if let Err(e) = lookup.save() {
+                eprintln!("Warning: Failed to update lookup with orchestration_id: {}", e);
+            }
+        }
+        Err(e) => {
+            eprintln!("Warning: Failed to write to Convex: {}", e);
+        }
     }
 
     // Auto-start daemon if not running
@@ -216,6 +224,7 @@ fn write_statusline_config(worktree_path: &Path) -> anyhow::Result<()> {
 }
 
 /// Write orchestration record to Convex via tina-data types.
+/// Returns the Convex orchestration doc ID.
 fn write_to_convex(
     feature: &str,
     worktree_path: &Path,
@@ -223,7 +232,7 @@ fn write_to_convex(
     branch: &str,
     total_phases: u32,
     cwd: &Path,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
     let now = chrono::Utc::now().to_rfc3339();
     let repo_name = cwd
         .file_name()
@@ -232,7 +241,7 @@ fn write_to_convex(
         .to_string();
     let repo_path = cwd.to_string_lossy().to_string();
 
-    convex::run_convex_write(|mut writer| async move {
+    convex::run_convex(|mut writer| async move {
         let project_id = match writer.find_or_create_project(&repo_name, &repo_path).await {
             Ok(id) => Some(id),
             Err(e) => {
@@ -255,8 +264,8 @@ fn write_to_convex(
             completed_at: None,
             total_elapsed_mins: None,
         };
-        writer.upsert_orchestration(&orch).await?;
-        Ok(())
+        let orch_id = writer.upsert_orchestration(&orch).await?;
+        Ok(orch_id)
     })
 }
 

@@ -11,6 +11,20 @@ export const registerNode = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const existing = await ctx.db
+      .query("nodes")
+      .withIndex("by_name_auth", (q) =>
+        q.eq("name", args.name).eq("authTokenHash", args.authTokenHash),
+      )
+      .first();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        os: args.os,
+        status: "online",
+        lastHeartbeat: now,
+      });
+      return existing._id;
+    }
     const nodeId = await ctx.db.insert("nodes", {
       name: args.name,
       os: args.os,

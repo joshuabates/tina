@@ -81,7 +81,7 @@ impl ConvexWriter {
         let token_hash = hash_token(&token);
         let mut args = BTreeMap::new();
         args.insert("name".into(), Value::from(node_name.as_str()));
-        args.insert("os".into(), Value::from("darwin"));
+        args.insert("os".into(), Value::from(std::env::consts::OS));
         args.insert("authTokenHash".into(), Value::from(token_hash.as_str()));
         let result = client.mutation("nodes:registerNode", args).await?;
         let node_id = extract_string(result)?;

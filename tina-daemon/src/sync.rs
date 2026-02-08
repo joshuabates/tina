@@ -341,7 +341,8 @@ pub fn load_task_files(dir: &Path) -> Result<Vec<Task>> {
 ///
 /// Strategy:
 /// 1. If team name ends with "-orchestration", extract feature and look up in cache.
-/// 2. Otherwise, match by the first member's cwd against session lookups.
+/// 2. If team name matches "{feature}-phase-{N}", extract feature and look up in cache.
+/// 3. Otherwise, match by the first member's cwd against session lookups.
 fn find_orchestration_id(
     cache: &SyncCache,
     team_name: &str,
@@ -350,6 +351,14 @@ fn find_orchestration_id(
     // Check orchestration teams
     if team_name.ends_with("-orchestration") {
         let feature = team_name.trim_end_matches("-orchestration");
+        if let Some(id) = cache.orchestration_ids.get(feature) {
+            return Ok(Some(id.clone()));
+        }
+    }
+
+    // Check phase execution teams: "{feature}-phase-{N}"
+    if let Some(pos) = team_name.rfind("-phase-") {
+        let feature = &team_name[..pos];
         if let Some(id) = cache.orchestration_ids.get(feature) {
             return Ok(Some(id.clone()));
         }
@@ -576,6 +585,73 @@ mod tests {
         assert_ne!(cache.task_state.get(&key), Some(&new));
     }
 
-    // --- Mapping tests ---
+    // --- find_orchestration_id tests ---
 
+    /// Helper to build a minimal Team for testing find_orchestration_id.
+    fn dummy_team() -> Team {
+        serde_json::from_str(
+            r#"{
+                "name": "test",
+                "description": "Test",
+                "createdAt": 1706644800000,
+                "leadAgentId": "lead@test",
+                "leadSessionId": "session-test",
+                "members": [{
+                    "agentId": "lead@test",
+                    "name": "team-lead",
+                    "agentType": "team-lead",
+                    "model": "claude-opus-4-6",
+                    "joinedAt": 1706644800000,
+                    "tmuxPaneId": null,
+                    "cwd": "/tmp/nonexistent",
+                    "subscriptions": []
+                }]
+            }"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_find_orchestration_id_orchestration_team() {
+        let mut cache = SyncCache::new();
+        cache
+            .orchestration_ids
+            .insert("my-feature".to_string(), "orch-123".to_string());
+
+        let team = dummy_team();
+        let result = find_orchestration_id(&cache, "my-feature-orchestration", &team).unwrap();
+        assert_eq!(result, Some("orch-123".to_string()));
+    }
+
+    #[test]
+    fn test_find_orchestration_id_phase_team() {
+        let mut cache = SyncCache::new();
+        cache
+            .orchestration_ids
+            .insert("my-feature".to_string(), "orch-456".to_string());
+
+        let team = dummy_team();
+        let result = find_orchestration_id(&cache, "my-feature-phase-1", &team).unwrap();
+        assert_eq!(result, Some("orch-456".to_string()));
+    }
+
+    #[test]
+    fn test_find_orchestration_id_phase_team_higher_number() {
+        let mut cache = SyncCache::new();
+        cache
+            .orchestration_ids
+            .insert("my-feature".to_string(), "orch-789".to_string());
+
+        let team = dummy_team();
+        let result = find_orchestration_id(&cache, "my-feature-phase-12", &team).unwrap();
+        assert_eq!(result, Some("orch-789".to_string()));
+    }
+
+    #[test]
+    fn test_find_orchestration_id_no_match() {
+        let cache = SyncCache::new();
+        let team = dummy_team();
+        let result = find_orchestration_id(&cache, "unknown-team", &team).unwrap();
+        assert_eq!(result, None);
+    }
 }
