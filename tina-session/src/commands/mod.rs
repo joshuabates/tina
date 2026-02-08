@@ -2,8 +2,6 @@ pub mod attach;
 pub mod capture;
 pub mod check;
 pub mod cleanup;
-mod config;
-mod convex_writes;
 pub mod daemon;
 pub mod exists;
 pub mod init;

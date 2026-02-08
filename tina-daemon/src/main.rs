@@ -82,7 +82,7 @@ async fn main() -> Result<()> {
 
     info!("daemon started, entering main loop");
 
-    // Periodic refresh interval for session lookups
+    // Periodic refresh interval for orchestration mapping
     let mut refresh_interval = tokio::time::interval(Duration::from_secs(60));
     refresh_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -120,13 +120,6 @@ async fn main() -> Result<()> {
                             error!(error = %e, "task sync failed");
                         }
                     }
-                    Some(WatchEvent::SupervisorState { feature }) => {
-                        if let Err(e) = sync::sync_supervisor_state(
-                            &client, &mut cache, &feature, &node_id,
-                        ).await {
-                            error!(feature = %feature, error = %e, "supervisor state sync failed");
-                        }
-                    }
                     None => {
                         info!("watcher channel closed, shutting down");
                         cancel.cancel();
@@ -157,8 +150,8 @@ async fn main() -> Result<()> {
 
             // Periodic refresh of session lookups
             _ = refresh_interval.tick() => {
-                if let Err(e) = watcher.refresh_state_watches() {
-                    error!(error = %e, "failed to refresh state watches");
+                if let Err(e) = sync::refresh_orchestration_ids(&client, &mut cache, &node_id).await {
+                    error!(error = %e, "failed to refresh orchestration ids");
                 }
             }
         }

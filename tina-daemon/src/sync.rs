@@ -6,12 +6,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
-use tina_data::{
-    OrchestrationRecord, PhaseRecord, SupervisorState, TaskEventRecord, TeamMemberRecord,
-    TinaConvexClient,
-};
+use tina_data::{TaskEventRecord, TeamMemberRecord, TinaConvexClient};
 use tina_session::session::lookup::SessionLookup;
 use tina_session::state::schema::{Task, Team};
 
@@ -23,8 +20,6 @@ pub struct SyncCache {
     pub team_member_state: HashMap<(String, String, String), String>,
     /// Maps `feature_name` -> convex orchestration ID
     pub orchestration_ids: HashMap<String, String>,
-    /// Maps `feature_name` -> last synced supervisor-state hash
-    pub supervisor_state_hashes: HashMap<String, u64>,
 }
 
 /// Cached task state for change detection.
@@ -41,7 +36,6 @@ impl SyncCache {
             task_state: HashMap::new(),
             team_member_state: HashMap::new(),
             orchestration_ids: HashMap::new(),
-            supervisor_state_hashes: HashMap::new(),
         }
     }
 }
@@ -222,70 +216,6 @@ async fn sync_task_dir(
     Ok(())
 }
 
-/// Sync a supervisor-state.json change to Convex.
-///
-/// Maps SupervisorState fields to OrchestrationRecord and PhaseRecord,
-/// then upserts them.
-pub async fn sync_supervisor_state(
-    client: &Arc<Mutex<TinaConvexClient>>,
-    cache: &mut SyncCache,
-    feature: &str,
-    node_id: &str,
-) -> Result<()> {
-    // Find the worktree path via session lookup
-    let lookups = SessionLookup::list_all().unwrap_or_default();
-    let lookup = lookups.iter().find(|l| l.feature == feature);
-    let worktree_path = match lookup {
-        Some(l) => l.cwd.clone(),
-        None => {
-            warn!(feature = %feature, "no session lookup found for feature");
-            return Ok(());
-        }
-    };
-
-    // Load the supervisor state
-    let state = match tina_data::tina_state::load_supervisor_state(&worktree_path)? {
-        Some(s) => s,
-        None => {
-            debug!(feature = %feature, "supervisor-state.json not found, skipping");
-            return Ok(());
-        }
-    };
-
-    // Simple hash to detect changes
-    let state_json = serde_json::to_string(&state)?;
-    let state_hash = simple_hash(&state_json);
-    if cache.supervisor_state_hashes.get(feature) == Some(&state_hash) {
-        debug!(feature = %feature, "supervisor state unchanged, skipping");
-        return Ok(());
-    }
-
-    let orch_record = supervisor_state_to_orchestration_record(&state, node_id);
-
-    let mut client_guard = client.lock().await;
-    let orch_id = client_guard.upsert_orchestration(&orch_record).await?;
-    cache
-        .orchestration_ids
-        .insert(feature.to_string(), orch_id.clone());
-
-    // Sync each phase
-    for (phase_num, phase_state) in &state.phases {
-        let phase_record = phase_state_to_phase_record(&orch_id, phase_num, phase_state);
-        if let Err(e) = client_guard.upsert_phase(&phase_record).await {
-            error!(phase = %phase_num, error = %e, "failed to sync phase");
-        }
-    }
-
-    drop(client_guard);
-
-    cache
-        .supervisor_state_hashes
-        .insert(feature.to_string(), state_hash);
-
-    info!(feature = %feature, status = ?state.status, phase = state.current_phase, "synced supervisor state");
-    Ok(())
-}
-
 /// Sync all known teams and tasks (called on startup or after detecting changes).
 pub async fn sync_all(
     client: &Arc<Mutex<TinaConvexClient>>,
@@ -294,6 +224,10 @@ pub async fn sync_all(
     tasks_dir: &Path,
     node_id: &str,
 ) -> Result<()> {
+    if let Err(e) = refresh_orchestration_ids(client, cache, node_id).await {
+        warn!(error = %e, "failed to refresh orchestration ids");
+    }
+
     let team_names = list_team_names(teams_dir)?;
 
     for team_name in &team_names {
@@ -306,57 +240,29 @@ pub async fn sync_all(
         warn!(error = %e, "failed to sync tasks");
     }
 
-    // Sync all supervisor states
-    let lookups = SessionLookup::list_all().unwrap_or_default();
-    for lookup in &lookups {
-        if let Err(e) = sync_supervisor_state(client, cache, &lookup.feature, node_id).await {
-            warn!(feature = %lookup.feature, error = %e, "failed to sync supervisor state");
-        }
-    }
-
     Ok(())
 }
 
-// --- Mapping functions ---
-
-/// Convert a SupervisorState to an OrchestrationRecord for Convex.
-pub fn supervisor_state_to_orchestration_record(
-    state: &SupervisorState,
+/// Refresh the feature -> orchestration ID map for this node.
+pub async fn refresh_orchestration_ids(
+    client: &Arc<Mutex<TinaConvexClient>>,
+    cache: &mut SyncCache,
     node_id: &str,
-) -> OrchestrationRecord {
-    OrchestrationRecord {
-        node_id: node_id.to_string(),
-        feature_name: state.feature.clone(),
-        design_doc_path: state.design_doc.display().to_string(),
-        branch: state.branch.clone(),
-        worktree_path: Some(state.worktree_path.display().to_string()),
-        total_phases: state.total_phases as f64,
-        current_phase: state.current_phase as f64,
-        status: format!("{:?}", state.status).to_lowercase(),
-        started_at: state.orchestration_started_at.to_rfc3339(),
-        completed_at: None,
-        total_elapsed_mins: state.timing.total_elapsed_mins.map(|m| m as f64),
-    }
-}
+) -> Result<()> {
+    let entries = {
+        let mut client_guard = client.lock().await;
+        client_guard.list_orchestrations().await?
+    };
 
-/// Convert a PhaseState to a PhaseRecord for Convex.
-pub fn phase_state_to_phase_record(
-    orchestration_id: &str,
-    phase_number: &str,
-    phase: &tina_data::PhaseState,
-) -> PhaseRecord {
-    PhaseRecord {
-        orchestration_id: orchestration_id.to_string(),
-        phase_number: phase_number.to_string(),
-        status: phase.status.to_string(),
-        plan_path: phase.plan_path.as_ref().map(|p| p.display().to_string()),
-        git_range: phase.git_range.clone(),
-        planning_mins: phase.breakdown.planning_mins.map(|m| m as f64),
-        execution_mins: phase.breakdown.execution_mins.map(|m| m as f64),
-        review_mins: phase.breakdown.review_mins.map(|m| m as f64),
-        started_at: phase.planning_started_at.map(|dt| dt.to_rfc3339()),
-        completed_at: phase.completed_at.map(|dt| dt.to_rfc3339()),
+    let mut new_map = HashMap::new();
+    for entry in entries {
+        if entry.record.node_id == node_id {
+            new_map.insert(entry.record.feature_name.clone(), entry.id.clone());
+        }
     }
+
+    cache.orchestration_ids = new_map;
+    Ok(())
 }
 
 // --- File reading helpers (ported from tina-session/src/daemon/sync.rs) ---
@@ -465,20 +371,10 @@ pub fn extract_phase_number(team_name: &str) -> Option<String> {
     None
 }
 
-/// Simple non-cryptographic hash for change detection.
-fn simple_hash(s: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use tempfile::TempDir;
-    use tina_data::{PhaseBreakdown, PhaseState, PhaseStatus};
 
     // --- extract_phase_number tests ---
 
@@ -664,93 +560,4 @@ mod tests {
 
     // --- Mapping tests ---
 
-    #[test]
-    fn test_supervisor_state_to_orchestration_record() {
-        let state = SupervisorState::new(
-            "auth-system",
-            PathBuf::from("docs/auth.md"),
-            PathBuf::from("/worktrees/auth-system"),
-            "tina/auth-system",
-            3,
-        );
-
-        let record = supervisor_state_to_orchestration_record(&state, "node-abc");
-
-        assert_eq!(record.node_id, "node-abc");
-        assert_eq!(record.feature_name, "auth-system");
-        assert_eq!(record.design_doc_path, "docs/auth.md");
-        assert_eq!(record.branch, "tina/auth-system");
-        assert_eq!(record.worktree_path, Some("/worktrees/auth-system".to_string()));
-        assert_eq!(record.total_phases, 3.0);
-        assert_eq!(record.current_phase, 1.0);
-        assert_eq!(record.status, "planning");
-        assert!(record.completed_at.is_none());
-        assert!(record.total_elapsed_mins.is_none());
-    }
-
-    #[test]
-    fn test_phase_state_to_phase_record() {
-        let phase = PhaseState {
-            plan_path: Some(PathBuf::from("docs/plans/phase-1.md")),
-            status: PhaseStatus::Executing,
-            planning_started_at: Some(chrono::Utc::now()),
-            execution_started_at: Some(chrono::Utc::now()),
-            review_started_at: None,
-            completed_at: None,
-            duration_mins: None,
-            git_range: Some("abc123..def456".to_string()),
-            blocked_reason: None,
-            breakdown: PhaseBreakdown {
-                planning_mins: Some(5),
-                execution_mins: Some(15),
-                review_mins: None,
-            },
-            review_verdicts: Vec::new(),
-        };
-
-        let record = phase_state_to_phase_record("orch-123", "1", &phase);
-
-        assert_eq!(record.orchestration_id, "orch-123");
-        assert_eq!(record.phase_number, "1");
-        assert_eq!(record.status, "executing");
-        assert_eq!(record.plan_path, Some("docs/plans/phase-1.md".to_string()));
-        assert_eq!(record.git_range, Some("abc123..def456".to_string()));
-        assert_eq!(record.planning_mins, Some(5.0));
-        assert_eq!(record.execution_mins, Some(15.0));
-        assert_eq!(record.review_mins, None);
-        assert!(record.started_at.is_some());
-        assert!(record.completed_at.is_none());
-    }
-
-    #[test]
-    fn test_phase_state_to_phase_record_minimal() {
-        let phase = PhaseState::new();
-        let record = phase_state_to_phase_record("orch-123", "2", &phase);
-
-        assert_eq!(record.orchestration_id, "orch-123");
-        assert_eq!(record.phase_number, "2");
-        assert_eq!(record.status, "planning");
-        assert!(record.plan_path.is_none());
-        assert!(record.git_range.is_none());
-        assert!(record.planning_mins.is_none());
-        assert!(record.execution_mins.is_none());
-        assert!(record.review_mins.is_none());
-        // started_at should be set since PhaseState::new() sets planning_started_at
-        assert!(record.started_at.is_some());
-        assert!(record.completed_at.is_none());
-    }
-
-    #[test]
-    fn test_simple_hash_consistent() {
-        let hash1 = simple_hash("hello world");
-        let hash2 = simple_hash("hello world");
-        assert_eq!(hash1, hash2);
-    }
-
-    #[test]
-    fn test_simple_hash_differs() {
-        let hash1 = simple_hash("hello");
-        let hash2 = simple_hash("world");
-        assert_ne!(hash1, hash2);
-    }
 }

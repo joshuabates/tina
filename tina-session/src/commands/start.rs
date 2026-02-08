@@ -50,7 +50,7 @@ pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyho
     let plan_abs = fs::canonicalize(plan)?;
 
     // Load state to validate phase (only for integer phases)
-    let state = SupervisorState::load(cwd)?;
+    let state = SupervisorState::load(feature)?;
     if let Ok(phase_num) = phase.parse::<u32>() {
         if phase_num > state.total_phases {
             anyhow::bail!(
@@ -176,4 +176,3 @@ fn install_dependencies(cwd: &Path) {
         }
     }
 }
-

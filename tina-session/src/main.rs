@@ -23,7 +23,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize orchestration (creates worktree, lookup file + supervisor-state.json)
+    /// Initialize orchestration (creates worktree, lookup file, and Convex state)
     Init {
         /// Feature name (used for session naming)
         #[arg(long)]

@@ -3,11 +3,12 @@ use std::collections::BTreeMap;
 use convex::{ConvexClient, FunctionResult, Value};
 use sha2::{Digest, Sha256};
 
-use super::config;
+use crate::config;
 
 /// Orchestration data for Convex upsert.
 pub struct OrchestrationArgs {
     pub node_id: String,
+    pub project_id: Option<String>,
     pub feature_name: String,
     pub design_doc_path: String,
     pub branch: String,
@@ -93,6 +94,22 @@ impl ConvexWriter {
         &self.node_id
     }
 
+    /// Find or create a project by repo path. Returns the project doc ID.
+    pub async fn find_or_create_project(
+        &mut self,
+        name: &str,
+        repo_path: &str,
+    ) -> anyhow::Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("name".into(), Value::from(name));
+        args.insert("repoPath".into(), Value::from(repo_path));
+        let result = self
+            .client
+            .mutation("projects:findOrCreateByRepoPath", args)
+            .await?;
+        extract_string(result)
+    }
+
     /// Upsert an orchestration record. Returns the orchestration doc ID.
     pub async fn upsert_orchestration(
         &mut self,
@@ -100,6 +117,9 @@ impl ConvexWriter {
     ) -> anyhow::Result<String> {
         let mut args = BTreeMap::new();
         args.insert("nodeId".into(), Value::from(orch.node_id.as_str()));
+        if let Some(ref pid) = orch.project_id {
+            args.insert("projectId".into(), Value::from(pid.as_str()));
+        }
         args.insert("featureName".into(), Value::from(orch.feature_name.as_str()));
         args.insert("designDocPath".into(), Value::from(orch.design_doc_path.as_str()));
         args.insert("branch".into(), Value::from(orch.branch.as_str()));
@@ -174,6 +194,42 @@ impl ConvexWriter {
         let result = self.client.mutation("events:recordEvent", args).await?;
         extract_string(result)
     }
+
+    /// Upsert a supervisor state JSON blob for this node/feature.
+    pub async fn upsert_supervisor_state(
+        &mut self,
+        feature_name: &str,
+        state_json: &str,
+        updated_at: f64,
+    ) -> anyhow::Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("nodeId".into(), Value::from(self.node_id.as_str()));
+        args.insert("featureName".into(), Value::from(feature_name));
+        args.insert("stateJson".into(), Value::from(state_json));
+        args.insert("updatedAt".into(), Value::from(updated_at));
+
+        let result = self
+            .client
+            .mutation("supervisorStates:upsertSupervisorState", args)
+            .await?;
+        extract_string(result)
+    }
+
+    /// Fetch supervisor state JSON for this node/feature.
+    pub async fn get_supervisor_state(
+        &mut self,
+        feature_name: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let mut args = BTreeMap::new();
+        args.insert("nodeId".into(), Value::from(self.node_id.as_str()));
+        args.insert("featureName".into(), Value::from(feature_name));
+
+        let result = self
+            .client
+            .query("supervisorStates:getSupervisorState", args)
+            .await?;
+        extract_optional_state_json(result)
+    }
 }
 
 fn hash_token(token: &str) -> String {
@@ -193,15 +249,40 @@ fn extract_string(result: FunctionResult) -> anyhow::Result<String> {
     }
 }
 
-/// Run an async Convex write operation using a one-shot tokio runtime.
-pub fn run_convex_write<F, Fut>(f: F) -> anyhow::Result<()>
+fn extract_optional_state_json(result: FunctionResult) -> anyhow::Result<Option<String>> {
+    match result {
+        FunctionResult::Value(Value::Null) => Ok(None),
+        FunctionResult::Value(Value::Object(map)) => match map.get("stateJson") {
+            Some(Value::String(s)) => Ok(Some(s.clone())),
+            Some(other) => anyhow::bail!("expected stateJson string, got: {:?}", other),
+            None => Ok(None),
+        },
+        FunctionResult::Value(other) => {
+            anyhow::bail!("expected object from Convex, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => anyhow::bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => anyhow::bail!("Convex error: {:?}", err),
+    }
+}
+
+/// Run an async Convex operation using a one-shot tokio runtime.
+pub fn run_convex<F, Fut, T>(f: F) -> anyhow::Result<T>
 where
     F: FnOnce(ConvexWriter) -> Fut,
-    Fut: std::future::Future<Output = anyhow::Result<()>>,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
 {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
         let writer = ConvexWriter::connect().await?;
         f(writer).await
     })
+}
+
+/// Run an async Convex write operation using a one-shot tokio runtime.
+pub fn run_convex_write<F, Fut>(f: F) -> anyhow::Result<()>
+where
+    F: FnOnce(ConvexWriter) -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<()>>,
+{
+    run_convex(f)
 }

@@ -2,12 +2,11 @@ use std::path::Path;
 
 use chrono::Utc;
 
-use tina_session::session::lookup::SessionLookup;
-use tina_session::state::schema::{PhaseStatus, SupervisorState, OrchestrationStatus, PhaseState};
+use tina_session::state::schema::{OrchestrationStatus, PhaseState, PhaseStatus, SupervisorState};
 use tina_session::state::transitions::validate_transition;
 use tina_session::state::timing::duration_mins;
 
-use super::convex_writes;
+use tina_session::convex;
 
 pub fn update(
     feature: &str,
@@ -15,8 +14,7 @@ pub fn update(
     status: &str,
     plan_path: Option<&Path>,
 ) -> anyhow::Result<u8> {
-    let lookup = SessionLookup::load(feature)?;
-    let mut state = SupervisorState::load(&lookup.cwd)?;
+    let mut state = SupervisorState::load(feature)?;
 
     let new_status: PhaseStatus = status.parse()?;
 
@@ -100,8 +98,7 @@ pub fn update(
 }
 
 pub fn phase_complete(feature: &str, phase: &str, git_range: &str) -> anyhow::Result<u8> {
-    let lookup = SessionLookup::load(feature)?;
-    let mut state = SupervisorState::load(&lookup.cwd)?;
+    let mut state = SupervisorState::load(feature)?;
 
     // Validate integer phases against total_phases
     let phase_num = phase.parse::<u32>().ok();
@@ -176,8 +173,7 @@ pub fn phase_complete(feature: &str, phase: &str, git_range: &str) -> anyhow::Re
 }
 
 pub fn blocked(feature: &str, phase: &str, reason: &str) -> anyhow::Result<u8> {
-    let lookup = SessionLookup::load(feature)?;
-    let mut state = SupervisorState::load(&lookup.cwd)?;
+    let mut state = SupervisorState::load(feature)?;
 
     // Validate integer phases against total_phases
     if let Ok(phase_num) = phase.parse::<u32>() {
@@ -218,9 +214,10 @@ pub fn blocked(feature: &str, phase: &str, reason: &str) -> anyhow::Result<u8> {
 
 /// Upsert a single phase record to Convex.
 /// Build an OrchestrationRecord from SupervisorState (no node_id - filled by writer).
-fn state_to_orch_args(feature: &str, state: &SupervisorState) -> convex_writes::OrchestrationArgs {
-    convex_writes::OrchestrationArgs {
+fn state_to_orch_args(feature: &str, state: &SupervisorState) -> convex::OrchestrationArgs {
+    convex::OrchestrationArgs {
         node_id: String::new(), // filled by writer
+        project_id: None,
         feature_name: feature.to_string(),
         design_doc_path: state.design_doc.to_string_lossy().to_string(),
         branch: state.branch.clone(),
@@ -235,8 +232,8 @@ fn state_to_orch_args(feature: &str, state: &SupervisorState) -> convex_writes::
 }
 
 /// Build a PhaseRecord from PhaseState (orchestration_id filled after upsert).
-fn phase_state_to_args(phase_key: &str, ps: &PhaseState) -> convex_writes::PhaseArgs {
-    convex_writes::PhaseArgs {
+fn phase_state_to_args(phase_key: &str, ps: &PhaseState) -> convex::PhaseArgs {
+    convex::PhaseArgs {
         orchestration_id: String::new(), // filled after upsert
         phase_number: phase_key.to_string(),
         status: ps.status.to_string(),
@@ -263,7 +260,7 @@ fn upsert_phase_to_convex(
     let mut orch = state_to_orch_args(feature, state);
     let mut phase_args = phase_state_to_args(phase, phase_state);
 
-    convex_writes::run_convex_write(|mut writer| async move {
+    convex::run_convex_write(|mut writer| async move {
         orch.node_id = writer.node_id().to_string();
         let orch_id = writer.upsert_orchestration(&orch).await?;
         phase_args.orchestration_id = orch_id;
@@ -281,7 +278,7 @@ fn sync_state_to_convex(
     let mut orch = state_to_orch_args(feature, state);
     let phase_args = state.phases.get(phase).map(|ps| phase_state_to_args(phase, ps));
 
-    convex_writes::run_convex_write(|mut writer| async move {
+    convex::run_convex_write(|mut writer| async move {
         orch.node_id = writer.node_id().to_string();
         let orch_id = writer.upsert_orchestration(&orch).await?;
 
@@ -305,8 +302,7 @@ fn orch_status_str(status: OrchestrationStatus) -> &'static str {
 }
 
 pub fn show(feature: &str, phase: Option<&str>, json: bool) -> anyhow::Result<u8> {
-    let lookup = SessionLookup::load(feature)?;
-    let state = SupervisorState::load(&lookup.cwd)?;
+    let state = SupervisorState::load(feature)?;
 
     if json {
         if let Some(phase_key) = phase {

@@ -2,6 +2,12 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  projects: defineTable({
+    name: v.string(),
+    repoPath: v.string(),
+    createdAt: v.string(),
+  }).index("by_repo_path", ["repoPath"]),
+
   nodes: defineTable({
     name: v.string(),
     os: v.string(),
@@ -13,6 +19,7 @@ export default defineSchema({
 
   orchestrations: defineTable({
     nodeId: v.id("nodes"),
+    projectId: v.optional(v.id("projects")),
     featureName: v.string(),
     designDocPath: v.string(),
     branch: v.string(),
@@ -25,7 +32,18 @@ export default defineSchema({
     totalElapsedMins: v.optional(v.number()),
   })
     .index("by_feature", ["featureName"])
-    .index("by_node", ["nodeId"]),
+    .index("by_node", ["nodeId"])
+    .index("by_project", ["projectId"]),
+
+  supervisorStates: defineTable({
+    nodeId: v.id("nodes"),
+    featureName: v.string(),
+    stateJson: v.string(),
+    updatedAt: v.number(),
+  })
+    .index("by_feature", ["featureName"])
+    .index("by_node", ["nodeId"])
+    .index("by_feature_node", ["featureName", "nodeId"]),
 
   phases: defineTable({
     orchestrationId: v.id("orchestrations"),

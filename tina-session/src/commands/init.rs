@@ -9,7 +9,7 @@ use tina_session::error::SessionError;
 use tina_session::session::lookup::SessionLookup;
 use tina_session::state::schema::SupervisorState;
 
-use super::convex_writes;
+use tina_session::convex;
 
 const STATUSLINE_SCRIPT: &str = r#"#!/bin/bash
 set -e
@@ -78,7 +78,7 @@ pub fn run(
     let lookup = SessionLookup::new(feature, worktree_path.clone());
     lookup.save()?;
 
-    // Create supervisor-state.json in the worktree
+    // Create supervisor state in Convex
     let state = SupervisorState::new(
         feature,
         design_doc_abs.clone(),
@@ -95,6 +95,7 @@ pub fn run(
         &design_doc_abs,
         &actual_branch,
         total_phases,
+        &cwd_abs,
     ) {
         eprintln!("Warning: Failed to write to Convex: {}", e);
     }
@@ -221,12 +222,28 @@ fn write_to_convex(
     design_doc: &Path,
     branch: &str,
     total_phases: u32,
+    cwd: &Path,
 ) -> anyhow::Result<()> {
     let now = chrono::Utc::now().to_rfc3339();
+    let repo_name = cwd
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let repo_path = cwd.to_string_lossy().to_string();
 
-    convex_writes::run_convex_write(|mut writer| async move {
-        let orch = convex_writes::OrchestrationArgs {
+    convex::run_convex_write(|mut writer| async move {
+        let project_id = match writer.find_or_create_project(&repo_name, &repo_path).await {
+            Ok(id) => Some(id),
+            Err(e) => {
+                eprintln!("Warning: Failed to find/create project: {}", e);
+                None
+            }
+        };
+
+        let orch = convex::OrchestrationArgs {
             node_id: writer.node_id().to_string(),
+            project_id,
             feature_name: feature.to_string(),
             design_doc_path: design_doc.to_string_lossy().to_string(),
             branch: branch.to_string(),
@@ -247,6 +264,16 @@ fn write_to_convex(
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    fn convex_available() -> bool {
+        match tina_session::config::load_config() {
+            Ok(cfg) => {
+                cfg.convex_url.as_deref().unwrap_or_default().is_empty() == false
+                    && cfg.auth_token.as_deref().unwrap_or_default().is_empty() == false
+            }
+            Err(_) => false,
+        }
+    }
 
     /// Create a temporary git repo for testing.
     fn create_test_repo() -> TempDir {
@@ -269,6 +296,10 @@ mod tests {
 
     #[test]
     fn test_init_creates_worktree_and_files() {
+        if !convex_available() {
+            return;
+        }
+
         let temp_dir = create_test_repo();
         let cwd = temp_dir.path();
 
@@ -299,10 +330,6 @@ mod tests {
         let settings = worktree_path.join(".claude").join("settings.local.json");
         assert!(settings.exists(), "Settings file should exist");
 
-        // Verify supervisor-state.json
-        let state_path = SupervisorState::state_path(&worktree_path);
-        assert!(state_path.exists(), "Supervisor state should exist");
-
         // Clean up worktree
         let _ = Command::new("git")
             .args(["-C", &cwd.to_string_lossy(), "worktree", "remove", "--force", &worktree_path.to_string_lossy()])
@@ -311,6 +338,10 @@ mod tests {
 
     #[test]
     fn test_init_gitignores_worktrees() {
+        if !convex_available() {
+            return;
+        }
+
         let temp_dir = create_test_repo();
         let cwd = temp_dir.path();
 
@@ -338,6 +369,10 @@ mod tests {
 
     #[test]
     fn test_init_branch_collision_appends_timestamp() {
+        if !convex_available() {
+            return;
+        }
+
         let temp_dir = create_test_repo();
         let cwd = temp_dir.path();
 

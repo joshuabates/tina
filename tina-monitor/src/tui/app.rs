@@ -703,15 +703,7 @@ impl App {
         let orch = &self.orchestrations[self.selected_index];
         let phase = orch.current_phase;
 
-        // Read supervisor state to get worktree path
-        let state_path = orch
-            .cwd
-            .join(".claude")
-            .join("tina")
-            .join("supervisor-state.json");
-        let state_content = std::fs::read_to_string(&state_path).ok()?;
-        let state: crate::types::SupervisorState =
-            serde_json::from_str(&state_content).ok()?;
+        let worktree_path = orch.cwd.clone();
 
         // Read handoff to get git range
         let handoff_path = orch
@@ -730,7 +722,7 @@ impl App {
 
         let title = format!("Phase {} Commits - {}", phase, orch.title());
 
-        Some((state.worktree_path, range, title))
+        Some((worktree_path, range, title))
     }
 
     /// Handle key events in PhaseDetail view
@@ -1480,6 +1472,7 @@ mod tests {
             node_name: "macbook".to_string(),
             record: tina_data::OrchestrationRecord {
                 node_id: "node-1".to_string(),
+                project_id: None,
                 feature_name: title.to_string(),
                 design_doc_path: "design.md".to_string(),
                 branch: format!("tina/{}", title),

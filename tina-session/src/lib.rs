@@ -4,6 +4,8 @@
 
 pub mod checks;
 pub mod claude;
+pub mod config;
+pub mod convex;
 pub mod daemon;
 pub mod error;
 pub mod session;

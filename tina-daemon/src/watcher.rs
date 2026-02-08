@@ -1,14 +1,11 @@
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc as std_mpsc;
 
 use anyhow::{Context, Result};
 use notify::{Event, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::info;
 
-use tina_session::session::lookup::SessionLookup;
-use tina_session::state::schema::SupervisorState;
 
 /// Categorized file-system event.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,11 +14,9 @@ pub enum WatchEvent {
     Teams,
     /// A file changed in `~/.claude/tasks/`
     Tasks,
-    /// A supervisor-state.json changed for the given feature
-    SupervisorState { feature: String },
 }
 
-/// Async file watcher that monitors teams, tasks, and supervisor-state files.
+/// Async file watcher that monitors teams and tasks.
 ///
 /// Uses `std::sync::mpsc` internally (safe from any thread) with an async
 /// bridge to a `tokio::sync::mpsc` channel for the consumer.
@@ -31,13 +26,11 @@ pub struct DaemonWatcher {
     _bridge_handle: tokio::task::JoinHandle<()>,
     teams_dir: PathBuf,
     tasks_dir: PathBuf,
-    watched_state_files: HashSet<PathBuf>,
 }
 
 impl DaemonWatcher {
     /// Create a watcher monitoring the given teams and tasks directories.
     ///
-    /// Also discovers and watches all supervisor-state.json files via SessionLookup.
     pub fn new(teams_dir: &Path, tasks_dir: &Path) -> Result<Self> {
         std::fs::create_dir_all(teams_dir)
             .with_context(|| format!("creating teams dir: {}", teams_dir.display()))?;
@@ -66,9 +59,6 @@ impl DaemonWatcher {
                         Some(WatchEvent::Teams)
                     } else if path.starts_with(&tkp) {
                         Some(WatchEvent::Tasks)
-                    } else if path.file_name().map(|n| n == "supervisor-state.json").unwrap_or(false) {
-                        extract_feature_from_state_path(path)
-                            .map(|feature| WatchEvent::SupervisorState { feature })
                     } else {
                         None
                     };
@@ -83,28 +73,9 @@ impl DaemonWatcher {
         watcher.watch(teams_dir, RecursiveMode::Recursive)?;
         watcher.watch(tasks_dir, RecursiveMode::Recursive)?;
 
-        // Discover and watch existing supervisor-state.json files
-        let mut watched_state_files = HashSet::new();
-        if let Ok(lookups) = SessionLookup::list_all() {
-            for lookup in &lookups {
-                let state_path = SupervisorState::state_path(&lookup.cwd);
-                if state_path.exists() {
-                    if let Some(parent) = state_path.parent() {
-                        if let Err(e) = watcher.watch(parent, RecursiveMode::NonRecursive) {
-                            warn!(path = %parent.display(), error = %e, "failed to watch state dir");
-                        } else {
-                            watched_state_files.insert(parent.to_path_buf());
-                            debug!(path = %state_path.display(), "watching supervisor-state.json");
-                        }
-                    }
-                }
-            }
-        }
-
         info!(
             teams = %teams_dir.display(),
             tasks = %tasks_dir.display(),
-            state_files = watched_state_files.len(),
             "file watchers initialized"
         );
 
@@ -134,27 +105,7 @@ impl DaemonWatcher {
             _bridge_handle: bridge_handle,
             teams_dir: teams_dir.to_path_buf(),
             tasks_dir: tasks_dir.to_path_buf(),
-            watched_state_files,
         })
-    }
-
-    /// Re-scan session lookups and watch any new supervisor-state.json files.
-    pub fn refresh_state_watches(&mut self) -> Result<()> {
-        let lookups = SessionLookup::list_all().unwrap_or_default();
-
-        for lookup in &lookups {
-            let state_path = SupervisorState::state_path(&lookup.cwd);
-            if let Some(parent) = state_path.parent() {
-                if state_path.exists() && !self.watched_state_files.contains(parent) {
-                    debug!(
-                        path = %state_path.display(),
-                        "new supervisor-state.json discovered but not yet watched"
-                    );
-                }
-            }
-        }
-
-        Ok(())
     }
 
     /// Get the teams directory being watched.
@@ -168,82 +119,16 @@ impl DaemonWatcher {
     }
 }
 
-/// Extract the feature name from a supervisor-state.json path.
-fn extract_feature_from_state_path(path: &Path) -> Option<String> {
-    let worktree_dir = path.parent()?.parent()?.parent()?;
-
-    if let Ok(content) = std::fs::read_to_string(path) {
-        if let Ok(state) = serde_json::from_str::<SupervisorState>(&content) {
-            return Some(state.feature);
-        }
-    }
-
-    worktree_dir
-        .file_name()
-        .and_then(|n| n.to_str())
-        .map(|s| s.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     #[test]
     fn test_watch_event_equality() {
         assert_eq!(WatchEvent::Teams, WatchEvent::Teams);
         assert_eq!(WatchEvent::Tasks, WatchEvent::Tasks);
-        assert_eq!(
-            WatchEvent::SupervisorState {
-                feature: "auth".to_string()
-            },
-            WatchEvent::SupervisorState {
-                feature: "auth".to_string()
-            },
-        );
         assert_ne!(WatchEvent::Teams, WatchEvent::Tasks);
-    }
-
-    #[test]
-    fn test_extract_feature_from_state_path_with_file() {
-        let dir = TempDir::new().unwrap();
-        let worktree = dir.path().join("my-feature");
-        let tina_dir = worktree.join(".claude").join("tina");
-        fs::create_dir_all(&tina_dir).unwrap();
-
-        let state_path = tina_dir.join("supervisor-state.json");
-        let state_json = r#"{
-            "version": 1,
-            "feature": "my-feature",
-            "design_doc": "docs/design.md",
-            "worktree_path": "/tmp/worktree",
-            "branch": "tina/my-feature",
-            "total_phases": 2,
-            "current_phase": 1,
-            "status": "planning",
-            "orchestration_started_at": "2026-02-07T10:00:00Z",
-            "phases": {},
-            "timing": {}
-        }"#;
-        fs::write(&state_path, state_json).unwrap();
-
-        let feature = extract_feature_from_state_path(&state_path);
-        assert_eq!(feature, Some("my-feature".to_string()));
-    }
-
-    #[test]
-    fn test_extract_feature_from_state_path_fallback_to_dir_name() {
-        let dir = TempDir::new().unwrap();
-        let worktree = dir.path().join("fallback-feature");
-        let tina_dir = worktree.join(".claude").join("tina");
-        fs::create_dir_all(&tina_dir).unwrap();
-
-        let state_path = tina_dir.join("supervisor-state.json");
-        fs::write(&state_path, "not valid json").unwrap();
-
-        let feature = extract_feature_from_state_path(&state_path);
-        assert_eq!(feature, Some("fallback-feature".to_string()));
     }
 
     #[tokio::test]

@@ -2,7 +2,7 @@
 //!
 //! Categorizes failures to help identify root causes:
 //! - Setup: Test infrastructure problems
-//! - Orchestration: State file issues
+//! - Orchestration: Convex state issues
 //! - Monitor: tina-monitor misreads valid state
 //! - Outcome: Feature not implemented correctly
 
@@ -13,7 +13,7 @@ use std::fmt;
 pub enum FailureCategory {
     /// Test infrastructure problem (compilation, patch, setup)
     Setup,
-    /// State files wrong or missing (supervisor-state.json issues)
+    /// Convex orchestration state issues
     Orchestration,
     /// Valid state but tina-monitor shows wrong values
     Monitor,
@@ -71,17 +71,18 @@ impl CategorizedFailure {
         Self::new(FailureCategory::Setup, "Patch application failed").with_details(details)
     }
 
-    /// Supervisor state file is missing
+    /// Orchestration state is missing
     pub fn missing_state_file() -> Self {
         Self::new(
             FailureCategory::Orchestration,
-            "supervisor-state.json not found",
+            "Orchestration state not found in Convex",
         )
     }
 
-    /// Supervisor state has invalid format
+    /// Orchestration state has invalid format
     pub fn invalid_state_format(details: impl Into<String>) -> Self {
-        Self::new(FailureCategory::Orchestration, "Invalid state file format").with_details(details)
+        Self::new(FailureCategory::Orchestration, "Invalid orchestration state format")
+            .with_details(details)
     }
 
     /// State is valid but monitor shows wrong data

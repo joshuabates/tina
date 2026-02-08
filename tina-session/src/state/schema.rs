@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -315,7 +314,7 @@ pub struct ReviewVerdict {
     pub issues: Vec<String>,
 }
 
-/// The main supervisor state file.
+/// The main supervisor state record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SupervisorState {
     pub version: u32,
@@ -363,39 +362,39 @@ impl SupervisorState {
         }
     }
 
-    /// Get the path to the supervisor state file for a worktree.
-    pub fn state_path(worktree: &Path) -> PathBuf {
-        worktree
-            .join(".claude")
-            .join("tina")
-            .join("supervisor-state.json")
-    }
+    /// Load supervisor state from Convex by feature name.
+    pub fn load(feature: &str) -> Result<Self> {
+        let feature_name = feature.to_string();
+        let state_json = crate::convex::run_convex(|mut writer| async move {
+            writer.get_supervisor_state(&feature_name).await
+        })
+        .map_err(|e| SessionError::ConvexError(e.to_string()))?;
 
-    /// Load supervisor state from a worktree.
-    pub fn load(worktree: &Path) -> Result<Self> {
-        let path = Self::state_path(worktree);
-        if !path.exists() {
-            return Err(SessionError::FileNotFound(path.display().to_string()));
-        }
-        let contents = fs::read_to_string(&path)
-            .map_err(|e| SessionError::FileNotFound(format!("{}: {}", path.display(), e)))?;
-        let state: Self = serde_json::from_str(&contents)
-            .map_err(|e| SessionError::FileNotFound(format!("Invalid JSON: {}", e)))?;
+        let json = match state_json {
+            Some(json) => json,
+            None => return Err(SessionError::NotInitialized(feature.to_string())),
+        };
+
+        let state: Self =
+            serde_json::from_str(&json).map_err(|e| SessionError::ConvexError(e.to_string()))?;
         Ok(state)
     }
 
-    /// Save supervisor state to its worktree.
+    /// Save supervisor state to Convex.
     pub fn save(&self) -> Result<()> {
-        let path = Self::state_path(&self.worktree_path);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|e| {
-                SessionError::DirectoryNotFound(format!("{}: {}", parent.display(), e))
-            })?;
-        }
-        let contents = serde_json::to_string_pretty(self)
-            .map_err(|e| SessionError::FileNotFound(format!("Serialization error: {}", e)))?;
-        fs::write(&path, contents)
-            .map_err(|e| SessionError::FileNotFound(format!("{}: {}", path.display(), e)))?;
+        let feature_name = self.feature.clone();
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| SessionError::ConvexError(e.to_string()))?;
+        let updated_at = chrono::Utc::now().timestamp_millis() as f64;
+
+        crate::convex::run_convex(|mut writer| async move {
+            writer
+                .upsert_supervisor_state(&feature_name, &json, updated_at)
+                .await?;
+            Ok(())
+        })
+        .map_err(|e| SessionError::ConvexError(e.to_string()))?;
+
         Ok(())
     }
 
@@ -448,15 +447,6 @@ mod tests {
         assert_eq!(state.total_phases, 3);
         assert_eq!(state.current_phase, 1);
         assert_eq!(state.status, OrchestrationStatus::Planning);
-    }
-
-    #[test]
-    fn test_state_path() {
-        let path = SupervisorState::state_path(Path::new("/worktree"));
-        assert_eq!(
-            path,
-            PathBuf::from("/worktree/.claude/tina/supervisor-state.json")
-        );
     }
 
     // ====================================================================

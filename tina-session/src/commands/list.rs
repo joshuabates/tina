@@ -13,7 +13,7 @@ pub fn run() -> anyhow::Result<u8> {
     println!("{}", "-".repeat(80));
 
     for lookup in lookups {
-        let (phase, status) = match SupervisorState::load(&lookup.cwd) {
+        let (phase, status) = match SupervisorState::load(&lookup.feature) {
             Ok(state) => (
                 format!("{}/{}", state.current_phase, state.total_phases),
                 format!("{:?}", state.status).to_lowercase(),

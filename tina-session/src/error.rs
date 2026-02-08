@@ -55,6 +55,9 @@ pub enum SessionError {
 
     #[error("Invalid model '{0}'. Must be 'opus' or 'haiku'.")]
     InvalidModel(String),
+
+    #[error("Convex error: {0}")]
+    ConvexError(String),
 }
 
 #[allow(dead_code)]

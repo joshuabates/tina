@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
+use tina_session::state::schema::SupervisorState;
 
 use crate::failure::{CategorizedFailure, FailureCategory};
 use crate::scenario::{
@@ -245,34 +246,29 @@ fn run_full_orchestration(
         );
     }
 
-    // Parse orchestration result from supervisor-state.json
-    let state_path = work_dir.join(".claude/tina/supervisor-state.json");
-    if !state_path.exists() {
-        anyhow::bail!("Orchestration completed but supervisor-state.json not found");
-    }
+    // Load orchestration result from Convex (canonical state)
+    let feature_name = feature_name_from_design_doc(&design_path);
+    let state = SupervisorState::load(&feature_name)
+        .context("Failed to load supervisor state from Convex")?;
 
-    let state_content = fs::read_to_string(&state_path)
-        .context("Failed to read supervisor-state.json")?;
-
-    // Parse the state to extract phases completed and status
-    let state: serde_json::Value = serde_json::from_str(&state_content)
-        .context("Failed to parse supervisor-state.json")?;
-
-    let phases_completed = state
-        .get("current_phase")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
-
-    let status = state
-        .get("status")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown")
-        .to_string();
+    let phases_completed = state.current_phase;
+    let status = format!("{:?}", state.status).to_lowercase();
 
     Ok(OrchestrationState {
         phases_completed,
         status,
     })
+}
+
+fn feature_name_from_design_doc(design_doc: &Path) -> String {
+    let filename = design_doc
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+
+    let without_prefix = filename.trim_start_matches(|c: char| c.is_ascii_digit() || c == '-');
+    let without_suffix = without_prefix.strip_suffix("-design.md").unwrap_or(without_prefix);
+    without_suffix.to_string()
 }
 
 /// Validate the outcome against expected state

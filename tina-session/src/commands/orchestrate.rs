@@ -1,14 +1,12 @@
 use std::path::Path;
 
-use tina_session::session::lookup::SessionLookup;
 use tina_session::state::orchestrate::{advance_state, next_action, Action, AdvanceEvent};
 
-use super::convex_writes;
+use tina_session::convex;
 
 /// Determine the next action to take based on current orchestration state.
 pub fn next(feature: &str) -> anyhow::Result<u8> {
-    let lookup = SessionLookup::load(feature)?;
-    let state = tina_session::state::schema::SupervisorState::load(&lookup.cwd)?;
+    let state = tina_session::state::schema::SupervisorState::load(feature)?;
 
     let action = next_action(&state)?;
     println!("{}", serde_json::to_string(&action)?);
@@ -24,8 +22,7 @@ pub fn advance(
     git_range: Option<&str>,
     issues: Option<&str>,
 ) -> anyhow::Result<u8> {
-    let lookup = SessionLookup::load(feature)?;
-    let mut state = tina_session::state::schema::SupervisorState::load(&lookup.cwd)?;
+    let mut state = tina_session::state::schema::SupervisorState::load(feature)?;
 
     let event = parse_event(event, plan_path, git_range, issues)?;
     let action = advance_state(&mut state, phase, event.clone())?;
@@ -114,8 +111,9 @@ fn sync_to_convex(
         OrchestrationStatus::Blocked => "blocked",
     };
 
-    let mut orch = convex_writes::OrchestrationArgs {
+    let mut orch = convex::OrchestrationArgs {
         node_id: String::new(), // filled by writer
+        project_id: None,
         feature_name: feature.to_string(),
         design_doc_path: state.design_doc.to_string_lossy().to_string(),
         branch: state.branch.clone(),
@@ -131,7 +129,7 @@ fn sync_to_convex(
     let phase_args_list: Vec<_> = state
         .phases
         .iter()
-        .map(|(k, ps)| convex_writes::PhaseArgs {
+        .map(|(k, ps)| convex::PhaseArgs {
             orchestration_id: String::new(), // filled after upsert
             phase_number: k.clone(),
             status: ps.status.to_string(),
@@ -152,7 +150,7 @@ fn sync_to_convex(
         Some(phase.to_string())
     };
 
-    convex_writes::run_convex_write(|mut writer| async move {
+    convex::run_convex_write(|mut writer| async move {
         orch.node_id = writer.node_id().to_string();
         let orch_id = writer.upsert_orchestration(&orch).await?;
 
@@ -161,7 +159,7 @@ fn sync_to_convex(
             writer.upsert_phase(&pa).await?;
         }
 
-        let event = convex_writes::EventArgs {
+        let event = convex::EventArgs {
             orchestration_id: orch_id,
             phase_number,
             event_type,
