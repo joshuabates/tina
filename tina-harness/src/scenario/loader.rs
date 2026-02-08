@@ -6,7 +6,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use chrono::Utc;
 
-use super::types::{ExpectedState, LastPassed, Scenario};
+use super::types::{ExpectedState, LastPassed, Scenario, ScenarioConfig};
 
 /// Load a scenario from a directory
 pub fn load_scenario(scenario_dir: &Path) -> Result<Scenario> {
@@ -15,6 +15,13 @@ pub fn load_scenario(scenario_dir: &Path) -> Result<Scenario> {
         .and_then(|s| s.to_str())
         .map(|s| s.to_string())
         .context("Invalid scenario directory name")?;
+
+    // Load scenario.json (required)
+    let config_path = scenario_dir.join("scenario.json");
+    let config_content = fs::read_to_string(&config_path)
+        .with_context(|| format!("Failed to read scenario.json at {}", config_path.display()))?;
+    let config: ScenarioConfig = serde_json::from_str(&config_content)
+        .with_context(|| format!("Failed to parse scenario.json at {}", config_path.display()))?;
 
     // Load design.md (required)
     let design_path = scenario_dir.join("design.md");
@@ -41,6 +48,7 @@ pub fn load_scenario(scenario_dir: &Path) -> Result<Scenario> {
     Ok(Scenario {
         name,
         path: scenario_dir.to_path_buf(),
+        feature_name: config.feature_name,
         design_doc,
         expected,
         setup_patch,
@@ -88,6 +96,11 @@ mod tests {
 
     fn create_test_scenario(dir: &Path) {
         fs::write(
+            dir.join("scenario.json"),
+            r#"{"feature_name": "test-feature"}"#,
+        )
+        .unwrap();
+        fs::write(
             dir.join("design.md"),
             "# Test\n\nA test scenario.\n\n## Phase 1\n\nDo something.",
         )
@@ -115,9 +128,27 @@ mod tests {
 
         let scenario = load_scenario(&scenario_dir).unwrap();
         assert_eq!(scenario.name, "01-test-scenario");
+        assert_eq!(scenario.feature_name, "test-feature");
         assert!(scenario.design_doc.contains("# Test"));
         assert_eq!(scenario.expected.assertions.phases_completed, 1);
         assert!(scenario.setup_patch.is_none());
+    }
+
+    #[test]
+    fn test_load_scenario_missing_scenario_json() {
+        let temp = TempDir::new().unwrap();
+        let scenario_dir = temp.path().join("05-no-config");
+        fs::create_dir(&scenario_dir).unwrap();
+        fs::write(scenario_dir.join("design.md"), "# Test").unwrap();
+        fs::write(
+            scenario_dir.join("expected.json"),
+            r#"{"schema_version":1,"assertions":{"phases_completed":1,"final_status":"complete","tests_pass":true}}"#,
+        )
+        .unwrap();
+
+        let result = load_scenario(&scenario_dir);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("scenario.json"));
     }
 
     #[test]
@@ -139,6 +170,11 @@ mod tests {
         let scenario_dir = temp.path().join("03-missing");
         fs::create_dir(&scenario_dir).unwrap();
         fs::write(
+            scenario_dir.join("scenario.json"),
+            r#"{"feature_name": "test"}"#,
+        )
+        .unwrap();
+        fs::write(
             scenario_dir.join("expected.json"),
             r#"{"schema_version":1,"assertions":{"phases_completed":1,"final_status":"complete","tests_pass":true}}"#,
         )
@@ -154,6 +190,11 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let scenario_dir = temp.path().join("04-missing");
         fs::create_dir(&scenario_dir).unwrap();
+        fs::write(
+            scenario_dir.join("scenario.json"),
+            r#"{"feature_name": "test"}"#,
+        )
+        .unwrap();
         fs::write(scenario_dir.join("design.md"), "# Test").unwrap();
 
         let result = load_scenario(&scenario_dir);

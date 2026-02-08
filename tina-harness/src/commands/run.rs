@@ -34,8 +34,7 @@ pub struct RunResult {
 }
 
 impl RunResult {
-    fn success(scenario_name: String, work_dir: PathBuf) -> Self {
-        let feature_name = derive_feature_name(&scenario_name);
+    fn success(scenario_name: String, feature_name: String, work_dir: PathBuf) -> Self {
         Self {
             scenario_name,
             feature_name,
@@ -46,8 +45,7 @@ impl RunResult {
         }
     }
 
-    fn failure(scenario_name: String, work_dir: PathBuf, failures: Vec<CategorizedFailure>) -> Self {
-        let feature_name = derive_feature_name(&scenario_name);
+    fn failure(scenario_name: String, feature_name: String, work_dir: PathBuf, failures: Vec<CategorizedFailure>) -> Self {
         Self {
             scenario_name,
             feature_name,
@@ -58,8 +56,7 @@ impl RunResult {
         }
     }
 
-    fn skipped(scenario_name: String, work_dir: PathBuf) -> Self {
-        let feature_name = derive_feature_name(&scenario_name);
+    fn skipped(scenario_name: String, feature_name: String, work_dir: PathBuf) -> Self {
         Self {
             scenario_name,
             feature_name,
@@ -99,7 +96,7 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
     if !config.force_baseline {
         if let Some(skip_reason) = should_skip_baseline(&scenario_dir)? {
             eprintln!("Skipping {}: {}", scenario_name, skip_reason);
-            return Ok(RunResult::skipped(scenario.name, scenario_work_dir));
+            return Ok(RunResult::skipped(scenario.name, scenario.feature_name, scenario_work_dir));
         }
     }
 
@@ -117,6 +114,7 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
         if let Err(e) = apply_patch(&scenario_work_dir, patch) {
             return Ok(RunResult::failure(
                 scenario.name.clone(),
+                scenario.feature_name.clone(),
                 scenario_work_dir,
                 vec![CategorizedFailure::patch_failed(e.to_string())],
             ));
@@ -127,6 +125,7 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
     if let Err(e) = verify_compilation(&scenario_work_dir) {
         return Ok(RunResult::failure(
             scenario.name.clone(),
+            scenario.feature_name.clone(),
             scenario_work_dir,
             vec![CategorizedFailure::compilation_failed(e.to_string())],
         ));
@@ -138,6 +137,7 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
         if setup_tests_result.is_ok() {
             return Ok(RunResult::failure(
                 scenario.name.clone(),
+                scenario.feature_name.clone(),
                 scenario_work_dir,
                 vec![CategorizedFailure::new(
                     FailureCategory::Setup,
@@ -148,6 +148,7 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
     } else if let Err(e) = setup_tests_result {
         return Ok(RunResult::failure(
             scenario.name.clone(),
+            scenario.feature_name.clone(),
             scenario_work_dir,
             vec![CategorizedFailure::new(
                 FailureCategory::Setup,
@@ -172,9 +173,9 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
         if let Ok(hash) = get_current_git_hash() {
             let _ = save_last_passed(&scenario_dir, &hash);
         }
-        Ok(RunResult::success(scenario.name, scenario_work_dir))
+        Ok(RunResult::success(scenario.name, scenario.feature_name, scenario_work_dir))
     } else {
-        Ok(RunResult::failure(scenario.name, scenario_work_dir, failures))
+        Ok(RunResult::failure(scenario.name, scenario.feature_name, scenario_work_dir, failures))
     }
 }
 
@@ -216,14 +217,11 @@ fn run_full_orchestration(
     work_dir: &Path,
     scenario: &Scenario,
 ) -> Result<OrchestrationState> {
-    // Derive a feature name the orchestrate skill will likely use.
-    // The skill extracts it from the design doc filename or content.
-    // We use a simple heuristic matching the scenario name pattern.
-    let feature_name = derive_feature_name(&scenario.name);
-    eprintln!("Derived feature name: {}", feature_name);
+    let feature_name = &scenario.feature_name;
+    eprintln!("Feature name: {}", feature_name);
 
     // Clean up stale state from previous runs
-    cleanup_stale_state(&feature_name);
+    cleanup_stale_state(feature_name);
 
     // Write the design doc to the work directory
     let design_path = work_dir.join("design.md");
@@ -300,7 +298,7 @@ fn run_full_orchestration(
     // Wait for orchestration to complete by polling Convex supervisor state
     eprintln!("Waiting for orchestration to complete (timeout: {}s)...", ORCHESTRATION_TIMEOUT_SECS);
     let result = wait_for_orchestration_complete(
-        &feature_name,
+        feature_name,
         &session_name,
         ORCHESTRATION_TIMEOUT_SECS,
         &started_after,
@@ -327,21 +325,6 @@ fn detect_claude_binary() -> &'static str {
 
     // Default to claude and let it fail with a clear error
     "claude"
-}
-
-/// Derive a feature name from a scenario name.
-/// Maps scenario names like "01-single-phase-feature" to likely orchestration
-/// feature names like "verbose-flag" by reading the design doc title.
-fn derive_feature_name(scenario_name: &str) -> String {
-    // The orchestrate skill typically derives feature name from the design content.
-    // For our known scenarios, we hardcode the mapping. A more robust approach
-    // would parse the design doc, but this works for the test scenarios.
-    match scenario_name {
-        "01-single-phase-feature" => "verbose-flag".to_string(),
-        "02-two-phase-refactor" => "utility-refactor".to_string(),
-        "03-failing-tests" => "fix-blank-check".to_string(),
-        _ => scenario_name.replace(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-'], ""),
-    }
 }
 
 /// Clean up stale state from a previous orchestration run for this feature.
@@ -461,16 +444,12 @@ fn load_orchestration_state_from_convex(feature_name: &str, started_after: &str)
         let mut client = tina_data::TinaConvexClient::new(&convex_url).await?;
         let orchestrations = client.list_orchestrations().await?;
 
-        // Find the most recent orchestration for this feature.
-        // tina-session init appends a suffix (PID) to the feature name,
-        // so we match by prefix (e.g. "verbose-flag" matches "verbose-flag-56979").
+        // Find the most recent orchestration for this feature (exact match).
         // Also filter by started_after to ignore stale orchestrations from previous runs.
-        let prefix = format!("{}-", feature_name);
         let entry = orchestrations
             .iter()
             .filter(|o| {
-                let name_matches = o.record.feature_name == feature_name
-                    || o.record.feature_name.starts_with(&prefix);
+                let name_matches = o.record.feature_name == feature_name;
                 let is_recent = o.record.started_at.as_str() >= started_after;
                 name_matches && is_recent
             })

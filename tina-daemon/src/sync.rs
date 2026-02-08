@@ -280,55 +280,10 @@ pub fn load_task_files(dir: &Path) -> Result<Vec<Task>> {
     Ok(tasks)
 }
 
-/// Extract a phase number from a team name.
-///
-/// Looks for "phase-N" patterns in the name.
-pub fn extract_phase_number(team_name: &str) -> Option<String> {
-    for part in team_name.split('-') {
-        if let Ok(n) = part.parse::<u32>() {
-            let pattern = format!("phase-{}", n);
-            if team_name.contains(&pattern) {
-                return Some(n.to_string());
-            }
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
-
-    // --- extract_phase_number tests ---
-
-    #[test]
-    fn test_extract_phase_number_with_suffix() {
-        assert_eq!(
-            extract_phase_number("feat-phase-2-execution"),
-            Some("2".to_string())
-        );
-    }
-
-    #[test]
-    fn test_extract_phase_number_trailing() {
-        assert_eq!(
-            extract_phase_number("my-feature-phase-1"),
-            Some("1".to_string())
-        );
-    }
-
-    #[test]
-    fn test_extract_phase_number_orchestration() {
-        assert_eq!(extract_phase_number("feat-orchestration"), None);
-    }
-
-    #[test]
-    fn test_extract_phase_number_no_match() {
-        assert_eq!(extract_phase_number("random-team"), None);
-    }
-
-    // --- File reading tests ---
 
     fn create_team_dir(dir: &Path, name: &str, cwd: &str) {
         let team_dir = dir.join(name);

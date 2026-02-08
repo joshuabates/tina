@@ -5,6 +5,13 @@ use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/// Configuration from scenario.json
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScenarioConfig {
+    /// The feature name used in orchestration (exact match, no derivation)
+    pub feature_name: String,
+}
+
 /// A parsed scenario from a scenario directory
 #[derive(Debug, Clone)]
 pub struct Scenario {
@@ -12,6 +19,8 @@ pub struct Scenario {
     pub name: String,
     /// Path to scenario directory
     pub path: PathBuf,
+    /// The feature name from scenario.json
+    pub feature_name: String,
     /// Contents of design.md
     pub design_doc: String,
     /// Expected state/assertions from expected.json

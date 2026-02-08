@@ -78,6 +78,12 @@ fn main() {
 /// Create a minimal scenario in the given directory
 fn create_scenario(dir: &std::path::Path, phases: u32, file_check: Option<(&str, &str)>) {
     fs::write(
+        dir.join("scenario.json"),
+        r#"{"feature_name": "test-feature"}"#,
+    )
+    .unwrap();
+
+    fs::write(
         dir.join("design.md"),
         "# Test Scenario\n\n## Phase 1\n\nDo something.\n",
     )
