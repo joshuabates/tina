@@ -129,9 +129,10 @@ pub async fn sync_tasks(
         };
 
         let phase_number = extract_phase_number(team_name);
-        let task_session_dir = tasks_dir.join(&team.lead_session_id);
+        // Claude CLI stores tasks under ~/.claude/tasks/{team_name}/, not by session ID
+        let task_team_dir = tasks_dir.join(team_name);
 
-        if !task_session_dir.exists() {
+        if !task_team_dir.exists() {
             continue;
         }
 
@@ -140,7 +141,7 @@ pub async fn sync_tasks(
             cache,
             &orchestration_id,
             phase_number.as_deref(),
-            &task_session_dir,
+            &task_team_dir,
         )
         .await?;
     }
@@ -243,24 +244,41 @@ pub async fn sync_all(
     Ok(())
 }
 
-/// Refresh the feature -> orchestration ID map for this node.
+/// Refresh the feature -> orchestration ID map.
+///
+/// Includes all orchestrations, not just those from this node, because
+/// tina-session and the daemon register separate node IDs. A future
+/// improvement would be to have registerNode return an existing node
+/// for the same hostname so all components share one node ID.
 pub async fn refresh_orchestration_ids(
     client: &Arc<Mutex<TinaConvexClient>>,
     cache: &mut SyncCache,
-    node_id: &str,
+    _node_id: &str,
 ) -> Result<()> {
     let entries = {
         let mut client_guard = client.lock().await;
         client_guard.list_orchestrations().await?
     };
 
-    let mut new_map = HashMap::new();
+    // When multiple orchestrations share the same feature name (from repeated runs),
+    // keep the most recent one (by started_at timestamp).
+    let mut new_map: HashMap<String, (String, String)> = HashMap::new();
     for entry in entries {
-        if entry.record.node_id == node_id {
-            new_map.insert(entry.record.feature_name.clone(), entry.id.clone());
+        let key = entry.record.feature_name.clone();
+        let started = entry.record.started_at.clone();
+        match new_map.get(&key) {
+            Some((_, existing_started)) if existing_started >= &started => {}
+            _ => {
+                new_map.insert(key, (entry.id.clone(), started));
+            }
         }
     }
+    let new_map: HashMap<String, String> = new_map
+        .into_iter()
+        .map(|(k, (id, _))| (k, id))
+        .collect();
 
+    debug!(count = new_map.len(), "refreshed orchestration ID cache");
     cache.orchestration_ids = new_map;
     Ok(())
 }

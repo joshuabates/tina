@@ -5,9 +5,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use tina_session::state::schema::SupervisorState;
 
 use crate::failure::{CategorizedFailure, FailureCategory};
 use crate::scenario::{
@@ -188,11 +188,33 @@ fn run_mock_orchestration(
     })
 }
 
-/// Run full orchestration (invokes actual orchestration)
+/// Maximum time to wait for orchestration to complete (45 minutes).
+const ORCHESTRATION_TIMEOUT_SECS: u64 = 45 * 60;
+
+/// Time to wait for Claude TUI to be ready (seconds).
+const CLAUDE_READY_TIMEOUT_SECS: u64 = 60;
+
+/// How often to poll the supervisor state for completion (seconds).
+const POLL_INTERVAL_SECS: u64 = 10;
+
+/// Run full orchestration via tmux-based interactive Claude session.
+///
+/// Creates a detached tmux session, launches Claude in interactive mode,
+/// sends the orchestrate skill command, and waits for completion by polling
+/// the supervisor state in Convex.
 fn run_full_orchestration(
     work_dir: &Path,
     scenario: &Scenario,
 ) -> Result<OrchestrationState> {
+    // Derive a feature name the orchestrate skill will likely use.
+    // The skill extracts it from the design doc filename or content.
+    // We use a simple heuristic matching the scenario name pattern.
+    let feature_name = derive_feature_name(&scenario.name);
+    eprintln!("Derived feature name: {}", feature_name);
+
+    // Clean up stale state from previous runs
+    cleanup_stale_state(&feature_name);
+
     // Write the design doc to the work directory
     let design_path = work_dir.join("design.md");
     fs::write(&design_path, &scenario.design_doc)
@@ -223,52 +245,223 @@ fn run_full_orchestration(
         .current_dir(work_dir)
         .output();
 
-    // Run orchestration using claude CLI with the orchestrate skill
-    // This assumes claude is in PATH and has access to the skill
-    let output = Command::new("claude")
-        .args([
-            "--print",  // Non-interactive mode
-            "-p",
-            &format!("/tina:orchestrate {}", design_path.display()),
-        ])
-        .current_dir(work_dir)
-        .env("CLAUDE_CODE_MODEL", "haiku")  // Use haiku for fast mode
-        .output()
-        .context("Failed to invoke claude CLI for orchestration")?;
+    let session_name = format!("tina-harness-{}", scenario.name);
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        anyhow::bail!(
-            "Orchestration failed:\nstderr: {}\nstdout: {}",
-            stderr,
-            stdout
-        );
+    // Kill any existing session with this name
+    let _ = tina_session::tmux::kill_session(&session_name);
+
+    // Create detached tmux session with work_dir as cwd
+    eprintln!("Creating tmux session '{}' in {}", session_name, work_dir.display());
+    tina_session::tmux::create_session(&session_name, work_dir, None)
+        .map_err(|e| anyhow::anyhow!("Failed to create tmux session: {}", e))?;
+
+    // Small delay to let shell initialize
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Launch Claude in interactive mode with permissions bypass
+    let claude_bin = detect_claude_binary();
+    let claude_cmd = format!("{} --dangerously-skip-permissions", claude_bin);
+    eprintln!("Starting Claude ({}) in session...", claude_bin);
+    tina_session::tmux::send_keys(&session_name, &claude_cmd)
+        .map_err(|e| anyhow::anyhow!("Failed to send claude command: {}", e))?;
+
+    // Wait for Claude to be ready
+    eprintln!("Waiting for Claude to be ready (up to {}s)...", CLAUDE_READY_TIMEOUT_SECS);
+    match tina_session::claude::wait_for_ready(&session_name, CLAUDE_READY_TIMEOUT_SECS) {
+        Ok(_) => eprintln!("Claude is ready."),
+        Err(e) => {
+            eprintln!("Warning: Claude may not be ready: {}", e);
+            eprintln!("Proceeding anyway...");
+        }
     }
 
-    // Load orchestration result from Convex (canonical state)
-    let feature_name = feature_name_from_design_doc(&design_path);
-    let state = SupervisorState::load(&feature_name)
-        .context("Failed to load supervisor state from Convex")?;
+    // Let TUI settle before sending commands
+    std::thread::sleep(Duration::from_secs(2));
 
-    let phases_completed = state.current_phase;
-    let status = format!("{:?}", state.status).to_lowercase();
+    // Send the orchestrate skill command
+    let skill_cmd = format!("/tina:orchestrate {}", design_path.display());
+    eprintln!("Sending: {}", skill_cmd);
+    tina_session::tmux::send_keys(&session_name, &skill_cmd)
+        .map_err(|e| anyhow::anyhow!("Failed to send orchestrate command: {}", e))?;
 
-    Ok(OrchestrationState {
-        phases_completed,
-        status,
-    })
+    // Wait for orchestration to complete by polling Convex supervisor state
+    eprintln!("Waiting for orchestration to complete (timeout: {}s)...", ORCHESTRATION_TIMEOUT_SECS);
+    let result = wait_for_orchestration_complete(
+        &scenario.name,
+        &session_name,
+        ORCHESTRATION_TIMEOUT_SECS,
+    );
+
+    // Always clean up the tmux session
+    eprintln!("Cleaning up tmux session '{}'", session_name);
+    let _ = tina_session::tmux::kill_session(&session_name);
+
+    result
 }
 
-fn feature_name_from_design_doc(design_doc: &Path) -> String {
-    let filename = design_doc
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
+/// Detect which claude binary is available and functional.
+/// Prefers 'claudesp' (sneak peek) over 'claude' (release),
+/// but only if it actually runs (not just exists on PATH).
+fn detect_claude_binary() -> &'static str {
+    if Command::new("claudesp")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        return "claudesp";
+    }
+    "claude"
+}
 
-    let without_prefix = filename.trim_start_matches(|c: char| c.is_ascii_digit() || c == '-');
-    let without_suffix = without_prefix.strip_suffix("-design.md").unwrap_or(without_prefix);
-    without_suffix.to_string()
+/// Derive a feature name from a scenario name.
+/// Maps scenario names like "01-single-phase-feature" to likely orchestration
+/// feature names like "verbose-flag" by reading the design doc title.
+fn derive_feature_name(scenario_name: &str) -> String {
+    // The orchestrate skill typically derives feature name from the design content.
+    // For our known scenarios, we hardcode the mapping. A more robust approach
+    // would parse the design doc, but this works for the test scenarios.
+    match scenario_name {
+        "01-single-phase-feature" => "verbose-flag".to_string(),
+        "02-two-phase-refactor" => "utility-refactor".to_string(),
+        "03-failing-tests" => "fix-blank-check".to_string(),
+        _ => scenario_name.replace(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-'], ""),
+    }
+}
+
+/// Clean up stale state from a previous orchestration run for this feature.
+fn cleanup_stale_state(feature_name: &str) {
+    let home = dirs::home_dir().expect("could not determine home directory");
+
+    // Remove session lookup
+    let session_file = home
+        .join(".claude")
+        .join("tina-sessions")
+        .join(format!("{}.json", feature_name));
+    if session_file.exists() {
+        eprintln!("Removing stale session lookup: {}", session_file.display());
+        let _ = fs::remove_file(&session_file);
+    }
+
+    // Remove team directory
+    let team_dir = home
+        .join(".claude")
+        .join("teams")
+        .join(format!("{}-orchestration", feature_name));
+    if team_dir.exists() {
+        eprintln!("Removing stale team dir: {}", team_dir.display());
+        let _ = fs::remove_dir_all(&team_dir);
+    }
+
+    // Remove tasks directory
+    let tasks_dir = home
+        .join(".claude")
+        .join("tasks")
+        .join(format!("{}-orchestration", feature_name));
+    if tasks_dir.exists() {
+        eprintln!("Removing stale tasks dir: {}", tasks_dir.display());
+        let _ = fs::remove_dir_all(&tasks_dir);
+    }
+
+    // Kill any stale tmux sessions
+    let session_name = format!("tina-harness-{}", feature_name);
+    let _ = tina_session::tmux::kill_session(&session_name);
+}
+
+/// Wait for orchestration to complete by polling Convex.
+///
+/// Checks the supervisor state periodically until:
+/// - Status is "complete" or "blocked" → returns OrchestrationState
+/// - Timeout expires → returns error
+/// - tmux session dies → returns error
+fn wait_for_orchestration_complete(
+    feature_name: &str,
+    session_name: &str,
+    timeout_secs: u64,
+) -> Result<OrchestrationState> {
+    let start = Instant::now();
+    let timeout = Duration::from_secs(timeout_secs);
+    let poll_interval = Duration::from_secs(POLL_INTERVAL_SECS);
+
+    loop {
+        if start.elapsed() > timeout {
+            anyhow::bail!(
+                "Orchestration timed out after {}s for feature '{}'",
+                timeout_secs,
+                feature_name
+            );
+        }
+
+        // Check tmux session health
+        if !tina_session::tmux::session_exists(session_name) {
+            // Session died — try to read final state from Convex anyway
+            eprintln!("Warning: tmux session '{}' disappeared", session_name);
+            return load_orchestration_state_from_convex(feature_name);
+        }
+
+        // Try to load state from Convex
+        match load_orchestration_state_from_convex(feature_name) {
+            Ok(state) => {
+                if state.status == "complete" || state.status == "blocked" {
+                    eprintln!(
+                        "Orchestration finished: status={}, phases={}",
+                        state.status, state.phases_completed
+                    );
+                    return Ok(state);
+                }
+                // Still running, report progress
+                let elapsed = start.elapsed().as_secs();
+                eprintln!(
+                    "[{}s] status={}, phases_completed={}",
+                    elapsed, state.status, state.phases_completed
+                );
+            }
+            Err(e) => {
+                // State not available yet (orchestration hasn't written to Convex)
+                let elapsed = start.elapsed().as_secs();
+                if elapsed % 30 == 0 && elapsed > 0 {
+                    eprintln!("[{}s] Waiting for orchestration state: {}", elapsed, e);
+                }
+            }
+        }
+
+        std::thread::sleep(poll_interval);
+    }
+}
+
+/// Load orchestration state from Convex for a given feature name.
+///
+/// Uses `listOrchestrations` via TinaConvexClient to find the most recent
+/// orchestration matching the feature name, avoiding node_id mismatch issues.
+fn load_orchestration_state_from_convex(feature_name: &str) -> Result<OrchestrationState> {
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(async {
+        let cfg = tina_session::config::load_config()?;
+        let convex_url = cfg
+            .convex_url
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| anyhow::anyhow!("convex_url not set in config"))?;
+
+        let mut client = tina_data::TinaConvexClient::new(&convex_url).await?;
+        let orchestrations = client.list_orchestrations().await?;
+
+        // Find the most recent orchestration for this feature
+        let entry = orchestrations
+            .iter()
+            .filter(|o| o.record.feature_name == feature_name)
+            .max_by(|a, b| a.record.started_at.cmp(&b.record.started_at))
+            .ok_or_else(|| {
+                anyhow::anyhow!("No orchestration found for feature '{}'", feature_name)
+            })?;
+
+        let current_phase = entry.record.current_phase as u32;
+        let status = entry.record.status.clone();
+
+        Ok(OrchestrationState {
+            phases_completed: current_phase,
+            status,
+        })
+    })
 }
 
 /// Validate the outcome against expected state
@@ -591,6 +784,7 @@ mod tests {
                 tests_pass: false,
                 setup_tests_failed: false,
                 file_changes: vec![],
+                convex: None,
             },
         };
         let state = OrchestrationState {

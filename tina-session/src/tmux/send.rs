@@ -8,8 +8,8 @@ pub fn send_keys(session: &str, text: &str) -> Result<()> {
     // Send text first
     send_keys_raw(session, text)?;
 
-    // Small delay to ensure text is received
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    // Delay to ensure TUI processes the text before Enter
+    std::thread::sleep(std::time::Duration::from_millis(500));
 
     // Send Enter separately
     let output = Command::new("tmux")
@@ -29,9 +29,10 @@ pub fn send_keys(session: &str, text: &str) -> Result<()> {
 }
 
 /// Send keys without pressing Enter.
+/// Uses `-l` (literal) flag to avoid tmux interpreting special characters.
 pub fn send_keys_raw(session: &str, text: &str) -> Result<()> {
     let output = Command::new("tmux")
-        .args(["send-keys", "-t", session, text])
+        .args(["send-keys", "-l", "-t", session, text])
         .output()
         .map_err(|e| SessionError::TmuxError(format!("Failed to execute tmux: {}", e)))?;
 

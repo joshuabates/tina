@@ -35,6 +35,10 @@ enum Commands {
         #[arg(long)]
         full: bool,
 
+        /// Also verify Convex state after a --full run
+        #[arg(long)]
+        verify: bool,
+
         /// Force re-run even if baseline exists
         #[arg(long)]
         force_baseline: bool,
@@ -50,6 +54,23 @@ enum Commands {
         /// Working directory for scenario execution (default: /tmp/tina-harness)
         #[arg(long)]
         work_dir: Option<PathBuf>,
+    },
+    /// Verify Convex state for an orchestration
+    Verify {
+        /// Feature name to verify
+        feature: String,
+
+        /// Minimum number of phases expected
+        #[arg(long)]
+        min_phases: Option<u32>,
+
+        /// Minimum number of tasks expected
+        #[arg(long)]
+        min_tasks: Option<u32>,
+
+        /// Minimum number of team members expected
+        #[arg(long)]
+        min_team_members: Option<u32>,
     },
     /// Generate a test scenario from parameters
     GenerateScenario {
@@ -96,6 +117,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Run {
             scenario,
             full,
+            verify,
             force_baseline,
             scenarios_dir,
             test_project_dir,
@@ -109,7 +131,7 @@ fn main() -> anyhow::Result<()> {
             let work_dir = work_dir.unwrap_or_else(|| PathBuf::from("/tmp/tina-harness"));
 
             let config = commands::run::RunConfig {
-                scenarios_dir,
+                scenarios_dir: scenarios_dir.clone(),
                 test_project_dir,
                 work_dir,
                 full,
@@ -127,6 +149,93 @@ fn main() -> anyhow::Result<()> {
             } else {
                 println!("FAIL: {}", result.scenario_name);
                 println!("  Work dir: {}", result.work_dir.display());
+                println!("  Failures:");
+                for failure in &result.failures {
+                    println!("    - {}", failure);
+                }
+                std::process::exit(1);
+            }
+
+            // Run Convex verification if requested and the run passed
+            if verify && full && result.passed && !result.skipped {
+                println!("\n--- Convex Verification ---");
+
+                // Check daemon is running
+                if !commands::verify::check_daemon_running() {
+                    println!("WARNING: tina-daemon does not appear to be running.");
+                    println!("  Team members and tasks may not be synced to Convex.");
+                    println!("  Start it with: cargo run -p tina-daemon");
+                }
+
+                // Load scenario to get Convex assertions
+                let scenario_dir = scenarios_dir.join(&scenario);
+                let loaded = tina_harness::scenario::load_scenario(&scenario_dir)?;
+                let assertions = loaded
+                    .expected
+                    .assertions
+                    .convex
+                    .unwrap_or(tina_harness::ConvexAssertions {
+                        has_orchestration: true,
+                        min_phases: Some(1),
+                        min_tasks: Some(1),
+                        min_team_members: Some(1),
+                    });
+
+                let verify_result =
+                    commands::verify::verify(&result.scenario_name, &assertions)?;
+
+                if verify_result.passed {
+                    println!("VERIFY PASS: {}", verify_result.feature_name);
+                    println!(
+                        "  Phases: {}, Tasks: {}, Team Members: {}",
+                        verify_result.phases_found,
+                        verify_result.tasks_found,
+                        verify_result.members_found
+                    );
+                } else {
+                    println!("VERIFY FAIL: {}", verify_result.feature_name);
+                    println!("  Failures:");
+                    for failure in &verify_result.failures {
+                        println!("    - {}", failure);
+                    }
+                    std::process::exit(1);
+                }
+            }
+
+            Ok(())
+        }
+        Commands::Verify {
+            feature,
+            min_phases,
+            min_tasks,
+            min_team_members,
+        } => {
+            // Check daemon is running
+            if !commands::verify::check_daemon_running() {
+                println!("WARNING: tina-daemon does not appear to be running.");
+                println!("  Team members and tasks may not be synced to Convex.");
+            }
+
+            let assertions = tina_harness::ConvexAssertions {
+                has_orchestration: true,
+                min_phases,
+                min_tasks,
+                min_team_members,
+            };
+
+            let result = commands::verify::verify(&feature, &assertions)?;
+
+            if result.passed {
+                println!("VERIFY PASS: {}", result.feature_name);
+                if let Some(ref id) = result.orchestration_id {
+                    println!("  Orchestration ID: {}", id);
+                }
+                println!(
+                    "  Phases: {}, Tasks: {}, Team Members: {}",
+                    result.phases_found, result.tasks_found, result.members_found
+                );
+            } else {
+                println!("VERIFY FAIL: {}", result.feature_name);
                 println!("  Failures:");
                 for failure in &result.failures {
                     println!("    - {}", failure);

@@ -1599,17 +1599,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "tina-data"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "convex",
+ "dirs",
+ "serde",
+ "serde_json",
+ "tina-session",
+]
+
+[[package]]
 name = "tina-harness"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "dirs",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 1.0.69",
+ "tina-data",
  "tina-session",
+ "tokio",
 ]
 
 [[package]]

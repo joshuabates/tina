@@ -8,6 +8,12 @@
       { "path": "src/utils/mod.rs", "exists": true },
       { "path": "src/lib.rs", "contains": "utils" },
       { "path": "src/core/processor.rs", "contains": "is_blank" }
-    ]
+    ],
+    "convex": {
+      "has_orchestration": true,
+      "min_phases": 2,
+      "min_tasks": 1,
+      "min_team_members": 1
+    }
   }
 }

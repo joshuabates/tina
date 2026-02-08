@@ -104,6 +104,8 @@ async fn main() -> Result<()> {
             event = watcher.rx.recv() => {
                 match event {
                     Some(WatchEvent::Teams) => {
+                        // Refresh orchestration cache to pick up newly created orchestrations
+                        let _ = sync::refresh_orchestration_ids(&client, &mut cache, &node_id).await;
                         let team_names = sync::list_team_names(&teams_dir).unwrap_or_default();
                         for name in &team_names {
                             if let Err(e) = sync::sync_team_members(
@@ -114,6 +116,8 @@ async fn main() -> Result<()> {
                         }
                     }
                     Some(WatchEvent::Tasks) => {
+                        // Refresh orchestration cache to pick up newly created orchestrations
+                        let _ = sync::refresh_orchestration_ids(&client, &mut cache, &node_id).await;
                         if let Err(e) = sync::sync_tasks(
                             &client, &mut cache, &teams_dir, &tasks_dir,
                         ).await {

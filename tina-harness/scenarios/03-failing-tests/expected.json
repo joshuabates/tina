@@ -4,6 +4,12 @@
     "phases_completed": 1,
     "final_status": "complete",
     "tests_pass": true,
-    "setup_tests_failed": true
+    "setup_tests_failed": true,
+    "convex": {
+      "has_orchestration": true,
+      "min_phases": 1,
+      "min_tasks": 1,
+      "min_team_members": 1
+    }
   }
 }

@@ -44,6 +44,30 @@ pub struct Assertions {
     /// File change assertions
     #[serde(default)]
     pub file_changes: Vec<FileAssertion>,
+    /// Convex state assertions (verified after full orchestration)
+    #[serde(default)]
+    pub convex: Option<ConvexAssertions>,
+}
+
+/// Assertions about Convex state after orchestration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConvexAssertions {
+    /// Orchestration record must exist
+    #[serde(default = "default_true")]
+    pub has_orchestration: bool,
+    /// Minimum number of phases expected
+    #[serde(default)]
+    pub min_phases: Option<u32>,
+    /// Minimum number of tasks expected
+    #[serde(default)]
+    pub min_tasks: Option<u32>,
+    /// Minimum number of team members expected
+    #[serde(default)]
+    pub min_team_members: Option<u32>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Assertion about a file change
