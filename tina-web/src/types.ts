@@ -100,5 +100,7 @@ export interface OrchestrationDetail {
   nodeName: string;
   phases: Phase[];
   tasks: TaskEvent[];
+  orchestratorTasks: TaskEvent[];
+  phaseTasks: Record<string, TaskEvent[]>;
   teamMembers: TeamMember[];
 }

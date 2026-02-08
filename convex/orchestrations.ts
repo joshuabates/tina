@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { deduplicateTaskEvents } from "./tasks";
 
 export const upsertOrchestration = mutation({
   args: {
@@ -146,12 +147,14 @@ export const getOrchestrationDetail = query({
       )
       .collect();
 
-    // Deduplicate: keep only the latest event per taskId
-    const latestByTaskId = new Map<string, (typeof allTaskEvents)[number]>();
-    for (const event of allTaskEvents) {
-      const existing = latestByTaskId.get(event.taskId);
-      if (!existing || event.recordedAt > existing.recordedAt) {
-        latestByTaskId.set(event.taskId, event);
+    const deduplicated = deduplicateTaskEvents(allTaskEvents);
+
+    const orchestratorTasks = deduplicated.filter((t) => !t.phaseNumber);
+    const phaseTasks: Record<string, typeof deduplicated> = {};
+    for (const task of deduplicated) {
+      if (task.phaseNumber) {
+        if (!phaseTasks[task.phaseNumber]) phaseTasks[task.phaseNumber] = [];
+        phaseTasks[task.phaseNumber].push(task);
       }
     }
 
@@ -168,7 +171,9 @@ export const getOrchestrationDetail = query({
       ...orchestration,
       nodeName: node?.name ?? "unknown",
       phases,
-      tasks: Array.from(latestByTaskId.values()),
+      tasks: deduplicated,
+      orchestratorTasks,
+      phaseTasks,
       teamMembers,
     };
   },
