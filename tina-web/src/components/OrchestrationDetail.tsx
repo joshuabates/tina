@@ -126,15 +126,71 @@ export default function OrchestrationDetail() {
         </div>
       )}
 
-      {/* Panels */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-gray-900 rounded-lg p-4">
-          <TaskList tasks={detail.tasks} title="Tasks" orchestrationId={detail._id} />
+      {/* Orchestrator Tasks */}
+      {detail.orchestratorTasks.length > 0 && (
+        <div className="mb-6 bg-gray-900 rounded-lg p-4">
+          <TaskList tasks={detail.orchestratorTasks} title="Orchestrator Tasks" orchestrationId={detail._id} />
+          {detail.teamMembers.filter((m) => !m.phaseNumber || m.phaseNumber === "0").length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-800">
+              <p className="text-xs text-gray-500 mb-1">Team</p>
+              <div className="flex flex-wrap gap-2">
+                {detail.teamMembers
+                  .filter((m) => !m.phaseNumber || m.phaseNumber === "0")
+                  .map((m) => (
+                    <span key={m.agentName} className="text-sm text-gray-300">
+                      {m.agentName}
+                      {m.agentType && <span className="text-gray-500 ml-1">{m.agentType}</span>}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
-        <div className="bg-gray-900 rounded-lg p-4">
+      )}
+
+      {/* Per-Phase Sections */}
+      {detail.phases.map((phase) => {
+        const phaseTasks = detail.phaseTasks[phase.phaseNumber] ?? [];
+        const phaseMembers = detail.teamMembers.filter((m) => m.phaseNumber === phase.phaseNumber);
+        return (
+          <div key={phase.phaseNumber} className="mb-6 bg-gray-900 rounded-lg p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <h2 className="text-sm font-semibold text-gray-300">Phase {phase.phaseNumber}</h2>
+              <span className={statusBadgeClass(phase.status)}>{phase.status}</span>
+              <span className="text-xs text-gray-500">{phaseTiming(phase)}</span>
+            </div>
+            <TaskList tasks={phaseTasks} title={`Phase ${phase.phaseNumber} Tasks`} orchestrationId={detail._id} />
+            {phaseMembers.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-800">
+                <p className="text-xs text-gray-500 mb-1">Team</p>
+                <div className="flex flex-wrap gap-2">
+                  {phaseMembers.map((m) => (
+                    <span key={m.agentName} className="text-sm text-gray-300">
+                      {m.agentName}
+                      {m.agentType && <span className="text-gray-500 ml-1">{m.agentType}</span>}
+                      {m.model && <span className="text-gray-600 ml-1">{m.model.includes("opus") ? "opus" : m.model.includes("sonnet") ? "sonnet" : m.model.includes("haiku") ? "haiku" : m.model}</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* All Team Members (collapsed fallback) */}
+      {detail.phases.length === 0 && detail.teamMembers.length > 0 && (
+        <div className="mb-6 bg-gray-900 rounded-lg p-4">
           <TeamPanel members={detail.teamMembers} />
         </div>
-      </div>
+      )}
+
+      {/* Flat task fallback when no phases exist */}
+      {detail.phases.length === 0 && detail.orchestratorTasks.length === 0 && detail.tasks.length > 0 && (
+        <div className="mb-6 bg-gray-900 rounded-lg p-4">
+          <TaskList tasks={detail.tasks} title="Tasks" orchestrationId={detail._id} />
+        </div>
+      )}
 
       {/* Event Log */}
       <div className="mt-6 bg-gray-900 rounded-lg p-4">
