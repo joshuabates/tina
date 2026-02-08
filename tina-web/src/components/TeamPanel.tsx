@@ -12,12 +12,12 @@ interface Props {
 }
 
 export default function TeamPanel({ members }: Props) {
-  // Group members by phase_number
+  // Group members by phaseNumber
   const grouped = new Map<string, TeamMember[]>();
   for (const member of members) {
-    const existing = grouped.get(member.phase_number) ?? [];
+    const existing = grouped.get(member.phaseNumber) ?? [];
     existing.push(member);
-    grouped.set(member.phase_number, existing);
+    grouped.set(member.phaseNumber, existing);
   }
   const phases = [...grouped.keys()].sort();
 
@@ -35,10 +35,10 @@ export default function TeamPanel({ members }: Props) {
               )}
               <ul className="space-y-1">
                 {grouped.get(phase)!.map((member) => (
-                  <li key={`${member.phase_number}-${member.agent_name}`} data-testid={`member-${member.agent_name}`} className="flex items-center gap-2 text-sm">
-                    <span className="font-medium">{member.agent_name}</span>
-                    {member.agent_type && (
-                      <span className="text-gray-500">{member.agent_type}</span>
+                  <li key={`${member.phaseNumber}-${member.agentName}`} data-testid={`member-${member.agentName}`} className="flex items-center gap-2 text-sm">
+                    <span className="font-medium">{member.agentName}</span>
+                    {member.agentType && (
+                      <span className="text-gray-500">{member.agentType}</span>
                     )}
                     {member.model && (
                       <span className="text-gray-600">{shortenModel(member.model)}</span>

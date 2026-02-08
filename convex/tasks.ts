@@ -1,5 +1,20 @@
-import { mutation } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+
+export const listTaskEvents = query({
+  args: {
+    orchestrationId: v.id("orchestrations"),
+    taskId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("taskEvents")
+      .withIndex("by_orchestration_task", (q) =>
+        q.eq("orchestrationId", args.orchestrationId).eq("taskId", args.taskId),
+      )
+      .collect();
+  },
+});
 
 export const recordTaskEvent = mutation({
   args: {

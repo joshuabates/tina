@@ -42,14 +42,14 @@ export default function TaskList({ tasks, title = "Tasks", orchestrationId }: Pr
       ) : (
         <ul className="space-y-1">
           {tasks.map((task) => (
-            <li key={task.task_id} data-testid={`task-${task.task_id}`} className="flex items-start gap-2 text-sm">
+            <li key={task.taskId} data-testid={`task-${task.taskId}`} className="flex items-start gap-2 text-sm">
               <span data-testid="task-status" className={`font-mono ${statusColor(task.status)}`}>
                 {statusIcon(task.status)}
               </span>
               <div className="flex-1 min-w-0">
                 {orchestrationId ? (
                   <Link
-                    to={`/orchestrations/${encodeURIComponent(orchestrationId)}/tasks/${encodeURIComponent(task.task_id)}`}
+                    to={`/orchestrations/${encodeURIComponent(orchestrationId)}/tasks/${encodeURIComponent(task.taskId)}`}
                     className="hover:underline"
                   >
                     <span data-testid="task-subject">{task.subject}</span>
@@ -62,7 +62,7 @@ export default function TaskList({ tasks, title = "Tasks", orchestrationId }: Pr
                     &larr; {task.owner}
                   </span>
                 )}
-                {task.blocked_by && (
+                {task.blockedBy && (
                   <span className="text-red-400 ml-2">(blocked)</span>
                 )}
               </div>

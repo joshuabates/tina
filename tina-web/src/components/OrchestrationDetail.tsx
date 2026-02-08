@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { fetchOrchestrationEvents } from "../api";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { useOrchestrationDetail } from "../hooks/useOrchestrationDetail";
 import type { OrchestrationEvent, Phase } from "../types";
 import EventTimeline from "./EventTimeline";
@@ -22,9 +23,9 @@ function statusBadgeClass(status: string): string {
 
 function phaseTiming(phase: Phase): string {
   const parts: string[] = [];
-  if (phase.planning_mins != null) parts.push(`plan ${phase.planning_mins}m`);
-  if (phase.execution_mins != null) parts.push(`exec ${phase.execution_mins}m`);
-  if (phase.review_mins != null) parts.push(`review ${phase.review_mins}m`);
+  if (phase.planningMins != null) parts.push(`plan ${phase.planningMins}m`);
+  if (phase.executionMins != null) parts.push(`exec ${phase.executionMins}m`);
+  if (phase.reviewMins != null) parts.push(`review ${phase.reviewMins}m`);
   return parts.join(", ") || "--";
 }
 
@@ -34,30 +35,12 @@ function copyToClipboard(text: string) {
   });
 }
 
-interface Props {
-  onUpdate?: (listener: () => void) => () => void;
-}
-
-export default function OrchestrationDetail({ onUpdate }: Props) {
+export default function OrchestrationDetail() {
   const { id } = useParams<{ id: string }>();
-  const { detail, loading, error } = useOrchestrationDetail(id!, onUpdate);
-  const [events, setEvents] = useState<OrchestrationEvent[]>([]);
-
-  const loadEvents = useCallback(() => {
-    if (!id) return;
-    fetchOrchestrationEvents(id)
-      .then(setEvents)
-      .catch(() => setEvents([]));
-  }, [id]);
-
-  useEffect(() => {
-    loadEvents();
-  }, [loadEvents]);
-
-  useEffect(() => {
-    if (!onUpdate) return;
-    return onUpdate(loadEvents);
-  }, [onUpdate, loadEvents]);
+  const { detail, loading } = useOrchestrationDetail(id!);
+  const events = (useQuery(api.events.listEvents, {
+    orchestrationId: id as Id<"orchestrations">,
+  }) ?? []) as OrchestrationEvent[];
 
   if (loading) {
     return (
@@ -68,16 +51,14 @@ export default function OrchestrationDetail({ onUpdate }: Props) {
     );
   }
 
-  if (error || !detail) {
+  if (!detail) {
     return (
       <div className="p-4">
         <Link to="/" className="text-cyan-400 hover:underline text-sm">&larr; Back</Link>
-        <p className="mt-4 text-gray-500">{error ?? `Orchestration not found: ${id}`}</p>
+        <p className="mt-4 text-gray-500">Orchestration not found: {id}</p>
       </div>
     );
   }
-
-  const orch = detail.orchestration;
 
   return (
     <div data-testid="orchestration-detail" className="p-4">
@@ -86,33 +67,33 @@ export default function OrchestrationDetail({ onUpdate }: Props) {
       {/* Header */}
       <div className="mt-4 mb-6">
         <div className="flex items-center gap-3">
-          <h1 data-testid="detail-feature-name" className="text-xl font-semibold">{orch.feature_name}</h1>
-          <span data-testid="detail-status-badge" className={statusBadgeClass(orch.status)}>
-            {orch.status}
+          <h1 data-testid="detail-feature-name" className="text-xl font-semibold">{detail.featureName}</h1>
+          <span data-testid="detail-status-badge" className={statusBadgeClass(detail.status)}>
+            {detail.status}
           </span>
           <OrchestrationControls
-            orchestrationId={orch.id}
-            status={orch.status}
+            orchestrationId={detail._id}
+            nodeId={detail.nodeId}
+            status={detail.status}
             phases={detail.phases}
-            onAction={loadEvents}
           />
         </div>
         <div className="text-sm text-gray-500 mt-1 space-x-4">
-          <span data-testid="detail-branch" className="font-mono">{orch.branch}</span>
+          <span data-testid="detail-branch" className="font-mono">{detail.branch}</span>
           <span data-testid="detail-phases">
-            {orch.total_phases} phase{orch.total_phases !== 1 ? "s" : ""}
+            {detail.totalPhases} phase{detail.totalPhases !== 1 ? "s" : ""}
           </span>
-          {orch.total_elapsed_mins != null && (
-            <span>{orch.total_elapsed_mins}m elapsed</span>
+          {detail.totalElapsedMins != null && (
+            <span>{detail.totalElapsedMins}m elapsed</span>
           )}
         </div>
-        {orch.worktree_path && (
+        {detail.worktreePath && (
           <div className="mt-2 flex items-center gap-2">
             <code className="text-xs bg-gray-800 px-2 py-1 rounded font-mono text-gray-300">
-              {orch.worktree_path}
+              {detail.worktreePath}
             </code>
             <button
-              onClick={() => copyToClipboard(orch.worktree_path!)}
+              onClick={() => copyToClipboard(detail.worktreePath!)}
               className="text-xs text-gray-500 hover:text-gray-300"
               title="Copy path"
             >
@@ -129,15 +110,15 @@ export default function OrchestrationDetail({ onUpdate }: Props) {
           <div className="space-y-2">
             {detail.phases.map((phase) => (
               <div
-                key={phase.phase_number}
-                data-testid={`phase-${phase.phase_number}`}
+                key={phase.phaseNumber}
+                data-testid={`phase-${phase.phaseNumber}`}
                 className="bg-gray-900 rounded-lg px-4 py-3 flex items-center gap-4"
               >
-                <span className="font-mono text-gray-400 w-8">{phase.phase_number}</span>
+                <span className="font-mono text-gray-400 w-8">{phase.phaseNumber}</span>
                 <span className={statusBadgeClass(phase.status)}>{phase.status}</span>
                 <span className="text-sm text-gray-500">{phaseTiming(phase)}</span>
-                {phase.git_range && (
-                  <code className="text-xs text-gray-600 font-mono">{phase.git_range}</code>
+                {phase.gitRange && (
+                  <code className="text-xs text-gray-600 font-mono">{phase.gitRange}</code>
                 )}
               </div>
             ))}
@@ -148,10 +129,10 @@ export default function OrchestrationDetail({ onUpdate }: Props) {
       {/* Panels */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-gray-900 rounded-lg p-4">
-          <TaskList tasks={detail.tasks} title="Tasks" orchestrationId={orch.id} />
+          <TaskList tasks={detail.tasks} title="Tasks" orchestrationId={detail._id} />
         </div>
         <div className="bg-gray-900 rounded-lg p-4">
-          <TeamPanel members={detail.members} />
+          <TeamPanel members={detail.teamMembers} />
         </div>
       </div>
 

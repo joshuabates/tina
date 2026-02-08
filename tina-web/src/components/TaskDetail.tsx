@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { fetchTaskEvents } from "../api";
+import { useQuery } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import type { TaskEvent } from "../types";
 
 function statusColor(status: string): string {
@@ -16,7 +17,7 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-function parseJsonOrNull(json: string | null): unknown {
+function parseJsonOrNull(json: string | undefined): unknown {
   if (!json) return null;
   try {
     return JSON.parse(json);
@@ -27,25 +28,12 @@ function parseJsonOrNull(json: string | null): unknown {
 
 export default function TaskDetail() {
   const { id: orchestrationId, taskId } = useParams<{ id: string; taskId: string }>();
-  const [events, setEvents] = useState<TaskEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const events = (useQuery(api.tasks.listTaskEvents, {
+    orchestrationId: orchestrationId as Id<"orchestrations">,
+    taskId: taskId!,
+  }) ?? undefined) as TaskEvent[] | undefined;
 
-  useEffect(() => {
-    if (!orchestrationId || !taskId) return;
-    setLoading(true);
-    fetchTaskEvents(orchestrationId, taskId)
-      .then((data) => {
-        setEvents(data);
-        setError(null);
-      })
-      .catch((err: Error) => {
-        setError(err.message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [orchestrationId, taskId]);
+  const loading = events === undefined;
 
   if (loading) {
     return (
@@ -58,19 +46,19 @@ export default function TaskDetail() {
     );
   }
 
-  if (error || events.length === 0) {
+  if (events.length === 0) {
     return (
       <div className="p-4">
         <Link to={`/orchestrations/${encodeURIComponent(orchestrationId!)}`} className="text-cyan-400 hover:underline text-sm">
           &larr; Back to orchestration
         </Link>
-        <p className="mt-4 text-gray-500">{error ?? "Task not found"}</p>
+        <p className="mt-4 text-gray-500">Task not found</p>
       </div>
     );
   }
 
   const current = events[events.length - 1];
-  const blockedBy = parseJsonOrNull(current.blocked_by) as string[] | null;
+  const blockedBy = parseJsonOrNull(current.blockedBy) as string[] | null;
   const metadata = parseJsonOrNull(current.metadata) as Record<string, unknown> | null;
 
   return (
@@ -85,7 +73,7 @@ export default function TaskDetail() {
         <div className="text-sm text-gray-500 mt-1 space-x-4">
           <span className={statusColor(current.status)}>{current.status}</span>
           {current.owner && <span>Owner: <span className="text-cyan-400">{current.owner}</span></span>}
-          {current.phase_number && <span>Phase {current.phase_number}</span>}
+          {current.phaseNumber && <span>Phase {current.phaseNumber}</span>}
         </div>
       </div>
 
@@ -128,10 +116,10 @@ export default function TaskDetail() {
       <div data-testid="event-log" className="bg-gray-900 rounded-lg p-4">
         <h3 className="text-sm font-semibold text-gray-400 mb-3">Event Log</h3>
         <ul className="space-y-2">
-          {events.map((event, i) => (
-            <li key={event.id ?? i} className="flex items-start gap-3 text-sm">
+          {events.map((event) => (
+            <li key={event._id} className="flex items-start gap-3 text-sm">
               <span className="text-gray-600 text-xs whitespace-nowrap mt-0.5">
-                {formatTime(event.recorded_at)}
+                {formatTime(event.recordedAt)}
               </span>
               <span className={`font-mono ${statusColor(event.status)}`}>
                 {event.status}

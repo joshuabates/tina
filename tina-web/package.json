@@ -1,5 +1,5 @@
 {
-  "name": "tina-web-frontend",
+  "name": "tina-web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "convex": "^1.31.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0"

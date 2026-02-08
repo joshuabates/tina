@@ -68,18 +68,18 @@ export default function EventTimeline({ events }: Props) {
   return (
     <div className="space-y-3">
       {events.map((event) => (
-        <div key={event.id} className="flex gap-3 items-start">
+        <div key={event._id} className="flex gap-3 items-start">
           <div className="mt-1.5">
-            <div className={`w-2.5 h-2.5 rounded-full ${eventDotClass(event.event_type)}`} />
+            <div className={`w-2.5 h-2.5 rounded-full ${eventDotClass(event.eventType)}`} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 text-sm">
               <span className="text-gray-300">{event.summary}</span>
-              <span className="text-xs text-gray-600">{formatTime(event.recorded_at)}</span>
+              <span className="text-xs text-gray-600">{formatTime(event.recordedAt)}</span>
             </div>
             <div className="text-xs text-gray-500">
               {event.source}
-              {event.phase_number && <span className="ml-2">phase {event.phase_number}</span>}
+              {event.phaseNumber && <span className="ml-2">phase {event.phaseNumber}</span>}
             </div>
             {event.detail && <DetailSection detail={event.detail} />}
           </div>

@@ -38,11 +38,11 @@ function relativeTime(iso: string): string {
 }
 
 function formatDuration(orch: Orchestration): string {
-  if (orch.total_elapsed_mins != null) {
-    return `${orch.total_elapsed_mins}m`;
+  if (orch.totalElapsedMins != null) {
+    return `${orch.totalElapsedMins}m`;
   }
-  if (orch.status !== "complete" && orch.completed_at == null) {
-    const mins = Math.floor((Date.now() - new Date(orch.started_at).getTime()) / 60_000);
+  if (orch.status !== "complete" && orch.completedAt == null) {
+    const mins = Math.floor((Date.now() - new Date(orch.startedAt).getTime()) / 60_000);
     return `${mins}m`;
   }
   return "--";
@@ -78,26 +78,26 @@ export default function OrchestrationList({ orchestrations }: Props) {
         <tbody>
           {orchestrations.map((orch) => (
             <tr
-              key={orch.id}
-              data-testid={`orchestration-row-${orch.id}`}
+              key={orch._id}
+              data-testid={`orchestration-row-${orch._id}`}
               className="border-b border-gray-900 hover:bg-gray-900/50"
             >
               <td data-testid="orchestration-feature" className="py-2 pr-4">
                 <Link
-                  to={`/orchestrations/${encodeURIComponent(orch.id)}`}
+                  to={`/orchestrations/${encodeURIComponent(orch._id)}`}
                   className="text-cyan-400 hover:underline"
                 >
-                  {orch.feature_name}
+                  {orch.featureName}
                 </Link>
               </td>
               <td data-testid="orchestration-branch" className="py-2 pr-4 font-mono text-gray-400">
                 {orch.branch}
               </td>
               <td data-testid="orchestration-phases" className="py-2 pr-4 font-mono">
-                {orch.total_phases}
+                {orch.totalPhases}
               </td>
               <td data-testid="orchestration-started" className="py-2 pr-4 text-gray-400">
-                {relativeTime(orch.started_at)}
+                {relativeTime(orch.startedAt)}
               </td>
               <td data-testid="orchestration-duration" className="py-2 pr-4 font-mono">
                 {formatDuration(orch)}

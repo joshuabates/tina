@@ -1,16 +1,19 @@
 import { useState } from "react";
-import { pauseOrchestration, resumeOrchestration, retryPhase } from "../api";
+import { useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import type { Phase } from "../types";
 
 interface Props {
-  orchestrationId: string;
+  orchestrationId: Id<"orchestrations">;
+  nodeId: Id<"nodes">;
   status: string;
   phases: Phase[];
-  onAction: () => void;
 }
 
-export default function OrchestrationControls({ orchestrationId, status, phases, onAction }: Props) {
+export default function OrchestrationControls({ orchestrationId, nodeId, status, phases }: Props) {
   const [loading, setLoading] = useState(false);
+  const submitAction = useMutation(api.actions.submitAction);
 
   const canPause = ["executing", "planning", "reviewing"].includes(status);
   const canResume = status === "blocked";
@@ -20,10 +23,9 @@ export default function OrchestrationControls({ orchestrationId, status, phases,
     if (!confirm("Pause this orchestration? This will block the current phase.")) return;
     setLoading(true);
     try {
-      await pauseOrchestration(orchestrationId);
-      onAction();
+      await submitAction({ nodeId, orchestrationId, type: "pause", payload: "{}" });
     } catch {
-      // Silently handle - UI will refresh
+      // Silently handle - Convex subscription will update the view
     } finally {
       setLoading(false);
     }
@@ -32,8 +34,7 @@ export default function OrchestrationControls({ orchestrationId, status, phases,
   async function handleResume() {
     setLoading(true);
     try {
-      await resumeOrchestration(orchestrationId);
-      onAction();
+      await submitAction({ nodeId, orchestrationId, type: "resume", payload: "{}" });
     } catch {
       // Silently handle
     } finally {
@@ -44,8 +45,7 @@ export default function OrchestrationControls({ orchestrationId, status, phases,
   async function handleRetry(phase: string) {
     setLoading(true);
     try {
-      await retryPhase(orchestrationId, phase);
-      onAction();
+      await submitAction({ nodeId, orchestrationId, type: "retry", payload: JSON.stringify({ phase }) });
     } catch {
       // Silently handle
     } finally {
@@ -77,12 +77,12 @@ export default function OrchestrationControls({ orchestrationId, status, phases,
       )}
       {blockedPhases.map((phase) => (
         <button
-          key={phase.phase_number}
-          onClick={() => handleRetry(phase.phase_number)}
+          key={phase.phaseNumber}
+          onClick={() => handleRetry(phase.phaseNumber)}
           disabled={loading}
           className="px-3 py-1 text-xs rounded bg-red-800 text-red-200 hover:bg-red-700 disabled:opacity-50"
         >
-          Retry phase {phase.phase_number}
+          Retry phase {phase.phaseNumber}
         </button>
       ))}
     </div>
