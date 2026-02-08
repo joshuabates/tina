@@ -9,15 +9,16 @@ export const upsertSupervisorState = mutation({
     updatedAt: v.number(),
   },
   handler: async (ctx, args) => {
+    // Find by feature name only (node_id changes across invocations)
     const existing = await ctx.db
       .query("supervisorStates")
-      .withIndex("by_feature_node", (q) =>
-        q.eq("featureName", args.featureName).eq("nodeId", args.nodeId),
-      )
+      .withIndex("by_feature", (q) => q.eq("featureName", args.featureName))
+      .order("desc")
       .first();
 
     if (existing) {
       await ctx.db.patch(existing._id, {
+        nodeId: args.nodeId,
         stateJson: args.stateJson,
         updatedAt: args.updatedAt,
       });
@@ -34,11 +35,11 @@ export const getSupervisorState = query({
     featureName: v.string(),
   },
   handler: async (ctx, args) => {
+    // Query by feature name only — node_id changes across invocations
     return await ctx.db
       .query("supervisorStates")
-      .withIndex("by_feature_node", (q) =>
-        q.eq("featureName", args.featureName).eq("nodeId", args.nodeId),
-      )
+      .withIndex("by_feature", (q) => q.eq("featureName", args.featureName))
+      .order("desc")
       .first();
   },
 });

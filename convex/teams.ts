@@ -77,6 +77,13 @@ export const listByParent = query({
   },
 });
 
+export const listAllTeams = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("teams").collect();
+  },
+});
+
 export const getByTeamName = query({
   args: {
     teamName: v.string(),

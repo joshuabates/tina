@@ -9,6 +9,7 @@
  */
 
 import type * as actions from "../actions.js";
+import type * as admin from "../admin.js";
 import type * as events from "../events.js";
 import type * as nodes from "../nodes.js";
 import type * as orchestrations from "../orchestrations.js";
@@ -27,6 +28,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   actions: typeof actions;
+  admin: typeof admin;
   events: typeof events;
   nodes: typeof nodes;
   orchestrations: typeof orchestrations;

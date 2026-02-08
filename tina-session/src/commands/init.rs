@@ -50,13 +50,16 @@ pub fn run(
     let cwd_abs = fs::canonicalize(cwd)?;
     let design_doc_abs = fs::canonicalize(design_doc)?;
 
-    // Check if already initialized via Convex
+    // Check if already initialized via Convex (only block on active orchestrations)
     if let Some(existing) = check_existing_orchestration(feature)? {
-        let worktree = existing.worktree_path.unwrap_or_default();
-        anyhow::bail!(SessionError::AlreadyInitialized(
-            feature.to_string(),
-            worktree,
-        ));
+        let is_terminal = existing.status == "complete" || existing.status == "blocked";
+        if !is_terminal {
+            let worktree = existing.worktree_path.unwrap_or_default();
+            anyhow::bail!(SessionError::AlreadyInitialized(
+                feature.to_string(),
+                worktree,
+            ));
+        }
     }
 
     // Create .worktrees directory

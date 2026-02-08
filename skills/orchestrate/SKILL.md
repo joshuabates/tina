@@ -24,22 +24,37 @@ You are a TEAM LEAD coordinating TEAMMATES. Do not do the work yourself - spawn 
 ## STEP 1: Parse invocation and extract info
 
 ```bash
-# Parse --model argument if provided
-# Invocation: /tina:orchestrate [--model <model>] <design-doc-path>
+# Parse optional arguments
+# Invocation: /tina:orchestrate [--model <model>] [--feature <name>] <design-doc-path>
 # Examples:
 #   /tina:orchestrate docs/plans/feature-design.md
-#   /tina:orchestrate --model haiku docs/plans/feature-design.md
+#   /tina:orchestrate --feature verbose-flag design.md
+#   /tina:orchestrate --model haiku --feature auth docs/plans/auth-design.md
 
 MODEL_OVERRIDE=""  # empty means planner decides per-task
-if [[ "$1" == "--model" ]]; then
-    MODEL_OVERRIDE="$2"  # haiku or opus
-    DESIGN_DOC="$3"
-else
-    DESIGN_DOC="$1"
-fi
+FEATURE_OVERRIDE=""  # empty means derive from design doc
+
+# Parse named arguments (order-independent)
+while [[ "$1" == --* ]]; do
+    case "$1" in
+        --model) MODEL_OVERRIDE="$2"; shift 2 ;;
+        --feature) FEATURE_OVERRIDE="$2"; shift 2 ;;
+        *) break ;;
+    esac
+done
+DESIGN_DOC="$1"
 
 TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
-FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
+
+# Feature name: use --feature if provided, otherwise derive from H1 title
+if [[ -n "$FEATURE_OVERRIDE" ]]; then
+    FEATURE_NAME="$FEATURE_OVERRIDE"
+else
+    # Extract from first H1 heading, slugify: lowercase, spaces to hyphens, strip non-alphanum
+    H1_TITLE=$(grep -m1 "^# " "$DESIGN_DOC" | sed 's/^# //')
+    FEATURE_NAME=$(echo "$H1_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g; s/[^a-z0-9-]//g; s/--*/-/g; s/^-//; s/-$//')
+fi
+
 TEAM_NAME="${FEATURE_NAME}-orchestration"
 ```
 

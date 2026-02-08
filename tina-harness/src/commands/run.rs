@@ -291,8 +291,8 @@ fn run_full_orchestration(
     // Record time before sending command so we can filter stale orchestrations
     let started_after = Utc::now().to_rfc3339();
 
-    // Send the orchestrate skill command
-    let skill_cmd = format!("/tina:orchestrate {}", design_path.display());
+    // Send the orchestrate skill command with explicit --feature to avoid name derivation issues
+    let skill_cmd = format!("/tina:orchestrate --feature {} {}", feature_name, design_path.display());
     eprintln!("Sending: {}", skill_cmd);
     tina_session::tmux::send_keys(&session_name, &skill_cmd)
         .map_err(|e| anyhow::anyhow!("Failed to send orchestrate command: {}", e))?;
