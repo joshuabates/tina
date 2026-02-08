@@ -63,12 +63,13 @@ Present the complete plan in a single message:
 3. [Third action]
 ...
 
-**What I'm NOT doing:** [Scope boundaries]
+**Scope boundaries (only if explicitly stated; omit if none):** [Known constraints from user or spec]
 
 **Risks/Assumptions:** [If any]
 ```
 
 Keep it concise. No need for extensive justification if the approach is straightforward.
+Do not invent exclusions to reduce scope. If you discover critical issues or unknowns, surface them in **Risks/Assumptions** or ask for clarification.
 
 ### 3. Get Approval
 
@@ -100,3 +101,4 @@ Once approved:
 - **Skipping research** - The value is in understanding before acting
 - **Multiple Q&A rounds** - That's brainstorming; switch if needed
 - **Detailed design docs** - Keep it actionable, not comprehensive
+- **Scope dodging** - Don't use scope boundaries to avoid hard problems; raise them as risks instead
