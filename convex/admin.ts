@@ -1,4 +1,5 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
 
 export const clearAll = mutation({
   args: {},
@@ -27,5 +28,18 @@ export const clearAll = mutation({
     }
 
     return counts;
+  },
+});
+
+export const getTeamHierarchy = query({
+  args: { orchestrationId: v.id("orchestrations") },
+  handler: async (ctx, args) => {
+    const teams = await ctx.db
+      .query("teams")
+      .withIndex("by_orchestration", (q) =>
+        q.eq("orchestrationId", args.orchestrationId)
+      )
+      .collect();
+    return teams;
   },
 });
