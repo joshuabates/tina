@@ -1,27 +1,36 @@
 [tools]
 node = "22"
 
-# --- Services ---
+# --- Services (Overmind) ---
 
 [tasks.dev]
-description = "Start tina-web backend + frontend dev server"
-run = """
-trap 'kill $(jobs -p) 2>/dev/null' EXIT
-echo "Starting backend on http://localhost:3100..."
-cargo run --manifest-path tina-web/Cargo.toml &
-echo "Starting frontend on http://localhost:5173..."
-cd tina-web/frontend && npm run dev &
-wait
-"""
+description = "Start all dev services via Overmind"
+run = "overmind start -f Procfile"
 
-[tasks."dev:backend"]
-description = "Start tina-web backend only"
-run = "cargo run --manifest-path tina-web/Cargo.toml"
-
-[tasks."dev:frontend"]
+[tasks."dev:web"]
 description = "Start frontend dev server only"
-dir = "tina-web/frontend"
-run = "npm run dev"
+dir = "tina-web"
+run = "VITE_CONVEX_URL=$CONVEX_URL npm run dev"
+
+[tasks."dev:convex"]
+description = "Start Convex dev server only"
+run = "npx convex dev"
+
+[tasks."dev:daemon"]
+description = "Start tina-daemon only"
+run = "cargo run --manifest-path tina-daemon/Cargo.toml"
+
+[tasks."dev:connect"]
+description = "Connect to a running Overmind service"
+run = "overmind connect {{arg(name=\"service\")}}"
+
+[tasks."dev:restart"]
+description = "Restart an Overmind service"
+run = "overmind restart {{arg(name=\"service\")}}"
+
+[tasks."dev:stop"]
+description = "Stop all Overmind services"
+run = "overmind stop"
 
 # --- Build ---
 
@@ -31,18 +40,18 @@ run = """
 set -e
 echo "Building tina-session..."
 cargo build --release --manifest-path tina-session/Cargo.toml
+echo "Building tina-daemon..."
+cargo build --release --manifest-path tina-daemon/Cargo.toml
 echo "Building tina-monitor..."
 cargo build --release --manifest-path tina-monitor/Cargo.toml
-echo "Building tina-web..."
-cargo build --release --manifest-path tina-web/Cargo.toml
 echo "Building tina-harness..."
 cargo build --release --manifest-path tina-harness/Cargo.toml
 """
 
 [tasks."build:frontend"]
 description = "Build frontend for production"
-dir = "tina-web/frontend"
-run = "npm run build"
+dir = "tina-web"
+run = "VITE_CONVEX_URL=$CONVEX_URL npm run build"
 
 # --- Install ---
 
@@ -55,9 +64,11 @@ BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
 ln -sf "$MISE_PROJECT_ROOT/tina-session/target/release/tina-session" "$BIN_DIR/tina-session"
 ln -sf "$MISE_PROJECT_ROOT/tina-monitor/target/release/tina-monitor" "$BIN_DIR/tina-monitor"
+ln -sf "$MISE_PROJECT_ROOT/tina-daemon/target/release/tina-daemon" "$BIN_DIR/tina-daemon"
 echo "Installed:"
 echo "  $BIN_DIR/tina-session"
 echo "  $BIN_DIR/tina-monitor"
+echo "  $BIN_DIR/tina-daemon"
 """
 
 # --- Test ---
@@ -70,8 +81,8 @@ echo "Testing tina-session..."
 cargo test --manifest-path tina-session/Cargo.toml
 echo "Testing tina-data..."
 cargo test --manifest-path tina-data/Cargo.toml
-echo "Testing tina-web..."
-cargo test --manifest-path tina-web/Cargo.toml
+echo "Testing tina-daemon..."
+cargo test --manifest-path tina-daemon/Cargo.toml
 echo "Testing tina-monitor..."
 cargo test --manifest-path tina-monitor/Cargo.toml
 echo "Testing tina-harness..."
@@ -86,9 +97,9 @@ run = "cargo test --manifest-path tina-session/Cargo.toml"
 description = "Test tina-data only"
 run = "cargo test --manifest-path tina-data/Cargo.toml"
 
-[tasks."test:web"]
-description = "Test tina-web only"
-run = "cargo test --manifest-path tina-web/Cargo.toml"
+[tasks."test:daemon"]
+description = "Test tina-daemon only"
+run = "cargo test --manifest-path tina-daemon/Cargo.toml"
 
 [tasks."test:monitor"]
 description = "Test tina-monitor only"
@@ -110,7 +121,7 @@ run = """
 set -e
 cargo check --manifest-path tina-session/Cargo.toml
 cargo check --manifest-path tina-data/Cargo.toml
-cargo check --manifest-path tina-web/Cargo.toml
+cargo check --manifest-path tina-daemon/Cargo.toml
 cargo check --manifest-path tina-monitor/Cargo.toml
 cargo check --manifest-path tina-harness/Cargo.toml
 """
@@ -144,10 +155,10 @@ VERSION="{{arg(name=\"version\")}}"
 if [ -z "$VERSION" ]; then
   echo "Usage: mise run bump:version <version>"
   echo "Current versions:"
-  grep '^version' tina-session/Cargo.toml tina-data/Cargo.toml tina-web/Cargo.toml tina-monitor/Cargo.toml tina-harness/Cargo.toml
+  grep '^version' tina-session/Cargo.toml tina-data/Cargo.toml tina-daemon/Cargo.toml tina-monitor/Cargo.toml tina-harness/Cargo.toml
   exit 1
 fi
-for manifest in tina-session/Cargo.toml tina-data/Cargo.toml tina-web/Cargo.toml tina-monitor/Cargo.toml tina-harness/Cargo.toml; do
+for manifest in tina-session/Cargo.toml tina-data/Cargo.toml tina-daemon/Cargo.toml tina-monitor/Cargo.toml tina-harness/Cargo.toml; do
   sed -i '' "s/^version = \".*\"/version = \"$VERSION\"/" "$manifest"
   echo "  $manifest -> $VERSION"
 done
