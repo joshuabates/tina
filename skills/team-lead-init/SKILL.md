@@ -264,12 +264,8 @@ Do NOT proceed to completion. Do NOT attempt workarounds.
 3. [ ] No active reviewers
 4. [ ] Verification gate passed (Step 6.1)
 5. [ ] Complexity gate passed (Step 6.2)
-6. [ ] Team cleanup completed:
-   ```json
-   {
-     "operation": "cleanup"
-   }
-   ```
+
+**Do NOT clean up the team.** Phase team/task directories must persist so the daemon can sync them to Convex. Cleanup is the orchestrator's responsibility after verification.
 
 **Only after ALL items verified:**
 
@@ -494,11 +490,11 @@ SendMessage({
 Repeat for each agent (worker, spec-reviewer, code-quality-reviewer if spawned).
 Monitor for shutdown acknowledgment messages before spawning agents for the next task.
 
-**Phase-end cleanup:**
+**Phase-end:**
 
 When all tasks complete:
 - No workers/reviewers to shut down (already cleaned up per-task)
-- Clean up team resources with Teammate `cleanup` operation (required unless supervisor will reuse the team)
+- Do NOT clean up team resources — the daemon needs the team/task dirs to sync to Convex
 - Update status.json to "complete"
 
 ## Shutdown Verification
@@ -595,11 +591,6 @@ See: `skills/checkpoint/SKILL.md` and `skills/rehydrate/SKILL.md`
 - Log warning: "Agent <name> did not acknowledge shutdown"
 - Proceed to next task (agent may have already terminated)
 
-**Cleanup operation fails:**
-- Retry cleanup once
-- If still fails: Log error but proceed (status can still be marked complete)
-- Include cleanup failure in completion notes
-
 ## Escalation Protocol
 
 When team-lead cannot complete a phase, mark it blocked with detailed context:
@@ -689,5 +680,5 @@ Note: `team-name.txt` is no longer used. Team names are passed explicitly from o
 - Set status to "blocked" with gate details if any gate fails
 - Request shutdown for worker, spec-reviewer, and code-quality-reviewer after each task
 - Wait for shutdown acknowledgment (or 30s timeout) before next task
-- Run team cleanup at phase end
+- Do NOT run team cleanup at phase end (daemon needs the dirs)
 - Log warning if agent doesn't acknowledge shutdown

@@ -129,7 +129,23 @@ pub struct TeamRecord {
     pub orchestration_id: String,
     pub lead_session_id: String,
     pub phase_number: Option<String>,
+    pub parent_team_id: Option<String>,
     pub created_at: f64,
+}
+
+/// Active team record as returned by `teams:listActiveTeams` query.
+/// Extends `TeamRecord` with orchestration context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveTeamRecord {
+    pub id: String,
+    pub team_name: String,
+    pub orchestration_id: String,
+    pub lead_session_id: String,
+    pub phase_number: Option<String>,
+    pub parent_team_id: Option<String>,
+    pub created_at: f64,
+    pub orchestration_status: String,
+    pub feature_name: String,
 }
 
 /// Full orchestration detail as returned by `getOrchestrationDetail` query.

@@ -109,10 +109,12 @@ export default defineSchema({
     orchestrationId: v.id("orchestrations"),
     leadSessionId: v.string(),
     phaseNumber: v.optional(v.string()),
+    parentTeamId: v.optional(v.id("teams")),
     createdAt: v.number(),
   })
     .index("by_team_name", ["teamName"])
-    .index("by_orchestration", ["orchestrationId"]),
+    .index("by_orchestration", ["orchestrationId"])
+    .index("by_parent", ["parentTeamId"]),
 
   inboundActions: defineTable({
     nodeId: v.id("nodes"),

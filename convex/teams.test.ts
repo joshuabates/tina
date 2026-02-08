@@ -111,6 +111,76 @@ describe("teams:registerTeam", () => {
 
     expect(teamId).toBeTruthy();
   });
+
+  test("stores parentTeamId when provided", async () => {
+    const t = convexTest(schema);
+    const nodeId = await createNode(t);
+    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+
+    // Create parent team
+    const parentId = await t.mutation(api.teams.registerTeam, {
+      teamName: "auth-feature-orchestration",
+      orchestrationId: orchId,
+      leadSessionId: "session-abc",
+      createdAt: Date.now(),
+    });
+
+    // Create child team with parentTeamId
+    await t.mutation(api.teams.registerTeam, {
+      teamName: "auth-feature-phase-1",
+      orchestrationId: orchId,
+      leadSessionId: "session-def",
+      phaseNumber: "1",
+      parentTeamId: parentId,
+      createdAt: Date.now(),
+    });
+
+    const child = await t.query(api.teams.getByTeamName, {
+      teamName: "auth-feature-phase-1",
+    });
+
+    expect(child).not.toBeNull();
+    expect(child!.parentTeamId).toBe(parentId);
+  });
+
+  test("updates parentTeamId on upsert", async () => {
+    const t = convexTest(schema);
+    const nodeId = await createNode(t);
+    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+
+    // Create parent team
+    const parentId = await t.mutation(api.teams.registerTeam, {
+      teamName: "auth-feature-orchestration",
+      orchestrationId: orchId,
+      leadSessionId: "session-abc",
+      createdAt: Date.now(),
+    });
+
+    // Create child team without parent
+    await t.mutation(api.teams.registerTeam, {
+      teamName: "auth-feature-phase-1",
+      orchestrationId: orchId,
+      leadSessionId: "session-def",
+      phaseNumber: "1",
+      createdAt: Date.now(),
+    });
+
+    // Re-register with parent
+    await t.mutation(api.teams.registerTeam, {
+      teamName: "auth-feature-phase-1",
+      orchestrationId: orchId,
+      leadSessionId: "session-def",
+      phaseNumber: "1",
+      parentTeamId: parentId,
+      createdAt: Date.now(),
+    });
+
+    const child = await t.query(api.teams.getByTeamName, {
+      teamName: "auth-feature-phase-1",
+    });
+
+    expect(child!.parentTeamId).toBe(parentId);
+  });
 });
 
 describe("teams:getByTeamName", () => {
@@ -147,6 +217,147 @@ describe("teams:getByTeamName", () => {
     });
 
     expect(result).toBeNull();
+  });
+});
+
+describe("teams:listActiveTeams", () => {
+  test("returns teams with active orchestrations", async () => {
+    const t = convexTest(schema);
+    const nodeId = await createNode(t);
+
+    // Active orchestration (status: planning)
+    const activeOrchId = await createOrchestration(t, nodeId, "active-feature");
+    await t.mutation(api.teams.registerTeam, {
+      teamName: "active-feature-orchestration",
+      orchestrationId: activeOrchId,
+      leadSessionId: "session-1",
+      createdAt: Date.now(),
+    });
+
+    const teams = await t.query(api.teams.listActiveTeams, {});
+    expect(teams.length).toBe(1);
+    expect(teams[0].teamName).toBe("active-feature-orchestration");
+    expect(teams[0].orchestrationStatus).toBe("planning");
+    expect(teams[0].featureName).toBe("active-feature");
+  });
+
+  test("excludes teams with completed orchestrations", async () => {
+    const t = convexTest(schema);
+    const nodeId = await createNode(t);
+
+    // Completed orchestration
+    const orchId = await t.mutation(api.orchestrations.upsertOrchestration, {
+      nodeId: nodeId as any,
+      featureName: "done-feature",
+      designDocPath: "/docs/design.md",
+      branch: "tina/done-feature",
+      totalPhases: 1,
+      currentPhase: 1,
+      status: "complete",
+      startedAt: "2026-02-08T10:00:00Z",
+    });
+
+    await t.mutation(api.teams.registerTeam, {
+      teamName: "done-feature-orchestration",
+      orchestrationId: orchId,
+      leadSessionId: "session-1",
+      createdAt: Date.now(),
+    });
+
+    const teams = await t.query(api.teams.listActiveTeams, {});
+    expect(teams.length).toBe(0);
+  });
+
+  test("excludes teams with blocked orchestrations", async () => {
+    const t = convexTest(schema);
+    const nodeId = await createNode(t);
+
+    const orchId = await t.mutation(api.orchestrations.upsertOrchestration, {
+      nodeId: nodeId as any,
+      featureName: "blocked-feature",
+      designDocPath: "/docs/design.md",
+      branch: "tina/blocked-feature",
+      totalPhases: 1,
+      currentPhase: 1,
+      status: "blocked",
+      startedAt: "2026-02-08T10:00:00Z",
+    });
+
+    await t.mutation(api.teams.registerTeam, {
+      teamName: "blocked-feature-orchestration",
+      orchestrationId: orchId,
+      leadSessionId: "session-1",
+      createdAt: Date.now(),
+    });
+
+    const teams = await t.query(api.teams.listActiveTeams, {});
+    expect(teams.length).toBe(0);
+  });
+
+  test("returns empty array when no teams", async () => {
+    const t = convexTest(schema);
+    const teams = await t.query(api.teams.listActiveTeams, {});
+    expect(teams).toEqual([]);
+  });
+});
+
+describe("teams:listByParent", () => {
+  test("returns child teams for a parent", async () => {
+    const t = convexTest(schema);
+    const nodeId = await createNode(t);
+    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+
+    const parentId = await t.mutation(api.teams.registerTeam, {
+      teamName: "auth-feature-orchestration",
+      orchestrationId: orchId,
+      leadSessionId: "session-abc",
+      createdAt: Date.now(),
+    });
+
+    await t.mutation(api.teams.registerTeam, {
+      teamName: "auth-feature-phase-1",
+      orchestrationId: orchId,
+      leadSessionId: "session-def",
+      phaseNumber: "1",
+      parentTeamId: parentId,
+      createdAt: Date.now(),
+    });
+
+    await t.mutation(api.teams.registerTeam, {
+      teamName: "auth-feature-phase-2",
+      orchestrationId: orchId,
+      leadSessionId: "session-ghi",
+      phaseNumber: "2",
+      parentTeamId: parentId,
+      createdAt: Date.now(),
+    });
+
+    const children = await t.query(api.teams.listByParent, {
+      parentTeamId: parentId,
+    });
+
+    expect(children.length).toBe(2);
+    const names = children.map((c: any) => c.teamName).sort();
+    expect(names).toEqual(["auth-feature-phase-1", "auth-feature-phase-2"]);
+  });
+
+  test("returns empty array when no children", async () => {
+    const t = convexTest(schema);
+    const nodeId = await createNode(t);
+    const orchId = await createOrchestration(t, nodeId, "solo-feature");
+
+    const parentId = await t.mutation(api.teams.registerTeam, {
+      teamName: "solo-feature-orchestration",
+      orchestrationId: orchId,
+      leadSessionId: "session-abc",
+      createdAt: Date.now(),
+    });
+
+    const children = await t.query(api.teams.listByParent, {
+      parentTeamId: parentId,
+    });
+
+    expect(children).toEqual([]);
   });
 });
 

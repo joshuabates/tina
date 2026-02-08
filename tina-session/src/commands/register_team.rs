@@ -5,6 +5,7 @@ pub fn run(
     team_name: &str,
     lead_session_id: &str,
     phase_number: Option<&str>,
+    parent_team_id: Option<&str>,
 ) -> anyhow::Result<u8> {
     let team_id = convex::run_convex(|mut writer| async move {
         let args = convex::RegisterTeamArgs {
@@ -12,6 +13,7 @@ pub fn run(
             orchestration_id: orchestration_id.to_string(),
             lead_session_id: lead_session_id.to_string(),
             phase_number: phase_number.map(|s| s.to_string()),
+            parent_team_id: parent_team_id.map(|s| s.to_string()),
             created_at: chrono::Utc::now().timestamp_millis() as f64,
         };
         writer.register_team(&args).await

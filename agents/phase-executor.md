@@ -21,6 +21,7 @@ Your spawn prompt contains: `task_id: <id>`
    - `phase_num`: Phase number (e.g., "4" or "2.5")
    - `plan_path`: Full path to plan file
    - `worktree_path`: Path to worktree
+   - `parent_team_id`: Convex doc ID of the orchestration team (optional)
 
 ## Boundaries
 
@@ -42,14 +43,18 @@ Your spawn prompt contains: `task_id: <id>`
 - `phase_num`: Phase number (e.g., "2" or "2.5" for remediation)
 - `plan_path`: Full path to plan file
 - `worktree_path`: Path to worktree
+- `parent_team_id`: Convex doc ID of the orchestration team (optional, used to link phase team to parent)
 
 ## Step 1: Start the Phase
 
 Run this exact command:
 
 ```bash
-tina-session start --feature "$FEATURE_NAME" --phase "$PHASE_NUM" --plan "$PLAN_PATH"
+tina-session start --feature "$FEATURE_NAME" --phase "$PHASE_NUM" --plan "$PLAN_PATH" \
+  ${PARENT_TEAM_ID:+--parent-team-id "$PARENT_TEAM_ID"}
 ```
+
+If `parent_team_id` is present in task metadata, pass it via `--parent-team-id`. This links the phase execution team to the orchestration team in Convex, enabling the daemon to sync tasks and members correctly.
 
 This command handles everything - session creation, Claude startup, and initialization.
 

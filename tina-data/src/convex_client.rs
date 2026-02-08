@@ -411,18 +411,51 @@ fn extract_node_list(result: FunctionResult) -> Result<Vec<NodeRecord>> {
     }
 }
 
+fn extract_team_record_from_obj(obj: &BTreeMap<String, Value>) -> TeamRecord {
+    TeamRecord {
+        id: value_as_id(obj, "_id"),
+        team_name: value_as_str(obj, "teamName"),
+        orchestration_id: value_as_id(obj, "orchestrationId"),
+        lead_session_id: value_as_str(obj, "leadSessionId"),
+        phase_number: value_as_opt_str(obj, "phaseNumber"),
+        parent_team_id: value_as_opt_str(obj, "parentTeamId"),
+        created_at: value_as_f64(obj, "createdAt"),
+    }
+}
+
 fn extract_team_record(result: FunctionResult) -> Result<Option<TeamRecord>> {
     match result {
         FunctionResult::Value(Value::Null) => Ok(None),
-        FunctionResult::Value(Value::Object(obj)) => Ok(Some(TeamRecord {
-            id: value_as_id(&obj, "_id"),
-            team_name: value_as_str(&obj, "teamName"),
-            orchestration_id: value_as_id(&obj, "orchestrationId"),
-            lead_session_id: value_as_str(&obj, "leadSessionId"),
-            phase_number: value_as_opt_str(&obj, "phaseNumber"),
-            created_at: value_as_f64(&obj, "createdAt"),
-        })),
+        FunctionResult::Value(Value::Object(obj)) => Ok(Some(extract_team_record_from_obj(&obj))),
         FunctionResult::Value(other) => bail!("expected object for team record, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_active_team_list(result: FunctionResult) -> Result<Vec<ActiveTeamRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut teams = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    teams.push(ActiveTeamRecord {
+                        id: value_as_id(&obj, "_id"),
+                        team_name: value_as_str(&obj, "teamName"),
+                        orchestration_id: value_as_id(&obj, "orchestrationId"),
+                        lead_session_id: value_as_str(&obj, "leadSessionId"),
+                        phase_number: value_as_opt_str(&obj, "phaseNumber"),
+                        parent_team_id: value_as_opt_str(&obj, "parentTeamId"),
+                        created_at: value_as_f64(&obj, "createdAt"),
+                        orchestration_status: value_as_str(&obj, "orchestrationStatus"),
+                        feature_name: value_as_str(&obj, "featureName"),
+                    });
+                }
+            }
+            Ok(teams)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => bail!("expected array for active team list, got: {:?}", other),
         FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
         FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
     }
@@ -579,6 +612,16 @@ impl TinaConvexClient {
         let args = BTreeMap::new();
         let result = self.client.query("nodes:listNodes", args).await?;
         extract_node_list(result)
+    }
+
+    /// List all active teams (teams whose orchestration is not complete/blocked).
+    pub async fn list_active_teams(&mut self) -> Result<Vec<ActiveTeamRecord>> {
+        let args = BTreeMap::new();
+        let result = self
+            .client
+            .query("teams:listActiveTeams", args)
+            .await?;
+        extract_active_team_list(result)
     }
 
     /// Look up a team by name from the Convex `teams` table.
@@ -960,6 +1003,7 @@ mod tests {
         map.insert("orchestrationId".to_string(), Value::from("orch-456"));
         map.insert("leadSessionId".to_string(), Value::from("session-789"));
         map.insert("phaseNumber".to_string(), Value::from("1"));
+        map.insert("parentTeamId".to_string(), Value::from("parent-team-001"));
         map.insert("createdAt".to_string(), Value::from(1706644800000.0f64));
         let result = FunctionResult::Value(Value::Object(map));
 
@@ -969,6 +1013,7 @@ mod tests {
         assert_eq!(team.orchestration_id, "orch-456");
         assert_eq!(team.lead_session_id, "session-789");
         assert_eq!(team.phase_number.as_deref(), Some("1"));
+        assert_eq!(team.parent_team_id.as_deref(), Some("parent-team-001"));
         assert_eq!(team.created_at, 1706644800000.0);
     }
 
@@ -984,11 +1029,58 @@ mod tests {
 
         let team = extract_team_record(result).unwrap().unwrap();
         assert!(team.phase_number.is_none());
+        assert!(team.parent_team_id.is_none());
     }
 
     #[test]
     fn test_extract_team_record_error() {
         let result = FunctionResult::ErrorMessage("not found".into());
         assert!(extract_team_record(result).is_err());
+    }
+
+    // --- Active team list extraction tests ---
+
+    #[test]
+    fn test_extract_active_team_list_empty() {
+        let result = FunctionResult::Value(Value::Array(vec![]));
+        let teams = extract_active_team_list(result).unwrap();
+        assert!(teams.is_empty());
+    }
+
+    #[test]
+    fn test_extract_active_team_list_null() {
+        let result = FunctionResult::Value(Value::Null);
+        let teams = extract_active_team_list(result).unwrap();
+        assert!(teams.is_empty());
+    }
+
+    #[test]
+    fn test_extract_active_team_list_with_entries() {
+        let mut map = BTreeMap::new();
+        map.insert("_id".to_string(), Value::from("team-id-1"));
+        map.insert("teamName".to_string(), Value::from("feature-orchestration"));
+        map.insert("orchestrationId".to_string(), Value::from("orch-1"));
+        map.insert("leadSessionId".to_string(), Value::from("session-1"));
+        map.insert("phaseNumber".to_string(), Value::from("1"));
+        map.insert("parentTeamId".to_string(), Value::from("parent-team-1"));
+        map.insert("createdAt".to_string(), Value::from(1000.0f64));
+        map.insert("orchestrationStatus".to_string(), Value::from("executing"));
+        map.insert("featureName".to_string(), Value::from("my-feature"));
+
+        let result = FunctionResult::Value(Value::Array(vec![Value::Object(map)]));
+        let teams = extract_active_team_list(result).unwrap();
+
+        assert_eq!(teams.len(), 1);
+        assert_eq!(teams[0].id, "team-id-1");
+        assert_eq!(teams[0].team_name, "feature-orchestration");
+        assert_eq!(teams[0].orchestration_status, "executing");
+        assert_eq!(teams[0].feature_name, "my-feature");
+        assert_eq!(teams[0].parent_team_id.as_deref(), Some("parent-team-1"));
+    }
+
+    #[test]
+    fn test_extract_active_team_list_error() {
+        let result = FunctionResult::ErrorMessage("query failed".into());
+        assert!(extract_active_team_list(result).is_err());
     }
 }

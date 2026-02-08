@@ -63,6 +63,10 @@ enum Commands {
         /// Install dependencies before starting (npm, cargo, pip)
         #[arg(long, default_value = "false")]
         install_deps: bool,
+
+        /// Parent team ID (Convex doc ID of the orchestration team)
+        #[arg(long)]
+        parent_team_id: Option<String>,
     },
 
     /// Wait for phase completion
@@ -215,6 +219,10 @@ enum Commands {
         /// Phase number (optional, null for orchestration team)
         #[arg(long)]
         phase_number: Option<String>,
+
+        /// Parent team ID (Convex doc ID of the orchestration team)
+        #[arg(long)]
+        parent_team_id: Option<String>,
     },
 
     /// Clean up orchestration state
@@ -420,9 +428,10 @@ fn run() -> anyhow::Result<u8> {
             phase,
             plan,
             install_deps,
+            parent_team_id,
         } => {
             check_phase(&phase)?;
-            commands::start::run(&feature, &phase, &plan, install_deps)
+            commands::start::run(&feature, &phase, &plan, install_deps, parent_team_id.as_deref())
         }
 
         Commands::Wait {
@@ -551,11 +560,13 @@ fn run() -> anyhow::Result<u8> {
             team,
             lead_session_id,
             phase_number,
+            parent_team_id,
         } => commands::register_team::run(
             &orchestration_id,
             &team,
             &lead_session_id,
             phase_number.as_deref(),
+            parent_team_id.as_deref(),
         ),
 
         Commands::Cleanup { feature } => commands::cleanup::run(&feature),

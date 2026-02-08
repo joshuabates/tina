@@ -97,9 +97,7 @@ pub fn run(
     // teams/tasks to this orchestration. The lead_session_id is a placeholder
     // until the real team lead starts and re-registers via upsert.
     let team_name = format!("{}-orchestration", feature);
-    if let Err(e) = register_orchestration_team(&orch_id, &team_name) {
-        eprintln!("Warning: Failed to pre-register team: {}", e);
-    }
+    let team_id = register_orchestration_team(&orch_id, &team_name)?;
 
     // Auto-start daemon if not running
     if tina_session::daemon::status().is_none() {
@@ -112,6 +110,7 @@ pub fn run(
     // Output JSON for orchestrator to capture
     let output = serde_json::json!({
         "orchestration_id": orch_id,
+        "team_id": team_id,
         "worktree_path": worktree_path.display().to_string(),
         "feature": feature,
         "branch": actual_branch,
@@ -233,6 +232,7 @@ fn register_orchestration_team(orchestration_id: &str, team_name: &str) -> anyho
             orchestration_id: orchestration_id.to_string(),
             lead_session_id: "pending".to_string(),
             phase_number: None,
+            parent_team_id: None,
             created_at: chrono::Utc::now().timestamp_millis() as f64,
         };
         writer.register_team(&args).await

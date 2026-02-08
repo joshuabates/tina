@@ -6,9 +6,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use chrono::Utc;
 use tokio::sync::Mutex;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
-use tina_data::{Task, TaskEventRecord, Team, TeamMemberRecord, TinaConvexClient};
+use tina_data::{ActiveTeamRecord, Task, TaskEventRecord, Team, TeamMemberRecord, TinaConvexClient};
 
 /// Cached state for detecting changes and avoiding redundant Convex writes.
 pub struct SyncCache {
@@ -35,42 +35,25 @@ impl SyncCache {
     }
 }
 
-/// Look up the Convex orchestration ID for a team by querying the teams table.
-async fn lookup_orchestration_id(
-    client: &Arc<Mutex<TinaConvexClient>>,
-    team_name: &str,
-) -> Result<Option<String>> {
-    let mut client_guard = client.lock().await;
-    match client_guard.get_team_by_name(team_name).await? {
-        Some(record) => Ok(Some(record.orchestration_id)),
-        None => Ok(None),
-    }
-}
-
 /// Sync team members from a team config file to Convex.
 ///
-/// Reads team config, finds the associated orchestration, and upserts each member.
+/// Uses the `ActiveTeamRecord` from Convex to get the orchestration ID and phase number
+/// directly, avoiding per-team lookups and name-based phase extraction.
 pub async fn sync_team_members(
     client: &Arc<Mutex<TinaConvexClient>>,
     cache: &mut SyncCache,
     teams_dir: &Path,
-    team_name: &str,
+    team: &ActiveTeamRecord,
 ) -> Result<()> {
-    let team = load_team_config(teams_dir, team_name)?;
-    let orchestration_id = match lookup_orchestration_id(client, team_name).await? {
-        Some(id) => id,
-        None => {
-            debug!(team = %team_name, "no orchestration found for team, skipping");
-            return Ok(());
-        }
-    };
+    let team_config = load_team_config(teams_dir, &team.team_name)?;
 
-    let phase_number = extract_phase_number(team_name).unwrap_or_else(|| "0".to_string());
+    let orchestration_id = &team.orchestration_id;
+    let phase_number = team.phase_number.clone().unwrap_or_else(|| "0".to_string());
     let now = Utc::now().to_rfc3339();
 
-    for member in &team.members {
+    for member in &team_config.members {
         let cache_key = (
-            orchestration_id.clone(),
+            orchestration_id.to_string(),
             phase_number.clone(),
             member.name.clone(),
         );
@@ -84,7 +67,7 @@ pub async fn sync_team_members(
             .map(|dt| dt.to_rfc3339());
 
         let record = TeamMemberRecord {
-            orchestration_id: orchestration_id.clone(),
+            orchestration_id: orchestration_id.to_string(),
             phase_number: phase_number.clone(),
             agent_name: member.name.clone(),
             agent_type: member.agent_type.clone(),
@@ -110,26 +93,19 @@ pub async fn sync_team_members(
     Ok(())
 }
 
-/// Sync tasks from the filesystem to Convex.
+/// Sync tasks from the filesystem to Convex, driven by active teams from Convex.
 ///
-/// Reads task files, compares against cache, and records events for changes.
+/// Queries Convex for active teams to get orchestration IDs, then reads task
+/// files from the filesystem and records events for changes.
 pub async fn sync_tasks(
     client: &Arc<Mutex<TinaConvexClient>>,
     cache: &mut SyncCache,
-    teams_dir: &Path,
+    active_teams: &[ActiveTeamRecord],
     tasks_dir: &Path,
 ) -> Result<()> {
-    let team_names = list_team_names(teams_dir)?;
-
-    for team_name in &team_names {
-        let orchestration_id = match lookup_orchestration_id(client, team_name).await? {
-            Some(id) => id,
-            None => continue,
-        };
-
-        let phase_number = extract_phase_number(team_name);
-        // Claude CLI stores tasks under ~/.claude/tasks/{team_name}/, not by session ID
-        let task_team_dir = tasks_dir.join(team_name);
+    for team in active_teams {
+        // Claude CLI stores tasks under ~/.claude/tasks/{team_name}/
+        let task_team_dir = tasks_dir.join(&team.team_name);
 
         if !task_team_dir.exists() {
             continue;
@@ -138,8 +114,8 @@ pub async fn sync_tasks(
         sync_task_dir(
             client,
             cache,
-            &orchestration_id,
-            phase_number.as_deref(),
+            &team.orchestration_id,
+            team.phase_number.as_deref(),
             &task_team_dir,
         )
         .await?;
@@ -216,22 +192,34 @@ async fn sync_task_dir(
     Ok(())
 }
 
+/// Fetch active teams from Convex for use by sync operations.
+pub async fn fetch_active_teams(
+    client: &Arc<Mutex<TinaConvexClient>>,
+) -> Result<Vec<ActiveTeamRecord>> {
+    let mut client_guard = client.lock().await;
+    client_guard.list_active_teams().await
+}
+
 /// Sync all known teams and tasks (called on startup or after detecting changes).
+///
+/// Queries Convex for active teams first, then syncs team members and tasks
+/// using the returned orchestration IDs (no per-team lookup needed).
 pub async fn sync_all(
     client: &Arc<Mutex<TinaConvexClient>>,
     cache: &mut SyncCache,
     teams_dir: &Path,
     tasks_dir: &Path,
 ) -> Result<()> {
-    let team_names = list_team_names(teams_dir)?;
+    let active_teams = fetch_active_teams(client).await?;
+    info!(count = active_teams.len(), "fetched active teams from Convex");
 
-    for team_name in &team_names {
-        if let Err(e) = sync_team_members(client, cache, teams_dir, team_name).await {
-            warn!(team = %team_name, error = %e, "failed to sync team");
+    for team in &active_teams {
+        if let Err(e) = sync_team_members(client, cache, teams_dir, team).await {
+            warn!(team = %team.team_name, error = %e, "failed to sync team");
         }
     }
 
-    if let Err(e) = sync_tasks(client, cache, teams_dir, tasks_dir).await {
+    if let Err(e) = sync_tasks(client, cache, &active_teams, tasks_dir).await {
         warn!(error = %e, "failed to sync tasks");
     }
 

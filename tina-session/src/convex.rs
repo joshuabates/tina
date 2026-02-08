@@ -52,6 +52,7 @@ pub struct RegisterTeamArgs {
     pub orchestration_id: String,
     pub lead_session_id: String,
     pub phase_number: Option<String>,
+    pub parent_team_id: Option<String>,
     pub created_at: f64,
 }
 
@@ -264,6 +265,9 @@ impl ConvexWriter {
         );
         if let Some(ref pn) = team.phase_number {
             args.insert("phaseNumber".into(), Value::from(pn.as_str()));
+        }
+        if let Some(ref ptid) = team.parent_team_id {
+            args.insert("parentTeamId".into(), Value::from(ptid.as_str()));
         }
         args.insert("createdAt".into(), Value::from(team.created_at));
 

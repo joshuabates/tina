@@ -7,6 +7,7 @@ export const registerTeam = mutation({
     orchestrationId: v.id("orchestrations"),
     leadSessionId: v.string(),
     phaseNumber: v.optional(v.string()),
+    parentTeamId: v.optional(v.id("teams")),
     createdAt: v.number(),
   },
   handler: async (ctx, args) => {
@@ -21,15 +22,58 @@ export const registerTeam = mutation({
           `Team "${args.teamName}" already registered to a different orchestration`,
         );
       }
-      await ctx.db.patch(existing._id, {
+      const patch: Record<string, unknown> = {
         leadSessionId: args.leadSessionId,
         phaseNumber: args.phaseNumber,
         createdAt: args.createdAt,
-      });
+      };
+      if (args.parentTeamId !== undefined) {
+        patch.parentTeamId = args.parentTeamId;
+      }
+      await ctx.db.patch(existing._id, patch);
       return existing._id;
     }
 
     return await ctx.db.insert("teams", args);
+  },
+});
+
+export const listActiveTeams = query({
+  args: {},
+  handler: async (ctx) => {
+    const teams = await ctx.db.query("teams").collect();
+
+    const results = await Promise.all(
+      teams.map(async (team) => {
+        const orchestration = await ctx.db.get(team.orchestrationId);
+        if (!orchestration) return null;
+
+        const isActive =
+          orchestration.status !== "complete" &&
+          orchestration.status !== "blocked";
+        if (!isActive) return null;
+
+        return {
+          ...team,
+          orchestrationStatus: orchestration.status,
+          featureName: orchestration.featureName,
+        };
+      }),
+    );
+
+    return results.filter((r) => r !== null);
+  },
+});
+
+export const listByParent = query({
+  args: {
+    parentTeamId: v.id("teams"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("teams")
+      .withIndex("by_parent", (q) => q.eq("parentTeamId", args.parentTeamId))
+      .collect();
   },
 });
 

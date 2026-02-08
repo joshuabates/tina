@@ -27,7 +27,7 @@ fn detect_claude_binary() -> &'static str {
     "claude"
 }
 
-pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyhow::Result<u8> {
+pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool, parent_team_id: Option<&str>) -> anyhow::Result<u8> {
     // Resolve worktree path from Convex
     let orch = convex::run_convex(|mut writer| async move {
         writer.get_by_feature(feature).await
@@ -115,9 +115,7 @@ pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyho
     // Register the phase execution team in Convex so the daemon can sync
     // phase-level tasks and team members.
     let team_name = format!("{}-phase-{}", feature, phase);
-    if let Err(e) = register_phase_team(&orch.id, &team_name) {
-        eprintln!("Warning: Failed to register phase team: {}", e);
-    }
+    register_phase_team(&orch.id, &team_name, phase, parent_team_id)?;
 
     // Send the team-lead-init skill command with team_name
     let skill_cmd = format!(
@@ -134,13 +132,21 @@ pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyho
 
 /// Register the phase execution team in Convex so the daemon can sync
 /// phase-level tasks and team members to the orchestration.
-fn register_phase_team(orchestration_id: &str, team_name: &str) -> anyhow::Result<String> {
+fn register_phase_team(
+    orchestration_id: &str,
+    team_name: &str,
+    phase: &str,
+    parent_team_id: Option<&str>,
+) -> anyhow::Result<String> {
+    let phase = phase.to_string();
+    let parent = parent_team_id.map(|s| s.to_string());
     convex::run_convex(|mut writer| async move {
         let args = convex::RegisterTeamArgs {
             team_name: team_name.to_string(),
             orchestration_id: orchestration_id.to_string(),
             lead_session_id: "pending".to_string(),
-            phase_number: None,
+            phase_number: Some(phase),
+            parent_team_id: parent,
             created_at: chrono::Utc::now().timestamp_millis() as f64,
         };
         writer.register_team(&args).await

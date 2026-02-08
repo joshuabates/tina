@@ -93,14 +93,15 @@ INIT_JSON=$(tina-session init \
   --total-phases "$TOTAL_PHASES")
 ```
 
-The command outputs JSON to stdout: `{orchestration_id, worktree_path, feature, branch, design_doc, total_phases}`. Parse it to extract the values you need:
+The command outputs JSON to stdout: `{orchestration_id, team_id, worktree_path, feature, branch, design_doc, total_phases}`. Parse it to extract the values you need:
 
 ```bash
 ORCHESTRATION_ID=$(echo "$INIT_JSON" | jq -r '.orchestration_id')
+TEAM_ID=$(echo "$INIT_JSON" | jq -r '.team_id')
 WORKTREE_PATH=$(echo "$INIT_JSON" | jq -r '.worktree_path')
 ```
 
-Store both `orchestration_id` and `worktree_path` in task metadata for later tasks to use.
+Store `orchestration_id`, `team_id`, and `worktree_path` in task metadata for later tasks to use. The `team_id` is the Convex document ID of the orchestration team - phase executor teams will reference it as their `parent_team_id`.
 
 ---
 
@@ -163,7 +164,7 @@ The design has `## Architectural Context` (added by `tina:architect` on approval
 1. Auto-complete the validate-design task:
    ```
    TaskUpdate: validate-design, status: completed
-   TaskUpdate: validate-design, metadata: { validation_status: "pre-approved", worktree_path: "$WORKTREE_PATH" }
+   TaskUpdate: validate-design, metadata: { validation_status: "pre-approved", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID" }
    ```
 2. Print: `"Design pre-approved (has Architectural Context). Skipping validation."`
 3. Check for `## Prerequisites` section in the design doc. If present, show prerequisites to user and ask for confirmation before continuing.
@@ -380,7 +381,9 @@ Task metadata carries orchestration state:
 |------|----------|
 | Design doc path | Team description |
 | Worktree path | validate-design task metadata (set during init) |
+| Team ID (orchestration) | validate-design task metadata (set during init) |
 | Plan path | plan-phase-N task metadata |
+| Parent team ID | execute-phase-N task metadata (propagated from validate-design) |
 | Git range | execute-phase-N task metadata |
 | Review findings | review-phase-N task metadata |
 | Supervisor state | `{worktree}/.claude/tina/supervisor-state.json` (written by tina-session init)
@@ -464,12 +467,13 @@ TaskCreate {
   "activeForm": "Validating design document",
   "metadata": {
     "design_doc_path": "<DESIGN_DOC>",
-    "worktree_path": "<WORKTREE_PATH>"
+    "worktree_path": "<WORKTREE_PATH>",
+    "team_id": "<TEAM_ID>"
   }
 }
 ```
 
-Note: `worktree_path` and `orchestration_id` are captured from `tina-session init` JSON output in STEP 1c. They're stored in validate-design metadata so all downstream tasks can access them.
+Note: `worktree_path`, `orchestration_id`, and `team_id` are captured from `tina-session init` JSON output in STEP 1c. They're stored in validate-design metadata so all downstream tasks can access them. The `team_id` is the Convex document ID of the orchestration team, used as `parent_team_id` when registering phase execution teams.
 
 4. **Create phase tasks (for each phase 1 to N):**
 ```json
@@ -556,11 +560,12 @@ Propagate data from completed tasks to the task being spawned. This way the spaw
 ```bash
 # Example: Before spawning executor, update its task with paths from earlier tasks
 WORKTREE_PATH=$(TaskGet { taskId: "validate-design" }).metadata.worktree_path
+TEAM_ID=$(TaskGet { taskId: "validate-design" }).metadata.team_id
 PLAN_PATH=$(TaskGet { taskId: "plan-phase-$N" }).metadata.plan_path
 
 TaskUpdate {
   taskId: "execute-phase-$N",
-  metadata: { worktree_path: WORKTREE_PATH, plan_path: PLAN_PATH }
+  metadata: { worktree_path: WORKTREE_PATH, plan_path: PLAN_PATH, parent_team_id: TEAM_ID }
 }
 ```
 
@@ -708,9 +713,9 @@ Orchestration tasks store metadata for monitoring and recovery:
 
 | Task | Required Metadata |
 |------|-------------------|
-| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path` |
+| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path`, `team_id` |
 | `plan-phase-N` | `plan_path` |
-| `execute-phase-N` | `phase_team_name`, `started_at` |
+| `execute-phase-N` | `phase_team_name`, `parent_team_id`, `started_at` |
 | `execute-phase-N` (on complete) | `git_range`, `completed_at` |
 | `review-phase-N` | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
 
@@ -756,7 +761,7 @@ if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
     # Advance state via CLI
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase validation --event $EVENT
     TaskUpdate: validate-design, status: completed
-    TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH" }
+    TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID" }
     # Dispatch NEXT_ACTION (see Action Dispatch table above)
 
 if message contains "VALIDATION_STATUS: Stop":
