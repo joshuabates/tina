@@ -12,6 +12,23 @@ pub struct Config {
     pub tui: TuiConfig,
     pub safety: SafetyConfig,
     pub logging: LoggingConfig,
+    pub convex: ConvexConfig,
+}
+
+/// Convex backend configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ConvexConfig {
+    /// Convex deployment URL
+    pub url: String,
+}
+
+impl Default for ConvexConfig {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+        }
+    }
 }
 
 /// Terminal handler configuration

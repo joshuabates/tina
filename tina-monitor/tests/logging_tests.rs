@@ -80,7 +80,7 @@ fn test_log_includes_timestamp_target_command() {
 
 #[test]
 fn test_expand_path_handles_tilde() {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let _temp_dir = TempDir::new().expect("Failed to create temp dir");
 
     // Create a path with ~ that we'll expand
     let path_with_tilde = PathBuf::from("~/test.log");

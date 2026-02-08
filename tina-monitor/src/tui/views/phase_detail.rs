@@ -16,10 +16,9 @@ use syntect::highlighting::{self, ThemeSet};
 use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
-use crate::data::discovery::Orchestration;
+use crate::data::MonitorOrchestration;
 use crate::types::{Agent, Task, TaskStatus};
 use crate::tui::app::{App, PaneFocus, PhaseDetailLayout, ViewState};
-use crate::tui::widgets::progress_bar;
 
 /// Convert syntect color to ratatui color
 fn syntect_to_ratatui_color(color: highlighting::Color) -> Color {
@@ -82,8 +81,9 @@ fn highlight_code(
 
 /// Render markdown text with syntax highlighting
 fn render_markdown(text: &str, max_width: usize) -> Vec<Line<'static>> {
-    let ps = SyntaxSet::load_defaults_newlines();
-    let ts = ThemeSet::load_defaults();
+    // Box to avoid stack overflow in test threads (SyntaxSet is very large)
+    let ps = Box::new(SyntaxSet::load_defaults_newlines());
+    let ts = Box::new(ThemeSet::load_defaults());
     let theme = &ts.themes["base16-eighties.dark"];
 
     let mut lines = Vec::new();
@@ -207,7 +207,7 @@ fn render_orch_phase_tasks(
     frame: &mut Frame,
     area: Rect,
     app: &App,
-    orchestration: &Orchestration,
+    orchestration: &MonitorOrchestration,
     focus: PaneFocus,
     task_index: usize,
     member_index: usize,
@@ -255,7 +255,7 @@ fn render_tasks_detail(
     frame: &mut Frame,
     area: Rect,
     _app: &App,
-    orchestration: &Orchestration,
+    orchestration: &MonitorOrchestration,
     focus: PaneFocus,
     task_index: usize,
     member_index: usize,
@@ -288,19 +288,23 @@ fn render_orchestrations_pane(frame: &mut Frame, area: Rect, app: &App, is_focus
         .map(|(i, orch)| {
             let indicator = if i == app.selected_index { "▶ " } else { "  " };
             let status_char = match &orch.status {
-                crate::data::discovery::OrchestrationStatus::Executing { .. } => "●",
-                crate::data::discovery::OrchestrationStatus::Blocked { .. } => "✗",
-                crate::data::discovery::OrchestrationStatus::Complete => "✓",
-                crate::data::discovery::OrchestrationStatus::Idle => "○",
+                crate::data::MonitorOrchestrationStatus::Executing => "●",
+                crate::data::MonitorOrchestrationStatus::Planning => "◑",
+                crate::data::MonitorOrchestrationStatus::Reviewing => "◎",
+                crate::data::MonitorOrchestrationStatus::Blocked => "✗",
+                crate::data::MonitorOrchestrationStatus::Complete => "✓",
+                crate::data::MonitorOrchestrationStatus::Idle => "○",
             };
             let status_color = match &orch.status {
-                crate::data::discovery::OrchestrationStatus::Executing { .. } => Color::Green,
-                crate::data::discovery::OrchestrationStatus::Blocked { .. } => Color::Red,
-                crate::data::discovery::OrchestrationStatus::Complete => Color::Blue,
-                crate::data::discovery::OrchestrationStatus::Idle => Color::DarkGray,
+                crate::data::MonitorOrchestrationStatus::Executing => Color::Green,
+                crate::data::MonitorOrchestrationStatus::Planning => Color::Yellow,
+                crate::data::MonitorOrchestrationStatus::Reviewing => Color::Cyan,
+                crate::data::MonitorOrchestrationStatus::Blocked => Color::Red,
+                crate::data::MonitorOrchestrationStatus::Complete => Color::Blue,
+                crate::data::MonitorOrchestrationStatus::Idle => Color::DarkGray,
             };
 
-            let title = truncate(&orch.title, area.width.saturating_sub(8) as usize);
+            let title = truncate(&orch.title(), area.width.saturating_sub(8) as usize);
             let style = if i == app.selected_index {
                 Style::default().add_modifier(Modifier::BOLD)
             } else {
@@ -328,16 +332,18 @@ fn render_orchestrations_pane(frame: &mut Frame, area: Rect, app: &App, is_focus
 }
 
 /// Get status indicator and color for a phase
-fn get_phase_status(orchestration: &Orchestration, phase: u32) -> (&'static str, Color) {
+fn get_phase_status(orchestration: &MonitorOrchestration, phase: u32) -> (&'static str, Color) {
     if phase < orchestration.current_phase {
         // Past phase - assume complete
         ("✓", Color::Green)
     } else if phase == orchestration.current_phase {
         match &orchestration.status {
-            crate::data::discovery::OrchestrationStatus::Executing { .. } => ("▶", Color::Cyan),
-            crate::data::discovery::OrchestrationStatus::Blocked { .. } => ("✗", Color::Red),
-            crate::data::discovery::OrchestrationStatus::Complete => ("✓", Color::Green),
-            crate::data::discovery::OrchestrationStatus::Idle => ("○", Color::DarkGray),
+            crate::data::MonitorOrchestrationStatus::Executing => ("▶", Color::Cyan),
+            crate::data::MonitorOrchestrationStatus::Planning => ("◑", Color::Yellow),
+            crate::data::MonitorOrchestrationStatus::Reviewing => ("◎", Color::Cyan),
+            crate::data::MonitorOrchestrationStatus::Blocked => ("✗", Color::Red),
+            crate::data::MonitorOrchestrationStatus::Complete => ("✓", Color::Green),
+            crate::data::MonitorOrchestrationStatus::Idle => ("○", Color::DarkGray),
         }
     } else {
         // Future phase
@@ -349,7 +355,7 @@ fn get_phase_status(orchestration: &Orchestration, phase: u32) -> (&'static str,
 fn render_phases_pane(
     frame: &mut Frame,
     area: Rect,
-    orchestration: &Orchestration,
+    orchestration: &MonitorOrchestration,
     is_focused: bool,
     selected_phase: u32,
 ) {
@@ -388,7 +394,7 @@ fn render_phases_pane(
         .collect();
 
     let border_style = border_style(is_focused);
-    let title = format!("{} [p:plan D:design]", truncate(&orchestration.title, area.width.saturating_sub(20) as usize));
+    let title = format!("{} [p:plan D:design]", truncate(&orchestration.title(), area.width.saturating_sub(20) as usize));
     let list = List::new(items).block(
         Block::default()
             .borders(Borders::ALL)
@@ -397,17 +403,10 @@ fn render_phases_pane(
     );
     frame.render_widget(list, chunks[0]);
 
-    // Context bar (bottom)
-    let context_text = if let Some(pct) = orchestration.context_percent {
-        format!("Context: {}%", pct)
-    } else {
-        "Context: --".to_string()
-    };
+    // Context bar (bottom) - context_percent not available from Convex
+    let context_text = "Context: --".to_string();
 
-    let progress = orchestration
-        .context_percent
-        .map(|pct| progress_bar::render(pct as usize, 100, chunks[1].width.saturating_sub(4) as usize))
-        .unwrap_or_else(|| "[----------]".to_string());
+    let progress = "[----------]".to_string();
 
     let context_content = vec![
         Line::from(context_text),
@@ -426,7 +425,7 @@ fn render_phases_pane(
 fn render_tasks_pane(
     frame: &mut Frame,
     area: Rect,
-    orchestration: &Orchestration,
+    orchestration: &MonitorOrchestration,
     is_focused: bool,
     selected_index: usize,
 ) {
@@ -483,7 +482,7 @@ fn render_tasks_pane(
 fn render_members_pane(
     frame: &mut Frame,
     area: Rect,
-    orchestration: &Orchestration,
+    orchestration: &MonitorOrchestration,
     is_focused: bool,
     selected_index: usize,
 ) {
@@ -674,7 +673,7 @@ fn render_members_pane_with_data(
 fn render_task_detail_pane(
     frame: &mut Frame,
     area: Rect,
-    orchestration: &Orchestration,
+    orchestration: &MonitorOrchestration,
     is_focused: bool,
     task_index: usize,
 ) {
@@ -831,10 +830,10 @@ fn truncate(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::discovery::{Orchestration, OrchestrationStatus};
+    use crate::data::MonitorOrchestration;
     use crate::types::{Task, TaskStatus};
+    use tina_data::OrchestrationListEntry;
     use ratatui::{backend::TestBackend, Terminal};
-    use std::path::PathBuf;
 
     fn make_test_task(
         id: &str,
@@ -855,31 +854,35 @@ mod tests {
         }
     }
 
-    fn make_test_orchestration() -> Orchestration {
-        Orchestration {
-            team_name: "test-team".to_string(),
-            title: "Test Project".to_string(),
+    fn make_test_orchestration() -> MonitorOrchestration {
+        let entry = OrchestrationListEntry {
+            id: "orch-1".to_string(),
+            node_id: "node-1".to_string(),
+            node_name: "macbook".to_string(),
             feature_name: "test-project".to_string(),
-            cwd: PathBuf::from("/test"),
-            current_phase: 2,
+            design_doc_path: "design.md".to_string(),
+            branch: "tina/test-project".to_string(),
+            worktree_path: Some("/test".to_string()),
             total_phases: 4,
-            design_doc_path: PathBuf::from("/test/design.md"),
-            context_percent: Some(65),
-            status: OrchestrationStatus::Executing { phase: 2 },
-            orchestrator_tasks: vec![],
-            tasks: vec![
-                make_test_task("1", "Completed task", TaskStatus::Completed, vec![]),
-                make_test_task("2", "In progress task", TaskStatus::InProgress, vec![]),
-                make_test_task("3", "Pending task", TaskStatus::Pending, vec![]),
-                make_test_task(
-                    "4",
-                    "Blocked task",
-                    TaskStatus::Pending,
-                    vec!["99".to_string()],
-                ),
-            ],
-            members: vec![],
-        }
+            current_phase: 2,
+            status: "executing".to_string(),
+            started_at: "2026-02-07T10:00:00Z".to_string(),
+            completed_at: None,
+            total_elapsed_mins: None,
+        };
+        let mut orch = MonitorOrchestration::from_list_entry(entry);
+        orch.tasks = vec![
+            make_test_task("1", "Completed task", TaskStatus::Completed, vec![]),
+            make_test_task("2", "In progress task", TaskStatus::InProgress, vec![]),
+            make_test_task("3", "Pending task", TaskStatus::Pending, vec![]),
+            make_test_task(
+                "4",
+                "Blocked task",
+                TaskStatus::Pending,
+                vec!["99".to_string()],
+            ),
+        ];
+        orch
     }
 
     #[test]
@@ -951,7 +954,7 @@ mod tests {
     }
 
     #[test]
-    fn test_team_pane_renders_context_percentage() {
+    fn test_team_pane_renders_context_placeholder() {
         let backend = TestBackend::new(120, 40);
         let mut terminal = Terminal::new(backend).unwrap();
 
@@ -976,8 +979,8 @@ mod tests {
             .collect::<String>();
 
         assert!(
-            buffer_str.contains("Context: 65%"),
-            "Should display context percentage"
+            buffer_str.contains("Context: --"),
+            "Should display context placeholder (not available from Convex)"
         );
     }
 
@@ -1090,10 +1093,10 @@ mod tests {
             .map(|c| c.symbol())
             .collect::<String>();
 
-        // Should contain progress bar characters (filled blocks █ or empty blocks ░)
+        // Context bar renders "Context: --" and "[----------]" as text
         assert!(
-            buffer_str.contains('\u{2588}') || buffer_str.contains('\u{2591}'),
-            "Should display progress bar blocks"
+            buffer_str.contains("Context: --"),
+            "Should display context placeholder"
         );
     }
 
@@ -1123,7 +1126,7 @@ mod tests {
             .collect::<String>();
 
         assert!(
-            buffer_str.contains("Test Project"),
+            buffer_str.contains("test-project"),
             "Should display orchestration title"
         );
         // With the new phase list, we show "Phase 2" as the current phase item
@@ -1134,12 +1137,11 @@ mod tests {
     }
 
     #[test]
-    fn test_team_pane_handles_missing_context_percentage() {
+    fn test_team_pane_handles_context_placeholder() {
         let backend = TestBackend::new(120, 40);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        let mut orchestration = make_test_orchestration();
-        orchestration.context_percent = None;
+        let orchestration = make_test_orchestration();
 
         let mut app = App::new_with_orchestrations(vec![orchestration]);
         app.view_state = ViewState::PhaseDetail {

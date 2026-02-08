@@ -193,32 +193,32 @@ mod tests {
     }
 
     fn create_items() -> Vec<OrchestrationSummary> {
-        use crate::types::OrchestrationStatus;
+        use crate::data::MonitorOrchestrationStatus;
         use std::path::PathBuf;
         vec![
             OrchestrationSummary {
                 feature: "auth-feature".to_string(),
                 worktree_path: PathBuf::from("/tmp/auth"),
-                status: OrchestrationStatus::Executing,
+                status: MonitorOrchestrationStatus::Executing,
                 current_phase: 1,
                 total_phases: 3,
-                elapsed_mins: 10,
+                elapsed_mins: Some(10.0),
             },
             OrchestrationSummary {
                 feature: "payment-system".to_string(),
                 worktree_path: PathBuf::from("/tmp/payment"),
-                status: OrchestrationStatus::Complete,
+                status: MonitorOrchestrationStatus::Complete,
                 current_phase: 3,
                 total_phases: 3,
-                elapsed_mins: 60,
+                elapsed_mins: Some(60.0),
             },
             OrchestrationSummary {
                 feature: "auth-refactor".to_string(),
                 worktree_path: PathBuf::from("/tmp/auth-refactor"),
-                status: OrchestrationStatus::Planning,
+                status: MonitorOrchestrationStatus::Planning,
                 current_phase: 0,
                 total_phases: 2,
-                elapsed_mins: 5,
+                elapsed_mins: Some(5.0),
             },
         ]
     }

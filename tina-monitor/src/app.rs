@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::actions;
 use crate::dashboard::Dashboard;
-use crate::data::{DataSource, Orchestration};
+use crate::data::{DataSource, LoadedOrchestration};
 use crate::git::commits::get_commits;
 use crate::layout::PanelGrid;
 use crate::overlay::{fuzzy, help, quicklook, send};
@@ -237,7 +237,7 @@ impl App {
     }
 
     /// Load commits for the current phase
-    fn load_phase_commits(&mut self, orchestration: &Orchestration) -> Result<()> {
+    fn load_phase_commits(&mut self, orchestration: &LoadedOrchestration) -> Result<()> {
         let phase_key = orchestration.state.current_phase.to_string();
 
         // Get git range from current phase, falling back to "main..HEAD"

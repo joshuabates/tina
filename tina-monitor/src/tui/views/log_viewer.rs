@@ -223,8 +223,9 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::discovery::{Orchestration, OrchestrationStatus};
+    use crate::data::MonitorOrchestration;
     use crate::tui::app::{App, ViewState};
+    use tina_data::OrchestrationListEntry;
     use ratatui::{backend::TestBackend, Terminal};
     use std::time::Duration;
 
@@ -233,20 +234,22 @@ mod tests {
         let backend = TestBackend::new(100, 40);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        let orchestrations = vec![Orchestration {
-            team_name: "test-project".to_string(),
-            title: "Test Project".to_string(),
+        let entry = OrchestrationListEntry {
+            id: "orch-1".to_string(),
+            node_id: "node-1".to_string(),
+            node_name: "macbook".to_string(),
             feature_name: "test-project".to_string(),
-            cwd: "/tmp/test".into(),
-            current_phase: 1,
+            design_doc_path: "design.md".to_string(),
+            branch: "tina/test-project".to_string(),
+            worktree_path: Some("/tmp/test".to_string()),
             total_phases: 3,
-            design_doc_path: "/tmp/test/design.md".into(),
-            context_percent: None,
-            status: OrchestrationStatus::Idle,
-            orchestrator_tasks: vec![],
-            tasks: vec![],
-            members: vec![],
-        }];
+            current_phase: 1,
+            status: "idle".to_string(),
+            started_at: "2026-02-07T10:00:00Z".to_string(),
+            completed_at: None,
+            total_elapsed_mins: None,
+        };
+        let orchestrations = vec![MonitorOrchestration::from_list_entry(entry)];
 
         let mut app = App::new_with_orchestrations(orchestrations);
         app.view_state = ViewState::LogViewer {

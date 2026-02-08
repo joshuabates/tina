@@ -1,6 +1,7 @@
 //! Status command handlers
 
-use crate::data::{discovery, tasks, teams};
+use crate::config::Config;
+use crate::data::{ConvexDataSource, MonitorOrchestrationStatus, TaskSummary};
 use crate::types::*;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
@@ -24,38 +25,47 @@ pub enum CheckCondition {
 #[derive(Debug, Serialize)]
 pub struct TeamStatusOutput {
     pub team_name: String,
-    pub session_id: String,
-    pub cwd: String,
     pub status: String,
-    pub tasks: tasks::TaskSummary,
+    pub tasks: TaskSummary,
     pub blocked_reason: Option<String>,
 }
 
 /// Handle `status team <name>` command
+///
+/// In the Convex model, "teams" map to orchestrations. We find the orchestration
+/// whose feature_name matches and derive team status from it.
 pub fn status_team(name: &str, format: OutputFormat, check: Option<CheckCondition>) -> Result<i32> {
-    let team = teams::load_team(name)?;
-    let task_list = tasks::load_tasks(&team.lead_session_id)?;
-    let summary = tasks::TaskSummary::from_tasks(&task_list);
+    let config = Config::load()?;
+    if config.convex.url.is_empty() {
+        return Err(anyhow!("Convex URL not configured in config.toml"));
+    }
 
-    // Derive status
-    let (status, blocked_reason) = derive_team_status(&task_list, &summary);
+    let rt = tokio::runtime::Runtime::new()?;
+    let orchestrations = rt.block_on(async {
+        let mut ds = ConvexDataSource::new(&config.convex.url).await?;
+        ds.list_orchestrations().await
+    })?;
 
-    let cwd = team
-        .members
-        .first()
-        .map(|m| m.cwd.display().to_string())
-        .unwrap_or_default();
+    // Find by feature name or team name pattern
+    let orch = orchestrations
+        .into_iter()
+        .find(|o| {
+            o.feature_name == name
+                || o.team_name() == name
+                || o.feature_name == name.trim_end_matches("-orchestration")
+        })
+        .ok_or_else(|| anyhow!("Team/orchestration not found: {}", name))?;
+
+    let summary = TaskSummary::from_tasks(&orch.tasks);
+    let (status, blocked_reason) = derive_team_status(&orch.tasks, &summary);
 
     let output = TeamStatusOutput {
-        team_name: team.name,
-        session_id: team.lead_session_id,
-        cwd,
+        team_name: orch.team_name(),
         status: status.clone(),
         tasks: summary,
         blocked_reason: blocked_reason.clone(),
     };
 
-    // Check condition if specified
     if let Some(condition) = check {
         let matches = match condition {
             CheckCondition::Complete => status == "complete",
@@ -65,15 +75,12 @@ pub fn status_team(name: &str, format: OutputFormat, check: Option<CheckConditio
         return Ok(if matches { 0 } else { 1 });
     }
 
-    // Output based on format
     match format {
         OutputFormat::Json => {
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
         OutputFormat::Text => {
             println!("Team: {}", output.team_name);
-            println!("Session: {}", output.session_id);
-            println!("CWD: {}", output.cwd);
             println!("Status: {}", output.status);
             println!();
             println!("Tasks:");
@@ -92,7 +99,7 @@ pub fn status_team(name: &str, format: OutputFormat, check: Option<CheckConditio
     Ok(0)
 }
 
-fn derive_team_status(tasks: &[Task], summary: &tasks::TaskSummary) -> (String, Option<String>) {
+fn derive_team_status(tasks: &[Task], summary: &TaskSummary) -> (String, Option<String>) {
     if summary.total == 0 {
         return ("idle".to_string(), None);
     }
@@ -105,8 +112,7 @@ fn derive_team_status(tasks: &[Task], summary: &tasks::TaskSummary) -> (String, 
         return ("executing".to_string(), None);
     }
 
-    // All remaining are pending or blocked
-    if summary.blocked > 0 && summary.pending == 0 {
+    if summary.blocked > 0 && summary.in_progress == 0 {
         let blocked_tasks: Vec<_> = tasks
             .iter()
             .filter(|t| t.status == TaskStatus::Pending && !t.blocked_by.is_empty())
@@ -122,15 +128,13 @@ fn derive_team_status(tasks: &[Task], summary: &tasks::TaskSummary) -> (String, 
 /// Orchestration status output for JSON format
 #[derive(Debug, Serialize)]
 pub struct OrchestrationStatusOutput {
-    pub team_name: String,
-    pub title: String,
+    pub feature_name: String,
     pub cwd: String,
     pub current_phase: u32,
     pub total_phases: u32,
     pub design_doc_path: String,
-    pub context_percent: Option<u8>,
-    pub status: discovery::OrchestrationStatus,
-    pub tasks: tasks::TaskSummary,
+    pub status: MonitorOrchestrationStatus,
+    pub tasks: TaskSummary,
 }
 
 /// Handle `status orchestration <name>` command
@@ -139,35 +143,40 @@ pub fn status_orchestration(
     format: OutputFormat,
     check: Option<CheckCondition>,
 ) -> Result<i32> {
-    // Allow searching by feature name (e.g., "gray-box-303") or team name (e.g., "gray-box-303-orchestration")
-    let orch = discovery::find_orchestrations()?
+    let config = Config::load()?;
+    if config.convex.url.is_empty() {
+        return Err(anyhow!("Convex URL not configured in config.toml"));
+    }
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let orchestrations = rt.block_on(async {
+        let mut ds = ConvexDataSource::new(&config.convex.url).await?;
+        ds.list_orchestrations().await
+    })?;
+
+    let orch = orchestrations
         .into_iter()
-        .find(|o| o.team_name == name || o.team_name == format!("{}-orchestration", name))
+        .find(|o| {
+            o.feature_name == name
+                || o.team_name() == name
+                || o.feature_name == name.trim_end_matches("-orchestration")
+        })
         .ok_or_else(|| anyhow!("Orchestration not found: {}", name))?;
 
-    let summary = tasks::TaskSummary::from_tasks(&orch.tasks);
+    let summary = TaskSummary::from_tasks(&orch.tasks);
 
     let output = OrchestrationStatusOutput {
-        team_name: orch.team_name,
-        title: orch.title,
+        feature_name: orch.feature_name.clone(),
         cwd: orch.cwd.display().to_string(),
         current_phase: orch.current_phase,
         total_phases: orch.total_phases,
         design_doc_path: orch.design_doc_path.display().to_string(),
-        context_percent: orch.context_percent,
         status: orch.status.clone(),
         tasks: summary.clone(),
     };
 
-    // Derive status string for check
-    let status_str = match &orch.status {
-        discovery::OrchestrationStatus::Complete => "complete",
-        discovery::OrchestrationStatus::Executing { .. } => "executing",
-        discovery::OrchestrationStatus::Blocked { .. } => "blocked",
-        discovery::OrchestrationStatus::Idle => "idle",
-    };
+    let status_str = orch.status.to_string();
 
-    // Check condition if specified
     if let Some(condition) = check {
         let matches = match condition {
             CheckCondition::Complete => status_str == "complete",
@@ -177,21 +186,16 @@ pub fn status_orchestration(
         return Ok(if matches { 0 } else { 1 });
     }
 
-    // Output based on format
     match format {
         OutputFormat::Json => {
             println!("{}", serde_json::to_string_pretty(&output)?);
         }
         OutputFormat::Text => {
-            println!("Orchestration: {}", output.title);
-            println!("Team: {}", output.team_name);
+            println!("Orchestration: {}", output.feature_name);
             println!("CWD: {}", output.cwd);
             println!("Phase: {}/{}", output.current_phase, output.total_phases);
             println!("Design Doc: {}", output.design_doc_path);
-            if let Some(ctx) = output.context_percent {
-                println!("Context: {}%", ctx);
-            }
-            println!("Status: {:?}", output.status);
+            println!("Status: {}", output.status);
             println!();
             println!("Tasks:");
             println!("  Total: {}", summary.total);
@@ -219,10 +223,29 @@ pub struct TaskStatusOutput {
 
 /// Handle `status task <team> <id>` command
 pub fn status_task(team_name: &str, task_id: &str, format: OutputFormat) -> Result<i32> {
-    let team = teams::load_team(team_name)?;
-    let task_list = tasks::load_tasks(&team.lead_session_id)?;
+    let config = Config::load()?;
+    if config.convex.url.is_empty() {
+        return Err(anyhow!("Convex URL not configured in config.toml"));
+    }
 
-    let task = task_list
+    let rt = tokio::runtime::Runtime::new()?;
+    let orchestrations = rt.block_on(async {
+        let mut ds = ConvexDataSource::new(&config.convex.url).await?;
+        ds.list_orchestrations().await
+    })?;
+
+    // Find orchestration by team name
+    let orch = orchestrations
+        .into_iter()
+        .find(|o| {
+            o.feature_name == team_name
+                || o.team_name() == team_name
+                || o.feature_name == team_name.trim_end_matches("-orchestration")
+        })
+        .ok_or_else(|| anyhow!("Team/orchestration not found: {}", team_name))?;
+
+    let task = orch
+        .tasks
         .into_iter()
         .find(|t| t.id == task_id)
         .ok_or_else(|| anyhow!("Task not found: {} in team {}", task_id, team_name))?;
@@ -283,7 +306,7 @@ mod tests {
             make_task("1", TaskStatus::Completed, vec![]),
             make_task("2", TaskStatus::Completed, vec![]),
         ];
-        let summary = tasks::TaskSummary::from_tasks(&tasks);
+        let summary = TaskSummary::from_tasks(&tasks);
 
         let (status, reason) = derive_team_status(&tasks, &summary);
         assert_eq!(status, "complete");
@@ -296,7 +319,7 @@ mod tests {
             make_task("1", TaskStatus::Completed, vec![]),
             make_task("2", TaskStatus::InProgress, vec![]),
         ];
-        let summary = tasks::TaskSummary::from_tasks(&tasks);
+        let summary = TaskSummary::from_tasks(&tasks);
 
         let (status, reason) = derive_team_status(&tasks, &summary);
         assert_eq!(status, "executing");
@@ -309,7 +332,7 @@ mod tests {
             make_task("1", TaskStatus::Completed, vec![]),
             make_task("2", TaskStatus::Pending, vec!["external".to_string()]),
         ];
-        let summary = tasks::TaskSummary::from_tasks(&tasks);
+        let summary = TaskSummary::from_tasks(&tasks);
 
         let (status, reason) = derive_team_status(&tasks, &summary);
         assert_eq!(status, "blocked");
@@ -320,7 +343,7 @@ mod tests {
     #[test]
     fn test_derive_team_status_idle_empty() {
         let tasks: Vec<Task> = vec![];
-        let summary = tasks::TaskSummary::from_tasks(&tasks);
+        let summary = TaskSummary::from_tasks(&tasks);
 
         let (status, reason) = derive_team_status(&tasks, &summary);
         assert_eq!(status, "idle");
@@ -331,9 +354,9 @@ mod tests {
     fn test_derive_team_status_idle_pending() {
         let tasks = vec![
             make_task("1", TaskStatus::Completed, vec![]),
-            make_task("2", TaskStatus::Pending, vec![]), // Not blocked
+            make_task("2", TaskStatus::Pending, vec![]),
         ];
-        let summary = tasks::TaskSummary::from_tasks(&tasks);
+        let summary = TaskSummary::from_tasks(&tasks);
 
         let (status, reason) = derive_team_status(&tasks, &summary);
         assert_eq!(status, "idle");
@@ -344,10 +367,8 @@ mod tests {
     fn test_team_status_output_serialization() {
         let output = TeamStatusOutput {
             team_name: "test-team".to_string(),
-            session_id: "session-123".to_string(),
-            cwd: "/path/to/project".to_string(),
             status: "executing".to_string(),
-            tasks: tasks::TaskSummary {
+            tasks: TaskSummary {
                 total: 5,
                 completed: 3,
                 in_progress: 1,

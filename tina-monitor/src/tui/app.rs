@@ -6,9 +6,9 @@ use std::time::{Duration, Instant};
 
 use super::ui;
 use crate::config::Config;
-use crate::data::discovery::{find_orchestrations, Orchestration};
+use crate::data::MonitorOrchestration;
 use crate::types::Team;
-use crate::data::watcher::{FileWatcher, WatchEvent};
+use crate::watcher::DataWatcher;
 use crate::terminal::{get_handler, TerminalResult};
 
 /// Result type for TUI operations
@@ -132,7 +132,7 @@ pub struct App {
     /// Whether the application should quit
     pub should_quit: bool,
     /// List of discovered orchestrations
-    pub orchestrations: Vec<Orchestration>,
+    pub orchestrations: Vec<MonitorOrchestration>,
     /// Index of the currently selected orchestration
     pub selected_index: usize,
     /// Tick rate for event polling
@@ -140,7 +140,7 @@ pub struct App {
     /// Whether to show the help modal
     pub show_help: bool,
     /// File watcher for automatic refresh
-    pub(crate) watcher: Option<FileWatcher>,
+    pub(crate) watcher: Option<DataWatcher>,
     /// Time of last refresh (for debouncing)
     pub(crate) last_refresh: Instant,
     /// Current view state
@@ -158,11 +158,20 @@ pub struct App {
 impl App {
     /// Create a new App instance
     pub fn new() -> AppResult<Self> {
-        let orchestrations = find_orchestrations()?;
-        let watcher = FileWatcher::new().ok(); // Don't fail if watcher can't start
-
-        // Load config and initialize command logger
         let config = Config::load()?;
+        let watcher = DataWatcher::new(None).ok(); // Don't fail if watcher can't start
+
+        // Load orchestrations from Convex if URL is configured
+        let orchestrations = if !config.convex.url.is_empty() {
+            let rt = tokio::runtime::Runtime::new()?;
+            rt.block_on(async {
+                let mut ds = crate::data::ConvexDataSource::new(&config.convex.url).await?;
+                ds.list_orchestrations().await
+            })?
+        } else {
+            vec![]
+        };
+
         let command_logger = Some(crate::logging::CommandLogger::new(
             config.logging.command_log,
         ));
@@ -187,7 +196,7 @@ impl App {
     ///
     /// This is primarily intended for testing purposes.
     #[doc(hidden)]
-    pub fn new_with_orchestrations(orchestrations: Vec<Orchestration>) -> Self {
+    pub fn new_with_orchestrations(orchestrations: Vec<MonitorOrchestration>) -> Self {
         Self {
             should_quit: false,
             orchestrations,
@@ -248,38 +257,34 @@ impl App {
         }
     }
 
-    /// Refresh orchestrations list from disk
+    /// Refresh orchestrations list from Convex
     pub fn refresh(&mut self) -> AppResult<()> {
-        self.orchestrations = find_orchestrations()?;
+        let config = Config::load()?;
+        if !config.convex.url.is_empty() {
+            let rt = tokio::runtime::Runtime::new()?;
+            self.orchestrations = rt.block_on(async {
+                let mut ds = crate::data::ConvexDataSource::new(&config.convex.url).await?;
+                ds.list_orchestrations().await
+            })?;
+        }
         // Clamp selected_index to valid range
         if self.orchestrations.is_empty() {
             self.selected_index = 0;
         } else if self.selected_index >= self.orchestrations.len() {
             self.selected_index = self.orchestrations.len() - 1;
         }
+        // Invalidate phase cache
+        self.phase_cache = None;
         Ok(())
     }
 
     /// Check for file watcher events and refresh if needed
     fn check_watcher(&mut self) {
-        // Collect events first to avoid borrow conflict
-        let mut should_refresh = false;
-
-        if let Some(ref watcher) = self.watcher {
-            while let Some(event) = watcher.try_recv() {
-                match event {
-                    WatchEvent::Refresh => {
-                        // Debounce: only refresh if 500ms since last refresh
-                        if self.last_refresh.elapsed() > Duration::from_millis(500) {
-                            should_refresh = true;
-                        }
-                    }
-                    WatchEvent::Error(_e) => {
-                        // Ignore errors, just continue
-                    }
-                }
-            }
-        }
+        let should_refresh = if let Some(ref watcher) = self.watcher {
+            watcher.has_changes() && self.last_refresh.elapsed() > Duration::from_millis(500)
+        } else {
+            false
+        };
 
         if should_refresh {
             let _ = self.refresh();
@@ -405,7 +410,7 @@ impl App {
         let team_path = dirs::home_dir()
             .ok_or("Could not find home directory")?
             .join(".claude/teams")
-            .join(&orch.team_name)
+            .join(&orch.team_name())
             .join("config.json");
 
         let team: Team = serde_json::from_str(&std::fs::read_to_string(&team_path)?)?;
@@ -420,7 +425,7 @@ impl App {
         let pane_id = agent.tmux_pane_id.as_deref();
 
         // Derive session name from team name (convention: tina-{team_name})
-        let session_name = format!("tina-{}", orch.team_name);
+        let session_name = format!("tina-{}", orch.team_name());
 
         let config = Config::load()?;
         let handler = get_handler(&config.terminal.handler);
@@ -453,7 +458,7 @@ impl App {
         let team_path = dirs::home_dir()
             .ok_or("Could not find home directory")?
             .join(".claude/teams")
-            .join(&orch.team_name)
+            .join(&orch.team_name())
             .join("config.json");
 
         // Try to load team config, fall back to placeholder values if not available
@@ -676,7 +681,7 @@ impl App {
     fn handle_view_diff(&mut self) -> AppResult<()> {
         if let Some((worktree_path, range, _)) = self.get_current_phase_git_info() {
             let orch = &self.orchestrations[self.selected_index];
-            let title = format!("Phase {} Diff - {}", orch.current_phase, orch.title);
+            let title = format!("Phase {} Diff - {}", orch.current_phase, orch.title());
             self.view_state = ViewState::DiffView {
                 worktree_path,
                 range,
@@ -723,7 +728,7 @@ impl App {
             .find(|line| line.starts_with("**Git Range**:"))
             .and_then(|line| line.split('`').nth(1).map(|s| s.to_string()))?;
 
-        let title = format!("Phase {} Commits - {}", phase, orch.title);
+        let title = format!("Phase {} Commits - {}", phase, orch.title());
 
         Some((state.worktree_path, range, title))
     }
@@ -1451,8 +1456,8 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::discovery::OrchestrationStatus;
     use crate::tui::views::log_viewer::LogViewer;
+    use tina_data::OrchestrationListEntry;
     use std::path::PathBuf;
 
     fn make_test_task(id: &str) -> crate::types::Task {
@@ -1469,21 +1474,25 @@ mod tests {
         }
     }
 
-    fn make_test_orchestration(title: &str) -> Orchestration {
-        Orchestration {
-            team_name: format!("{}-team", title),
-            title: title.to_string(),
+    fn make_test_orchestration(title: &str) -> MonitorOrchestration {
+        let entry = OrchestrationListEntry {
+            id: format!("orch-{}", title),
+            node_id: "node-1".to_string(),
+            node_name: "macbook".to_string(),
             feature_name: title.to_string(),
-            cwd: PathBuf::from("/test"),
-            current_phase: 1,
+            design_doc_path: "design.md".to_string(),
+            branch: format!("tina/{}", title),
+            worktree_path: Some("/test".to_string()),
             total_phases: 3,
-            design_doc_path: PathBuf::from("/test/design.md"),
-            context_percent: Some(50),
-            status: OrchestrationStatus::Idle,
-            orchestrator_tasks: vec![],
-            tasks: vec![make_test_task("1"), make_test_task("2"), make_test_task("3")],
-            members: vec![],
-        }
+            current_phase: 1,
+            status: "idle".to_string(),
+            started_at: "2026-02-07T10:00:00Z".to_string(),
+            completed_at: None,
+            total_elapsed_mins: None,
+        };
+        let mut orch = MonitorOrchestration::from_list_entry(entry);
+        orch.tasks = vec![make_test_task("1"), make_test_task("2"), make_test_task("3")];
+        orch
     }
 
     #[test]

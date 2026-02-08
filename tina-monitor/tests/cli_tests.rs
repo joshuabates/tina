@@ -197,20 +197,25 @@ fn test_tasks_help() {
     );
 }
 
-/// Test that teams list runs (may be empty)
+/// Test that teams list fails gracefully without Convex config
 #[test]
-fn test_teams_list_runs() {
+fn test_teams_list_without_config() {
     let output = Command::new("cargo")
         .args(["run", "--", "teams", "--format", "json"])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("Failed to execute command");
 
-    // Should succeed even if teams dir doesn't exist
-    assert!(output.status.success(), "teams command should succeed");
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // Should output valid JSON (empty array is valid)
-    assert!(stdout.contains("["), "Should output JSON array");
+    // Without Convex URL configured, the command should fail with an error
+    assert!(
+        !output.status.success(),
+        "teams command should fail without Convex config"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Convex") || stderr.contains("error") || stderr.contains("Error"),
+        "Should mention Convex or error in stderr"
+    );
 }
 
 /// Test invalid format option fails gracefully

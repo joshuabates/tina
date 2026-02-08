@@ -207,6 +207,218 @@ fn extract_unit(result: FunctionResult) -> Result<()> {
     }
 }
 
+// --- Query result extraction helpers ---
+
+fn value_as_str(map: &BTreeMap<String, Value>, key: &str) -> String {
+    match map.get(key) {
+        Some(Value::String(s)) => s.clone(),
+        _ => String::new(),
+    }
+}
+
+fn value_as_opt_str(map: &BTreeMap<String, Value>, key: &str) -> Option<String> {
+    match map.get(key) {
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
+    }
+}
+
+fn value_as_i64(map: &BTreeMap<String, Value>, key: &str) -> i64 {
+    match map.get(key) {
+        Some(Value::Int64(n)) => *n,
+        Some(Value::Float64(f)) => *f as i64,
+        _ => 0,
+    }
+}
+
+fn value_as_f64(map: &BTreeMap<String, Value>, key: &str) -> f64 {
+    match map.get(key) {
+        Some(Value::Float64(f)) => *f,
+        Some(Value::Int64(n)) => *n as f64,
+        _ => 0.0,
+    }
+}
+
+fn value_as_opt_f64(map: &BTreeMap<String, Value>, key: &str) -> Option<f64> {
+    match map.get(key) {
+        Some(Value::Float64(f)) => Some(*f),
+        Some(Value::Int64(n)) => Some(*n as f64),
+        _ => None,
+    }
+}
+
+fn value_as_id(map: &BTreeMap<String, Value>, key: &str) -> String {
+    match map.get(key) {
+        Some(Value::String(s)) => s.clone(),
+        _ => String::new(),
+    }
+}
+
+fn extract_orchestration_from_obj(obj: &BTreeMap<String, Value>) -> OrchestrationListEntry {
+    OrchestrationListEntry {
+        id: value_as_id(obj, "_id"),
+        node_id: value_as_id(obj, "nodeId"),
+        node_name: value_as_str(obj, "nodeName"),
+        feature_name: value_as_str(obj, "featureName"),
+        design_doc_path: value_as_str(obj, "designDocPath"),
+        branch: value_as_str(obj, "branch"),
+        worktree_path: value_as_opt_str(obj, "worktreePath"),
+        total_phases: value_as_i64(obj, "totalPhases"),
+        current_phase: value_as_i64(obj, "currentPhase"),
+        status: value_as_str(obj, "status"),
+        started_at: value_as_str(obj, "startedAt"),
+        completed_at: value_as_opt_str(obj, "completedAt"),
+        total_elapsed_mins: value_as_opt_f64(obj, "totalElapsedMins"),
+    }
+}
+
+fn extract_phase_from_obj(obj: &BTreeMap<String, Value>) -> PhaseRecord {
+    PhaseRecord {
+        orchestration_id: value_as_id(obj, "orchestrationId"),
+        phase_number: value_as_str(obj, "phaseNumber"),
+        status: value_as_str(obj, "status"),
+        plan_path: value_as_opt_str(obj, "planPath"),
+        git_range: value_as_opt_str(obj, "gitRange"),
+        planning_mins: value_as_opt_f64(obj, "planningMins"),
+        execution_mins: value_as_opt_f64(obj, "executionMins"),
+        review_mins: value_as_opt_f64(obj, "reviewMins"),
+        started_at: value_as_opt_str(obj, "startedAt"),
+        completed_at: value_as_opt_str(obj, "completedAt"),
+    }
+}
+
+fn extract_task_event_from_obj(obj: &BTreeMap<String, Value>) -> TaskEventRecord {
+    TaskEventRecord {
+        orchestration_id: value_as_id(obj, "orchestrationId"),
+        phase_number: value_as_opt_str(obj, "phaseNumber"),
+        task_id: value_as_str(obj, "taskId"),
+        subject: value_as_str(obj, "subject"),
+        description: value_as_opt_str(obj, "description"),
+        status: value_as_str(obj, "status"),
+        owner: value_as_opt_str(obj, "owner"),
+        blocked_by: value_as_opt_str(obj, "blockedBy"),
+        metadata: value_as_opt_str(obj, "metadata"),
+        recorded_at: value_as_str(obj, "recordedAt"),
+    }
+}
+
+fn extract_team_member_from_obj(obj: &BTreeMap<String, Value>) -> TeamMemberRecord {
+    TeamMemberRecord {
+        orchestration_id: value_as_id(obj, "orchestrationId"),
+        phase_number: value_as_str(obj, "phaseNumber"),
+        agent_name: value_as_str(obj, "agentName"),
+        agent_type: value_as_opt_str(obj, "agentType"),
+        model: value_as_opt_str(obj, "model"),
+        joined_at: value_as_opt_str(obj, "joinedAt"),
+        recorded_at: value_as_str(obj, "recordedAt"),
+    }
+}
+
+fn extract_orchestration_list(result: FunctionResult) -> Result<Vec<OrchestrationListEntry>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut entries = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    entries.push(extract_orchestration_from_obj(&obj));
+                }
+            }
+            Ok(entries)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => bail!("expected array for orchestration list, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_orchestration_detail(result: FunctionResult) -> Result<Option<OrchestrationDetailResponse>> {
+    match result {
+        FunctionResult::Value(Value::Null) => Ok(None),
+        FunctionResult::Value(Value::Object(obj)) => {
+            let phases = match obj.get("phases") {
+                Some(Value::Array(items)) => items
+                    .iter()
+                    .filter_map(|v| match v {
+                        Value::Object(o) => Some(extract_phase_from_obj(o)),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => vec![],
+            };
+
+            let tasks = match obj.get("tasks") {
+                Some(Value::Array(items)) => items
+                    .iter()
+                    .filter_map(|v| match v {
+                        Value::Object(o) => Some(extract_task_event_from_obj(o)),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => vec![],
+            };
+
+            let team_members = match obj.get("teamMembers") {
+                Some(Value::Array(items)) => items
+                    .iter()
+                    .filter_map(|v| match v {
+                        Value::Object(o) => Some(extract_team_member_from_obj(o)),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => vec![],
+            };
+
+            Ok(Some(OrchestrationDetailResponse {
+                id: value_as_id(&obj, "_id"),
+                node_id: value_as_id(&obj, "nodeId"),
+                node_name: value_as_str(&obj, "nodeName"),
+                feature_name: value_as_str(&obj, "featureName"),
+                design_doc_path: value_as_str(&obj, "designDocPath"),
+                branch: value_as_str(&obj, "branch"),
+                worktree_path: value_as_opt_str(&obj, "worktreePath"),
+                total_phases: value_as_i64(&obj, "totalPhases"),
+                current_phase: value_as_i64(&obj, "currentPhase"),
+                status: value_as_str(&obj, "status"),
+                started_at: value_as_str(&obj, "startedAt"),
+                completed_at: value_as_opt_str(&obj, "completedAt"),
+                total_elapsed_mins: value_as_opt_f64(&obj, "totalElapsedMins"),
+                phases,
+                tasks,
+                team_members,
+            }))
+        }
+        FunctionResult::Value(other) => bail!("expected object for orchestration detail, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_node_list(result: FunctionResult) -> Result<Vec<NodeRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut nodes = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    nodes.push(NodeRecord {
+                        id: value_as_id(&obj, "_id"),
+                        name: value_as_str(&obj, "name"),
+                        os: value_as_str(&obj, "os"),
+                        status: value_as_str(&obj, "status"),
+                        last_heartbeat: value_as_f64(&obj, "lastHeartbeat"),
+                        registered_at: value_as_f64(&obj, "registeredAt"),
+                    });
+                }
+            }
+            Ok(nodes)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => bail!("expected array for node list, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
 impl TinaConvexClient {
     /// Connect to a Convex deployment.
     pub async fn new(deployment_url: &str) -> Result<Self> {
@@ -309,6 +521,39 @@ impl TinaConvexClient {
             .subscribe("actions:pendingActions", args)
             .await?;
         Ok(sub)
+    }
+
+    // --- Query methods (for tina-monitor reads) ---
+
+    /// List all orchestrations with node names resolved.
+    pub async fn list_orchestrations(&mut self) -> Result<Vec<OrchestrationListEntry>> {
+        let args = BTreeMap::new();
+        let result = self
+            .client
+            .query("orchestrations:listOrchestrations", args)
+            .await?;
+        extract_orchestration_list(result)
+    }
+
+    /// Get full detail for an orchestration (phases, tasks, team members).
+    pub async fn get_orchestration_detail(
+        &mut self,
+        orchestration_id: &str,
+    ) -> Result<Option<OrchestrationDetailResponse>> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        let result = self
+            .client
+            .query("orchestrations:getOrchestrationDetail", args)
+            .await?;
+        extract_orchestration_detail(result)
+    }
+
+    /// List all registered nodes.
+    pub async fn list_nodes(&mut self) -> Result<Vec<NodeRecord>> {
+        let args = BTreeMap::new();
+        let result = self.client.query("nodes:listNodes", args).await?;
+        extract_node_list(result)
     }
 }
 

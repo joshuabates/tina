@@ -1,10 +1,11 @@
 //! Tasks command handler
 
 use crate::cli::OutputFormat;
-use crate::data::{tasks, teams};
+use crate::config::Config;
+use crate::data::ConvexDataSource;
 use crate::types::TaskStatus;
 use crate::TaskStatusFilter;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::Serialize;
 
 /// Task list entry for output
@@ -17,26 +18,35 @@ pub struct TaskListEntry {
     pub blocked_by: Vec<String>,
 }
 
-/// List tasks for a team
+/// List tasks for a team (orchestration in Convex model)
 pub fn list_tasks(
     team_name: &str,
     format: OutputFormat,
     status_filter: Option<TaskStatusFilter>,
 ) -> Result<i32> {
-    let team = teams::load_team(team_name)?;
-    let mut task_list = tasks::load_tasks(&team.lead_session_id)?;
-
-    // Apply status filter
-    if let Some(filter) = status_filter {
-        let target_status = match filter {
-            TaskStatusFilter::Pending => TaskStatus::Pending,
-            TaskStatusFilter::InProgress => TaskStatus::InProgress,
-            TaskStatusFilter::Completed => TaskStatus::Completed,
-        };
-        task_list.retain(|t| t.status == target_status);
+    let config = Config::load()?;
+    if config.convex.url.is_empty() {
+        return Err(anyhow!("Convex URL not configured in config.toml"));
     }
 
-    let output: Vec<TaskListEntry> = task_list
+    let rt = tokio::runtime::Runtime::new()?;
+    let orchestrations = rt.block_on(async {
+        let mut ds = ConvexDataSource::new(&config.convex.url).await?;
+        ds.list_orchestrations().await
+    })?;
+
+    // Find orchestration by name
+    let orch = orchestrations
+        .into_iter()
+        .find(|o| {
+            o.feature_name == team_name
+                || o.team_name() == team_name
+                || o.feature_name == team_name.trim_end_matches("-orchestration")
+        })
+        .ok_or_else(|| anyhow!("Team/orchestration not found: {}", team_name))?;
+
+    let mut output: Vec<TaskListEntry> = orch
+        .tasks
         .into_iter()
         .map(|t| TaskListEntry {
             id: t.id,
@@ -46,6 +56,16 @@ pub fn list_tasks(
             blocked_by: t.blocked_by,
         })
         .collect();
+
+    // Apply status filter
+    if let Some(filter) = status_filter {
+        let target_status = match filter {
+            TaskStatusFilter::Pending => TaskStatus::Pending,
+            TaskStatusFilter::InProgress => TaskStatus::InProgress,
+            TaskStatusFilter::Completed => TaskStatus::Completed,
+        };
+        output.retain(|t| t.status == target_status);
+    }
 
     match format {
         OutputFormat::Json => {

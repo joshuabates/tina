@@ -1,6 +1,6 @@
 //! Type definitions for tina-monitor
 //!
-//! Re-exports canonical types from tina-session.
+//! Re-exports canonical types from tina-session and monitor-specific types.
 
 // Re-export all schema types from tina-session
 pub use tina_session::state::schema::{
@@ -8,8 +8,10 @@ pub use tina_session::state::schema::{
     SessionLookup, SupervisorState, Task, TaskStatus, Team, TimingGap, TimingStats,
 };
 
-// Re-export OrchestrationSummary from tina-data
-pub use tina_data::OrchestrationSummary;
+// Re-export monitor-specific types
+pub use crate::data::convex::{
+    MonitorOrchestration, MonitorOrchestrationStatus, OrchestrationSummary,
+};
 
 /// TeamMember is a type alias for Agent for backward compatibility.
 pub type TeamMember = Agent;
@@ -96,7 +98,6 @@ mod tests {
 
     #[test]
     fn team_member_is_alias_for_agent() {
-        // This just verifies the type alias works
         let agent = Agent {
             agent_id: "agent-1".to_string(),
             name: "researcher".to_string(),
@@ -112,25 +113,12 @@ mod tests {
     }
 
     // ====================================================================
-    // OrchestrationSummary Tests
+    // MonitorOrchestrationStatus Tests
     // ====================================================================
 
     #[test]
-    fn orchestration_summary_can_be_created() {
-        let summary = OrchestrationSummary {
-            feature: "auth-system".to_string(),
-            worktree_path: PathBuf::from("/path/to/worktree"),
-            status: OrchestrationStatus::Executing,
-            current_phase: 2,
-            total_phases: 4,
-            elapsed_mins: 45,
-        };
-
-        assert_eq!(summary.feature, "auth-system");
-        assert_eq!(summary.worktree_path, PathBuf::from("/path/to/worktree"));
-        assert_eq!(summary.status, OrchestrationStatus::Executing);
-        assert_eq!(summary.current_phase, 2);
-        assert_eq!(summary.total_phases, 4);
-        assert_eq!(summary.elapsed_mins, 45);
+    fn monitor_status_display() {
+        assert_eq!(MonitorOrchestrationStatus::Executing.to_string(), "executing");
+        assert_eq!(MonitorOrchestrationStatus::Complete.to_string(), "complete");
     }
 }

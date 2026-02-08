@@ -1,11 +1,11 @@
 //! Teams command handler
 
 use crate::cli::OutputFormat;
-use crate::data::{teams, tina_state};
+use crate::config::Config;
+use crate::data::ConvexDataSource;
 use crate::TeamFilter;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use serde::Serialize;
-use std::path::Path;
 
 /// Team list entry for output
 #[derive(Debug, Serialize)]
@@ -16,27 +16,25 @@ pub struct TeamListEntry {
     pub is_orchestration: bool,
 }
 
-/// List all teams
+/// List all teams (orchestrations in Convex model)
 pub fn list_teams(format: OutputFormat, filter: Option<TeamFilter>) -> Result<i32> {
-    let team_names = teams::list_teams()?;
+    let config = Config::load()?;
+    if config.convex.url.is_empty() {
+        return Err(anyhow!("Convex URL not configured in config.toml"));
+    }
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let orchestrations = rt.block_on(async {
+        let mut ds = ConvexDataSource::new(&config.convex.url).await?;
+        ds.list_orchestrations().await
+    })?;
 
     let mut output = Vec::new();
-    for name in team_names {
-        let team = match teams::load_team(&name) {
-            Ok(t) => t,
-            Err(_) => continue, // Skip teams that can't be loaded
-        };
+    for orch in orchestrations {
+        let cwd = orch.cwd.display().to_string();
 
-        let cwd = team
-            .members
-            .first()
-            .map(|m| m.cwd.display().to_string())
-            .unwrap_or_default();
-
-        // Check if this is an orchestration
-        let is_orchestration = tina_state::load_supervisor_state(Path::new(&cwd))
-            .unwrap_or(None)
-            .is_some();
+        // In Convex model, all entries are orchestrations
+        let is_orchestration = true;
 
         // Apply filter
         if let Some(ref f) = filter {
@@ -48,9 +46,9 @@ pub fn list_teams(format: OutputFormat, filter: Option<TeamFilter>) -> Result<i3
         }
 
         output.push(TeamListEntry {
-            name,
+            name: orch.team_name(),
             cwd,
-            member_count: team.members.len(),
+            member_count: orch.members.len(),
             is_orchestration,
         });
     }

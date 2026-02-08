@@ -336,6 +336,7 @@ mod tests {
             orchestration_started_at: now,
             phases: Default::default(),
             timing: Default::default(),
+            model_policy: Default::default(),
         };
 
         dashboard.update(&state);
@@ -359,6 +360,7 @@ mod tests {
             orchestration_started_at: now,
             phases: Default::default(),
             timing: Default::default(),
+            model_policy: Default::default(),
         };
 
         dashboard.update(&state);
@@ -382,6 +384,7 @@ mod tests {
             orchestration_started_at: now,
             phases: Default::default(),
             timing: Default::default(),
+            model_policy: Default::default(),
         };
 
         dashboard.update(&state);
@@ -407,6 +410,7 @@ mod tests {
             orchestration_started_at: start_time,
             phases: Default::default(),
             timing: Default::default(),
+            model_policy: Default::default(),
         };
 
         dashboard.update(&state);

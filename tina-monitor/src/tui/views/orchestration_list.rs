@@ -19,14 +19,10 @@ pub fn render_orchestration_list(frame: &mut Frame, area: Rect, app: &App) {
         .orchestrations
         .iter()
         .map(|orch| {
-            let name = truncate_name(&orch.team_name, 25);
+            let name = truncate_name(&orch.team_name(), 25);
             let path = shorten_path(&orch.cwd, 30);
             let phase = format!("{}/{}", orch.current_phase, orch.total_phases);
             let progress = progress_bar::render(orch.tasks_completed(), orch.tasks_total(), 10);
-            let context = orch
-                .context_percent
-                .map(|p| format!("ctx:{}%", p))
-                .unwrap_or_else(|| "ctx:--".to_string());
             let status = status_indicator::render(&orch.status);
 
             let line = Line::from(vec![
@@ -38,10 +34,6 @@ pub fn render_orchestration_list(frame: &mut Frame, area: Rect, app: &App) {
                 Span::styled(format!("{:<5} ", phase), Style::default()),
                 Span::raw(progress),
                 Span::raw("  "),
-                Span::styled(
-                    format!("{:<7} ", context),
-                    Style::default().fg(Color::Yellow),
-                ),
                 status,
             ]);
             ListItem::new(line)

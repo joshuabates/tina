@@ -88,6 +88,7 @@ fn orchestration_struct_fields() {
             orchestration_started_at: chrono::Utc::now(),
             phases: Default::default(),
             timing: Default::default(),
+            model_policy: Default::default(),
         },
         orchestrator_team: None,
         phase_team: None,
@@ -399,6 +400,6 @@ fn load_summary_from_fixture() {
     assert_eq!(summary.feature, "test-feature");
     assert_eq!(summary.current_phase, 2);
     assert_eq!(summary.total_phases, 3);
-    // elapsed_mins should be calculated (it will be positive)
-    assert!(summary.elapsed_mins >= 0);
+    // elapsed_mins is not computed from local files in the new data layer
+    assert!(summary.elapsed_mins.is_none());
 }

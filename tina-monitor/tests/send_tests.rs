@@ -5,27 +5,28 @@
 
 use ratatui::{backend::TestBackend, Terminal};
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
-use tina_monitor::data::discovery::{Orchestration, OrchestrationStatus};
+use tina_monitor::data::MonitorOrchestration;
 use tina_monitor::tui::{App, PaneFocus, PhaseDetailLayout, ViewState};
+use tina_data::OrchestrationListEntry;
 
 /// Helper function to create a test orchestration
-fn make_test_orchestration(name: &str) -> Orchestration {
-    Orchestration {
-        team_name: format!("{}-team", name),
-        title: name.to_string(),
+fn make_test_orchestration(name: &str) -> MonitorOrchestration {
+    MonitorOrchestration::from_list_entry(OrchestrationListEntry {
+        id: format!("orch-{}", name),
+        node_id: "node-1".to_string(),
+        node_name: "test".to_string(),
         feature_name: name.to_string(),
-        cwd: PathBuf::from("/test"),
-        current_phase: 1,
+        design_doc_path: "/test/design.md".to_string(),
+        branch: format!("tina/{}", name),
+        worktree_path: Some("/test".to_string()),
         total_phases: 3,
-        design_doc_path: PathBuf::from("/test/design.md"),
-        context_percent: Some(50),
-        status: OrchestrationStatus::Idle,
-        orchestrator_tasks: vec![],
-        tasks: vec![],
-        members: vec![],
-    }
+        current_phase: 1,
+        status: "idle".to_string(),
+        started_at: "2026-02-07T10:00:00Z".to_string(),
+        completed_at: None,
+        total_elapsed_mins: None,
+    })
 }
 
 // ============================================================================

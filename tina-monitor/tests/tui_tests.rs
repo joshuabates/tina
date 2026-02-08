@@ -1,10 +1,10 @@
 //! TUI module integration tests
 
 use ratatui::{backend::TestBackend, Terminal};
-use std::path::PathBuf;
 use std::time::Duration;
-use tina_monitor::data::discovery::{Orchestration, OrchestrationStatus};
+use tina_monitor::data::MonitorOrchestration;
 use tina_monitor::tui::{App, AppResult};
+use tina_data::OrchestrationListEntry;
 
 // ============================================================================
 // Module Export Tests
@@ -104,21 +104,22 @@ fn test_empty_state_navigation() {
 // Integration Tests: Single Orchestration Handling
 // ============================================================================
 
-fn make_test_orchestration(name: &str) -> Orchestration {
-    Orchestration {
-        team_name: format!("{}-team", name),
-        title: name.to_string(),
+fn make_test_orchestration(name: &str) -> MonitorOrchestration {
+    MonitorOrchestration::from_list_entry(OrchestrationListEntry {
+        id: format!("orch-{}", name),
+        node_id: "node-1".to_string(),
+        node_name: "test".to_string(),
         feature_name: name.to_string(),
-        cwd: PathBuf::from("/test"),
-        current_phase: 1,
+        design_doc_path: "/test/design.md".to_string(),
+        branch: format!("tina/{}", name),
+        worktree_path: Some("/test".to_string()),
         total_phases: 3,
-        design_doc_path: PathBuf::from("/test/design.md"),
-        context_percent: Some(50),
-        status: OrchestrationStatus::Idle,
-        orchestrator_tasks: vec![],
-        tasks: vec![],
-        members: vec![],
-    }
+        current_phase: 1,
+        status: "idle".to_string(),
+        started_at: "2026-02-07T10:00:00Z".to_string(),
+        completed_at: None,
+        total_elapsed_mins: None,
+    })
 }
 
 /// Test that TUI can handle single orchestration
@@ -262,11 +263,11 @@ fn test_multiple_orchestrations_render() {
 /// Test that FileWatcher can be created
 #[test]
 fn test_file_watcher_can_be_created() {
-    use tina_monitor::data::watcher::FileWatcher;
+    use tina_monitor::watcher::DataWatcher;
 
-    // FileWatcher::new() should either succeed or fail gracefully
+    // DataWatcher::new() should either succeed or fail gracefully
     // (may fail if .claude dirs don't exist, which is OK)
-    let result = FileWatcher::new();
+    let result = DataWatcher::new(None);
 
     // We don't assert success because it depends on environment
     // But it should not panic
@@ -276,7 +277,7 @@ fn test_file_watcher_can_be_created() {
         }
         Err(e) => {
             // Failure is acceptable if directories don't exist
-            println!("FileWatcher creation failed (acceptable): {}", e);
+            println!("DataWatcher creation failed (acceptable): {}", e);
         }
     }
 }
@@ -354,21 +355,10 @@ fn make_test_task(id: &str, status: TaskStatus) -> Task {
 }
 
 /// Helper function to create a test orchestration with tasks
-fn make_test_orchestration_with_tasks(name: &str, tasks: Vec<Task>) -> Orchestration {
-    Orchestration {
-        team_name: format!("{}-team", name),
-        title: name.to_string(),
-        feature_name: name.to_string(),
-        cwd: PathBuf::from("/test"),
-        current_phase: 1,
-        total_phases: 3,
-        design_doc_path: PathBuf::from("/test/design.md"),
-        context_percent: Some(50),
-        status: OrchestrationStatus::Idle,
-        orchestrator_tasks: vec![],
-        tasks,
-        members: vec![],
-    }
+fn make_test_orchestration_with_tasks(name: &str, tasks: Vec<Task>) -> MonitorOrchestration {
+    let mut orch = make_test_orchestration(name);
+    orch.tasks = tasks;
+    orch
 }
 
 /// Test that app starts in OrchestrationList view

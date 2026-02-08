@@ -96,3 +96,56 @@ pub struct ClaimResult {
     pub success: bool,
     pub reason: Option<String>,
 }
+
+// --- Query response types (returned by Convex queries) ---
+
+/// Node record as returned by `listNodes` query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NodeRecord {
+    pub id: String,
+    pub name: String,
+    pub os: String,
+    pub status: String,
+    pub last_heartbeat: f64,
+    pub registered_at: f64,
+}
+
+/// Orchestration list entry as returned by `listOrchestrations` query.
+/// Extends `OrchestrationRecord` with a resolved `node_name` and Convex `_id`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrchestrationListEntry {
+    pub id: String,
+    pub node_id: String,
+    pub node_name: String,
+    pub feature_name: String,
+    pub design_doc_path: String,
+    pub branch: String,
+    pub worktree_path: Option<String>,
+    pub total_phases: i64,
+    pub current_phase: i64,
+    pub status: String,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub total_elapsed_mins: Option<f64>,
+}
+
+/// Full orchestration detail as returned by `getOrchestrationDetail` query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrchestrationDetailResponse {
+    pub id: String,
+    pub node_id: String,
+    pub node_name: String,
+    pub feature_name: String,
+    pub design_doc_path: String,
+    pub branch: String,
+    pub worktree_path: Option<String>,
+    pub total_phases: i64,
+    pub current_phase: i64,
+    pub status: String,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub total_elapsed_mins: Option<f64>,
+    pub phases: Vec<PhaseRecord>,
+    pub tasks: Vec<TaskEventRecord>,
+    pub team_members: Vec<TeamMemberRecord>,
+}

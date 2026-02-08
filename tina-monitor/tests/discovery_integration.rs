@@ -96,7 +96,7 @@ fn test_discover_orchestration_from_worktree_path() {
     assert_eq!(test_feature.total_phases, 3);
     assert_eq!(
         test_feature.status,
-        tina_monitor::types::OrchestrationStatus::Executing
+        tina_monitor::types::MonitorOrchestrationStatus::Executing
     );
 }
 
