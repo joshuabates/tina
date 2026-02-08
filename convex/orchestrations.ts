@@ -97,6 +97,31 @@ export const listByProject = query({
   },
 });
 
+export const getByFeature = query({
+  args: {
+    featureName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const orchestrations = await ctx.db
+      .query("orchestrations")
+      .withIndex("by_feature", (q) => q.eq("featureName", args.featureName))
+      .collect();
+
+    if (orchestrations.length === 0) {
+      return null;
+    }
+
+    // Return the latest by startedAt
+    orchestrations.sort((a, b) => {
+      if (a.startedAt > b.startedAt) return -1;
+      if (a.startedAt < b.startedAt) return 1;
+      return 0;
+    });
+
+    return orchestrations[0];
+  },
+});
+
 export const getOrchestrationDetail = query({
   args: {
     orchestrationId: v.id("orchestrations"),

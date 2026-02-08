@@ -104,6 +104,16 @@ export default defineSchema({
       "agentName",
     ]),
 
+  teams: defineTable({
+    teamName: v.string(),
+    orchestrationId: v.id("orchestrations"),
+    leadSessionId: v.string(),
+    phaseNumber: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_team_name", ["teamName"])
+    .index("by_orchestration", ["orchestrationId"]),
+
   inboundActions: defineTable({
     nodeId: v.id("nodes"),
     orchestrationId: v.id("orchestrations"),

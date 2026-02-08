@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const upsertPhase = mutation({
@@ -41,5 +41,22 @@ export const upsertPhase = mutation({
     }
 
     return await ctx.db.insert("phases", args);
+  },
+});
+
+export const getPhaseStatus = query({
+  args: {
+    orchestrationId: v.id("orchestrations"),
+    phaseNumber: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("phases")
+      .withIndex("by_orchestration_phase", (q) =>
+        q
+          .eq("orchestrationId", args.orchestrationId)
+          .eq("phaseNumber", args.phaseNumber),
+      )
+      .first();
   },
 });

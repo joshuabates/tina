@@ -17,6 +17,7 @@ import type * as projects from "../projects.js";
 import type * as supervisorStates from "../supervisorStates.js";
 import type * as tasks from "../tasks.js";
 import type * as teamMembers from "../teamMembers.js";
+import type * as teams from "../teams.js";
 
 import type {
   ApiFromModules,
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   supervisorStates: typeof supervisorStates;
   tasks: typeof tasks;
   teamMembers: typeof teamMembers;
+  teams: typeof teams;
 }>;
 
 /**
