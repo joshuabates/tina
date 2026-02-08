@@ -12,6 +12,25 @@ Tina's data layer is local-only: SQLite on disk, file watchers, and an Axum HTTP
 
 Replace the local data layer with Convex as the primary datastore. Each laptop runs a daemon that syncs local state to Convex and receives inbound actions. The React frontend talks directly to Convex — no Axum backend needed.
 
+## Assumptions
+
+- Single operator (one user account).
+- macOS-only daemon (launchd).
+
+## Auth & Access Control (Single User)
+
+Even with a single operator, all Convex access must be authenticated and scoped.
+
+- **UI auth** — the React app requires a logged-in user (the operator).
+- **Daemon auth** — each daemon uses a per-node token stored in `~/.config/tina/config.toml`.
+
+**Access rules (enforced inside Convex queries/mutations):**
+
+- All reads require the operator identity or a valid node token.
+- `submitAction` is UI-only (operator).
+- `pendingActions`, `claimAction`, `completeAction`, `heartbeat`, `registerNode` require a valid node token.
+- Node-scoped calls can only operate on their own `nodeId`.
+
 ## Success Metrics
 
 - All active orchestrations across all laptops visible in a single dashboard
@@ -75,6 +94,7 @@ convex/
 - `status` (string) — "online" | "offline"
 - `lastHeartbeat` (number) — timestamp of last heartbeat
 - `registeredAt` (number) — first registration timestamp
+- `authTokenHash` (string) — hash of the per-node daemon token
 
 **orchestrations** — mirrors current SQLite table, plus node tracking.
 - `nodeId` (id, references nodes) — which laptop owns this orchestration
@@ -161,6 +181,11 @@ convex/
 - `submitAction` — phone/browser submits an action
 - `claimAction` / `completeAction` — daemon claims and completes actions
 
+**Notes:**
+
+- Node online/offline is computed from `lastHeartbeat` at query time (e.g., `now - lastHeartbeat < 60s`).
+- `claimAction` is atomic: only transitions `pending -> claimed` if still pending; otherwise returns a conflict.
+
 ## tina-daemon
 
 New crate. Always-on launchd service, one per laptop.
@@ -196,6 +221,7 @@ Installed as a macOS launchd service at `~/Library/LaunchAgents/dev.tina.daemon.
 ### Configuration
 
 Reads Convex deployment URL and auth from `~/.config/tina/config.toml` or environment variables.
+Per-node daemon token is stored in `~/.config/tina/config.toml` and validated against `nodes.authTokenHash`.
 
 ## tina-data Changes
 
@@ -299,18 +325,134 @@ Reads Convex deployment URL and auth from `~/.config/tina/config.toml` or enviro
 - Convex account and project created at [convex.dev](https://www.convex.dev)
 - Deployment URL available for daemon configuration
 
-## TBDs
+## Event Retention & Pagination
 
-### 1. Inbound message delivery to running Claude sessions
+- **Retention:** keep task and orchestration events forever initially.
+- **Pagination:** all event queries must be paginated (`limit` + `cursor` or `since`) and indexed by `orchestrationId` and `recordedAt`.
 
-How the daemon delivers a message (approval, rejection, chat message) into a running Claude TUI process. The daemon can execute CLI commands (`tina-session orchestrate advance`), but sending an arbitrary message into an active Claude Code session has no established mechanism.
+## Scope Decisions
 
-Needs investigation: Claude Code hooks, tmux send-keys, file-based inbox, or other approaches.
+- **File sync**: Use `notify` crate file watchers (not Claude Code hooks). Proven pattern already in `tina-data/src/watcher.rs`.
+- **Inbound message delivery**: Deferred to a future design. This migration covers outbound sync and operator controls via `tina-session orchestrate advance/next` CLI commands only.
+- **tina-monitor**: Switches to Convex (reads from Convex instead of local files/SQLite). Included in scope.
 
-### 2. Claude-owned file sync mechanism
+## Architectural Context
 
-Current plan: file watchers (notify crate) detect changes to `~/.claude/teams/` and `~/.claude/tasks/`, daemon syncs to Convex.
+**Patterns to follow:**
+- DataSource fixture pattern: `tina-data/src/lib.rs:46-61` — constructor takes optional fixture path, all methods resolve against it. Replicate for ConvexClient wrapper (test with mock/fixture, prod with real client).
+- File watcher setup: `tina-data/src/watcher.rs` — current `notify` usage. Daemon inherits this pattern.
+- State machine: `tina-session/src/state/orchestrate.rs` — `next_action()` / `advance_state()` are pure functions. Keep them unchanged; only change the persistence callsites.
+- SQLite test pattern: `tina-session/src/db/mod.rs:42-47` — `test_db()` uses in-memory SQLite. Convex wrapper tests should use a similar fixture/mock approach.
+- Serde conventions: all types use `#[serde(rename_all = "snake_case")]` for enums. Convex schema field names should match (snake_case).
+- Frontend hooks pattern: `tina-web/frontend/src/hooks/useOrchestrations.ts` — WebSocket subscription with auto-reconnect. Replace with Convex `useQuery` subscriptions.
 
-Alternative: Claude Code hooks that fire on tool calls could push state directly to Convex, eliminating the watcher. Hooks are appealing (event-driven, no polling) but may be fragile or limited in what context they provide.
+**Code to reuse:**
+- `tina-session/src/state/schema.rs` — SupervisorState, PhaseState, OrchestrationStatus, etc. These types stay as-is.
+- `tina-session/src/session/lookup.rs` — SessionLookup. Daemon uses this for worktree discovery.
+- `tina-session/src/state/orchestrate.rs` — State machine logic. Untouched by migration.
+- `tina-session/src/state/transitions.rs` — Transition logic. Untouched.
+- `tina-web/frontend/src/types.ts` — TypeScript interfaces. Adapt for Convex document types.
+- `tina-web/frontend/src/components/` — All React components stay. Only data-fetching changes.
 
-Leaning toward file watchers for reliability. Worth spiking hooks to see if they're viable.
+**Anti-patterns:**
+- Don't put Convex client construction in every crate — centralize in tina-data, other crates call through it.
+- Don't mix file-based discovery with Convex reads in the same code path — daemon reads files and writes Convex; consumers read Convex only.
+- Don't use `tina-data` as a dependency for tina-daemon's file watching — daemon should own its file watchers directly (tina-data becomes Convex-only after migration).
+
+**Integration:**
+- Daemon entry: new crate `tina-daemon/`, installed via `cargo install --path tina-daemon`
+- Convex entry: new top-level `convex/` directory with `npx convex dev` workflow
+- tina-session writes: `commands/init.rs:L5-L10` and `state/orchestrate.rs` — add Convex writes alongside supervisor-state.json writes
+- tina-web restructure: move `tina-web/frontend/*` to `tina-web/` root, delete Rust source
+- tina-monitor: replace `tina-data::DataSource` usage with Convex client reads
+- Cargo workspace: remove `tina-web` member, add `tina-daemon` member
+
+**Dependency changes:**
+- Add: `convex` crate (tina-data, tina-daemon), `convex` npm package (tina-web)
+- Remove: `rusqlite` (tina-session, tina-data, tina-web), `axum`/`tower`/`tower-http` (tina-web), `notify` (tina-data, moves to tina-daemon)
+- Keep: `notify` in tina-session (daemon watcher for supervisor-state.json changes)
+
+## Phase 1: Convex Schema & Backend Functions
+
+Set up the Convex project and define all tables and server-side functions. No Rust or React changes yet — this phase is purely TypeScript in the new `convex/` directory.
+
+**Delivers:**
+- `convex/` directory with schema, queries, mutations
+- All tables defined: nodes, orchestrations, phases, taskEvents, orchestrationEvents, teamMembers, inboundActions
+- All queries: listNodes, listOrchestrations, getOrchestrationDetail, listEvents, pendingActions
+- All mutations: registerNode, heartbeat, upsertOrchestration, upsertPhase, recordTaskEvent, recordEvent, upsertTeamMember, submitAction, claimAction, completeAction
+- `npx convex dev` runs successfully against a dev deployment
+- Index definitions for paginated queries (orchestrationId + recordedAt)
+
+**Does NOT touch:** Any Rust crate or React code.
+
+## Phase 2: tina-data Convex Client Wrapper
+
+Replace tina-data's file-based discovery with a Convex Rust SDK wrapper. tina-data becomes the shared typed interface to Convex for all Rust crates.
+
+**Delivers:**
+- `convex` crate added to tina-data dependencies
+- New `convex_client.rs` module with typed methods: `upsert_orchestration`, `record_task_event`, `record_event`, `upsert_phase`, `subscribe_pending_actions`, `claim_action`, `complete_action`, `register_node`, `heartbeat`
+- Shared Convex-compatible types (mirroring schema from Phase 1)
+- Delete: `discovery.rs`, `teams.rs`, `tasks.rs`, `watcher.rs`, `db.rs`, `tina_state.rs`
+- Remove `rusqlite` and `notify` dependencies
+- Fixture/mock testing for Convex client wrapper
+- `cargo build` succeeds for tina-data
+
+**Does NOT touch:** tina-session, tina-web, tina-monitor (they may temporarily fail to compile — that's fine, fixed in later phases).
+
+## Phase 3: tina-daemon (New Crate)
+
+Create the always-on daemon that bridges local filesystem state to Convex.
+
+**Delivers:**
+- New `tina-daemon/` crate added to workspace
+- Node registration and heartbeat (30s interval)
+- File watchers on `~/.claude/teams/`, `~/.claude/tasks/`, and supervisor-state.json files
+- Outbound sync: file changes → diff → Convex mutations via tina-data
+- Inbound actions: subscribe to `pendingActions`, dispatch via `tina-session orchestrate advance/next` CLI
+- launchd plist template at `tina-daemon/dev.tina.daemon.plist`
+- Config reading from `~/.config/tina/config.toml`
+- `cargo build` and `cargo test` pass for tina-daemon
+
+**Does NOT touch:** tina-session database layer (still writes SQLite), tina-web, tina-monitor.
+
+## Phase 4: tina-session Convex Integration & SQLite Removal
+
+Switch tina-session from SQLite to Convex writes. The daemon handles reads; tina-session only needs to write.
+
+**Delivers:**
+- `init` command writes to Convex (via tina-data) instead of SQLite
+- State advances call `tina_data::upsert_orchestration()` after `state.save()`
+- Event recording goes through tina-data to Convex
+- Delete: entire `db/` module (mod.rs, migrations.rs, orchestrations.rs, phases.rs, task_events.rs, orchestration_events.rs, team_members.rs, queries.rs, projects.rs)
+- Delete: `daemon/sync.rs`
+- Remove `rusqlite` dependency
+- `cargo build` and `cargo test` pass for tina-session
+- All existing state machine tests still pass (they don't touch db)
+
+## Phase 5: tina-web Frontend Migration
+
+Replace the Axum backend + REST/WebSocket data layer with direct Convex React SDK usage.
+
+**Delivers:**
+- Move `tina-web/frontend/*` to `tina-web/` root
+- Delete all Rust source: `src/main.rs`, `api.rs`, `state.rs`, `ws.rs`, `lib.rs`, `Cargo.toml`, `tests/`
+- Remove `tina-web` from Cargo workspace
+- Add `convex` npm package
+- Replace `api.ts` fetch calls with Convex `useQuery` / `useMutation`
+- Replace `useOrchestrations.ts` WebSocket hook with Convex reactive subscriptions
+- Operator controls (pause/resume/retry) become `useMutation` calls to `submitAction`
+- All existing React components preserved (only data-fetching props change)
+- `npm run build` succeeds, app loads and shows data from Convex
+
+## Phase 6: tina-monitor Convex Migration
+
+Switch tina-monitor from local file/SQLite reads to Convex reads via tina-data.
+
+**Delivers:**
+- Replace `DataSource` usage with Convex client reads from tina-data
+- Remove direct file reading for orchestration data (keep any local-only features like log viewing)
+- Remove `rusqlite` and `notify` dependencies if no longer needed
+- `cargo build` and `cargo test` pass for tina-monitor
+- TUI displays orchestration data from Convex
