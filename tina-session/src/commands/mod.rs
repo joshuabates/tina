@@ -8,6 +8,7 @@ pub mod init;
 pub mod list;
 pub mod name;
 pub mod orchestrate;
+pub mod register_team;
 pub mod send;
 pub mod start;
 pub mod state;

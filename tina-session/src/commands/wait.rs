@@ -1,4 +1,4 @@
-use tina_session::session::lookup::SessionLookup;
+use tina_session::convex;
 use tina_session::session::naming::session_name;
 use tina_session::watch;
 
@@ -9,8 +9,17 @@ pub fn run(
     stream_interval: Option<u64>,
     team: Option<&str>,
 ) -> anyhow::Result<u8> {
-    let lookup = SessionLookup::load(feature)?;
-    let cwd = &lookup.worktree_path;
+    // Resolve worktree path from Convex
+    let orch = convex::run_convex(|mut writer| async move {
+        writer.get_by_feature(feature).await
+    })?
+    .ok_or_else(|| anyhow::anyhow!("No orchestration found for feature '{}'", feature))?;
+
+    let cwd = std::path::PathBuf::from(
+        orch.worktree_path
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("Orchestration has no worktree_path"))?,
+    );
 
     // Construct status file path
     let status_path = cwd
@@ -44,7 +53,7 @@ pub fn run(
         }
         watch::watch_status_streaming(
             &status_path,
-            cwd,
+            &cwd,
             team_name,
             timeout,
             interval,

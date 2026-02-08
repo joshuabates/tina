@@ -23,7 +23,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize orchestration (creates worktree, lookup file, and Convex state)
+    /// Initialize orchestration (creates worktree and Convex state, outputs JSON)
     Init {
         /// Feature name (used for session naming)
         #[arg(long)]
@@ -198,7 +198,26 @@ enum Commands {
     /// List active orchestrations
     List,
 
-    /// Remove lookup file for feature
+    /// Register a team in Convex (links team to orchestration)
+    RegisterTeam {
+        /// Convex orchestration doc ID
+        #[arg(long)]
+        orchestration_id: String,
+
+        /// Team name (e.g., "my-feature-phase-1")
+        #[arg(long)]
+        team: String,
+
+        /// Lead session ID
+        #[arg(long)]
+        lead_session_id: String,
+
+        /// Phase number (optional, null for orchestration team)
+        #[arg(long)]
+        phase_number: Option<String>,
+    },
+
+    /// Clean up orchestration state
     Cleanup {
         /// Feature name
         #[arg(long)]
@@ -526,6 +545,18 @@ fn run() -> anyhow::Result<u8> {
         },
 
         Commands::List => commands::list::run(),
+
+        Commands::RegisterTeam {
+            orchestration_id,
+            team,
+            lead_session_id,
+            phase_number,
+        } => commands::register_team::run(
+            &orchestration_id,
+            &team,
+            &lead_session_id,
+            phase_number.as_deref(),
+        ),
 
         Commands::Cleanup { feature } => commands::cleanup::run(&feature),
 

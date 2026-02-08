@@ -3,8 +3,8 @@ use std::path::Path;
 use std::process::Command;
 
 use tina_session::claude;
+use tina_session::convex;
 use tina_session::error::SessionError;
-use tina_session::session::lookup::SessionLookup;
 use tina_session::session::naming::session_name;
 use tina_session::state::schema::SupervisorState;
 use tina_session::tmux;
@@ -39,9 +39,17 @@ fn detect_claude_binary() -> &'static str {
 }
 
 pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyhow::Result<u8> {
-    // Load lookup to get cwd
-    let lookup = SessionLookup::load(feature)?;
-    let cwd = &lookup.worktree_path;
+    // Resolve worktree path from Convex
+    let orch = convex::run_convex(|mut writer| async move {
+        writer.get_by_feature(feature).await
+    })?
+    .ok_or_else(|| anyhow::anyhow!("No orchestration found for feature '{}'", feature))?;
+
+    let cwd = &std::path::PathBuf::from(
+        orch.worktree_path
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("Orchestration has no worktree_path"))?,
+    );
 
     // Validate plan exists and resolve to absolute path
     if !plan.exists() {

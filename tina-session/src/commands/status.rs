@@ -1,9 +1,18 @@
-use tina_session::session::lookup::SessionLookup;
+use tina_session::convex;
 use tina_session::watch::{get_current_status, get_last_commit, get_task_progress, StatusUpdate};
 
 pub fn run(feature: &str, phase: &str, team: Option<&str>) -> anyhow::Result<u8> {
-    let lookup = SessionLookup::load(feature)?;
-    let cwd = &lookup.worktree_path;
+    // Resolve worktree path from Convex
+    let orch = convex::run_convex(|mut writer| async move {
+        writer.get_by_feature(feature).await
+    })?
+    .ok_or_else(|| anyhow::anyhow!("No orchestration found for feature '{}'", feature))?;
+
+    let cwd = std::path::PathBuf::from(
+        orch.worktree_path
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("Orchestration has no worktree_path"))?,
+    );
 
     // Construct status file path
     let status_path = cwd
@@ -25,7 +34,7 @@ pub fn run(feature: &str, phase: &str, team: Option<&str>) -> anyhow::Result<u8>
     // Get current status
     let status = get_current_status(&status_path);
     let (tasks_complete, tasks_total, current_task) = get_task_progress(team_name);
-    let last_commit = get_last_commit(cwd);
+    let last_commit = get_last_commit(&cwd);
 
     // Check if complete/blocked for git_range/blocked_reason
     let (git_range, blocked_reason) = if status_path.exists() {

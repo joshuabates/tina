@@ -6,7 +6,6 @@ use std::process::Command;
 use chrono::Utc;
 
 use tina_session::error::SessionError;
-use tina_session::session::lookup::SessionLookup;
 use tina_session::state::schema::SupervisorState;
 
 use tina_session::convex;
@@ -48,17 +47,17 @@ pub fn run(
         anyhow::bail!(SessionError::FileNotFound(design_doc.display().to_string()));
     }
 
-    // Check if already initialized
-    if SessionLookup::exists(feature) {
-        let existing = SessionLookup::load(feature)?;
-        anyhow::bail!(SessionError::AlreadyInitialized(
-            feature.to_string(),
-            existing.worktree_path.display().to_string()
-        ));
-    }
-
     let cwd_abs = fs::canonicalize(cwd)?;
     let design_doc_abs = fs::canonicalize(design_doc)?;
+
+    // Check if already initialized via Convex
+    if let Some(existing) = check_existing_orchestration(feature)? {
+        let worktree = existing.worktree_path.unwrap_or_default();
+        anyhow::bail!(SessionError::AlreadyInitialized(
+            feature.to_string(),
+            worktree,
+        ));
+    }
 
     // Create .worktrees directory
     let worktrees_dir = cwd_abs.join(".worktrees");
@@ -74,11 +73,7 @@ pub fn run(
     // Write statusline config files
     write_statusline_config(&worktree_path)?;
 
-    // Create SessionLookup pointing to the worktree and repo root
-    let mut lookup = SessionLookup::new(feature, worktree_path.clone(), cwd_abs.clone());
-    lookup.save()?;
-
-    // Create supervisor state in Convex
+    // Create supervisor state file in worktree
     let state = SupervisorState::new(
         feature,
         design_doc_abs.clone(),
@@ -88,25 +83,15 @@ pub fn run(
     );
     state.save()?;
 
-    // Write orchestration record to Convex (non-fatal)
-    match write_to_convex(
+    // Write orchestration record to Convex
+    let orch_id = write_to_convex(
         feature,
         &worktree_path,
         &design_doc_abs,
         &actual_branch,
         total_phases,
         &cwd_abs,
-    ) {
-        Ok(orch_id) => {
-            lookup.orchestration_id = Some(orch_id);
-            if let Err(e) = lookup.save() {
-                eprintln!("Warning: Failed to update lookup with orchestration_id: {}", e);
-            }
-        }
-        Err(e) => {
-            eprintln!("Warning: Failed to write to Convex: {}", e);
-        }
-    }
+    )?;
 
     // Auto-start daemon if not running
     if tina_session::daemon::status().is_none() {
@@ -116,8 +101,16 @@ pub fn run(
         }
     }
 
-    // Print worktree path for orchestrator to capture
-    println!("{}", worktree_path.display());
+    // Output JSON for orchestrator to capture
+    let output = serde_json::json!({
+        "orchestration_id": orch_id,
+        "worktree_path": worktree_path.display().to_string(),
+        "feature": feature,
+        "branch": actual_branch,
+        "design_doc": design_doc_abs.display().to_string(),
+        "total_phases": total_phases,
+    });
+    println!("{}", serde_json::to_string(&output)?);
 
     Ok(0)
 }
@@ -223,6 +216,15 @@ fn write_statusline_config(worktree_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Check if an orchestration already exists for this feature via Convex.
+fn check_existing_orchestration(
+    feature: &str,
+) -> anyhow::Result<Option<convex::OrchestrationRecord>> {
+    convex::run_convex(|mut writer| async move {
+        writer.get_by_feature(feature).await
+    })
+}
+
 /// Write orchestration record to Convex via tina-data types.
 /// Returns the Convex orchestration doc ID.
 fn write_to_convex(
@@ -320,9 +322,6 @@ mod tests {
 
         let result = run(&feature, cwd, &design_doc, "tina/test", 3);
 
-        // Clean up lookup file regardless of result
-        let _ = SessionLookup::delete(&feature);
-
         assert!(result.is_ok());
 
         // Verify worktree was created
@@ -360,7 +359,7 @@ mod tests {
         let feature = format!("test-gitignore-{}", std::process::id());
         let result = run(&feature, cwd, &design_doc, "tina/test", 2);
 
-        let _ = SessionLookup::delete(&feature);
+        // worktree cleanup below
         assert!(result.is_ok());
 
         // Check .gitignore contains .worktrees
@@ -397,7 +396,7 @@ mod tests {
         let feature = format!("collision-{}", std::process::id());
         let result = run(&feature, cwd, &design_doc, "tina/collision-test", 1);
 
-        let _ = SessionLookup::delete(&feature);
+        // worktree cleanup below
         assert!(result.is_ok());
 
         // Verify worktree was still created (with unique branch)
