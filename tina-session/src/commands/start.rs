@@ -11,22 +11,11 @@ use tina_session::tmux;
 
 const CLAUDE_READY_TIMEOUT_SECS: u64 = 60;
 
-/// Detect which claude binary is available.
-/// Prefers 'claudesp' (sneak peek) over 'claude' (release).
+/// Detect which claude binary is available and functional.
+/// Uses 'claude' (release) and verifies it runs.
 fn detect_claude_binary() -> &'static str {
-    // Check for claudesp first (sneak peek version)
-    if Command::new("which")
-        .arg("claudesp")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        return "claudesp";
-    }
-
-    // Fall back to claude
-    if Command::new("which")
-        .arg("claude")
+    if Command::new("claude")
+        .arg("--version")
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
@@ -105,7 +94,7 @@ pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyho
     // Small delay to let shell initialize
     std::thread::sleep(std::time::Duration::from_millis(500));
 
-    // Detect which claude binary is available (claudesp for sneak peek, claude for release)
+    // Detect which claude binary is available
     let claude_bin = detect_claude_binary();
     let claude_cmd = format!("{} --dangerously-skip-permissions", claude_bin);
     println!("Starting Claude ({}) in session...", claude_bin);

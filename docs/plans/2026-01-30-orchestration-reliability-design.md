@@ -425,7 +425,7 @@ predicates = "3"
 
 Key implementation details discovered during development:
 
-1. **Claude Binary Detection**: The `start` command auto-detects `claudesp` (sneak peek) vs `claude` (release) since different environments may have different binaries installed.
+1. **Claude Binary Detection**: The `start` command verifies `claude --version` and defaults to `claude` for a clear error if not found.
 
 2. **Session Creation Strategy**: tmux sessions are created with a shell first, then the claude command is sent to the shell. This prevents session death if Claude fails to start (e.g., binary not in PATH).
 

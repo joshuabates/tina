@@ -180,6 +180,6 @@ If teams underperform or don't ship to regular Claude Code, revisit dual-mode su
 
 **Date:** 2026-02-05
 
-Teams shipped in mainline Claude Code behind the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` environment variable. The `claude-sneakpeek` fork is no longer needed.
+Teams shipped in mainline Claude Code behind the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` environment variable. The separate fork is no longer needed.
 
 **Option E (Wait and See) proved correct.** The teams API is now available in mainline Claude Code as an experimental feature, eliminating the need for dual-mode support or any of the other workarounds explored above. The plugin now targets mainline Claude Code directly.

@@ -19,6 +19,8 @@ use crate::scenario::{
 pub struct RunResult {
     /// Scenario that was run
     pub scenario_name: String,
+    /// Derived feature name used in Convex (may differ from scenario_name)
+    pub feature_name: String,
     /// Whether the scenario passed
     pub passed: bool,
     /// List of failures (empty if passed)
@@ -31,8 +33,10 @@ pub struct RunResult {
 
 impl RunResult {
     fn success(scenario_name: String, work_dir: PathBuf) -> Self {
+        let feature_name = derive_feature_name(&scenario_name);
         Self {
             scenario_name,
+            feature_name,
             passed: true,
             failures: vec![],
             work_dir,
@@ -41,8 +45,10 @@ impl RunResult {
     }
 
     fn failure(scenario_name: String, work_dir: PathBuf, failures: Vec<CategorizedFailure>) -> Self {
+        let feature_name = derive_feature_name(&scenario_name);
         Self {
             scenario_name,
+            feature_name,
             passed: false,
             failures,
             work_dir,
@@ -51,8 +57,10 @@ impl RunResult {
     }
 
     fn skipped(scenario_name: String, work_dir: PathBuf) -> Self {
+        let feature_name = derive_feature_name(&scenario_name);
         Self {
             scenario_name,
+            feature_name,
             passed: true,
             failures: vec![],
             work_dir,
@@ -287,7 +295,7 @@ fn run_full_orchestration(
     // Wait for orchestration to complete by polling Convex supervisor state
     eprintln!("Waiting for orchestration to complete (timeout: {}s)...", ORCHESTRATION_TIMEOUT_SECS);
     let result = wait_for_orchestration_complete(
-        &scenario.name,
+        &feature_name,
         &session_name,
         ORCHESTRATION_TIMEOUT_SECS,
     );
@@ -300,17 +308,18 @@ fn run_full_orchestration(
 }
 
 /// Detect which claude binary is available and functional.
-/// Prefers 'claudesp' (sneak peek) over 'claude' (release),
-/// but only if it actually runs (not just exists on PATH).
+/// Uses 'claude' (release) and verifies it runs.
 fn detect_claude_binary() -> &'static str {
-    if Command::new("claudesp")
+    if Command::new("claude")
         .arg("--version")
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
     {
-        return "claudesp";
+        return "claude";
     }
+
+    // Default to claude and let it fail with a clear error
     "claude"
 }
 

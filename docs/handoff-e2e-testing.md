@@ -36,12 +36,12 @@ Ran an end-to-end orchestration test via `tina-harness --full --verify` to verif
 
 **Fix:** When building the cache, keep the orchestration with the latest `started_at` timestamp.
 
-### 5. tina-harness: `claudesp` binary detection broken
+### 5. tina-harness: Claude binary detection simplified
 **File:** `tina-harness/src/commands/run.rs` — `detect_claude_binary()`
 
-**Root cause:** Used `which claudesp` to detect availability, but `claudesp` exists on PATH with a broken module. Detection should verify the binary actually runs.
+**Root cause:** Legacy support for a secondary Claude binary was no longer needed now that teams are in mainline Claude Code.
 
-**Fix:** Changed to `claudesp --version` check instead of `which`.
+**Fix:** Removed alternate binary detection; only `claude --version` is used (with a fallback to `claude` for clear errors).
 
 ### 6. tina-harness: send_keys not using literal mode
 **File:** `tina-session/src/tmux/send.rs` — `send_keys_raw()`
