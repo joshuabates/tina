@@ -93,6 +93,14 @@ pub fn run(
         &cwd_abs,
     )?;
 
+    // Pre-register the orchestration team in Convex so the daemon can link
+    // teams/tasks to this orchestration. The lead_session_id is a placeholder
+    // until the real team lead starts and re-registers via upsert.
+    let team_name = format!("{}-orchestration", feature);
+    if let Err(e) = register_orchestration_team(&orch_id, &team_name) {
+        eprintln!("Warning: Failed to pre-register team: {}", e);
+    }
+
     // Auto-start daemon if not running
     if tina_session::daemon::status().is_none() {
         match tina_session::daemon::start() {
@@ -214,6 +222,21 @@ fn write_statusline_config(worktree_path: &Path) -> anyhow::Result<()> {
     fs::write(&settings_path, settings)?;
 
     Ok(())
+}
+
+/// Pre-register the orchestration team in Convex so the daemon can resolve
+/// the team-to-orchestration link when syncing team members and tasks.
+fn register_orchestration_team(orchestration_id: &str, team_name: &str) -> anyhow::Result<String> {
+    convex::run_convex(|mut writer| async move {
+        let args = convex::RegisterTeamArgs {
+            team_name: team_name.to_string(),
+            orchestration_id: orchestration_id.to_string(),
+            lead_session_id: "pending".to_string(),
+            phase_number: None,
+            created_at: chrono::Utc::now().timestamp_millis() as f64,
+        };
+        writer.register_team(&args).await
+    })
 }
 
 /// Check if an orchestration already exists for this feature via Convex.

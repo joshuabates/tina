@@ -112,8 +112,14 @@ pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyho
         }
     }
 
-    // Send the team-lead-init skill command with team_name
+    // Register the phase execution team in Convex so the daemon can sync
+    // phase-level tasks and team members.
     let team_name = format!("{}-phase-{}", feature, phase);
+    if let Err(e) = register_phase_team(&orch.id, &team_name) {
+        eprintln!("Warning: Failed to register phase team: {}", e);
+    }
+
+    // Send the team-lead-init skill command with team_name
     let skill_cmd = format!(
         "/tina:team-lead-init team_name: {} plan_path: {}",
         team_name,
@@ -124,6 +130,21 @@ pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyho
 
     println!("Started phase {} execution in session '{}'", phase, name);
     Ok(0)
+}
+
+/// Register the phase execution team in Convex so the daemon can sync
+/// phase-level tasks and team members to the orchestration.
+fn register_phase_team(orchestration_id: &str, team_name: &str) -> anyhow::Result<String> {
+    convex::run_convex(|mut writer| async move {
+        let args = convex::RegisterTeamArgs {
+            team_name: team_name.to_string(),
+            orchestration_id: orchestration_id.to_string(),
+            lead_session_id: "pending".to_string(),
+            phase_number: None,
+            created_at: chrono::Utc::now().timestamp_millis() as f64,
+        };
+        writer.register_team(&args).await
+    })
 }
 
 /// Detect and install project dependencies. Non-fatal on failure.
