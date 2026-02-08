@@ -2,7 +2,7 @@
   "version": 1,
   "feature": "my-feature",
   "design_doc": "docs/design.md",
-  "worktree_path": "FIXTURE_ROOT/worktree",
+  "worktree_path": "FIXTURE_ROOT/my-feature",
   "branch": "tina/my-feature",
   "total_phases": 3,
   "current_phase": 2,

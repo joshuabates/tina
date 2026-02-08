@@ -411,6 +411,23 @@ fn extract_node_list(result: FunctionResult) -> Result<Vec<NodeRecord>> {
     }
 }
 
+fn extract_team_record(result: FunctionResult) -> Result<Option<TeamRecord>> {
+    match result {
+        FunctionResult::Value(Value::Null) => Ok(None),
+        FunctionResult::Value(Value::Object(obj)) => Ok(Some(TeamRecord {
+            id: value_as_id(&obj, "_id"),
+            team_name: value_as_str(&obj, "teamName"),
+            orchestration_id: value_as_id(&obj, "orchestrationId"),
+            lead_session_id: value_as_str(&obj, "leadSessionId"),
+            phase_number: value_as_opt_str(&obj, "phaseNumber"),
+            created_at: value_as_f64(&obj, "createdAt"),
+        })),
+        FunctionResult::Value(other) => bail!("expected object for team record, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
 impl TinaConvexClient {
     /// Connect to a Convex deployment.
     pub async fn new(deployment_url: &str) -> Result<Self> {
@@ -562,6 +579,14 @@ impl TinaConvexClient {
         let args = BTreeMap::new();
         let result = self.client.query("nodes:listNodes", args).await?;
         extract_node_list(result)
+    }
+
+    /// Look up a team by name from the Convex `teams` table.
+    pub async fn get_team_by_name(&mut self, team_name: &str) -> Result<Option<TeamRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("teamName".into(), Value::from(team_name));
+        let result = self.client.query("teams:getByTeamName", args).await?;
+        extract_team_record(result)
     }
 }
 
@@ -916,5 +941,54 @@ mod tests {
     fn test_extract_unit_error() {
         let result = FunctionResult::ErrorMessage("bad".into());
         assert!(extract_unit(result).is_err());
+    }
+
+    // --- Team record extraction tests ---
+
+    #[test]
+    fn test_extract_team_record_null() {
+        let result = FunctionResult::Value(Value::Null);
+        let team = extract_team_record(result).unwrap();
+        assert!(team.is_none());
+    }
+
+    #[test]
+    fn test_extract_team_record_found() {
+        let mut map = BTreeMap::new();
+        map.insert("_id".to_string(), Value::from("team-id-123"));
+        map.insert("teamName".to_string(), Value::from("my-feature-orchestration"));
+        map.insert("orchestrationId".to_string(), Value::from("orch-456"));
+        map.insert("leadSessionId".to_string(), Value::from("session-789"));
+        map.insert("phaseNumber".to_string(), Value::from("1"));
+        map.insert("createdAt".to_string(), Value::from(1706644800000.0f64));
+        let result = FunctionResult::Value(Value::Object(map));
+
+        let team = extract_team_record(result).unwrap().unwrap();
+        assert_eq!(team.id, "team-id-123");
+        assert_eq!(team.team_name, "my-feature-orchestration");
+        assert_eq!(team.orchestration_id, "orch-456");
+        assert_eq!(team.lead_session_id, "session-789");
+        assert_eq!(team.phase_number.as_deref(), Some("1"));
+        assert_eq!(team.created_at, 1706644800000.0);
+    }
+
+    #[test]
+    fn test_extract_team_record_no_phase() {
+        let mut map = BTreeMap::new();
+        map.insert("_id".to_string(), Value::from("team-id-123"));
+        map.insert("teamName".to_string(), Value::from("my-team"));
+        map.insert("orchestrationId".to_string(), Value::from("orch-456"));
+        map.insert("leadSessionId".to_string(), Value::from("session-789"));
+        map.insert("createdAt".to_string(), Value::from(1706644800000.0f64));
+        let result = FunctionResult::Value(Value::Object(map));
+
+        let team = extract_team_record(result).unwrap().unwrap();
+        assert!(team.phase_number.is_none());
+    }
+
+    #[test]
+    fn test_extract_team_record_error() {
+        let result = FunctionResult::ErrorMessage("not found".into());
+        assert!(extract_team_record(result).is_err());
     }
 }

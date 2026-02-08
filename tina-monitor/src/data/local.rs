@@ -1,14 +1,15 @@
 //! Local file-based data source for the panel-grid app shell.
 //!
-//! Reads session lookups, supervisor state, teams, and tasks from
-//! the filesystem (or a fixture directory for testing).
+//! Reads supervisor state, teams, and tasks from the filesystem
+//! (or a fixture directory for testing). Orchestration discovery
+//! uses supervisor-state.json files directly (no SessionLookup).
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::types::{SessionLookup, SupervisorState, Task, Team};
+use crate::types::{SupervisorState, Task, Team};
 
 /// Full orchestration data loaded from local files.
 #[derive(Debug, Clone)]
@@ -35,43 +36,38 @@ impl DataSource {
     }
 
     /// List all available orchestrations (returns summaries for the fuzzy finder).
+    ///
+    /// Scans for supervisor-state.json files under worktree directories.
+    /// In fixture mode, scans `{fixture}/{feature}/.claude/tina/supervisor-state.json`.
+    /// In production mode, this is unused (ConvexDataSource is preferred).
     pub fn list_orchestrations(&self) -> Result<Vec<crate::data::OrchestrationSummary>> {
-        let sessions_dir = self.sessions_dir();
-        if !sessions_dir.exists() {
+        let base_dir = self.base_dir();
+        if !base_dir.exists() {
             return Ok(vec![]);
         }
 
         let mut summaries = Vec::new();
 
-        for entry in fs::read_dir(&sessions_dir)
-            .context(format!("Failed to list sessions directory: {}", sessions_dir.display()))?
+        for entry in fs::read_dir(&base_dir)
+            .context(format!("Failed to list directory: {}", base_dir.display()))?
         {
             let entry = entry.context("Failed to read directory entry")?;
             let path = entry.path();
 
-            if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            if !path.is_dir() {
                 continue;
             }
 
-            let feature = path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or_default()
-                .to_string();
-
-            if let Ok(lookup) = self.load_session_lookup(&feature) {
-                let worktree = self.resolve_path(&lookup.worktree_path);
-                let tina_dir = worktree.join(".claude").join("tina");
-                if let Ok(state) = load_supervisor_state(&tina_dir) {
-                    summaries.push(crate::data::OrchestrationSummary {
-                        feature: state.feature.clone(),
-                        worktree_path: PathBuf::from(&state.worktree_path),
-                        status: crate::data::MonitorOrchestrationStatus::from_orchestration_status(&state.status),
-                        current_phase: state.current_phase,
-                        total_phases: state.total_phases,
-                        elapsed_mins: None,
-                    });
-                }
+            let tina_dir = path.join(".claude").join("tina");
+            if let Ok(state) = load_supervisor_state(&tina_dir) {
+                summaries.push(crate::data::OrchestrationSummary {
+                    feature: state.feature.clone(),
+                    worktree_path: PathBuf::from(&state.worktree_path),
+                    status: crate::data::MonitorOrchestrationStatus::from_orchestration_status(&state.status),
+                    current_phase: state.current_phase,
+                    total_phases: state.total_phases,
+                    elapsed_mins: None,
+                });
             }
         }
 
@@ -79,9 +75,10 @@ impl DataSource {
     }
 
     /// Load full orchestration data for a feature.
+    ///
+    /// In fixture mode, looks for `{fixture}/{feature}/.claude/tina/supervisor-state.json`.
     pub fn load_orchestration(&mut self, feature: &str) -> Result<&LoadedOrchestration> {
-        let lookup = self.load_session_lookup(feature)?;
-        let worktree = self.resolve_path(&lookup.worktree_path);
+        let worktree = self.worktree_dir(feature);
         let tina_dir = worktree.join(".claude").join("tina");
         let state = load_supervisor_state(&tina_dir)?;
 
@@ -109,12 +106,24 @@ impl DataSource {
         self.current.as_ref()
     }
 
-    pub fn sessions_dir(&self) -> PathBuf {
+    /// Base directory for scanning orchestration worktrees.
+    fn base_dir(&self) -> PathBuf {
         match &self.fixture_path {
             Some(fixture) => fixture.clone(),
             None => {
                 let home = dirs::home_dir().expect("Could not determine home directory");
-                home.join(".claude").join("tina-sessions")
+                home.join(".worktrees")
+            }
+        }
+    }
+
+    /// Worktree directory for a feature.
+    fn worktree_dir(&self, feature: &str) -> PathBuf {
+        match &self.fixture_path {
+            Some(fixture) => fixture.join(feature),
+            None => {
+                let home = dirs::home_dir().expect("Could not determine home directory");
+                home.join(".worktrees").join(feature)
             }
         }
     }
@@ -137,20 +146,6 @@ impl DataSource {
                 home.join(".claude").join("tasks")
             }
         }
-    }
-
-    fn resolve_path(&self, path: &Path) -> PathBuf {
-        match &self.fixture_path {
-            Some(base) if path.is_relative() => base.join(path),
-            _ => path.to_path_buf(),
-        }
-    }
-
-    pub fn load_session_lookup(&self, feature: &str) -> Result<SessionLookup> {
-        let path = self.sessions_dir().join(format!("{}.json", feature));
-        let content = fs::read_to_string(&path)
-            .context(format!("Failed to read session lookup: {}", path.display()))?;
-        serde_json::from_str(&content).context("Failed to parse session lookup JSON")
     }
 
     pub fn load_team(&self, name: &str) -> Result<Team> {
@@ -195,6 +190,7 @@ impl DataSource {
 
         Ok(tasks)
     }
+
     /// Load supervisor state from a tina directory.
     pub fn load_supervisor_state(&self, tina_dir: &Path) -> Result<SupervisorState> {
         load_supervisor_state(tina_dir)

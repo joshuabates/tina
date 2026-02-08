@@ -533,25 +533,17 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let fixture_path = temp_dir.path().to_path_buf();
 
-        // Create minimal fixture structure
-        let sessions_dir = fixture_path.clone();
-        fs::create_dir_all(&sessions_dir).unwrap();
+        // Create fixture: {fixture}/test-feature/.claude/tina/supervisor-state.json
+        let tina_dir = fixture_path.join("test-feature").join(".claude").join("tina");
+        fs::create_dir_all(&tina_dir).unwrap();
 
-        let worktree_dir = fixture_path.join("worktree").join(".claude").join("tina");
-        fs::create_dir_all(&worktree_dir).unwrap();
-
-        // Create session lookup
-        let session_json = r#"{"feature":"test-feature","worktree_path":"worktree","repo_root":".","created_at":"2026-01-30T10:00:00Z"}"#;
-        fs::write(sessions_dir.join("test-feature.json"), session_json).unwrap();
-
-        // Create supervisor state
         let state_json = r#"{
             "version":1,"feature":"test-feature","design_doc":"docs/design.md",
-            "worktree_path":"worktree","branch":"tina/test-feature","total_phases":3,
+            "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":2,"status":"executing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}
         }"#;
-        fs::write(worktree_dir.join("supervisor-state.json"), state_json).unwrap();
+        fs::write(tina_dir.join("supervisor-state.json"), state_json).unwrap();
 
         let mut app = App::with_fixture_path(Some(fixture_path));
         let result = app.load_orchestration("test-feature");
@@ -567,22 +559,16 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let fixture_path = temp_dir.path().to_path_buf();
 
-        let sessions_dir = fixture_path.clone();
-        fs::create_dir_all(&sessions_dir).unwrap();
-
-        let worktree_dir = fixture_path.join("worktree").join(".claude").join("tina");
-        fs::create_dir_all(&worktree_dir).unwrap();
-
-        let session_json = r#"{"feature":"test-feature","worktree_path":"worktree","repo_root":".","created_at":"2026-01-30T10:00:00Z"}"#;
-        fs::write(sessions_dir.join("test-feature.json"), session_json).unwrap();
+        let tina_dir = fixture_path.join("test-feature").join(".claude").join("tina");
+        fs::create_dir_all(&tina_dir).unwrap();
 
         let state_json = r#"{
             "version":1,"feature":"test-feature","design_doc":"docs/design.md",
-            "worktree_path":"worktree","branch":"tina/test-feature","total_phases":3,
+            "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":2,"status":"executing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}
         }"#;
-        fs::write(worktree_dir.join("supervisor-state.json"), state_json).unwrap();
+        fs::write(tina_dir.join("supervisor-state.json"), state_json).unwrap();
 
         let mut app = App::with_fixture_path(Some(fixture_path));
         app.load_orchestration("test-feature").unwrap();
@@ -611,22 +597,16 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let fixture_path = temp_dir.path().to_path_buf();
 
-        let sessions_dir = fixture_path.clone();
-        fs::create_dir_all(&sessions_dir).unwrap();
-
-        let worktree_dir = fixture_path.join("worktree").join(".claude").join("tina");
-        fs::create_dir_all(&worktree_dir).unwrap();
-
-        let session_json = r#"{"feature":"test-feature","worktree_path":"worktree","repo_root":".","created_at":"2026-01-30T10:00:00Z"}"#;
-        fs::write(sessions_dir.join("test-feature.json"), session_json).unwrap();
+        let tina_dir = fixture_path.join("test-feature").join(".claude").join("tina");
+        fs::create_dir_all(&tina_dir).unwrap();
 
         let state_json = r#"{
             "version":1,"feature":"test-feature","design_doc":"docs/design.md",
-            "worktree_path":"worktree","branch":"tina/test-feature","total_phases":3,
+            "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":2,"status":"executing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}
         }"#;
-        fs::write(worktree_dir.join("supervisor-state.json"), state_json).unwrap();
+        fs::write(tina_dir.join("supervisor-state.json"), state_json).unwrap();
 
         let mut app = App::with_fixture_path(Some(fixture_path.clone()));
         app.load_orchestration("test-feature").unwrap();
@@ -634,11 +614,11 @@ mod tests {
         // Update the state file
         let updated_state_json = r#"{
             "version":1,"feature":"test-feature","design_doc":"docs/design.md",
-            "worktree_path":"worktree","branch":"tina/test-feature","total_phases":3,
+            "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":3,"status":"reviewing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}
         }"#;
-        fs::write(fixture_path.join("worktree").join(".claude").join("tina").join("supervisor-state.json"), updated_state_json).unwrap();
+        fs::write(tina_dir.join("supervisor-state.json"), updated_state_json).unwrap();
 
         let result = app.refresh();
         assert!(result.is_ok());
@@ -704,22 +684,16 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let fixture_path = temp_dir.path().to_path_buf();
 
-        let sessions_dir = fixture_path.clone();
-        fs::create_dir_all(&sessions_dir).unwrap();
-
-        let worktree_dir = fixture_path.join("worktree").join(".claude").join("tina");
-        fs::create_dir_all(&worktree_dir).unwrap();
-
-        let session_json = r#"{"feature":"test-feature","worktree_path":"worktree","repo_root":".","created_at":"2026-01-30T10:00:00Z"}"#;
-        fs::write(sessions_dir.join("test-feature.json"), session_json).unwrap();
+        let tina_dir = fixture_path.join("test-feature").join(".claude").join("tina");
+        fs::create_dir_all(&tina_dir).unwrap();
 
         let state_json = r#"{
             "version":1,"feature":"test-feature","design_doc":"docs/design.md",
-            "worktree_path":"worktree","branch":"tina/test-feature","total_phases":3,
+            "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":2,"status":"executing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}
         }"#;
-        fs::write(worktree_dir.join("supervisor-state.json"), state_json).unwrap();
+        fs::write(tina_dir.join("supervisor-state.json"), state_json).unwrap();
 
         let mut app = App::with_fixture_path(Some(fixture_path));
         app.load_orchestration("test-feature").unwrap();

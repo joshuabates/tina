@@ -46,6 +46,41 @@ pub struct EventArgs {
     pub recorded_at: String,
 }
 
+/// Team registration data for Convex.
+pub struct RegisterTeamArgs {
+    pub team_name: String,
+    pub orchestration_id: String,
+    pub lead_session_id: String,
+    pub phase_number: Option<String>,
+    pub created_at: f64,
+}
+
+/// Orchestration record returned from Convex queries.
+#[derive(Debug, Clone)]
+pub struct OrchestrationRecord {
+    pub id: String,
+    pub feature_name: String,
+    pub worktree_path: Option<String>,
+    pub branch: String,
+    pub design_doc_path: String,
+    pub total_phases: u32,
+    pub current_phase: u32,
+    pub status: String,
+    pub started_at: String,
+}
+
+/// Phase status record returned from Convex queries.
+#[derive(Debug, Clone)]
+pub struct PhaseStatusRecord {
+    pub orchestration_id: String,
+    pub phase_number: String,
+    pub status: String,
+    pub plan_path: Option<String>,
+    pub git_range: Option<String>,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+}
+
 /// A short-lived Convex connection for CLI commands.
 ///
 /// Registers a node (or reuses cached), then provides typed write methods.
@@ -215,6 +250,93 @@ impl ConvexWriter {
         extract_string(result)
     }
 
+    /// Register a team in Convex. Returns the team doc ID.
+    pub async fn register_team(&mut self, team: &RegisterTeamArgs) -> anyhow::Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("teamName".into(), Value::from(team.team_name.as_str()));
+        args.insert(
+            "orchestrationId".into(),
+            Value::from(team.orchestration_id.as_str()),
+        );
+        args.insert(
+            "leadSessionId".into(),
+            Value::from(team.lead_session_id.as_str()),
+        );
+        if let Some(ref pn) = team.phase_number {
+            args.insert("phaseNumber".into(), Value::from(pn.as_str()));
+        }
+        args.insert("createdAt".into(), Value::from(team.created_at));
+
+        let result = self
+            .client
+            .mutation("teams:registerTeam", args)
+            .await?;
+        extract_string(result)
+    }
+
+    /// Get the latest orchestration for a feature name.
+    pub async fn get_by_feature(
+        &mut self,
+        feature_name: &str,
+    ) -> anyhow::Result<Option<OrchestrationRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("featureName".into(), Value::from(feature_name));
+
+        let result = self
+            .client
+            .query("orchestrations:getByFeature", args)
+            .await?;
+        extract_optional_orchestration(result)
+    }
+
+    /// Get phase status for an orchestration + phase number.
+    pub async fn get_phase_status(
+        &mut self,
+        orchestration_id: &str,
+        phase_number: &str,
+    ) -> anyhow::Result<Option<PhaseStatusRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert(
+            "orchestrationId".into(),
+            Value::from(orchestration_id),
+        );
+        args.insert("phaseNumber".into(), Value::from(phase_number));
+
+        let result = self
+            .client
+            .query("phases:getPhaseStatus", args)
+            .await?;
+        extract_optional_phase_status(result)
+    }
+
+    /// Subscribe to phase status updates. Returns the underlying ConvexClient
+    /// subscribe handle for streaming.
+    pub async fn subscribe_phase_status(
+        &mut self,
+        orchestration_id: &str,
+        phase_number: &str,
+    ) -> anyhow::Result<convex::QuerySubscription> {
+        let mut args = BTreeMap::new();
+        args.insert(
+            "orchestrationId".into(),
+            Value::from(orchestration_id),
+        );
+        args.insert("phaseNumber".into(), Value::from(phase_number));
+
+        self.client
+            .subscribe("phases:getPhaseStatus", args)
+            .await
+    }
+
+    /// List all orchestrations from Convex.
+    pub async fn list_orchestrations(&mut self) -> anyhow::Result<Vec<OrchestrationRecord>> {
+        let result = self
+            .client
+            .query("orchestrations:listOrchestrations", BTreeMap::new())
+            .await?;
+        extract_orchestration_list(result)
+    }
+
     /// Fetch supervisor state JSON for this node/feature.
     pub async fn get_supervisor_state(
         &mut self,
@@ -259,6 +381,192 @@ fn extract_optional_state_json(result: FunctionResult) -> anyhow::Result<Option<
         },
         FunctionResult::Value(other) => {
             anyhow::bail!("expected object from Convex, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => anyhow::bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => anyhow::bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_optional_orchestration(
+    result: FunctionResult,
+) -> anyhow::Result<Option<OrchestrationRecord>> {
+    match result {
+        FunctionResult::Value(Value::Null) => Ok(None),
+        FunctionResult::Value(Value::Object(map)) => {
+            let id = match map.get("_id") {
+                Some(Value::String(s)) => s.clone(),
+                _ => anyhow::bail!("missing _id in orchestration"),
+            };
+            let feature_name = match map.get("featureName") {
+                Some(Value::String(s)) => s.clone(),
+                _ => anyhow::bail!("missing featureName in orchestration"),
+            };
+            let worktree_path = map
+                .get("worktreePath")
+                .and_then(|v| if let Value::String(s) = v { Some(s.clone()) } else { None });
+            let branch = match map.get("branch") {
+                Some(Value::String(s)) => s.clone(),
+                _ => anyhow::bail!("missing branch in orchestration"),
+            };
+            let design_doc_path = match map.get("designDocPath") {
+                Some(Value::String(s)) => s.clone(),
+                _ => anyhow::bail!("missing designDocPath in orchestration"),
+            };
+            let total_phases = match map.get("totalPhases") {
+                Some(Value::Float64(n)) => *n as u32,
+                Some(Value::Int64(n)) => *n as u32,
+                _ => anyhow::bail!("missing totalPhases in orchestration"),
+            };
+            let current_phase = match map.get("currentPhase") {
+                Some(Value::Float64(n)) => *n as u32,
+                Some(Value::Int64(n)) => *n as u32,
+                _ => anyhow::bail!("missing currentPhase in orchestration"),
+            };
+            let status = match map.get("status") {
+                Some(Value::String(s)) => s.clone(),
+                _ => anyhow::bail!("missing status in orchestration"),
+            };
+            let started_at = match map.get("startedAt") {
+                Some(Value::String(s)) => s.clone(),
+                _ => anyhow::bail!("missing startedAt in orchestration"),
+            };
+            Ok(Some(OrchestrationRecord {
+                id,
+                feature_name,
+                worktree_path,
+                branch,
+                design_doc_path,
+                total_phases,
+                current_phase,
+                status,
+                started_at,
+            }))
+        }
+        FunctionResult::Value(other) => {
+            anyhow::bail!("expected object or null from getByFeature, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => anyhow::bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => anyhow::bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_optional_phase_status(
+    result: FunctionResult,
+) -> anyhow::Result<Option<PhaseStatusRecord>> {
+    match result {
+        FunctionResult::Value(Value::Null) => Ok(None),
+        FunctionResult::Value(Value::Object(map)) => {
+            let orchestration_id = match map.get("orchestrationId") {
+                Some(Value::String(s)) => s.clone(),
+                _ => anyhow::bail!("missing orchestrationId in phase"),
+            };
+            let phase_number = match map.get("phaseNumber") {
+                Some(Value::String(s)) => s.clone(),
+                _ => anyhow::bail!("missing phaseNumber in phase"),
+            };
+            let status = match map.get("status") {
+                Some(Value::String(s)) => s.clone(),
+                _ => anyhow::bail!("missing status in phase"),
+            };
+            let plan_path = map
+                .get("planPath")
+                .and_then(|v| if let Value::String(s) = v { Some(s.clone()) } else { None });
+            let git_range = map
+                .get("gitRange")
+                .and_then(|v| if let Value::String(s) = v { Some(s.clone()) } else { None });
+            let started_at = map
+                .get("startedAt")
+                .and_then(|v| if let Value::String(s) = v { Some(s.clone()) } else { None });
+            let completed_at = map
+                .get("completedAt")
+                .and_then(|v| if let Value::String(s) = v { Some(s.clone()) } else { None });
+            Ok(Some(PhaseStatusRecord {
+                orchestration_id,
+                phase_number,
+                status,
+                plan_path,
+                git_range,
+                started_at,
+                completed_at,
+            }))
+        }
+        FunctionResult::Value(other) => {
+            anyhow::bail!("expected object or null from getPhaseStatus, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => anyhow::bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => anyhow::bail!("Convex error: {:?}", err),
+    }
+}
+
+/// Parse a FunctionResult containing a phase status object (from subscription stream).
+pub fn parse_phase_status(result: FunctionResult) -> anyhow::Result<Option<PhaseStatusRecord>> {
+    extract_optional_phase_status(result)
+}
+
+fn extract_orchestration_list(
+    result: FunctionResult,
+) -> anyhow::Result<Vec<OrchestrationRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(arr)) => {
+            let mut records = Vec::new();
+            for item in arr {
+                if let Value::Object(map) = item {
+                    let id = match map.get("_id") {
+                        Some(Value::String(s)) => s.clone(),
+                        _ => continue,
+                    };
+                    let feature_name = match map.get("featureName") {
+                        Some(Value::String(s)) => s.clone(),
+                        _ => continue,
+                    };
+                    let worktree_path = map
+                        .get("worktreePath")
+                        .and_then(|v| {
+                            if let Value::String(s) = v { Some(s.clone()) } else { None }
+                        });
+                    let branch = match map.get("branch") {
+                        Some(Value::String(s)) => s.clone(),
+                        _ => continue,
+                    };
+                    let design_doc_path = match map.get("designDocPath") {
+                        Some(Value::String(s)) => s.clone(),
+                        _ => continue,
+                    };
+                    let total_phases = match map.get("totalPhases") {
+                        Some(Value::Float64(n)) => *n as u32,
+                        Some(Value::Int64(n)) => *n as u32,
+                        _ => continue,
+                    };
+                    let current_phase = match map.get("currentPhase") {
+                        Some(Value::Float64(n)) => *n as u32,
+                        Some(Value::Int64(n)) => *n as u32,
+                        _ => continue,
+                    };
+                    let status = match map.get("status") {
+                        Some(Value::String(s)) => s.clone(),
+                        _ => continue,
+                    };
+                    let started_at = match map.get("startedAt") {
+                        Some(Value::String(s)) => s.clone(),
+                        _ => continue,
+                    };
+                    records.push(OrchestrationRecord {
+                        id,
+                        feature_name,
+                        worktree_path,
+                        branch,
+                        design_doc_path,
+                        total_phases,
+                        current_phase,
+                        status,
+                        started_at,
+                    });
+                }
+            }
+            Ok(records)
+        }
+        FunctionResult::Value(other) => {
+            anyhow::bail!("expected array from listOrchestrations, got: {:?}", other)
         }
         FunctionResult::ErrorMessage(msg) => anyhow::bail!("Convex error: {}", msg),
         FunctionResult::ConvexError(err) => anyhow::bail!("Convex error: {:?}", err),

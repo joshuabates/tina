@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
@@ -70,7 +69,7 @@ async fn main() -> Result<()> {
 
     // Initial full sync
     let mut cache = SyncCache::new();
-    if let Err(e) = sync::sync_all(&client, &mut cache, &teams_dir, &tasks_dir, &node_id).await {
+    if let Err(e) = sync::sync_all(&client, &mut cache, &teams_dir, &tasks_dir).await {
         error!(error = %e, "initial sync failed");
     }
 
@@ -81,10 +80,6 @@ async fn main() -> Result<()> {
     };
 
     info!("daemon started, entering main loop");
-
-    // Periodic refresh interval for orchestration mapping
-    let mut refresh_interval = tokio::time::interval(Duration::from_secs(60));
-    refresh_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     // Main event loop
     loop {
@@ -104,8 +99,6 @@ async fn main() -> Result<()> {
             event = watcher.rx.recv() => {
                 match event {
                     Some(WatchEvent::Teams) => {
-                        // Refresh orchestration cache to pick up newly created orchestrations
-                        let _ = sync::refresh_orchestration_ids(&client, &mut cache, &node_id).await;
                         let team_names = sync::list_team_names(&teams_dir).unwrap_or_default();
                         for name in &team_names {
                             if let Err(e) = sync::sync_team_members(
@@ -116,8 +109,6 @@ async fn main() -> Result<()> {
                         }
                     }
                     Some(WatchEvent::Tasks) => {
-                        // Refresh orchestration cache to pick up newly created orchestrations
-                        let _ = sync::refresh_orchestration_ids(&client, &mut cache, &node_id).await;
                         if let Err(e) = sync::sync_tasks(
                             &client, &mut cache, &teams_dir, &tasks_dir,
                         ).await {
@@ -149,13 +140,6 @@ async fn main() -> Result<()> {
                     None => {
                         warn!("action subscription ended, will not receive new actions");
                     }
-                }
-            }
-
-            // Periodic refresh of session lookups
-            _ = refresh_interval.tick() => {
-                if let Err(e) = sync::refresh_orchestration_ids(&client, &mut cache, &node_id).await {
-                    error!(error = %e, "failed to refresh orchestration ids");
                 }
             }
         }

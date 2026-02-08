@@ -11,7 +11,7 @@ pub mod types;
 // Re-export canonical types from tina-session for convenience
 pub use tina_session::state::schema::{
     Agent, ContextMetrics, OrchestrationStatus, PhaseBreakdown, PhaseState, PhaseStatus,
-    SessionLookup, SupervisorState, Task, TaskStatus, Team, TimingGap, TimingStats,
+    SupervisorState, Task, TaskStatus, Team, TimingGap, TimingStats,
 };
 
 pub use convex_client::TinaConvexClient;

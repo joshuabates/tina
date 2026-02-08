@@ -8,9 +8,7 @@ use chrono::Utc;
 use tokio::sync::Mutex;
 use tracing::{debug, error, warn};
 
-use tina_data::{TaskEventRecord, TeamMemberRecord, TinaConvexClient};
-use tina_session::session::lookup::SessionLookup;
-use tina_session::state::schema::{Task, Team};
+use tina_data::{Task, TaskEventRecord, Team, TeamMemberRecord, TinaConvexClient};
 
 /// Cached state for detecting changes and avoiding redundant Convex writes.
 pub struct SyncCache {
@@ -18,8 +16,6 @@ pub struct SyncCache {
     pub task_state: HashMap<(String, String), TaskCacheEntry>,
     /// Maps `(orchestration_id, phase_number, agent_name)` -> last recorded_at
     pub team_member_state: HashMap<(String, String, String), String>,
-    /// Maps `feature_name` -> convex orchestration ID
-    pub orchestration_ids: HashMap<String, String>,
 }
 
 /// Cached task state for change detection.
@@ -35,8 +31,19 @@ impl SyncCache {
         Self {
             task_state: HashMap::new(),
             team_member_state: HashMap::new(),
-            orchestration_ids: HashMap::new(),
         }
+    }
+}
+
+/// Look up the Convex orchestration ID for a team by querying the teams table.
+async fn lookup_orchestration_id(
+    client: &Arc<Mutex<TinaConvexClient>>,
+    team_name: &str,
+) -> Result<Option<String>> {
+    let mut client_guard = client.lock().await;
+    match client_guard.get_team_by_name(team_name).await? {
+        Some(record) => Ok(Some(record.orchestration_id)),
+        None => Ok(None),
     }
 }
 
@@ -50,7 +57,7 @@ pub async fn sync_team_members(
     team_name: &str,
 ) -> Result<()> {
     let team = load_team_config(teams_dir, team_name)?;
-    let orchestration_id = match find_orchestration_id(cache, team_name, &team)? {
+    let orchestration_id = match lookup_orchestration_id(client, team_name).await? {
         Some(id) => id,
         None => {
             debug!(team = %team_name, "no orchestration found for team, skipping");
@@ -115,15 +122,7 @@ pub async fn sync_tasks(
     let team_names = list_team_names(teams_dir)?;
 
     for team_name in &team_names {
-        let team = match load_team_config(teams_dir, team_name) {
-            Ok(t) => t,
-            Err(e) => {
-                warn!(team = %team_name, error = %e, "failed to load team config");
-                continue;
-            }
-        };
-
-        let orchestration_id = match find_orchestration_id(cache, team_name, &team)? {
+        let orchestration_id = match lookup_orchestration_id(client, team_name).await? {
             Some(id) => id,
             None => continue,
         };
@@ -223,12 +222,7 @@ pub async fn sync_all(
     cache: &mut SyncCache,
     teams_dir: &Path,
     tasks_dir: &Path,
-    node_id: &str,
 ) -> Result<()> {
-    if let Err(e) = refresh_orchestration_ids(client, cache, node_id).await {
-        warn!(error = %e, "failed to refresh orchestration ids");
-    }
-
     let team_names = list_team_names(teams_dir)?;
 
     for team_name in &team_names {
@@ -241,45 +235,6 @@ pub async fn sync_all(
         warn!(error = %e, "failed to sync tasks");
     }
 
-    Ok(())
-}
-
-/// Refresh the feature -> orchestration ID map.
-///
-/// Includes all orchestrations, not just those from this node, because
-/// tina-session and the daemon register separate node IDs. A future
-/// improvement would be to have registerNode return an existing node
-/// for the same hostname so all components share one node ID.
-pub async fn refresh_orchestration_ids(
-    client: &Arc<Mutex<TinaConvexClient>>,
-    cache: &mut SyncCache,
-    _node_id: &str,
-) -> Result<()> {
-    let entries = {
-        let mut client_guard = client.lock().await;
-        client_guard.list_orchestrations().await?
-    };
-
-    // When multiple orchestrations share the same feature name (from repeated runs),
-    // keep the most recent one (by started_at timestamp).
-    let mut new_map: HashMap<String, (String, String)> = HashMap::new();
-    for entry in entries {
-        let key = entry.record.feature_name.clone();
-        let started = entry.record.started_at.clone();
-        match new_map.get(&key) {
-            Some((_, existing_started)) if existing_started >= &started => {}
-            _ => {
-                new_map.insert(key, (entry.id.clone(), started));
-            }
-        }
-    }
-    let new_map: HashMap<String, String> = new_map
-        .into_iter()
-        .map(|(k, (id, _))| (k, id))
-        .collect();
-
-    debug!(count = new_map.len(), "refreshed orchestration ID cache");
-    cache.orchestration_ids = new_map;
     Ok(())
 }
 
@@ -335,52 +290,6 @@ pub fn load_task_files(dir: &Path) -> Result<Vec<Task>> {
         }
     }
     Ok(tasks)
-}
-
-/// Find the Convex orchestration ID for a team.
-///
-/// Strategy:
-/// 1. If team name ends with "-orchestration", extract feature and look up in cache.
-/// 2. If team name matches "{feature}-phase-{N}", extract feature and look up in cache.
-/// 3. Otherwise, match by the first member's cwd against session lookups.
-fn find_orchestration_id(
-    cache: &SyncCache,
-    team_name: &str,
-    team: &Team,
-) -> Result<Option<String>> {
-    // Check orchestration teams
-    if team_name.ends_with("-orchestration") {
-        let feature = team_name.trim_end_matches("-orchestration");
-        if let Some(id) = cache.orchestration_ids.get(feature) {
-            return Ok(Some(id.clone()));
-        }
-    }
-
-    // Check phase execution teams: "{feature}-phase-{N}"
-    if let Some(pos) = team_name.rfind("-phase-") {
-        let feature = &team_name[..pos];
-        if let Some(id) = cache.orchestration_ids.get(feature) {
-            return Ok(Some(id.clone()));
-        }
-    }
-
-    // Try session lookup matching by first member's cwd
-    let member_cwd = team
-        .members
-        .first()
-        .map(|m| m.cwd.clone())
-        .unwrap_or_default();
-
-    let lookups = SessionLookup::list_all().unwrap_or_default();
-    for lookup in &lookups {
-        if lookup.worktree_path == member_cwd {
-            if let Some(id) = cache.orchestration_ids.get(&lookup.feature) {
-                return Ok(Some(id.clone()));
-            }
-        }
-    }
-
-    Ok(None)
 }
 
 /// Extract a phase number from a team name.
@@ -583,75 +492,5 @@ mod tests {
 
         // Different entry should not match
         assert_ne!(cache.task_state.get(&key), Some(&new));
-    }
-
-    // --- find_orchestration_id tests ---
-
-    /// Helper to build a minimal Team for testing find_orchestration_id.
-    fn dummy_team() -> Team {
-        serde_json::from_str(
-            r#"{
-                "name": "test",
-                "description": "Test",
-                "createdAt": 1706644800000,
-                "leadAgentId": "lead@test",
-                "leadSessionId": "session-test",
-                "members": [{
-                    "agentId": "lead@test",
-                    "name": "team-lead",
-                    "agentType": "team-lead",
-                    "model": "claude-opus-4-6",
-                    "joinedAt": 1706644800000,
-                    "tmuxPaneId": null,
-                    "cwd": "/tmp/nonexistent",
-                    "subscriptions": []
-                }]
-            }"#,
-        )
-        .unwrap()
-    }
-
-    #[test]
-    fn test_find_orchestration_id_orchestration_team() {
-        let mut cache = SyncCache::new();
-        cache
-            .orchestration_ids
-            .insert("my-feature".to_string(), "orch-123".to_string());
-
-        let team = dummy_team();
-        let result = find_orchestration_id(&cache, "my-feature-orchestration", &team).unwrap();
-        assert_eq!(result, Some("orch-123".to_string()));
-    }
-
-    #[test]
-    fn test_find_orchestration_id_phase_team() {
-        let mut cache = SyncCache::new();
-        cache
-            .orchestration_ids
-            .insert("my-feature".to_string(), "orch-456".to_string());
-
-        let team = dummy_team();
-        let result = find_orchestration_id(&cache, "my-feature-phase-1", &team).unwrap();
-        assert_eq!(result, Some("orch-456".to_string()));
-    }
-
-    #[test]
-    fn test_find_orchestration_id_phase_team_higher_number() {
-        let mut cache = SyncCache::new();
-        cache
-            .orchestration_ids
-            .insert("my-feature".to_string(), "orch-789".to_string());
-
-        let team = dummy_team();
-        let result = find_orchestration_id(&cache, "my-feature-phase-12", &team).unwrap();
-        assert_eq!(result, Some("orch-789".to_string()));
-    }
-
-    #[test]
-    fn test_find_orchestration_id_no_match() {
-        let cache = SyncCache::new();
-        let team = dummy_team();
-        let result = find_orchestration_id(&cache, "unknown-team", &team).unwrap();
-        assert_eq!(result, None);
     }
 }

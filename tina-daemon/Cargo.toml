@@ -6,7 +6,6 @@ description = "Always-on daemon that syncs local orchestration state to Convex"
 
 [dependencies]
 tina-data = { path = "../tina-data" }
-tina-session = { path = "../tina-session" }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }

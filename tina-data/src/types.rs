@@ -121,6 +121,17 @@ pub struct OrchestrationListEntry {
     pub record: OrchestrationRecord,
 }
 
+/// Team record as returned by `teams:getByTeamName` query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamRecord {
+    pub id: String,
+    pub team_name: String,
+    pub orchestration_id: String,
+    pub lead_session_id: String,
+    pub phase_number: Option<String>,
+    pub created_at: f64,
+}
+
 /// Full orchestration detail as returned by `getOrchestrationDetail` query.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationDetailResponse {

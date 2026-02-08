@@ -1,7 +1,7 @@
 //! Integration tests for orchestration discovery
 //!
-//! These tests verify that find_orchestrations() correctly discovers
-//! orchestration teams with supervisor-state.json in worktrees.
+//! These tests verify that list_orchestrations() correctly discovers
+//! orchestration state from supervisor-state.json files in worktree directories.
 
 use std::fs;
 use std::path::Path;
@@ -64,14 +64,8 @@ fn setup_fixture(fixture_name: &str) -> (TempDir, std::path::PathBuf) {
     (temp_dir, dest_fixture)
 }
 
-/// Test that verifies find_orchestrations() correctly discovers an orchestration
-/// team with supervisor-state.json in the worktree path (not member's cwd).
-///
-/// This is the critical fix for Phase 2 - the discovery must:
-/// 1. Find teams ending with -orchestration
-/// 2. Use tina-sessions lookup to find the worktree path
-/// 3. Load supervisor-state.json from the worktree path
-/// 4. Load tasks using the team name (not session_id)
+/// Test that list_orchestrations() discovers orchestrations by scanning
+/// for supervisor-state.json under feature directories.
 #[test]
 fn test_discover_orchestration_from_worktree_path() {
     let (_temp_dir, fixture_path) = setup_fixture("orchestration-e2e");
@@ -124,18 +118,14 @@ fn test_tasks_loaded_by_session_id() {
     assert_eq!(tasks[2].subject, "Plan phase 1");
 }
 
-/// Test that supervisor state is loaded from worktree path via session lookup
+/// Test that supervisor state is loaded directly from the feature's tina directory
 #[test]
-fn test_supervisor_state_loaded_from_worktree() {
+fn test_supervisor_state_loaded_from_feature_dir() {
     let (_temp_dir, fixture_path) = setup_fixture("orchestration-e2e");
     let ds = tina_monitor::data::DataSource::new(Some(fixture_path.clone()));
 
-    // Load session lookup to get worktree path
-    let lookup = ds.load_session_lookup("my-feature").unwrap();
-    let worktree_path = fixture_path.join(&lookup.worktree_path);
-
-    // Load supervisor state from worktree
-    let tina_dir = worktree_path.join(".claude").join("tina");
+    // Load supervisor state from the feature's tina directory
+    let tina_dir = fixture_path.join("my-feature").join(".claude").join("tina");
     let state = ds.load_supervisor_state(&tina_dir).unwrap();
 
     // Verify fields

@@ -7,22 +7,6 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Result, SessionError};
 
 // ====================================================================
-// Session Lookup
-// ====================================================================
-
-/// Session lookup from ~/.claude/tina-sessions/{feature}.json
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct SessionLookup {
-    pub feature: String,
-    pub worktree_path: PathBuf,
-    pub repo_root: PathBuf,
-    pub created_at: DateTime<Utc>,
-    /// Convex orchestration doc ID (populated after init writes to Convex)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub orchestration_id: Option<String>,
-}
-
-// ====================================================================
 // Team Types
 // ====================================================================
 
@@ -451,30 +435,6 @@ mod tests {
         assert_eq!(state.total_phases, 3);
         assert_eq!(state.current_phase, 1);
         assert_eq!(state.status, OrchestrationStatus::Planning);
-    }
-
-    // ====================================================================
-    // SessionLookup Tests
-    // ====================================================================
-
-    #[test]
-    fn test_session_lookup_serializes() {
-        let lookup = SessionLookup {
-            feature: "test-feature".to_string(),
-            worktree_path: PathBuf::from("/path/to/worktree"),
-            repo_root: PathBuf::from("/path/to/repo"),
-            created_at: Utc::now(),
-            orchestration_id: None,
-        };
-
-        let json = serde_json::to_string(&lookup).expect("serialize");
-        let deserialized: SessionLookup = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(deserialized, lookup);
-
-        // New serialization uses worktree_path, not cwd
-        assert!(json.contains("worktree_path"));
-        assert!(json.contains("repo_root"));
-        assert!(!json.contains("\"cwd\""));
     }
 
     // ====================================================================

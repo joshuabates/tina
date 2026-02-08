@@ -7,5 +7,5 @@ pub mod validation;
 // Re-export all schema types for convenience
 pub use schema::{
     Agent, ContextMetrics, OrchestrationStatus, PhaseBreakdown, PhaseState, PhaseStatus,
-    SessionLookup, SupervisorState, Task, TaskStatus, Team, TimingGap, TimingStats,
+    SupervisorState, Task, TaskStatus, Team, TimingGap, TimingStats,
 };

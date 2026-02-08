@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::session::naming;
-use crate::state::schema::{SessionLookup, SupervisorState, Task, Team};
+use crate::state::schema::{SupervisorState, Task, Team};
 
 /// A validation error or warning.
 #[derive(Debug, Clone)]
@@ -275,51 +275,6 @@ pub fn validate_task(path: &Path) -> ValidationResult {
     result
 }
 
-/// Validate a session lookup .json file.
-pub fn validate_session_lookup(path: &Path) -> ValidationResult {
-    let mut result = ValidationResult::new();
-
-    // Check file exists
-    if !path.exists() {
-        result.add_error(path, "file", "File does not exist");
-        return result;
-    }
-
-    // Try to read the file
-    let content = match fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(e) => {
-            result.add_error(path, "file", &format!("Failed to read file: {}", e));
-            return result;
-        }
-    };
-
-    // Try to parse as JSON
-    let lookup: SessionLookup = match serde_json::from_str(&content) {
-        Ok(l) => l,
-        Err(e) => {
-            result.add_error(path, "json", &format!("Invalid JSON: {}", e));
-            return result;
-        }
-    };
-
-    // Validate field values
-    if lookup.feature.is_empty() {
-        result.add_error(path, "feature", "Feature name is empty");
-    }
-
-    // Check if worktree path exists (warning only)
-    if !lookup.worktree_path.exists() {
-        result.add_warning(
-            path,
-            "worktree_path",
-            &format!("Worktree does not exist: {}", lookup.worktree_path.display()),
-        );
-    }
-
-    result
-}
-
 /// Validate an entire tina directory structure.
 ///
 /// Expects the path to be a worktree/.claude/tina directory.
@@ -468,22 +423,6 @@ mod tests {
         fs::write(&path, json).unwrap();
 
         let result = validate_task(&path);
-        assert!(result.is_valid());
-    }
-
-    #[test]
-    fn test_validate_session_lookup() {
-        let temp_dir = TempDir::new().unwrap();
-        let path = temp_dir.path().join("feature.json");
-        let json = r#"{
-            "feature": "test-feature",
-            "worktree_path": "/tmp/worktree",
-            "repo_root": "/tmp",
-            "created_at": "2026-01-30T10:00:00Z"
-        }"#;
-        fs::write(&path, json).unwrap();
-
-        let result = validate_session_lookup(&path);
         assert!(result.is_valid());
     }
 

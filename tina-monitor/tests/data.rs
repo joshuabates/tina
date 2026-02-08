@@ -17,25 +17,6 @@ fn data_source_new_with_fixture() {
 }
 
 #[test]
-fn data_source_sessions_dir_without_fixture() {
-    let ds = tina_monitor::data::DataSource::new(None);
-    let sessions_dir = ds.sessions_dir();
-
-    // Should point to ~/.claude/tina-sessions
-    assert!(sessions_dir.ends_with(".claude/tina-sessions"));
-}
-
-#[test]
-fn data_source_sessions_dir_with_fixture() {
-    let fixture_path = PathBuf::from("/tmp/fixtures");
-    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.clone()));
-    let sessions_dir = ds.sessions_dir();
-
-    // Should point to fixture path
-    assert_eq!(sessions_dir, fixture_path);
-}
-
-#[test]
 fn data_source_teams_dir_without_fixture() {
     let ds = tina_monitor::data::DataSource::new(None);
     let teams_dir = ds.teams_dir();
@@ -120,47 +101,6 @@ fn data_source_load_orchestration_placeholder() {
     let result = ds.load_orchestration("test-feature");
     // Placeholder should return empty or an error
     assert!(result.is_ok() || result.is_err());
-}
-
-// ====================================================================
-// Tests for load_session_lookup
-// ====================================================================
-
-#[test]
-fn load_session_lookup_from_fixture() {
-    let temp_dir = TempDir::new().unwrap();
-    let fixture_path = temp_dir.path();
-
-    // Create session lookup file with correct schema
-    let session_content = r#"{
-        "feature": "auth-feature",
-        "worktree_path": "/path/to/worktree",
-        "repo_root": "/path/to",
-        "created_at": "2026-01-30T10:00:00Z"
-    }"#;
-    fs::write(
-        fixture_path.join("auth-feature.json"),
-        session_content,
-    ).unwrap();
-
-    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
-    let result = ds.load_session_lookup("auth-feature");
-
-    assert!(result.is_ok());
-    let lookup = result.unwrap();
-    assert_eq!(lookup.feature, "auth-feature");
-    assert_eq!(lookup.worktree_path, std::path::PathBuf::from("/path/to/worktree"));
-}
-
-#[test]
-fn load_session_lookup_missing_file_returns_error() {
-    let temp_dir = TempDir::new().unwrap();
-    let fixture_path = temp_dir.path();
-
-    let ds = tina_monitor::data::DataSource::new(Some(fixture_path.to_path_buf()));
-    let result = ds.load_session_lookup("nonexistent");
-
-    assert!(result.is_err());
 }
 
 // ====================================================================

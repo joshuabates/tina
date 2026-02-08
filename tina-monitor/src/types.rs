@@ -5,7 +5,7 @@
 // Re-export all schema types from tina-session
 pub use tina_session::state::schema::{
     Agent, ContextMetrics, OrchestrationStatus, PhaseBreakdown, PhaseState, PhaseStatus,
-    SessionLookup, SupervisorState, Task, TaskStatus, Team, TimingGap, TimingStats,
+    SupervisorState, Task, TaskStatus, Team, TimingGap, TimingStats,
 };
 
 // Re-export monitor-specific types
@@ -19,27 +19,7 @@ pub type TeamMember = Agent;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
     use std::path::PathBuf;
-
-    // ====================================================================
-    // SessionLookup Tests
-    // ====================================================================
-
-    #[test]
-    fn session_lookup_serializes_and_deserializes() {
-        let original = SessionLookup {
-            feature: "feature-x".to_string(),
-            worktree_path: PathBuf::from("/path/to/worktree"),
-            repo_root: PathBuf::from("/path/to/repo"),
-            created_at: Utc::now(),
-        };
-
-        let json = serde_json::to_string(&original).expect("serialize");
-        let deserialized: SessionLookup = serde_json::from_str(&json).expect("deserialize");
-
-        assert_eq!(deserialized, original);
-    }
 
     // ====================================================================
     // OrchestrationStatus Tests
