@@ -41,7 +41,7 @@ fn detect_claude_binary() -> &'static str {
 pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool) -> anyhow::Result<u8> {
     // Load lookup to get cwd
     let lookup = SessionLookup::load(feature)?;
-    let cwd = &lookup.cwd;
+    let cwd = &lookup.worktree_path;
 
     // Validate plan exists and resolve to absolute path
     if !plan.exists() {

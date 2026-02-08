@@ -53,7 +53,7 @@ pub fn run(
         let existing = SessionLookup::load(feature)?;
         anyhow::bail!(SessionError::AlreadyInitialized(
             feature.to_string(),
-            existing.cwd.display().to_string()
+            existing.worktree_path.display().to_string()
         ));
     }
 
@@ -74,8 +74,8 @@ pub fn run(
     // Write statusline config files
     write_statusline_config(&worktree_path)?;
 
-    // Create SessionLookup pointing to the worktree
-    let lookup = SessionLookup::new(feature, worktree_path.clone());
+    // Create SessionLookup pointing to the worktree and repo root
+    let lookup = SessionLookup::new(feature, worktree_path.clone(), cwd_abs.clone());
     lookup.save()?;
 
     // Create supervisor state in Convex

@@ -129,7 +129,7 @@ fn derive_team_status(tasks: &[Task], summary: &TaskSummary) -> (String, Option<
 #[derive(Debug, Serialize)]
 pub struct OrchestrationStatusOutput {
     pub feature_name: String,
-    pub cwd: String,
+    pub worktree_path: String,
     pub current_phase: u32,
     pub total_phases: u32,
     pub design_doc_path: String,
@@ -167,7 +167,7 @@ pub fn status_orchestration(
 
     let output = OrchestrationStatusOutput {
         feature_name: orch.feature_name.clone(),
-        cwd: orch.cwd.display().to_string(),
+        worktree_path: orch.worktree_path.display().to_string(),
         current_phase: orch.current_phase,
         total_phases: orch.total_phases,
         design_doc_path: orch.design_doc_path.display().to_string(),
@@ -192,7 +192,7 @@ pub fn status_orchestration(
         }
         OutputFormat::Text => {
             println!("Orchestration: {}", output.feature_name);
-            println!("CWD: {}", output.cwd);
+            println!("Worktree: {}", output.worktree_path);
             println!("Phase: {}/{}", output.current_phase, output.total_phases);
             println!("Design Doc: {}", output.design_doc_path);
             println!("Status: {}", output.status);

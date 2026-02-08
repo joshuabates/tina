@@ -60,7 +60,7 @@ impl DataSource {
                 .to_string();
 
             if let Ok(lookup) = self.load_session_lookup(&feature) {
-                let worktree = self.resolve_path(&lookup.cwd);
+                let worktree = self.resolve_path(&lookup.worktree_path);
                 let tina_dir = worktree.join(".claude").join("tina");
                 if let Ok(state) = load_supervisor_state(&tina_dir) {
                     summaries.push(crate::data::OrchestrationSummary {
@@ -81,7 +81,7 @@ impl DataSource {
     /// Load full orchestration data for a feature.
     pub fn load_orchestration(&mut self, feature: &str) -> Result<&LoadedOrchestration> {
         let lookup = self.load_session_lookup(feature)?;
-        let worktree = self.resolve_path(&lookup.cwd);
+        let worktree = self.resolve_path(&lookup.worktree_path);
         let tina_dir = worktree.join(".claude").join("tina");
         let state = load_supervisor_state(&tina_dir)?;
 

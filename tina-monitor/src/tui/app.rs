@@ -378,7 +378,7 @@ impl App {
         let config = Config::load()?;
         let handler = get_handler(&config.terminal.handler);
 
-        match handler.open_tab_at(&orch.cwd)? {
+        match handler.open_tab_at(&orch.worktree_path)? {
             TerminalResult::Success => {
                 // Terminal opened successfully
                 Ok(())
@@ -623,7 +623,7 @@ impl App {
         );
 
         let plan_path = orch
-            .cwd
+            .worktree_path
             .parent()?
             .join("docs")
             .join("plans")
@@ -703,11 +703,11 @@ impl App {
         let orch = &self.orchestrations[self.selected_index];
         let phase = orch.current_phase;
 
-        let worktree_path = orch.cwd.clone();
+        let worktree_path = orch.worktree_path.clone();
 
         // Read handoff to get git range
         let handoff_path = orch
-            .cwd
+            .worktree_path
             .join(".claude")
             .join("tina")
             .join(format!("phase-{}", phase))

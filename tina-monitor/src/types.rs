@@ -30,7 +30,8 @@ mod tests {
     fn session_lookup_serializes_and_deserializes() {
         let original = SessionLookup {
             feature: "feature-x".to_string(),
-            cwd: PathBuf::from("/path/to/worktree"),
+            worktree_path: PathBuf::from("/path/to/worktree"),
+            repo_root: PathBuf::from("/path/to/repo"),
             created_at: Utc::now(),
         };
 

@@ -132,7 +132,7 @@ fn test_supervisor_state_loaded_from_worktree() {
 
     // Load session lookup to get worktree path
     let lookup = ds.load_session_lookup("my-feature").unwrap();
-    let worktree_path = fixture_path.join(&lookup.cwd);
+    let worktree_path = fixture_path.join(&lookup.worktree_path);
 
     // Load supervisor state from worktree
     let tina_dir = worktree_path.join(".claude").join("tina");

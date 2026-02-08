@@ -148,7 +148,7 @@ fn load_session_lookup_from_fixture() {
     assert!(result.is_ok());
     let lookup = result.unwrap();
     assert_eq!(lookup.feature, "auth-feature");
-    assert_eq!(lookup.cwd, std::path::PathBuf::from("/path/to/worktree"));
+    assert_eq!(lookup.worktree_path, std::path::PathBuf::from("/path/to/worktree"));
 }
 
 #[test]

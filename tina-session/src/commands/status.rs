@@ -2,9 +2,8 @@ use tina_session::session::lookup::SessionLookup;
 use tina_session::watch::{get_current_status, get_last_commit, get_task_progress, StatusUpdate};
 
 pub fn run(feature: &str, phase: &str, team: Option<&str>) -> anyhow::Result<u8> {
-    // Load lookup to get cwd
     let lookup = SessionLookup::load(feature)?;
-    let cwd = &lookup.cwd;
+    let cwd = &lookup.worktree_path;
 
     // Construct status file path
     let status_path = cwd

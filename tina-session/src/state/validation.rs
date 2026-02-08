@@ -307,12 +307,12 @@ pub fn validate_session_lookup(path: &Path) -> ValidationResult {
         result.add_error(path, "feature", "Feature name is empty");
     }
 
-    // Check if cwd exists (warning only)
-    if !lookup.cwd.exists() {
+    // Check if worktree path exists (warning only)
+    if !lookup.worktree_path.exists() {
         result.add_warning(
             path,
-            "cwd",
-            &format!("Working directory does not exist: {}", lookup.cwd.display()),
+            "worktree_path",
+            &format!("Worktree does not exist: {}", lookup.worktree_path.display()),
         );
     }
 

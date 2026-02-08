@@ -101,7 +101,7 @@ pub struct MonitorOrchestration {
     pub node_id: String,
     pub node_name: String,
     pub feature_name: String,
-    pub cwd: PathBuf,
+    pub worktree_path: PathBuf,
     pub current_phase: u32,
     pub total_phases: u32,
     pub design_doc_path: PathBuf,
@@ -124,7 +124,7 @@ pub struct MonitorOrchestration {
 impl MonitorOrchestration {
     /// Create from a list entry (minimal data, no tasks/members/phases).
     pub fn from_list_entry(entry: OrchestrationListEntry) -> Self {
-        let cwd = entry
+        let worktree_path = entry
             .record
             .worktree_path
             .as_deref()
@@ -136,7 +136,7 @@ impl MonitorOrchestration {
             node_id: entry.record.node_id,
             node_name: entry.node_name,
             feature_name: entry.record.feature_name,
-            cwd,
+            worktree_path,
             current_phase: entry.record.current_phase as u32,
             total_phases: entry.record.total_phases as u32,
             design_doc_path: PathBuf::from(&entry.record.design_doc_path),
@@ -154,7 +154,7 @@ impl MonitorOrchestration {
 
     /// Create from a full detail response.
     pub fn from_detail(detail: OrchestrationDetailResponse) -> Self {
-        let cwd = detail
+        let worktree_path = detail
             .record
             .worktree_path
             .as_deref()
@@ -178,7 +178,7 @@ impl MonitorOrchestration {
             node_id: detail.record.node_id,
             node_name: detail.node_name,
             feature_name: detail.record.feature_name,
-            cwd,
+            worktree_path,
             current_phase: detail.record.current_phase as u32,
             total_phases: detail.record.total_phases as u32,
             design_doc_path: PathBuf::from(&detail.record.design_doc_path),
@@ -209,7 +209,7 @@ impl MonitorOrchestration {
 
     /// Get the path to a phase plan file.
     pub fn phase_plan_path(&self, phase: u32) -> PathBuf {
-        self.cwd
+        self.worktree_path
             .join(".claude")
             .join("tina")
             .join("plans")
@@ -331,7 +331,7 @@ impl From<&MonitorOrchestration> for OrchestrationSummary {
     fn from(orch: &MonitorOrchestration) -> Self {
         Self {
             feature: orch.feature_name.clone(),
-            worktree_path: orch.cwd.clone(),
+            worktree_path: orch.worktree_path.clone(),
             status: orch.status.clone(),
             current_phase: orch.current_phase,
             total_phases: orch.total_phases,
@@ -448,7 +448,7 @@ mod tests {
         assert_eq!(orch.feature_name, "auth-system");
         assert_eq!(orch.current_phase, 2);
         assert_eq!(orch.total_phases, 3);
-        assert_eq!(orch.cwd, PathBuf::from("/path/to/worktree"));
+        assert_eq!(orch.worktree_path, PathBuf::from("/path/to/worktree"));
         assert_eq!(orch.status, MonitorOrchestrationStatus::Executing);
         assert_eq!(orch.team_name(), "auth-system-orchestration");
     }

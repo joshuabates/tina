@@ -11,7 +11,7 @@ use serde::Serialize;
 #[derive(Debug, Serialize)]
 pub struct TeamListEntry {
     pub name: String,
-    pub cwd: String,
+    pub worktree_path: String,
     pub member_count: usize,
     pub is_orchestration: bool,
 }
@@ -31,7 +31,7 @@ pub fn list_teams(format: OutputFormat, filter: Option<TeamFilter>) -> Result<i3
 
     let mut output = Vec::new();
     for orch in orchestrations {
-        let cwd = orch.cwd.display().to_string();
+        let worktree_path = orch.worktree_path.display().to_string();
 
         // In Convex model, all entries are orchestrations
         let is_orchestration = true;
@@ -47,7 +47,7 @@ pub fn list_teams(format: OutputFormat, filter: Option<TeamFilter>) -> Result<i3
 
         output.push(TeamListEntry {
             name: orch.team_name(),
-            cwd,
+            worktree_path,
             member_count: orch.members.len(),
             is_orchestration,
         });
@@ -89,7 +89,7 @@ mod tests {
     fn test_team_list_entry_serialization() {
         let entry = TeamListEntry {
             name: "test-team".to_string(),
-            cwd: "/path/to/project".to_string(),
+            worktree_path: "/path/to/project".to_string(),
             member_count: 3,
             is_orchestration: true,
         };

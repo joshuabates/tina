@@ -20,7 +20,7 @@ pub fn render_orchestration_list(frame: &mut Frame, area: Rect, app: &App) {
         .iter()
         .map(|orch| {
             let name = truncate_name(&orch.team_name(), 25);
-            let path = shorten_path(&orch.cwd, 30);
+            let path = shorten_path(&orch.worktree_path, 30);
             let phase = format!("{}/{}", orch.current_phase, orch.total_phases);
             let progress = progress_bar::render(orch.tasks_completed(), orch.tasks_total(), 10);
             let status = status_indicator::render(&orch.status);

@@ -346,7 +346,7 @@ fn find_orchestration_id(
 
     let lookups = SessionLookup::list_all().unwrap_or_default();
     for lookup in &lookups {
-        if lookup.cwd == member_cwd {
+        if lookup.worktree_path == member_cwd {
             if let Some(id) = cache.orchestration_ids.get(&lookup.feature) {
                 return Ok(Some(id.clone()));
             }

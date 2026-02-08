@@ -9,9 +9,8 @@ pub fn run(
     stream_interval: Option<u64>,
     team: Option<&str>,
 ) -> anyhow::Result<u8> {
-    // Load lookup to get cwd
     let lookup = SessionLookup::load(feature)?;
-    let cwd = &lookup.cwd;
+    let cwd = &lookup.worktree_path;
 
     // Construct status file path
     let status_path = cwd

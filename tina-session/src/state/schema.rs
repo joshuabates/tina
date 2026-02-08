@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -14,8 +14,38 @@ use crate::error::{Result, SessionError};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionLookup {
     pub feature: String,
-    pub cwd: PathBuf,
+    #[serde(alias = "cwd")]
+    pub worktree_path: PathBuf,
+    #[serde(default)]
+    pub repo_root: PathBuf,
     pub created_at: DateTime<Utc>,
+}
+
+impl SessionLookup {
+    /// Derive repo_root from worktree_path if not set (backward compat).
+    ///
+    /// If the worktree_path contains `/.worktrees/`, the repo root is the
+    /// parent of `.worktrees/`. Otherwise, the worktree_path IS the repo root.
+    pub fn backfill_repo_root(&mut self) {
+        if self.repo_root.as_os_str().is_empty() {
+            self.repo_root = derive_repo_root(&self.worktree_path);
+        }
+    }
+}
+
+/// Derive the repo root from a worktree path.
+///
+/// Walks up the path looking for a `.worktrees` component. If found,
+/// returns its parent. Otherwise returns the path itself.
+pub fn derive_repo_root(worktree_path: &Path) -> PathBuf {
+    for ancestor in worktree_path.ancestors() {
+        if ancestor.file_name().and_then(|n| n.to_str()) == Some(".worktrees") {
+            if let Some(parent) = ancestor.parent() {
+                return parent.to_path_buf();
+            }
+        }
+    }
+    worktree_path.to_path_buf()
 }
 
 // ====================================================================
@@ -457,13 +487,73 @@ mod tests {
     fn test_session_lookup_serializes() {
         let lookup = SessionLookup {
             feature: "test-feature".to_string(),
-            cwd: PathBuf::from("/path/to/worktree"),
+            worktree_path: PathBuf::from("/path/to/worktree"),
+            repo_root: PathBuf::from("/path/to/repo"),
             created_at: Utc::now(),
         };
 
         let json = serde_json::to_string(&lookup).expect("serialize");
         let deserialized: SessionLookup = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(deserialized, lookup);
+
+        // New serialization uses worktree_path, not cwd
+        assert!(json.contains("worktree_path"));
+        assert!(json.contains("repo_root"));
+        assert!(!json.contains("\"cwd\""));
+    }
+
+    #[test]
+    fn test_session_lookup_deserializes_legacy_cwd_field() {
+        let legacy_json = r#"{
+            "feature": "old-feature",
+            "cwd": "/repo/.worktrees/old-feature",
+            "created_at": "2026-02-08T00:00:00Z"
+        }"#;
+
+        let mut lookup: SessionLookup =
+            serde_json::from_str(legacy_json).expect("deserialize legacy");
+        assert_eq!(lookup.feature, "old-feature");
+        assert_eq!(
+            lookup.worktree_path,
+            PathBuf::from("/repo/.worktrees/old-feature")
+        );
+        // repo_root defaults to empty before backfill
+        assert_eq!(lookup.repo_root, PathBuf::from(""));
+
+        // After backfill, repo_root is derived from worktree_path
+        lookup.backfill_repo_root();
+        assert_eq!(lookup.repo_root, PathBuf::from("/repo"));
+    }
+
+    #[test]
+    fn test_session_lookup_legacy_without_worktrees_dir() {
+        // When cwd is a repo root (no .worktrees/ in path), repo_root = worktree_path
+        let legacy_json = r#"{
+            "feature": "old-feature",
+            "cwd": "/path/to/repo",
+            "created_at": "2026-02-08T00:00:00Z"
+        }"#;
+
+        let mut lookup: SessionLookup =
+            serde_json::from_str(legacy_json).expect("deserialize legacy");
+        lookup.backfill_repo_root();
+        assert_eq!(lookup.repo_root, PathBuf::from("/path/to/repo"));
+    }
+
+    #[test]
+    fn test_derive_repo_root_from_worktree_path() {
+        assert_eq!(
+            derive_repo_root(Path::new("/repo/.worktrees/feature")),
+            PathBuf::from("/repo")
+        );
+    }
+
+    #[test]
+    fn test_derive_repo_root_from_plain_path() {
+        assert_eq!(
+            derive_repo_root(Path::new("/path/to/repo")),
+            PathBuf::from("/path/to/repo")
+        );
     }
 
     // ====================================================================
