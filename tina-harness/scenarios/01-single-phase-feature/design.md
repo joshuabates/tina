@@ -4,6 +4,10 @@
 
 Add a `--verbose` flag to the test-project CLI that enables detailed output during processing.
 
+## Architectural Context
+
+This is a single-file change to the CLI argument parser and main processing loop. No architectural changes required. The existing Clap-based CLI parser supports boolean flags natively.
+
 ## Requirements
 
 1. Add `--verbose` / `-v` flag to CLI arguments

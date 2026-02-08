@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
+use chrono::Utc;
+
 use anyhow::{Context, Result};
 
 use crate::failure::{CategorizedFailure, FailureCategory};
@@ -454,10 +456,15 @@ fn load_orchestration_state_from_convex(feature_name: &str) -> Result<Orchestrat
         let mut client = tina_data::TinaConvexClient::new(&convex_url).await?;
         let orchestrations = client.list_orchestrations().await?;
 
-        // Find the most recent orchestration for this feature
+        // Find the most recent orchestration for this feature.
+        // tina-session init appends a suffix (PID) to the feature name,
+        // so we match by prefix (e.g. "verbose-flag" matches "verbose-flag-56979").
         let entry = orchestrations
             .iter()
-            .filter(|o| o.record.feature_name == feature_name)
+            .filter(|o| {
+                o.record.feature_name == feature_name
+                    || o.record.feature_name.starts_with(&format!("{}-", feature_name))
+            })
             .max_by(|a, b| a.record.started_at.cmp(&b.record.started_at))
             .ok_or_else(|| {
                 anyhow::anyhow!("No orchestration found for feature '{}'", feature_name)

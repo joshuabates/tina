@@ -183,7 +183,7 @@ fn main() -> anyhow::Result<()> {
                     });
 
                 let verify_result =
-                    commands::verify::verify(&result.scenario_name, &assertions)?;
+                    commands::verify::verify(&result.feature_name, &assertions)?;
 
                 if verify_result.passed {
                     println!("VERIFY PASS: {}", verify_result.feature_name);

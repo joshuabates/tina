@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use tina_session::state::validation::{
-    validate_session_lookup, validate_supervisor_state, validate_task, validate_team,
+    validate_supervisor_state, validate_task, validate_team,
     validate_tina_directory, ValidationResult,
 };
 
@@ -105,13 +105,6 @@ fn validate_path(path: &Path) -> Result<ValidationResult> {
             if grandparent.file_name().and_then(|s| s.to_str()) == Some("tasks") {
                 return Ok(validate_task(path));
             }
-        }
-    }
-
-    // Check if it's in tina-sessions directory
-    if let Some(parent) = path.parent() {
-        if parent.file_name().and_then(|s| s.to_str()) == Some("tina-sessions") {
-            return Ok(validate_session_lookup(path));
         }
     }
 

@@ -75,7 +75,10 @@ pub fn find_orchestration_by_feature<'a>(
 ) -> Option<&'a OrchestrationListEntry> {
     orchestrations
         .iter()
-        .filter(|o| o.record.feature_name == feature_name)
+        .filter(|o| {
+            o.record.feature_name == feature_name
+                || o.record.feature_name.starts_with(&format!("{}-", feature_name))
+        })
         .max_by(|a, b| a.record.started_at.cmp(&b.record.started_at))
 }
 
