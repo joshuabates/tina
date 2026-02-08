@@ -5,15 +5,12 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, SessionError};
-use crate::state::schema::derive_repo_root;
 
 /// Session lookup entry stored at ~/.claude/tina-sessions/{feature}.json
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionLookup {
     pub feature: String,
-    #[serde(alias = "cwd")]
     pub worktree_path: PathBuf,
-    #[serde(default)]
     pub repo_root: PathBuf,
     pub created_at: DateTime<Utc>,
 }
@@ -26,13 +23,6 @@ impl SessionLookup {
             worktree_path,
             repo_root,
             created_at: Utc::now(),
-        }
-    }
-
-    /// Derive repo_root from worktree_path if not set (backward compat).
-    pub fn backfill_repo_root(&mut self) {
-        if self.repo_root.as_os_str().is_empty() {
-            self.repo_root = derive_repo_root(&self.worktree_path);
         }
     }
 
@@ -52,8 +42,6 @@ impl SessionLookup {
     }
 
     /// Load a session lookup entry for a feature.
-    ///
-    /// Automatically backfills `repo_root` for legacy files that only had `cwd`.
     pub fn load(feature: &str) -> Result<Self> {
         let path = Self::lookup_path(feature);
         if !path.exists() {
@@ -61,9 +49,8 @@ impl SessionLookup {
         }
         let contents = fs::read_to_string(&path)
             .map_err(|e| SessionError::FileNotFound(format!("{}: {}", path.display(), e)))?;
-        let mut lookup: Self = serde_json::from_str(&contents)
+        let lookup: Self = serde_json::from_str(&contents)
             .map_err(|e| SessionError::FileNotFound(format!("Invalid JSON: {}", e)))?;
-        lookup.backfill_repo_root();
         Ok(lookup)
     }
 

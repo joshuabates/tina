@@ -134,7 +134,8 @@ fn load_session_lookup_from_fixture() {
     // Create session lookup file with correct schema
     let session_content = r#"{
         "feature": "auth-feature",
-        "cwd": "/path/to/worktree",
+        "worktree_path": "/path/to/worktree",
+        "repo_root": "/path/to",
         "created_at": "2026-01-30T10:00:00Z"
     }"#;
     fs::write(

@@ -541,7 +541,7 @@ mod tests {
         fs::create_dir_all(&worktree_dir).unwrap();
 
         // Create session lookup
-        let session_json = r#"{"feature":"test-feature","cwd":"worktree","created_at":"2026-01-30T10:00:00Z"}"#;
+        let session_json = r#"{"feature":"test-feature","worktree_path":"worktree","repo_root":".","created_at":"2026-01-30T10:00:00Z"}"#;
         fs::write(sessions_dir.join("test-feature.json"), session_json).unwrap();
 
         // Create supervisor state
@@ -573,7 +573,7 @@ mod tests {
         let worktree_dir = fixture_path.join("worktree").join(".claude").join("tina");
         fs::create_dir_all(&worktree_dir).unwrap();
 
-        let session_json = r#"{"feature":"test-feature","cwd":"worktree","created_at":"2026-01-30T10:00:00Z"}"#;
+        let session_json = r#"{"feature":"test-feature","worktree_path":"worktree","repo_root":".","created_at":"2026-01-30T10:00:00Z"}"#;
         fs::write(sessions_dir.join("test-feature.json"), session_json).unwrap();
 
         let state_json = r#"{
@@ -617,7 +617,7 @@ mod tests {
         let worktree_dir = fixture_path.join("worktree").join(".claude").join("tina");
         fs::create_dir_all(&worktree_dir).unwrap();
 
-        let session_json = r#"{"feature":"test-feature","cwd":"worktree","created_at":"2026-01-30T10:00:00Z"}"#;
+        let session_json = r#"{"feature":"test-feature","worktree_path":"worktree","repo_root":".","created_at":"2026-01-30T10:00:00Z"}"#;
         fs::write(sessions_dir.join("test-feature.json"), session_json).unwrap();
 
         let state_json = r#"{
@@ -710,7 +710,7 @@ mod tests {
         let worktree_dir = fixture_path.join("worktree").join(".claude").join("tina");
         fs::create_dir_all(&worktree_dir).unwrap();
 
-        let session_json = r#"{"feature":"test-feature","cwd":"worktree","created_at":"2026-01-30T10:00:00Z"}"#;
+        let session_json = r#"{"feature":"test-feature","worktree_path":"worktree","repo_root":".","created_at":"2026-01-30T10:00:00Z"}"#;
         fs::write(sessions_dir.join("test-feature.json"), session_json).unwrap();
 
         let state_json = r#"{

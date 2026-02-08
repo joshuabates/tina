@@ -476,7 +476,8 @@ mod tests {
         let path = temp_dir.path().join("feature.json");
         let json = r#"{
             "feature": "test-feature",
-            "cwd": "/tmp/worktree",
+            "worktree_path": "/tmp/worktree",
+            "repo_root": "/tmp",
             "created_at": "2026-01-30T10:00:00Z"
         }"#;
         fs::write(&path, json).unwrap();
