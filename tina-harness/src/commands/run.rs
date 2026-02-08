@@ -913,4 +913,35 @@ mod tests {
         };
         assert!(config.skip_build);
     }
+
+    #[test]
+    fn test_run_config_team_pattern_defaults() {
+        // In team mode, the lead rebuilds and the runner uses --skip-build
+        let config = RunConfig {
+            scenarios_dir: PathBuf::from("/tmp/scenarios"),
+            test_project_dir: PathBuf::from("/tmp/test-project"),
+            work_dir: PathBuf::from("/tmp/work"),
+            full: true,
+            force_baseline: true,  // Team mode always forces (no baseline skip)
+            skip_build: true,      // Lead already rebuilt
+        };
+        assert!(config.full);
+        assert!(config.force_baseline);
+        assert!(config.skip_build);
+    }
+
+    #[test]
+    fn test_rebuild_binaries_requires_valid_project_root() {
+        // Verify that rebuild_binaries checks for crate directories
+        let temp = TempDir::new().unwrap();
+        let result = rebuild_binaries(temp.path());
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        // Should fail because tina-session directory doesn't exist
+        assert!(
+            err.contains("tina-session") || err.contains("cargo build"),
+            "Error should mention tina-session or cargo: {}",
+            err
+        );
+    }
 }

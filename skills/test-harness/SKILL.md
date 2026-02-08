@@ -23,6 +23,7 @@ description: Use when testing changes to tina-monitor, tina-session, or orchestr
 | `tina-harness validate <path>` | Validate state files against schema |
 | `tina-harness run <scenario>` | Run scenario with mock orchestration |
 | `tina-harness run <scenario> --full` | Run with real orchestration (slow) |
+| `/run-harness <scenario>` | Run with team pattern (frees main session) |
 | `tina-harness run <scenario> --force-baseline` | Force re-run even if baseline exists |
 | `tina-harness generate-scenario --phases N --output <dir>` | Generate new scenario |
 
@@ -99,6 +100,22 @@ Relevant files checked:
 - Final verification before merging
 - Debugging state issues that only appear with real orchestration
 - Eval runs where accuracy matters
+
+## Team Mode
+
+**Team mode (`/run-harness`):** Delegates the full orchestration run to subagents. The main session stays free while:
+- A **harness-runner** agent executes `tina-harness run --full`
+- A **convex-watcher** agent monitors Convex state and reports progress
+
+Use team mode when:
+- You want to continue working while the harness runs
+- You want real-time Convex monitoring without burning context
+- Running a long scenario (17-45 minutes)
+
+Use direct `--full` mode when:
+- You need to debug the harness itself
+- You want to watch the raw output
+- Quick iteration on a scenario fix
 
 ## Scenario Structure
 
