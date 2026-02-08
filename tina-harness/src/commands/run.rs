@@ -392,24 +392,15 @@ fn rebuild_binaries(project_root: &Path) -> Result<()> {
     }
 
     // Restart daemon if running so it picks up the new binary
-    if check_daemon_running() {
+    if super::verify::check_daemon_running() {
         eprintln!("  Restarting tina-daemon with new binary...");
-        let _ = Command::new("tina-daemon").arg("stop").output();
+        let _ = Command::new("tina-session").args(["daemon", "stop"]).output();
         std::thread::sleep(Duration::from_millis(500));
-        let _ = Command::new("tina-daemon").arg("start").output();
+        let _ = Command::new("tina-session").args(["daemon", "start"]).output();
     }
 
     eprintln!("Binary rebuild complete.");
     Ok(())
-}
-
-/// Check if tina-daemon is running by looking for the process.
-fn check_daemon_running() -> bool {
-    Command::new("pgrep")
-        .args(["-f", "tina-daemon"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
 }
 
 /// Clean up stale state from a previous orchestration run for this feature.
