@@ -5,10 +5,11 @@ use std::process::Command;
 
 use chrono::Utc;
 
-use tina_session::db;
 use tina_session::error::SessionError;
 use tina_session::session::lookup::SessionLookup;
 use tina_session::state::schema::SupervisorState;
+
+use super::convex_writes;
 
 const STATUSLINE_SCRIPT: &str = r#"#!/bin/bash
 set -e
@@ -87,16 +88,15 @@ pub fn run(
     );
     state.save()?;
 
-    // Write SQLite record with worktree path
-    if let Err(e) = write_to_sqlite(
+    // Write orchestration record to Convex (non-fatal)
+    if let Err(e) = write_to_convex(
         feature,
         &worktree_path,
         &design_doc_abs,
         &actual_branch,
         total_phases,
-        &cwd_abs,
     ) {
-        eprintln!("Warning: Failed to write to SQLite: {}", e);
+        eprintln!("Warning: Failed to write to Convex: {}", e);
     }
 
     // Auto-start daemon if not running
@@ -214,62 +214,37 @@ fn write_statusline_config(worktree_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Write orchestration record to SQLite, auto-creating the project.
-fn write_to_sqlite(
+/// Write orchestration record to Convex via tina-data types.
+fn write_to_convex(
     feature: &str,
     worktree_path: &Path,
     design_doc: &Path,
     branch: &str,
     total_phases: u32,
-    repo_root_hint: &Path,
 ) -> anyhow::Result<()> {
-    let db_path = db::default_db_path();
-    let conn = db::open_or_create(&db_path)?;
-    db::migrations::migrate(&conn)?;
+    let now = chrono::Utc::now().to_rfc3339();
+    let wp = worktree_path.to_string_lossy().to_string();
+    let ddp = design_doc.to_string_lossy().to_string();
+    let feature = feature.to_string();
+    let branch = branch.to_string();
 
-    let repo_root = find_repo_root(repo_root_hint)?;
-    let repo_name = repo_root
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("unknown");
-
-    // Find or create the project
-    let project_id =
-        db::projects::find_or_create_by_repo_path(&conn, repo_name, &repo_root.to_string_lossy())?;
-
-    // Create orchestration record
-    let now = Utc::now().to_rfc3339();
-    let orch_id = format!("{}_{}", feature, now);
-    let orch = db::orchestrations::Orchestration {
-        id: orch_id,
-        project_id,
-        feature_name: feature.to_string(),
-        design_doc_path: design_doc.to_string_lossy().to_string(),
-        branch: branch.to_string(),
-        worktree_path: Some(worktree_path.to_string_lossy().to_string()),
-        total_phases: total_phases as i32,
-        status: "planning".to_string(),
-        started_at: now,
-        completed_at: None,
-        total_elapsed_mins: None,
-    };
-    db::orchestrations::insert(&conn, &orch)?;
-
-    Ok(())
-}
-
-/// Find the git repo root for a given path.
-fn find_repo_root(cwd: &Path) -> anyhow::Result<std::path::PathBuf> {
-    let output = Command::new("git")
-        .args(["-C", &cwd.to_string_lossy(), "rev-parse", "--show-toplevel"])
-        .output()?;
-
-    if !output.status.success() {
-        anyhow::bail!("Not a git repository: {}", cwd.display());
-    }
-
-    let root = String::from_utf8(output.stdout)?.trim().to_string();
-    Ok(std::path::PathBuf::from(root))
+    convex_writes::run_convex_write(|mut writer| async move {
+        writer
+            .upsert_orchestration(
+                &feature,
+                &ddp,
+                &branch,
+                Some(&wp),
+                total_phases as i64,
+                1,
+                "planning",
+                &now,
+                None,
+                None,
+            )
+            .await?;
+        Ok(())
+    })
 }
 
 #[cfg(test)]

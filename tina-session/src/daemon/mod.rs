@@ -1,4 +1,3 @@
-pub mod sync;
 pub mod watcher;
 
 use std::fs;
@@ -112,55 +111,14 @@ fn remove_pid() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Run the daemon in the foreground (called by `daemon run`).
+/// Run the daemon in the foreground.
 ///
-/// This is the main loop: sets up the file watcher, opens the database,
-/// and processes file change events until SIGTERM.
+/// The embedded daemon is deprecated. Use tina-daemon instead, which syncs
+/// local state to Convex.
 pub fn run_foreground() -> anyhow::Result<()> {
-    use crate::db;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
-    use std::time::Duration;
-
-    let running = Arc::new(AtomicBool::new(true));
-
-    // Set up signal handler for graceful shutdown
-    #[cfg(unix)]
-    {
-        let r = running.clone();
-        ctrlc::set_handler(move || {
-            r.store(false, Ordering::SeqCst);
-        })?;
-    }
-
-    // Open database
-    let db_path = db::default_db_path();
-    let conn = db::open_or_create(&db_path)?;
-    db::migrations::migrate(&conn)?;
-
-    // Set up file watcher
-    let home = dirs::home_dir().expect("Could not determine home directory");
-    let teams_dir = home.join(".claude").join("teams");
-    let tasks_dir = home.join(".claude").join("tasks");
-
-    let file_watcher = watcher::DaemonWatcher::new(&teams_dir, &tasks_dir)?;
-
-    eprintln!("tina-session daemon started, watching for changes...");
-
-    // Main loop
-    while running.load(Ordering::SeqCst) {
-        if file_watcher.has_changes() {
-            if let Err(e) = sync::sync_all(&conn, &teams_dir, &tasks_dir) {
-                eprintln!("Sync error: {}", e);
-            }
-        }
-        std::thread::sleep(Duration::from_millis(500));
-    }
-
-    // Clean up PID file on exit
-    let _ = remove_pid();
-    eprintln!("tina-session daemon stopped");
-    Ok(())
+    eprintln!("Warning: The embedded daemon is deprecated. Use tina-daemon instead.");
+    eprintln!("Install: cargo install --path tina-daemon");
+    anyhow::bail!("Embedded daemon removed. Use tina-daemon for file sync.")
 }
 
 #[cfg(test)]

@@ -1,8 +1,9 @@
 use std::path::Path;
 
-use tina_session::db::orchestration_events::OrchestrationEvent;
 use tina_session::session::lookup::SessionLookup;
 use tina_session::state::orchestrate::{advance_state, next_action, Action, AdvanceEvent};
+
+use super::convex_writes;
 
 /// Determine the next action to take based on current orchestration state.
 pub fn next(feature: &str) -> anyhow::Result<u8> {
@@ -31,9 +32,9 @@ pub fn advance(
 
     state.save()?;
 
-    // Sync to SQLite (non-fatal)
-    if let Err(e) = sync_to_sqlite(feature, &state, phase, &action, Some(&event)) {
-        eprintln!("Warning: Failed to sync to SQLite: {}", e);
+    // Sync to Convex (non-fatal)
+    if let Err(e) = sync_to_convex(feature, &state, phase, &action, Some(&event)) {
+        eprintln!("Warning: Failed to sync to Convex: {}", e);
     }
 
     println!("{}", serde_json::to_string(&action)?);
@@ -96,70 +97,105 @@ fn parse_event(
     }
 }
 
-fn sync_to_sqlite(
+fn sync_to_convex(
     feature: &str,
     state: &tina_session::state::schema::SupervisorState,
     phase: &str,
     action: &Action,
     event: Option<&AdvanceEvent>,
 ) -> anyhow::Result<()> {
-    let db_path = tina_session::db::default_db_path();
-    let conn = tina_session::db::open_or_create(&db_path)?;
-    tina_session::db::migrations::migrate(&conn)?;
+    use tina_session::state::schema::OrchestrationStatus;
 
-    let orch = match tina_session::db::orchestrations::find_by_feature(&conn, feature)? {
-        Some(o) => o,
-        None => return Ok(()),
-    };
-
-    // Update orchestration status
     let status_str = match state.status {
-        tina_session::state::schema::OrchestrationStatus::Planning => "planning",
-        tina_session::state::schema::OrchestrationStatus::Executing => "executing",
-        tina_session::state::schema::OrchestrationStatus::Reviewing => "reviewing",
-        tina_session::state::schema::OrchestrationStatus::Complete => "complete",
-        tina_session::state::schema::OrchestrationStatus::Blocked => "blocked",
+        OrchestrationStatus::Planning => "planning",
+        OrchestrationStatus::Executing => "executing",
+        OrchestrationStatus::Reviewing => "reviewing",
+        OrchestrationStatus::Complete => "complete",
+        OrchestrationStatus::Blocked => "blocked",
     };
-    tina_session::db::orchestrations::update_status(&conn, &orch.id, status_str)?;
 
-    // Upsert all phase records
-    for (phase_key, phase_state) in &state.phases {
-        let db_phase = tina_session::db::phases::Phase {
-            id: None,
-            orchestration_id: orch.id.clone(),
-            phase_number: phase_key.clone(),
-            status: phase_state.status.to_string(),
-            plan_path: phase_state
-                .plan_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().to_string()),
-            git_range: phase_state.git_range.clone(),
-            planning_mins: phase_state.breakdown.planning_mins.map(|m| m as i32),
-            execution_mins: phase_state.breakdown.execution_mins.map(|m| m as i32),
-            review_mins: phase_state.breakdown.review_mins.map(|m| m as i32),
-            started_at: phase_state
-                .planning_started_at
-                .map(|dt| dt.to_rfc3339()),
-            completed_at: phase_state.completed_at.map(|dt| dt.to_rfc3339()),
-        };
-        tina_session::db::phases::upsert(&conn, &db_phase)?;
-    }
+    let feature = feature.to_string();
+    let design_doc = state.design_doc.to_string_lossy().to_string();
+    let branch = state.branch.clone();
+    let worktree = state.worktree_path.to_string_lossy().to_string();
+    let started_at = state.orchestration_started_at.to_rfc3339();
+    let total_phases = state.total_phases as i64;
+    let current_phase = state.current_phase as i64;
+    let status_str = status_str.to_string();
+    let phases: Vec<_> = state
+        .phases
+        .iter()
+        .map(|(k, ps)| {
+            (
+                k.clone(),
+                ps.status.to_string(),
+                ps.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+                ps.git_range.clone(),
+                ps.breakdown.planning_mins,
+                ps.breakdown.execution_mins,
+                ps.breakdown.review_mins,
+                ps.planning_started_at.map(|dt| dt.to_rfc3339()),
+                ps.completed_at.map(|dt| dt.to_rfc3339()),
+            )
+        })
+        .collect();
 
-    // Record orchestration event
     let (event_type, summary, detail) = event_from_action(phase, action, event);
-    let event = OrchestrationEvent {
-        id: None,
-        orchestration_id: orch.id.clone(),
-        phase_number: if phase == "validation" { None } else { Some(phase.to_string()) },
-        event_type,
-        source: "tina-session orchestrate".to_string(),
-        summary,
-        detail,
-        recorded_at: chrono::Utc::now().to_rfc3339(),
+    let phase_number = if phase == "validation" {
+        None
+    } else {
+        Some(phase.to_string())
     };
-    tina_session::db::orchestration_events::insert(&conn, &event)?;
 
-    Ok(())
+    convex_writes::run_convex_write(|mut writer| async move {
+        // Upsert orchestration status
+        let orch_id = writer
+            .upsert_orchestration(
+                &feature,
+                &design_doc,
+                &branch,
+                Some(&worktree),
+                total_phases,
+                current_phase,
+                &status_str,
+                &started_at,
+                None,
+                None,
+            )
+            .await?;
+
+        // Upsert all phase records
+        for (key, status, plan_path, git_range, plan_mins, exec_mins, rev_mins, sa, ca) in &phases {
+            writer
+                .upsert_phase(
+                    &orch_id,
+                    key,
+                    status,
+                    plan_path.as_deref(),
+                    git_range.as_deref(),
+                    *plan_mins,
+                    *exec_mins,
+                    *rev_mins,
+                    sa.as_deref(),
+                    ca.as_deref(),
+                )
+                .await?;
+        }
+
+        // Record orchestration event
+        writer
+            .record_event(
+                &orch_id,
+                phase_number.as_deref(),
+                &event_type,
+                "tina-session orchestrate",
+                &summary,
+                detail.as_deref(),
+            )
+            .await?;
+
+        Ok(())
+    })
 }
 
 fn event_from_action(

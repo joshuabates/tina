@@ -2,11 +2,12 @@ use std::path::Path;
 
 use chrono::Utc;
 
-use tina_session::db;
 use tina_session::session::lookup::SessionLookup;
 use tina_session::state::schema::{PhaseStatus, SupervisorState, OrchestrationStatus, PhaseState};
 use tina_session::state::transitions::validate_transition;
 use tina_session::state::timing::duration_mins;
+
+use super::convex_writes;
 
 pub fn update(
     feature: &str,
@@ -89,9 +90,9 @@ pub fn update(
 
     state.save()?;
 
-    // Write phase update to SQLite
-    if let Err(e) = upsert_phase_to_sqlite(feature, phase, &state) {
-        eprintln!("Warning: Failed to write phase to SQLite: {}", e);
+    // Write phase update to Convex (non-fatal)
+    if let Err(e) = upsert_phase_to_convex(feature, phase, &state) {
+        eprintln!("Warning: Failed to write phase to Convex: {}", e);
     }
 
     println!("Updated phase {} status to '{}'", phase, new_status);
@@ -165,14 +166,9 @@ pub fn phase_complete(feature: &str, phase: &str, git_range: &str) -> anyhow::Re
 
     state.save()?;
 
-    // Write phase completion to SQLite
-    if let Err(e) = upsert_phase_to_sqlite(feature, phase, &state) {
-        eprintln!("Warning: Failed to write phase to SQLite: {}", e);
-    }
-
-    // Update orchestration status in SQLite
-    if let Err(e) = update_orchestration_status_in_sqlite(feature, &state) {
-        eprintln!("Warning: Failed to update orchestration status in SQLite: {}", e);
+    // Write phase completion and orchestration status to Convex (non-fatal)
+    if let Err(e) = sync_state_to_convex(feature, phase, &state) {
+        eprintln!("Warning: Failed to sync to Convex: {}", e);
     }
 
     println!("Phase {} complete. Git range: {}", phase, git_range);
@@ -211,80 +207,130 @@ pub fn blocked(feature: &str, phase: &str, reason: &str) -> anyhow::Result<u8> {
 
     state.save()?;
 
-    // Write blocked state to SQLite
-    if let Err(e) = upsert_phase_to_sqlite(feature, phase, &state) {
-        eprintln!("Warning: Failed to write phase to SQLite: {}", e);
-    }
-    if let Err(e) = update_orchestration_status_in_sqlite(feature, &state) {
-        eprintln!("Warning: Failed to update orchestration status in SQLite: {}", e);
+    // Write blocked state to Convex (non-fatal)
+    if let Err(e) = sync_state_to_convex(feature, phase, &state) {
+        eprintln!("Warning: Failed to sync to Convex: {}", e);
     }
 
     println!("Phase {} blocked: {}", phase, reason);
     Ok(0)
 }
 
-/// Upsert a phase record to SQLite, deriving values from the supervisor state.
-fn upsert_phase_to_sqlite(
+/// Upsert a single phase record to Convex.
+fn upsert_phase_to_convex(
     feature: &str,
     phase: &str,
     state: &SupervisorState,
 ) -> anyhow::Result<()> {
-    let db_path = db::default_db_path();
-    let conn = db::open_or_create(&db_path)?;
-    db::migrations::migrate(&conn)?;
-
-    let orch = match db::orchestrations::find_by_feature(&conn, feature)? {
-        Some(o) => o,
-        None => return Ok(()), // No orchestration in SQLite yet
-    };
-
     let phase_state = match state.phases.get(phase) {
         Some(ps) => ps,
         None => return Ok(()),
     };
 
-    let db_phase = db::phases::Phase {
-        id: None,
-        orchestration_id: orch.id,
-        phase_number: phase.to_string(),
-        status: phase_state.status.to_string(),
-        plan_path: phase_state.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-        git_range: phase_state.git_range.clone(),
-        planning_mins: phase_state.breakdown.planning_mins.map(|m| m as i32),
-        execution_mins: phase_state.breakdown.execution_mins.map(|m| m as i32),
-        review_mins: phase_state.breakdown.review_mins.map(|m| m as i32),
-        started_at: phase_state.planning_started_at.map(|dt| dt.to_rfc3339()),
-        completed_at: phase_state.completed_at.map(|dt| dt.to_rfc3339()),
-    };
+    let feature = feature.to_string();
+    let design_doc = state.design_doc.to_string_lossy().to_string();
+    let branch = state.branch.clone();
+    let worktree = state.worktree_path.to_string_lossy().to_string();
+    let started_at = state.orchestration_started_at.to_rfc3339();
+    let status_str = orch_status_str(state.status).to_string();
+    let total_phases = state.total_phases as i64;
+    let current_phase = state.current_phase as i64;
 
-    db::phases::upsert(&conn, &db_phase)?;
-    Ok(())
+    let phase_key = phase.to_string();
+    let phase_status = phase_state.status.to_string();
+    let plan_path = phase_state.plan_path.as_ref().map(|p| p.to_string_lossy().to_string());
+    let git_range = phase_state.git_range.clone();
+    let planning_mins = phase_state.breakdown.planning_mins;
+    let execution_mins = phase_state.breakdown.execution_mins;
+    let review_mins = phase_state.breakdown.review_mins;
+    let sa = phase_state.planning_started_at.map(|dt| dt.to_rfc3339());
+    let ca = phase_state.completed_at.map(|dt| dt.to_rfc3339());
+
+    convex_writes::run_convex_write(|mut writer| async move {
+        let orch_id = writer
+            .upsert_orchestration(
+                &feature, &design_doc, &branch, Some(&worktree),
+                total_phases, current_phase, &status_str, &started_at,
+                None, None,
+            )
+            .await?;
+
+        writer
+            .upsert_phase(
+                &orch_id, &phase_key, &phase_status,
+                plan_path.as_deref(), git_range.as_deref(),
+                planning_mins, execution_mins, review_mins,
+                sa.as_deref(), ca.as_deref(),
+            )
+            .await?;
+
+        Ok(())
+    })
 }
 
-/// Update orchestration status in SQLite to match the supervisor state.
-fn update_orchestration_status_in_sqlite(
+/// Sync both orchestration status and phase to Convex.
+fn sync_state_to_convex(
     feature: &str,
+    phase: &str,
     state: &SupervisorState,
 ) -> anyhow::Result<()> {
-    let db_path = db::default_db_path();
-    let conn = db::open_or_create(&db_path)?;
-    db::migrations::migrate(&conn)?;
+    let feature = feature.to_string();
+    let design_doc = state.design_doc.to_string_lossy().to_string();
+    let branch = state.branch.clone();
+    let worktree = state.worktree_path.to_string_lossy().to_string();
+    let started_at = state.orchestration_started_at.to_rfc3339();
+    let status_str = orch_status_str(state.status).to_string();
+    let total_phases = state.total_phases as i64;
+    let current_phase = state.current_phase as i64;
 
-    let orch = match db::orchestrations::find_by_feature(&conn, feature)? {
-        Some(o) => o,
-        None => return Ok(()),
-    };
+    let phase_key = phase.to_string();
+    let phase_data = state.phases.get(phase).map(|ps| {
+        (
+            ps.status.to_string(),
+            ps.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+            ps.git_range.clone(),
+            ps.breakdown.planning_mins,
+            ps.breakdown.execution_mins,
+            ps.breakdown.review_mins,
+            ps.planning_started_at.map(|dt| dt.to_rfc3339()),
+            ps.completed_at.map(|dt| dt.to_rfc3339()),
+        )
+    });
 
-    let status_str = match state.status {
+    convex_writes::run_convex_write(|mut writer| async move {
+        let orch_id = writer
+            .upsert_orchestration(
+                &feature, &design_doc, &branch, Some(&worktree),
+                total_phases, current_phase, &status_str, &started_at,
+                None, None,
+            )
+            .await?;
+
+        if let Some((status, plan_path, git_range, plan_mins, exec_mins, rev_mins, sa, ca)) =
+            &phase_data
+        {
+            writer
+                .upsert_phase(
+                    &orch_id, &phase_key, status,
+                    plan_path.as_deref(), git_range.as_deref(),
+                    *plan_mins, *exec_mins, *rev_mins,
+                    sa.as_deref(), ca.as_deref(),
+                )
+                .await?;
+        }
+
+        Ok(())
+    })
+}
+
+fn orch_status_str(status: OrchestrationStatus) -> &'static str {
+    match status {
         OrchestrationStatus::Planning => "planning",
         OrchestrationStatus::Executing => "executing",
         OrchestrationStatus::Reviewing => "reviewing",
         OrchestrationStatus::Complete => "complete",
         OrchestrationStatus::Blocked => "blocked",
-    };
-
-    db::orchestrations::update_status(&conn, &orch.id, status_str)?;
-    Ok(())
+    }
 }
 
 pub fn show(feature: &str, phase: Option<&str>, json: bool) -> anyhow::Result<u8> {

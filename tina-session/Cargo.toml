@@ -28,8 +28,12 @@ thiserror = "1"
 # Paths
 dirs = "5"
 
-# Database
-rusqlite = { version = "0.31", features = ["bundled"] }
+# Convex cloud backend (used by binary commands, not the library)
+convex = "0.10"
+toml = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+hostname = "0.4"
 
 # Signal handling (for daemon)
 ctrlc = "3"
