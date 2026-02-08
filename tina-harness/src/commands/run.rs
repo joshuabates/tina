@@ -288,6 +288,9 @@ fn run_full_orchestration(
     // Let TUI settle before sending commands
     std::thread::sleep(Duration::from_secs(2));
 
+    // Record time before sending command so we can filter stale orchestrations
+    let started_after = Utc::now().to_rfc3339();
+
     // Send the orchestrate skill command
     let skill_cmd = format!("/tina:orchestrate {}", design_path.display());
     eprintln!("Sending: {}", skill_cmd);
@@ -300,6 +303,7 @@ fn run_full_orchestration(
         &feature_name,
         &session_name,
         ORCHESTRATION_TIMEOUT_SECS,
+        &started_after,
     );
 
     // Always clean up the tmux session
@@ -389,6 +393,7 @@ fn wait_for_orchestration_complete(
     feature_name: &str,
     session_name: &str,
     timeout_secs: u64,
+    started_after: &str,
 ) -> Result<OrchestrationState> {
     let start = Instant::now();
     let timeout = Duration::from_secs(timeout_secs);
@@ -407,11 +412,11 @@ fn wait_for_orchestration_complete(
         if !tina_session::tmux::session_exists(session_name) {
             // Session died — try to read final state from Convex anyway
             eprintln!("Warning: tmux session '{}' disappeared", session_name);
-            return load_orchestration_state_from_convex(feature_name);
+            return load_orchestration_state_from_convex(feature_name, started_after);
         }
 
         // Try to load state from Convex
-        match load_orchestration_state_from_convex(feature_name) {
+        match load_orchestration_state_from_convex(feature_name, started_after) {
             Ok(state) => {
                 if state.status == "complete" || state.status == "blocked" {
                     eprintln!(
@@ -444,7 +449,7 @@ fn wait_for_orchestration_complete(
 ///
 /// Uses `listOrchestrations` via TinaConvexClient to find the most recent
 /// orchestration matching the feature name, avoiding node_id mismatch issues.
-fn load_orchestration_state_from_convex(feature_name: &str) -> Result<OrchestrationState> {
+fn load_orchestration_state_from_convex(feature_name: &str, started_after: &str) -> Result<OrchestrationState> {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
         let cfg = tina_session::config::load_config()?;
@@ -459,11 +464,15 @@ fn load_orchestration_state_from_convex(feature_name: &str) -> Result<Orchestrat
         // Find the most recent orchestration for this feature.
         // tina-session init appends a suffix (PID) to the feature name,
         // so we match by prefix (e.g. "verbose-flag" matches "verbose-flag-56979").
+        // Also filter by started_after to ignore stale orchestrations from previous runs.
+        let prefix = format!("{}-", feature_name);
         let entry = orchestrations
             .iter()
             .filter(|o| {
-                o.record.feature_name == feature_name
-                    || o.record.feature_name.starts_with(&format!("{}-", feature_name))
+                let name_matches = o.record.feature_name == feature_name
+                    || o.record.feature_name.starts_with(&prefix);
+                let is_recent = o.record.started_at.as_str() >= started_after;
+                name_matches && is_recent
             })
             .max_by(|a, b| a.record.started_at.cmp(&b.record.started_at))
             .ok_or_else(|| {
@@ -478,6 +487,20 @@ fn load_orchestration_state_from_convex(feature_name: &str) -> Result<Orchestrat
             status,
         })
     })
+}
+
+/// Find the most recently modified worktree directory under work_dir/.worktrees/
+fn find_latest_worktree(work_dir: &Path) -> Option<PathBuf> {
+    let worktrees_dir = work_dir.join(".worktrees");
+    if !worktrees_dir.exists() {
+        return None;
+    }
+    fs::read_dir(&worktrees_dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_dir())
+        .max_by_key(|e| e.metadata().ok().and_then(|m| m.modified().ok()))
+        .map(|e| e.path())
 }
 
 /// Validate the outcome against expected state
@@ -504,16 +527,19 @@ fn validate_outcome(
         ));
     }
 
+    // Use worktree for file/test assertions since the executor works there
+    let check_dir = find_latest_worktree(work_dir).unwrap_or_else(|| work_dir.to_path_buf());
+
     // Check tests pass (if required)
     if expected.assertions.tests_pass {
-        if let Err(e) = run_tests(work_dir) {
+        if let Err(e) = run_tests(&check_dir) {
             failures.push(CategorizedFailure::tests_failed(e.to_string()));
         }
     }
 
     // Check file assertions
     for file_assertion in &expected.assertions.file_changes {
-        if let Some(failure) = check_file_assertion(work_dir, file_assertion) {
+        if let Some(failure) = check_file_assertion(&check_dir, file_assertion) {
             failures.push(failure);
         }
     }
