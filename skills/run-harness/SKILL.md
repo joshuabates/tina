@@ -45,7 +45,8 @@ cd tina-harness && cargo build -p tina-session -p tina-daemon
 
 If tina-daemon is running, restart it:
 ```bash
-tina-session daemon stop && sleep 1 && tina-session daemon start
+tina-session daemon stop && sleep 1 && \
+  tina-session daemon start --env dev --daemon-bin "$PWD/tina-daemon/target/debug/tina-daemon"
 ```
 
 ### Step 4: Create Subagent Tasks

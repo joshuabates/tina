@@ -112,10 +112,12 @@ mise run check      # verify everything compiles
 
 ```bash
 mise run dev                    # start tina-web backend + frontend
+mise run dev:web:dev            # start tina-web against dev Convex profile
 mise run test                   # cargo test across all crates
 mise run check                  # fast cargo check, all crates
 mise run build                  # release build, all crates
 mise run install                # build + symlink CLIs to ~/.local/bin
+mise run plugin:bundle          # build minimal local plugin bundle (no target artifacts)
 
 mise run test:web               # test a single crate
 mise run test:skills            # run skill test suite
@@ -137,6 +139,51 @@ Run `mise tasks` for the full list.
 | `tina-web` | Web dashboard (Axum backend + React frontend) |
 | `tina-monitor` | TUI for monitoring orchestrations |
 | `tina-harness` | Test harness for running scenarios |
+
+### Convex Profiles
+
+TINA supports two Convex profiles:
+- `prod` (default) - used unless explicitly overridden
+- `dev` - used for orchestration testing and local iteration
+
+Set the runtime profile with `TINA_ENV` or per-command flags:
+
+```bash
+# Default (prod)
+tina-session config show
+
+# Explicit dev
+tina-session config show --env dev
+TINA_ENV=dev tina-session daemon start
+```
+
+### Daemon Control and Update Policy
+
+- `tina-session daemon start` now launches the external `tina-daemon` binary (not an embedded daemon).
+- Default behavior is `prod` profile unless `--env dev` or `TINA_ENV=dev` is set.
+- For unreleased testing, run with an explicit binary path:
+
+```bash
+tina-session daemon start --env dev --daemon-bin /absolute/path/to/tina-daemon/target/debug/tina-daemon
+```
+
+- For plugin usage, ship released binaries in the plugin bundle and use defaults (`prod`).
+
+Config file supports legacy flat fields and profile-based fields:
+
+```toml
+active_env = "prod"
+
+[prod]
+convex_url = "https://your-prod.convex.cloud"
+auth_token = "prod-token"
+node_name = "my-laptop"
+
+[dev]
+convex_url = "https://your-dev.convex.cloud"
+auth_token = "dev-token"
+node_name = "my-laptop-dev"
+```
 
 ## Testing
 
@@ -172,16 +219,23 @@ Subagent types for the Task tool:
 
 ## Installation
 
-First, add the TINA marketplace:
+For local production-like plugin installs (without copying Cargo artifacts), build the bundle first:
+
+```bash
+mise run plugin:bundle
+```
+
+Then add the generated local marketplace:
+
+```bash
+claude plugins add-marketplace /absolute/path/to/tina/.claude-plugin/.plugin-dist/marketplace.json
+claude plugins add tina
+```
+
+For GitHub-hosted installs, first add the TINA marketplace:
 
 ```bash
 claude plugins add-marketplace https://raw.githubusercontent.com/joshuabates/tina/refs/heads/main/marketplace.json
-```
-
-Then install TINA:
-
-```bash
-claude plugins add tina
 ```
 
 Requires:

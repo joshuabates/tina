@@ -2,6 +2,7 @@ pub mod attach;
 pub mod capture;
 pub mod check;
 pub mod cleanup;
+pub mod config;
 pub mod daemon;
 pub mod exists;
 pub mod init;

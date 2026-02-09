@@ -170,26 +170,26 @@ fn main() -> anyhow::Result<()> {
                 if !commands::verify::check_daemon_running() {
                     println!("WARNING: tina-daemon does not appear to be running.");
                     println!("  Team members and tasks may not be synced to Convex.");
-                    println!("  Start it with: cargo run -p tina-daemon");
+                    println!("  Start it with: TINA_ENV=dev cargo run --manifest-path tina-daemon/Cargo.toml");
                 }
 
                 // Load scenario to get Convex assertions
                 let scenario_dir = scenarios_dir.join(&scenario);
                 let loaded = tina_harness::scenario::load_scenario(&scenario_dir)?;
-                let assertions = loaded
-                    .expected
-                    .assertions
-                    .convex
-                    .unwrap_or(tina_harness::ConvexAssertions {
-                        has_orchestration: true,
-                        expected_status: None,
-                        min_phases: Some(1),
-                        min_tasks: Some(1),
-                        min_team_members: Some(1),
-                    });
+                let assertions =
+                    loaded
+                        .expected
+                        .assertions
+                        .convex
+                        .unwrap_or(tina_harness::ConvexAssertions {
+                            has_orchestration: true,
+                            expected_status: None,
+                            min_phases: Some(1),
+                            min_tasks: Some(1),
+                            min_team_members: Some(1),
+                        });
 
-                let verify_result =
-                    commands::verify::verify(&result.feature_name, &assertions)?;
+                let verify_result = commands::verify::verify(&result.feature_name, &assertions)?;
 
                 if verify_result.passed {
                     println!("VERIFY PASS: {}", verify_result.feature_name);

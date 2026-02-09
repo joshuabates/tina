@@ -8,9 +8,18 @@ description = "Start all dev services via Overmind"
 run = "overmind start -f Procfile"
 
 [tasks."dev:web"]
-description = "Start frontend dev server only"
-dir = "tina-web"
-run = "VITE_CONVEX_URL=$CONVEX_URL npm run dev"
+description = "Start frontend dev server only (defaults to prod Convex profile)"
+run = """
+set -e
+TINA_ENV="${TINA_ENV:-prod}"
+CONVEX_URL=$(cargo run --quiet --manifest-path tina-session/Cargo.toml -- config convex-url --env "$TINA_ENV")
+cd tina-web
+VITE_TINA_ENV="$TINA_ENV" VITE_CONVEX_URL="$CONVEX_URL" npm run dev
+"""
+
+[tasks."dev:web:dev"]
+description = "Start frontend dev server against dev Convex profile"
+run = "TINA_ENV=dev mise run dev:web"
 
 [tasks."dev:convex"]
 description = "Start Convex dev server only"
@@ -18,7 +27,7 @@ run = "npx convex dev"
 
 [tasks."dev:daemon"]
 description = "Start tina-daemon only"
-run = "cargo run --manifest-path tina-daemon/Cargo.toml"
+run = "cargo run --manifest-path tina-daemon/Cargo.toml -- --env ${TINA_ENV:-prod}"
 
 [tasks."dev:connect"]
 description = "Connect to a running Overmind service"
@@ -49,9 +58,14 @@ cargo build --release --manifest-path tina-harness/Cargo.toml
 """
 
 [tasks."build:frontend"]
-description = "Build frontend for production"
-dir = "tina-web"
-run = "VITE_CONVEX_URL=$CONVEX_URL npm run build"
+description = "Build frontend (defaults to prod Convex profile)"
+run = """
+set -e
+TINA_ENV="${TINA_ENV:-prod}"
+CONVEX_URL=$(cargo run --quiet --manifest-path tina-session/Cargo.toml -- config convex-url --env "$TINA_ENV")
+cd tina-web
+VITE_TINA_ENV="$TINA_ENV" VITE_CONVEX_URL="$CONVEX_URL" npm run build
+"""
 
 # --- Install ---
 
@@ -146,6 +160,10 @@ cargo run --manifest-path tina-harness/Cargo.toml -- run \
 [tasks."analyze:tokens"]
 description = "Analyze token usage from a session file"
 run = "python3 tests/claude-code/analyze-token-usage.py {{arg(name=\"session_file\")}}"
+
+[tasks."plugin:bundle"]
+description = "Build a minimal plugin bundle (skills + hooks + binaries, no build artifacts)"
+run = "./scripts/build-plugin-bundle.sh"
 
 [tasks."bump:version"]
 description = "Set version across all crates"

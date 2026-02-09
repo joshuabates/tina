@@ -33,11 +33,8 @@ pub fn verify(feature_name: &str, assertions: &ConvexAssertions) -> Result<Verif
     rt.block_on(verify_async(feature_name, assertions))
 }
 
-async fn verify_async(
-    feature_name: &str,
-    assertions: &ConvexAssertions,
-) -> Result<VerifyResult> {
-    let cfg = tina_session::config::load_config()?;
+async fn verify_async(feature_name: &str, assertions: &ConvexAssertions) -> Result<VerifyResult> {
+    let cfg = tina_session::config::load_config_for_env(Some("dev"))?;
     let convex_url = cfg
         .convex_url
         .filter(|s| !s.is_empty())
@@ -54,15 +51,16 @@ async fn verify_async(
 
     let mut failures = Vec::new();
 
-    let orchestration_id = match verify_logic::verify_orchestration_exists(&orchestrations, feature_name) {
-        Ok(id) => Some(id),
-        Err(failure) => {
-            if assertions.has_orchestration {
-                failures.push(failure);
+    let orchestration_id =
+        match verify_logic::verify_orchestration_exists(&orchestrations, feature_name) {
+            Ok(id) => Some(id),
+            Err(failure) => {
+                if assertions.has_orchestration {
+                    failures.push(failure);
+                }
+                None
             }
-            None
-        }
-    };
+        };
 
     // Step 2: If orchestration found, get detail and verify
     let (phases_found, tasks_found, members_found) = if let Some(ref orch_id) = orchestration_id {

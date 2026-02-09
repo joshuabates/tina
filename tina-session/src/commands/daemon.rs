@@ -1,7 +1,13 @@
-use tina_session::daemon;
+use std::path::Path;
 
-pub fn start() -> anyhow::Result<u8> {
-    let pid = daemon::start()?;
+use tina_session::daemon::{self, DaemonLaunchOptions};
+
+pub fn start(env: Option<&str>, daemon_bin: Option<&Path>) -> anyhow::Result<u8> {
+    let options = DaemonLaunchOptions {
+        env: env.map(str::to_string),
+        daemon_bin: daemon_bin.map(Path::to_path_buf),
+    };
+    let pid = daemon::start_with_options(&options)?;
     println!("Daemon started (pid {})", pid);
     Ok(0)
 }
@@ -25,7 +31,11 @@ pub fn status() -> anyhow::Result<u8> {
     }
 }
 
-pub fn run() -> anyhow::Result<u8> {
-    daemon::run_foreground()?;
+pub fn run_with_options(env: Option<&str>, daemon_bin: Option<&Path>) -> anyhow::Result<u8> {
+    let options = DaemonLaunchOptions {
+        env: env.map(str::to_string),
+        daemon_bin: daemon_bin.map(Path::to_path_buf),
+    };
+    daemon::run_foreground_with_options(&options)?;
     Ok(0)
 }

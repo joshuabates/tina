@@ -45,7 +45,12 @@ impl RunResult {
         }
     }
 
-    fn failure(scenario_name: String, feature_name: String, work_dir: PathBuf, failures: Vec<CategorizedFailure>) -> Self {
+    fn failure(
+        scenario_name: String,
+        feature_name: String,
+        work_dir: PathBuf,
+        failures: Vec<CategorizedFailure>,
+    ) -> Self {
         Self {
             scenario_name,
             feature_name,
@@ -117,13 +122,21 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
     if !config.force_baseline {
         if let Some(skip_reason) = should_skip_baseline(&scenario_dir)? {
             eprintln!("Skipping {}: {}", scenario_name, skip_reason);
-            return Ok(RunResult::skipped(scenario.name, scenario.feature_name, scenario_work_dir));
+            return Ok(RunResult::skipped(
+                scenario.name,
+                scenario.feature_name,
+                scenario_work_dir,
+            ));
         }
     }
 
     if scenario_work_dir.exists() {
-        fs::remove_dir_all(&scenario_work_dir)
-            .with_context(|| format!("Failed to clean work directory: {}", scenario_work_dir.display()))?;
+        fs::remove_dir_all(&scenario_work_dir).with_context(|| {
+            format!(
+                "Failed to clean work directory: {}",
+                scenario_work_dir.display()
+            )
+        })?;
     }
 
     // Copy test-project to work directory
@@ -194,9 +207,18 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
         if let Ok(hash) = get_current_git_hash() {
             let _ = save_last_passed(&scenario_dir, &hash);
         }
-        Ok(RunResult::success(scenario.name, scenario.feature_name, scenario_work_dir))
+        Ok(RunResult::success(
+            scenario.name,
+            scenario.feature_name,
+            scenario_work_dir,
+        ))
     } else {
-        Ok(RunResult::failure(scenario.name, scenario.feature_name, scenario_work_dir, failures))
+        Ok(RunResult::failure(
+            scenario.name,
+            scenario.feature_name,
+            scenario_work_dir,
+            failures,
+        ))
     }
 }
 
@@ -208,10 +230,7 @@ struct OrchestrationState {
 }
 
 /// Run mock orchestration (simulates state without invoking real orchestration)
-fn run_mock_orchestration(
-    _work_dir: &Path,
-    scenario: &Scenario,
-) -> Result<OrchestrationState> {
+fn run_mock_orchestration(_work_dir: &Path, scenario: &Scenario) -> Result<OrchestrationState> {
     // Mock: just return the expected state so validation logic can be tested
     // In reality, this is where we'd invoke orchestration
     Ok(OrchestrationState {
@@ -234,10 +253,7 @@ const POLL_INTERVAL_SECS: u64 = 10;
 /// Creates a detached tmux session, launches Claude in interactive mode,
 /// sends the orchestrate skill command, and waits for completion by polling
 /// the supervisor state in Convex.
-fn run_full_orchestration(
-    work_dir: &Path,
-    scenario: &Scenario,
-) -> Result<OrchestrationState> {
+fn run_full_orchestration(work_dir: &Path, scenario: &Scenario) -> Result<OrchestrationState> {
     let feature_name = &scenario.feature_name;
     eprintln!("Feature name: {}", feature_name);
 
@@ -280,12 +296,21 @@ fn run_full_orchestration(
     let _ = tina_session::tmux::kill_session(&session_name);
 
     // Create detached tmux session with work_dir as cwd
-    eprintln!("Creating tmux session '{}' in {}", session_name, work_dir.display());
+    eprintln!(
+        "Creating tmux session '{}' in {}",
+        session_name,
+        work_dir.display()
+    );
     tina_session::tmux::create_session(&session_name, work_dir, None)
         .map_err(|e| anyhow::anyhow!("Failed to create tmux session: {}", e))?;
 
     // Small delay to let shell initialize
     std::thread::sleep(Duration::from_millis(500));
+
+    // Harness runs against the dev Convex profile by default.
+    tina_session::tmux::send_keys(&session_name, "export TINA_ENV=dev")
+        .map_err(|e| anyhow::anyhow!("Failed to set TINA_ENV in tmux session: {}", e))?;
+    std::thread::sleep(Duration::from_millis(200));
 
     // Launch Claude in interactive mode with permissions bypass
     let claude_bin = detect_claude_binary();
@@ -295,7 +320,10 @@ fn run_full_orchestration(
         .map_err(|e| anyhow::anyhow!("Failed to send claude command: {}", e))?;
 
     // Wait for Claude to be ready
-    eprintln!("Waiting for Claude to be ready (up to {}s)...", CLAUDE_READY_TIMEOUT_SECS);
+    eprintln!(
+        "Waiting for Claude to be ready (up to {}s)...",
+        CLAUDE_READY_TIMEOUT_SECS
+    );
     match tina_session::claude::wait_for_ready(&session_name, CLAUDE_READY_TIMEOUT_SECS) {
         Ok(_) => eprintln!("Claude is ready."),
         Err(e) => {
@@ -311,13 +339,20 @@ fn run_full_orchestration(
     let started_after = Utc::now().to_rfc3339();
 
     // Send the orchestrate skill command with explicit --feature to avoid name derivation issues
-    let skill_cmd = format!("/tina:orchestrate --feature {} {}", feature_name, design_path.display());
+    let skill_cmd = format!(
+        "/tina:orchestrate --feature {} {}",
+        feature_name,
+        design_path.display()
+    );
     eprintln!("Sending: {}", skill_cmd);
     tina_session::tmux::send_keys(&session_name, &skill_cmd)
         .map_err(|e| anyhow::anyhow!("Failed to send orchestrate command: {}", e))?;
 
     // Wait for orchestration to complete by polling Convex supervisor state
-    eprintln!("Waiting for orchestration to complete (timeout: {}s)...", ORCHESTRATION_TIMEOUT_SECS);
+    eprintln!(
+        "Waiting for orchestration to complete (timeout: {}s)...",
+        ORCHESTRATION_TIMEOUT_SECS
+    );
     let result = wait_for_orchestration_complete(
         feature_name,
         &session_name,
@@ -351,8 +386,7 @@ fn detect_claude_binary() -> &'static str {
 /// Rebuild tina-session and tina-daemon binaries from source.
 ///
 /// Each crate is built individually since there is no workspace Cargo.toml.
-/// The symlinks at `~/.local/bin/` point to `target/debug/`, so a debug
-/// build is sufficient to update the binaries on PATH.
+/// A debug build is sufficient for harness runs.
 ///
 /// If tina-daemon is running, it is restarted after the rebuild so it
 /// picks up the new binary.
@@ -393,10 +427,16 @@ fn rebuild_binaries(project_root: &Path) -> Result<()> {
 
     // Restart daemon if running so it picks up the new binary
     if super::verify::check_daemon_running() {
+        let daemon_bin = daemon_dir.join("target").join("debug").join("tina-daemon");
         eprintln!("  Restarting tina-daemon with new binary...");
-        let _ = Command::new("tina-session").args(["daemon", "stop"]).output();
+        let _ = Command::new("tina-session")
+            .args(["daemon", "stop"])
+            .output();
         std::thread::sleep(Duration::from_millis(500));
-        let _ = Command::new("tina-session").args(["daemon", "start"]).output();
+        let _ = Command::new("tina-session")
+            .args(["daemon", "start", "--env", "dev", "--daemon-bin"])
+            .arg(&daemon_bin)
+            .output();
     }
 
     eprintln!("Binary rebuild complete.");
@@ -508,10 +548,13 @@ fn wait_for_orchestration_complete(
 ///
 /// Uses `listOrchestrations` via TinaConvexClient to find the most recent
 /// orchestration matching the feature name, avoiding node_id mismatch issues.
-fn load_orchestration_state_from_convex(feature_name: &str, started_after: &str) -> Result<OrchestrationState> {
+fn load_orchestration_state_from_convex(
+    feature_name: &str,
+    started_after: &str,
+) -> Result<OrchestrationState> {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
-        let cfg = tina_session::config::load_config()?;
+        let cfg = tina_session::config::load_config_for_env(Some("dev"))?;
         let convex_url = cfg
             .convex_url
             .filter(|s| !s.is_empty())
@@ -922,8 +965,8 @@ mod tests {
             test_project_dir: PathBuf::from("/tmp/test-project"),
             work_dir: PathBuf::from("/tmp/work"),
             full: true,
-            force_baseline: true,  // Team mode always forces (no baseline skip)
-            skip_build: true,      // Lead already rebuilt
+            force_baseline: true, // Team mode always forces (no baseline skip)
+            skip_build: true,     // Lead already rebuilt
         };
         assert!(config.full);
         assert!(config.force_baseline);

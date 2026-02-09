@@ -1,6 +1,7 @@
 .worktrees/
 .private-journal/
 .claude/
+.claude-plugin/.plugin-dist/
 
 # Rust compilation artifacts
 **/target/

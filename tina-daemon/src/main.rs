@@ -18,11 +18,18 @@ use convex::{FunctionResult, Value};
 use tina_data::{InboundAction, TinaConvexClient};
 
 #[derive(Parser)]
-#[command(name = "tina-daemon", about = "Syncs local orchestration state to Convex")]
+#[command(
+    name = "tina-daemon",
+    about = "Syncs local orchestration state to Convex"
+)]
 struct Cli {
     /// Path to config file (default: ~/.config/tina/config.toml)
     #[arg(long)]
     config: Option<PathBuf>,
+
+    /// Tina environment profile to use (`prod` or `dev`)
+    #[arg(long)]
+    env: Option<String>,
 }
 
 #[tokio::main]
@@ -38,8 +45,13 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Load config
-    let config = DaemonConfig::load(cli.config.as_ref())?;
-    info!(node = %config.node_name, url = %config.convex_url, "loaded config");
+    let config = DaemonConfig::load(cli.config.as_ref(), cli.env.as_deref())?;
+    info!(
+        node = %config.node_name,
+        env = %config.env,
+        url = %config.convex_url,
+        "loaded config"
+    );
 
     // Connect to Convex
     let mut client = TinaConvexClient::new(&config.convex_url).await?;
@@ -54,11 +66,8 @@ async fn main() -> Result<()> {
     let cancel = CancellationToken::new();
 
     // Start heartbeat
-    let heartbeat_handle = heartbeat::spawn_heartbeat(
-        Arc::clone(&client),
-        node_id.clone(),
-        cancel.clone(),
-    );
+    let heartbeat_handle =
+        heartbeat::spawn_heartbeat(Arc::clone(&client), node_id.clone(), cancel.clone());
 
     // Set up file watchers
     let home = dirs::home_dir().expect("could not determine home directory");

@@ -199,6 +199,12 @@ enum Commands {
         command: DaemonCommands,
     },
 
+    /// Config helpers
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
+
     /// List active orchestrations
     List,
 
@@ -345,7 +351,15 @@ enum CheckCommands {
 #[derive(Subcommand)]
 enum DaemonCommands {
     /// Start the daemon as a background process
-    Start,
+    Start {
+        /// Environment profile (`prod` or `dev`)
+        #[arg(long)]
+        env: Option<String>,
+
+        /// Explicit path to the tina-daemon binary
+        #[arg(long)]
+        daemon_bin: Option<PathBuf>,
+    },
 
     /// Stop the running daemon
     Stop,
@@ -354,7 +368,32 @@ enum DaemonCommands {
     Status,
 
     /// Run the daemon in the foreground (used internally)
-    Run,
+    Run {
+        /// Environment profile (`prod` or `dev`)
+        #[arg(long)]
+        env: Option<String>,
+
+        /// Explicit path to the tina-daemon binary
+        #[arg(long)]
+        daemon_bin: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigCommands {
+    /// Print the resolved Convex URL for the selected environment
+    ConvexUrl {
+        /// Environment profile (`prod` or `dev`). Defaults to prod.
+        #[arg(long)]
+        env: Option<String>,
+    },
+
+    /// Print resolved config fields (JSON)
+    Show {
+        /// Environment profile (`prod` or `dev`). Defaults to prod.
+        #[arg(long)]
+        env: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -431,7 +470,13 @@ fn run() -> anyhow::Result<u8> {
             parent_team_id,
         } => {
             check_phase(&phase)?;
-            commands::start::run(&feature, &phase, &plan, install_deps, parent_team_id.as_deref())
+            commands::start::run(
+                &feature,
+                &phase,
+                &plan,
+                install_deps,
+                parent_team_id.as_deref(),
+            )
         }
 
         Commands::Wait {
@@ -497,7 +542,12 @@ fn run() -> anyhow::Result<u8> {
                 max_file_lines,
                 max_total_lines,
                 max_function_lines,
-            } => commands::check::complexity(&cwd, max_file_lines, max_total_lines, max_function_lines),
+            } => commands::check::complexity(
+                &cwd,
+                max_file_lines,
+                max_total_lines,
+                max_function_lines,
+            ),
 
             CheckCommands::Verify { cwd } => commands::check::verify(&cwd),
 
@@ -547,10 +597,19 @@ fn run() -> anyhow::Result<u8> {
         }
 
         Commands::Daemon { command } => match command {
-            DaemonCommands::Start => commands::daemon::start(),
+            DaemonCommands::Start { env, daemon_bin } => {
+                commands::daemon::start(env.as_deref(), daemon_bin.as_deref())
+            }
             DaemonCommands::Stop => commands::daemon::stop(),
             DaemonCommands::Status => commands::daemon::status(),
-            DaemonCommands::Run => commands::daemon::run(),
+            DaemonCommands::Run { env, daemon_bin } => {
+                commands::daemon::run_with_options(env.as_deref(), daemon_bin.as_deref())
+            }
+        },
+
+        Commands::Config { command } => match command {
+            ConfigCommands::ConvexUrl { env } => commands::config::convex_url(env.as_deref()),
+            ConfigCommands::Show { env } => commands::config::show(env.as_deref()),
         },
 
         Commands::List => commands::list::run(),
@@ -572,9 +631,7 @@ fn run() -> anyhow::Result<u8> {
         Commands::Cleanup { feature } => commands::cleanup::run(&feature),
 
         Commands::Orchestrate { command } => match command {
-            OrchestrateCommands::Next { feature } => {
-                commands::orchestrate::next(&feature)
-            }
+            OrchestrateCommands::Next { feature } => commands::orchestrate::next(&feature),
 
             OrchestrateCommands::Advance {
                 feature,
@@ -583,16 +640,14 @@ fn run() -> anyhow::Result<u8> {
                 plan_path,
                 git_range,
                 issues,
-            } => {
-                commands::orchestrate::advance(
-                    &feature,
-                    &phase,
-                    &event,
-                    plan_path.as_deref(),
-                    git_range.as_deref(),
-                    issues.as_deref(),
-                )
-            }
+            } => commands::orchestrate::advance(
+                &feature,
+                &phase,
+                &event,
+                plan_path.as_deref(),
+                git_range.as_deref(),
+                issues.as_deref(),
+            ),
         },
     }
 }

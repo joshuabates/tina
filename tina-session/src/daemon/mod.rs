@@ -5,32 +5,60 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Launch options for controlling which daemon binary/environment to run.
+#[derive(Debug, Clone, Default)]
+pub struct DaemonLaunchOptions {
+    /// Environment profile (`prod`/`dev`) forwarded to tina-daemon via `--env`.
+    pub env: Option<String>,
+    /// Optional explicit path to the daemon binary.
+    pub daemon_bin: Option<PathBuf>,
+}
+
 /// Returns the PID file path: `~/.local/share/tina/daemon.pid`
 pub fn pid_path() -> PathBuf {
     let data_dir = dirs::data_local_dir().expect("Could not determine local data directory");
     data_dir.join("tina").join("daemon.pid")
 }
 
-/// Start the daemon as a background process.
+/// Start tina-daemon as a background process.
 ///
-/// Forks the current binary with `daemon run` and writes the child PID to the PID file.
-/// Returns Ok(pid) if started successfully, Err if already running.
-pub fn start() -> anyhow::Result<u32> {
+/// Resolves the daemon binary in this order:
+/// 1. Explicit `daemon_bin` option
+/// 2. `TINA_DAEMON_BIN` environment variable
+/// 3. Sibling `tina-daemon` next to the current `tina-session` binary
+/// 4. `tina-daemon` from PATH
+pub fn start_with_options(options: &DaemonLaunchOptions) -> anyhow::Result<u32> {
     if let Some(pid) = running_pid() {
         anyhow::bail!("Daemon already running (pid {})", pid);
     }
 
-    let exe = std::env::current_exe()?;
-    let child = Command::new(exe)
-        .args(["daemon", "run"])
+    let daemon_bin = resolve_daemon_bin(options.daemon_bin.as_ref());
+    let mut command = Command::new(&daemon_bin);
+    if let Some(env) = resolved_env_arg(options) {
+        command.args(["--env", &env]);
+    }
+
+    let child = command
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .spawn()?;
+        .spawn()
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to launch tina-daemon (binary: {}): {}",
+                daemon_bin.display(),
+                e
+            )
+        })?;
 
     let pid = child.id();
     write_pid(pid)?;
     Ok(pid)
+}
+
+/// Start the daemon using defaults.
+pub fn start() -> anyhow::Result<u32> {
+    start_with_options(&DaemonLaunchOptions::default())
 }
 
 /// Stop the daemon by sending SIGTERM to the PID.
@@ -50,6 +78,34 @@ pub fn stop() -> anyhow::Result<()> {
 /// Check if the daemon is running. Returns the PID if so.
 pub fn status() -> Option<u32> {
     running_pid()
+}
+
+/// Run the daemon in the foreground.
+pub fn run_foreground_with_options(options: &DaemonLaunchOptions) -> anyhow::Result<()> {
+    let daemon_bin = resolve_daemon_bin(options.daemon_bin.as_ref());
+    let mut command = Command::new(&daemon_bin);
+    if let Some(env) = resolved_env_arg(options) {
+        command.args(["--env", &env]);
+    }
+
+    let status = command.status().map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to launch tina-daemon (binary: {}): {}",
+            daemon_bin.display(),
+            e
+        )
+    })?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!("tina-daemon exited with status {}", status)
+    }
+}
+
+/// Run the daemon in the foreground using defaults.
+pub fn run_foreground() -> anyhow::Result<()> {
+    run_foreground_with_options(&DaemonLaunchOptions::default())
 }
 
 /// Read the PID file and check if the process is still alive.
@@ -75,6 +131,38 @@ fn running_pid() -> Option<u32> {
         let _ = fs::remove_file(&path);
         None
     }
+}
+
+fn resolve_daemon_bin(explicit: Option<&PathBuf>) -> PathBuf {
+    if let Some(path) = explicit {
+        return path.clone();
+    }
+
+    if let Ok(path) = std::env::var("TINA_DAEMON_BIN") {
+        if !path.trim().is_empty() {
+            return PathBuf::from(path);
+        }
+    }
+
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(dir) = current_exe.parent() {
+            let sibling = dir.join("tina-daemon");
+            if sibling.exists() {
+                return sibling;
+            }
+        }
+    }
+
+    PathBuf::from("tina-daemon")
+}
+
+fn resolved_env_arg(options: &DaemonLaunchOptions) -> Option<String> {
+    options
+        .env
+        .clone()
+        .or_else(|| std::env::var("TINA_ENV").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 /// Check if a process with the given PID is alive.
@@ -109,16 +197,6 @@ fn remove_pid() -> anyhow::Result<()> {
         fs::remove_file(&path)?;
     }
     Ok(())
-}
-
-/// Run the daemon in the foreground.
-///
-/// The embedded daemon is deprecated. Use tina-daemon instead, which syncs
-/// local state to Convex.
-pub fn run_foreground() -> anyhow::Result<()> {
-    eprintln!("Warning: The embedded daemon is deprecated. Use tina-daemon instead.");
-    eprintln!("Install: cargo install --path tina-daemon");
-    anyhow::bail!("Embedded daemon removed. Use tina-daemon for file sync.")
 }
 
 #[cfg(test)]
@@ -162,5 +240,21 @@ mod tests {
     fn test_is_process_alive_nonexistent() {
         // Very high PID should not exist
         assert!(!is_process_alive(4_000_000));
+    }
+
+    #[test]
+    fn test_resolved_env_arg_prefers_options() {
+        let options = DaemonLaunchOptions {
+            env: Some("dev".to_string()),
+            daemon_bin: None,
+        };
+        assert_eq!(resolved_env_arg(&options).as_deref(), Some("dev"));
+    }
+
+    #[test]
+    fn test_resolve_daemon_bin_uses_explicit_path() {
+        let explicit = PathBuf::from("/tmp/custom-daemon");
+        let resolved = resolve_daemon_bin(Some(&explicit));
+        assert_eq!(resolved, explicit);
     }
 }
