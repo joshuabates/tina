@@ -165,13 +165,58 @@ if plan_roi < design_roi_threshold:
 - **Warning:** ROI below threshold but above 50%
 - **Pass:** ROI meets or exceeds threshold (or not applicable)
 
+### 5. Check Plan Staleness
+
+Validate that the plan is still current relative to repository changes since it was created.
+
+**Step 1:** Extract Plan Baseline from plan file
+
+Look for a `**Plan Baseline:**` line in the plan header. Extract the git sha value.
+
+If no Plan Baseline is found:
+- Emit Warning: "Plan has no baseline sha, cannot check staleness"
+- Skip remaining staleness steps
+
+**Step 2:** Compute changed files since baseline
+
+```
+changed_files = git diff --name-only <baseline_sha>..HEAD
+```
+
+If the baseline sha is not a valid commit (e.g., force-pushed away):
+- Emit Warning: "Baseline sha not found in repository history"
+- Skip remaining staleness steps
+
+**Step 3:** Extract plan target files
+
+Collect all file paths from `**Files:**` sections across all tasks in the plan. Normalize paths (strip leading `./` or workspace prefix if present).
+
+**Step 4:** Compute overlap and emit verdict
+
+```
+overlap = changed_files ∩ plan_target_files
+overlap_ratio = len(overlap) / len(plan_target_files)
+
+if overlap_ratio == 0:
+    Pass - no plan targets changed since baseline
+elif overlap_ratio <= 0.3:
+    Warning - some plan targets changed: [list overlap files]
+else:
+    Stop - >30% of plan targets changed: [list overlap files]
+```
+
+**Severity:**
+- **Pass:** No plan target files changed since baseline
+- **Warning:** Some target files changed (up to 30%)
+- **Stop:** More than 30% of plan target files changed since baseline
+
 ## Severity Tiers
 
 | Severity | Condition | Action |
 |----------|-----------|--------|
-| Stop | Plans don't cover scope, OR estimates implausible, OR ROI unacceptable | Reject, require replanning |
-| Warning | Some drift from priorities, OR marginal ROI, OR estimates on edge | Flag concerns, allow proceed |
-| Pass | Plans align with design, estimates plausible, ROI acceptable | Continue to execution |
+| Stop | Plans don't cover scope, OR estimates implausible, OR ROI unacceptable, OR >30% plan targets changed | Reject, require replanning |
+| Warning | Some drift from priorities, OR marginal ROI, OR estimates on edge, OR some plan targets changed | Flag concerns, allow proceed |
+| Pass | Plans align with design, estimates plausible, ROI acceptable, plan targets unchanged | Continue to execution |
 
 ## Report Format
 
@@ -239,6 +284,17 @@ if plan_roi < design_roi_threshold:
 **Plan ROI expectation:** [value or N/A]
 **Assessment:** [explanation]
 
+### Staleness Check
+**Status:** Pass / Warning / Stop / N/A
+
+**Plan Baseline:** [sha or "not found"]
+**Changed files since baseline:** [count]
+**Plan target files:** [count]
+**Overlap:** [count] ([percentage]%)
+
+**Changed plan targets:**
+- [list of overlapping files, or "none"]
+
 ### Summary
 **Status:** Pass / Warning / Stop
 **Severity tier:** [Worst of all checks]
@@ -261,6 +317,7 @@ if plan_roi < design_roi_threshold:
 - Calculate actual ratios for plausibility checks
 - Give specific feedback on what's misaligned
 - Output clear severity tier
+- Check plan baseline and compute staleness when baseline sha is present
 
 **DON'T:**
 - Approve plans that miss major design deliverables
@@ -268,3 +325,4 @@ if plan_roi < design_roi_threshold:
 - Give vague feedback ("needs better alignment") - be specific
 - Block plans for minor additions beyond design scope
 - Assume plan is correct without checking against design
+- Skip staleness check when Plan Baseline is present in the plan

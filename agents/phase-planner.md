@@ -92,6 +92,15 @@ Understand existing patterns relevant to this phase:
 
 ### Write the Implementation Plan
 
+**Plan header requirements:**
+
+Every plan MUST begin with:
+```
+**Plan Baseline:** <output of `git rev-parse HEAD`>
+```
+
+This records the repository state when the plan was created. The plan-validator uses this to detect staleness.
+
 **For regular phases:**
 Create a plan file at `docs/plans/YYYY-MM-DD-<feature>-phase-N.md` following the planner methodology.
 
@@ -142,6 +151,8 @@ Each task in the plan MUST include a `**Model:**` field that specifies which mod
 **Model:** <haiku|opus>
 
 **review:** <spec-only|full>
+
+**Depends on:** <task numbers or "none">
 ```
 
 **Selection logic:**
@@ -205,6 +216,7 @@ Every task in the plan MUST have:
 - `**Files:**` - List of files to modify
 - `**Model:** <haiku|opus>` - Model assignment
 - `**review:** <spec-only|full>` - Review level
+- `**Depends on:**` - Task numbers this depends on, or "none"
 - At least one step with a `Run:` command and `Expected:` output
 
 ### Lint Rules
@@ -215,6 +227,8 @@ Every task in the plan MUST have:
 | review-tag | Every task has `**review:**` line | error |
 | complexity-budget | `### Complexity Budget` section exists | error |
 | phase-estimates | `## Phase Estimates` section exists | error |
+| depends-on | Every task has `**Depends on:**` line | error |
+| plan-baseline | Plan contains `**Plan Baseline:**` header | error |
 | file-list | Every task has `**Files:**` section | warning |
 | run-command | Every task has at least one `Run:` block | warning |
 | expected-output | Every `Run:` block has `Expected:` | warning |
@@ -230,6 +244,8 @@ After running lint, append a lint report to the plan file:
 |------|--------|
 | model-tag | pass |
 | review-tag | pass |
+| depends-on | pass |
+| plan-baseline | pass |
 | complexity-budget | pass |
 | phase-estimates | pass |
 | file-list | pass |
