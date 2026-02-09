@@ -439,7 +439,7 @@ Some text but no table.
     }
 
     #[test]
-    fn test_plan_validation_rejects_sonnet() {
+    fn test_plan_validation_accepts_sonnet() {
         let temp = TempDir::new().unwrap();
 
         let plan_with_sonnet = r#"
@@ -458,7 +458,99 @@ Some text but no table.
         fs::write(&path, plan_with_sonnet).unwrap();
 
         let result = plan(&path).unwrap();
-        assert_eq!(result, 1, "Should reject sonnet model");
+        assert_eq!(result, 0, "Sonnet is a valid model routed to Claude");
+    }
+
+    #[test]
+    fn test_plan_validation_accepts_codex() {
+        let temp = TempDir::new().unwrap();
+
+        let content = r#"
+# Phase 1 Plan
+
+### Task 1: Something
+**Model:** codex
+
+### Complexity Budget
+
+| Metric | Limit |
+|--------|-------|
+| Max lines per file | 400 |
+"#;
+        let path = temp.path().join("plan.md");
+        fs::write(&path, content).unwrap();
+
+        let result = plan(&path).unwrap();
+        assert_eq!(result, 0, "Codex should be accepted");
+    }
+
+    #[test]
+    fn test_plan_validation_accepts_gpt_model() {
+        let temp = TempDir::new().unwrap();
+
+        let content = r#"
+# Phase 1 Plan
+
+### Task 1: Something
+**Model:** gpt-5.3-codex
+
+### Complexity Budget
+
+| Metric | Limit |
+|--------|-------|
+| Max lines per file | 400 |
+"#;
+        let path = temp.path().join("plan.md");
+        fs::write(&path, content).unwrap();
+
+        let result = plan(&path).unwrap();
+        assert_eq!(result, 0, "GPT model should be accepted");
+    }
+
+    #[test]
+    fn test_plan_validation_accepts_o3_model() {
+        let temp = TempDir::new().unwrap();
+
+        let content = r#"
+# Phase 1 Plan
+
+### Task 1: Something
+**Model:** o3-mini
+
+### Complexity Budget
+
+| Metric | Limit |
+|--------|-------|
+| Max lines per file | 400 |
+"#;
+        let path = temp.path().join("plan.md");
+        fs::write(&path, content).unwrap();
+
+        let result = plan(&path).unwrap();
+        assert_eq!(result, 0, "o3-mini should be accepted");
+    }
+
+    #[test]
+    fn test_plan_validation_rejects_empty_model() {
+        let temp = TempDir::new().unwrap();
+
+        let content = r#"
+# Phase 1 Plan
+
+### Task 1: Something
+**Model:**
+
+### Complexity Budget
+
+| Metric | Limit |
+|--------|-------|
+| Max lines per file | 400 |
+"#;
+        let path = temp.path().join("plan.md");
+        fs::write(&path, content).unwrap();
+
+        let result = plan(&path).unwrap();
+        assert_eq!(result, 1, "Empty model should be rejected");
     }
 }
 
@@ -483,8 +575,9 @@ pub fn plan(path: &Path) -> anyhow::Result<u8> {
         return Ok(1);
     }
 
-    // Check model values are valid (opus or haiku only)
-    // Only check lines that look like actual model specifications (start with **Model:**)
+    // Validate model specifications: must be non-empty, no backticks, max 50 chars.
+    // Routing config determines which CLI handles each model, so we don't restrict
+    // by model name — only enforce basic sanity checks.
     for line in contents.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("**Model:**") {
@@ -493,13 +586,16 @@ pub fn plan(path: &Path) -> anyhow::Result<u8> {
                 .map(|s| s.trim().to_lowercase())
                 .unwrap_or_default();
 
-            // Skip empty or clearly non-model values
-            if model.is_empty() || model.contains('`') || model.len() > 20 {
-                continue;
+            if model.is_empty() {
+                println!("FAIL: Empty model specification found.");
+                return Ok(1);
             }
-
-            if !model.starts_with("opus") && !model.starts_with("haiku") {
-                println!("FAIL: Invalid model '{}'. Must be 'opus' or 'haiku'.", model);
+            if model.contains('`') {
+                println!("FAIL: Model '{}' contains backticks.", model);
+                return Ok(1);
+            }
+            if model.len() > 50 {
+                println!("FAIL: Model '{}' exceeds 50 characters.", model);
                 return Ok(1);
             }
         }
