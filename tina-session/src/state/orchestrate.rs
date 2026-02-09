@@ -47,6 +47,10 @@ pub enum Action {
         git_range: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         model: Option<String>,
+        /// When set, the orchestrator should spawn a second reviewer with this model
+        /// in parallel for consensus review.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        secondary_model: Option<String>,
     },
 
     /// Reuse an existing plan (skip planning).
@@ -139,6 +143,15 @@ type Result<T> = std::result::Result<T, OrchestrateError>;
 fn non_default_model(model: &str, default: &str) -> Option<String> {
     if model != default {
         Some(model.to_string())
+    } else {
+        None
+    }
+}
+
+/// Return the secondary reviewer model when consensus is enabled.
+fn consensus_secondary_model(state: &SupervisorState) -> Option<String> {
+    if state.model_policy.review_consensus {
+        Some(state.model_policy.reviewer_secondary.clone())
     } else {
         None
     }
@@ -271,6 +284,7 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                         phase: key,
                         git_range,
                         model: non_default_model(&state.model_policy.reviewer, "opus"),
+                        secondary_model: consensus_secondary_model(state),
                     });
                 }
                 PhaseStatus::Blocked => {
@@ -407,6 +421,7 @@ pub fn advance_state(
                 phase: phase.to_string(),
                 git_range,
                 model: non_default_model(&state.model_policy.reviewer, "opus"),
+                secondary_model: consensus_secondary_model(state),
             })
         }
 
@@ -417,17 +432,15 @@ pub fn advance_state(
                 .ok_or_else(|| OrchestrateError::PhaseNotFound(phase.to_string()))?;
 
             // Consensus mode: collect verdict before deciding
-            if state.model_policy.review_consensus && phase_state.review_verdicts.len() < 1 {
-                // First verdict - store and spawn second reviewer
+            if state.model_policy.review_consensus && phase_state.review_verdicts.is_empty() {
+                // First verdict - store and wait for second reviewer
+                // (both reviewers were spawned in parallel by the orchestrator)
                 phase_state.review_verdicts.push(ReviewVerdict {
                     result: "pass".to_string(),
                     issues: vec![],
                 });
-                let git_range = phase_state.git_range.clone().unwrap_or_default();
-                return Ok(Action::SpawnReviewer {
-                    phase: phase.to_string(),
-                    git_range,
-                    model: Some("haiku".to_string()),
+                return Ok(Action::Wait {
+                    reason: format!("consensus: waiting for second reviewer on phase {}", phase),
                 });
             }
 
@@ -499,17 +512,15 @@ pub fn advance_state(
                 .ok_or_else(|| OrchestrateError::PhaseNotFound(phase.to_string()))?;
 
             // Consensus mode: collect verdict before deciding
-            if state.model_policy.review_consensus && phase_state.review_verdicts.len() < 1 {
-                // First verdict - store and spawn second reviewer
+            if state.model_policy.review_consensus && phase_state.review_verdicts.is_empty() {
+                // First verdict - store and wait for second reviewer
+                // (both reviewers were spawned in parallel by the orchestrator)
                 phase_state.review_verdicts.push(ReviewVerdict {
                     result: "gaps".to_string(),
                     issues: issues.clone(),
                 });
-                let git_range = phase_state.git_range.clone().unwrap_or_default();
-                return Ok(Action::SpawnReviewer {
-                    phase: phase.to_string(),
-                    git_range,
-                    model: Some("haiku".to_string()),
+                return Ok(Action::Wait {
+                    reason: format!("consensus: waiting for second reviewer on phase {}", phase),
                 });
             }
 
@@ -595,6 +606,7 @@ pub fn advance_state(
                     phase: phase.to_string(),
                     git_range,
                     model: non_default_model(&state.model_policy.reviewer, "opus"),
+                    secondary_model: consensus_secondary_model(state),
                 });
             }
 
@@ -761,6 +773,7 @@ fn find_remediation_action(state: &SupervisorState, phase_num: u32) -> Result<Ac
                         phase: key.clone(),
                         git_range,
                         model: non_default_model(&state.model_policy.reviewer, "opus"),
+                        secondary_model: consensus_secondary_model(state),
                     })
                 }
                 PhaseStatus::Blocked => {
@@ -1308,7 +1321,72 @@ mod tests {
     }
 
     #[test]
-    fn test_review_consensus_first_verdict_spawns_second_reviewer() {
+    fn test_consensus_execute_complete_includes_secondary_model() {
+        // When consensus is enabled, ExecuteComplete should include secondary_model
+        // in SpawnReviewer so the orchestrator can spawn both reviewers in parallel
+        let mut state = test_state(2);
+        state.model_policy.review_consensus = true;
+        state.model_policy.reviewer_secondary = "sonnet".to_string();
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Executing,
+                execution_started_at: Some(Utc::now()),
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "abc..def".to_string(),
+            },
+        )
+        .unwrap();
+        match action {
+            Action::SpawnReviewer {
+                secondary_model, ..
+            } => {
+                assert_eq!(secondary_model, Some("sonnet".to_string()));
+            }
+            other => panic!("Expected SpawnReviewer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_consensus_execute_complete_no_secondary_when_disabled() {
+        // When consensus is NOT enabled, ExecuteComplete should NOT include secondary_model
+        let mut state = test_state(2);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Executing,
+                execution_started_at: Some(Utc::now()),
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ExecuteComplete {
+                git_range: "abc..def".to_string(),
+            },
+        )
+        .unwrap();
+        match action {
+            Action::SpawnReviewer {
+                secondary_model, ..
+            } => {
+                assert_eq!(secondary_model, None);
+            }
+            other => panic!("Expected SpawnReviewer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_review_consensus_first_verdict_returns_wait() {
+        // In parallel consensus mode, first verdict should return Wait
+        // (orchestrator already spawned both reviewers)
         let mut state = test_state(2);
         state.model_policy.review_consensus = true;
         state.phases.insert(
@@ -1322,10 +1400,38 @@ mod tests {
             },
         );
         let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
-        // First verdict should spawn second reviewer
-        assert!(matches!(action, Action::SpawnReviewer { .. }));
+        // First verdict should return Wait (not SpawnReviewer)
+        assert!(matches!(action, Action::Wait { .. }));
         assert_eq!(state.phases["1"].review_verdicts.len(), 1);
         assert_eq!(state.phases["1"].review_verdicts[0].result, "pass");
+    }
+
+    #[test]
+    fn test_review_consensus_first_verdict_gaps_returns_wait() {
+        // First verdict with gaps should also return Wait
+        let mut state = test_state(2);
+        state.model_policy.review_consensus = true;
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Reviewing,
+                git_range: Some("abc..def".to_string()),
+                planning_started_at: Some(Utc::now()),
+                review_started_at: Some(Utc::now()),
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ReviewGaps {
+                issues: vec!["missing tests".to_string()],
+            },
+        )
+        .unwrap();
+        assert!(matches!(action, Action::Wait { .. }));
+        assert_eq!(state.phases["1"].review_verdicts.len(), 1);
+        assert_eq!(state.phases["1"].review_verdicts[0].result, "gaps");
     }
 
     #[test]

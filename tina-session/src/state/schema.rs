@@ -267,6 +267,11 @@ pub struct ModelPolicy {
     #[serde(default)]
     pub dual_validation: bool,
 
+    /// Secondary model for consensus review. Used when `review_consensus` is true.
+    /// Default: "haiku".
+    #[serde(default = "default_haiku")]
+    pub reviewer_secondary: String,
+
     /// If true, phase reviews require consensus from a second model before
     /// marking review as pass. Default: false.
     #[serde(default)]
@@ -288,6 +293,7 @@ impl Default for ModelPolicy {
             planner: default_opus(),
             executor: default_haiku(),
             reviewer: default_opus(),
+            reviewer_secondary: default_haiku(),
             dual_validation: false,
             review_consensus: false,
         }
@@ -575,6 +581,7 @@ mod tests {
         assert_eq!(policy.planner, "opus");
         assert_eq!(policy.executor, "haiku");
         assert_eq!(policy.reviewer, "opus");
+        assert_eq!(policy.reviewer_secondary, "haiku");
         assert!(!policy.dual_validation);
         assert!(!policy.review_consensus);
     }
@@ -585,7 +592,25 @@ mod tests {
         let policy: ModelPolicy = serde_json::from_str(json).unwrap();
         assert_eq!(policy.validator, "opus");
         assert_eq!(policy.executor, "haiku");
+        assert_eq!(policy.reviewer_secondary, "haiku");
         assert!(!policy.dual_validation);
+    }
+
+    #[test]
+    fn test_model_policy_reviewer_secondary_custom() {
+        let json = r#"{"reviewer_secondary": "sonnet"}"#;
+        let policy: ModelPolicy = serde_json::from_str(json).unwrap();
+        assert_eq!(policy.reviewer_secondary, "sonnet");
+    }
+
+    #[test]
+    fn test_model_policy_reviewer_secondary_serializes() {
+        let mut policy = ModelPolicy::default();
+        policy.reviewer_secondary = "sonnet".to_string();
+        let json = serde_json::to_string(&policy).unwrap();
+        assert!(json.contains("reviewer_secondary"));
+        let deserialized: ModelPolicy = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.reviewer_secondary, "sonnet");
     }
 
     #[test]

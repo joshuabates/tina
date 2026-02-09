@@ -283,7 +283,7 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 | `spawn_validator` | Spawn `tina:design-validator` teammate (model from `.model` if present) |
 | `spawn_planner` | Spawn `tina:phase-planner` for `.phase` (model from `.model` if present) |
 | `spawn_executor` | Spawn `tina:phase-executor` for `.phase` (plan at `.plan_path`, model from `.model` if present) |
-| `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`, model from `.model` if present) |
+| `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`, model from `.model` if present). If `.secondary_model` is present, spawn a second reviewer with that model in parallel for consensus review. |
 | `consensus_disagreement` | Surface to user: "Reviewers disagree on phase `.phase`. Verdict 1: `.verdict_1`, Verdict 2: `.verdict_2`. Please resolve manually." |
 | `reuse_plan` | Skip planning, auto-complete plan task, dispatch executor |
 | `wait` | No action required; keep waiting for teammate updates |
@@ -652,6 +652,34 @@ Before spawning: Update review-phase-N metadata with worktree_path, design_doc_p
 ```
 Then: Mark review-phase-N as in_progress
 
+**Parallel consensus reviewer spawn:**
+
+When the `spawn_reviewer` action includes a `secondary_model` field, spawn TWO reviewers in parallel:
+1. Primary reviewer: use `.model` (or default)
+2. Secondary reviewer: use `.secondary_model`
+
+```json
+// Primary reviewer
+{
+  "subagent_type": "tina:phase-reviewer",
+  "team_name": "<TEAM_NAME>",
+  "name": "reviewer-<N>",
+  "model": "<model from action, if present>",
+  "prompt": "task_id: review-phase-<N>"
+}
+
+// Secondary reviewer (spawned simultaneously)
+{
+  "subagent_type": "tina:phase-reviewer",
+  "team_name": "<TEAM_NAME>",
+  "name": "reviewer-<N>-secondary",
+  "model": "<secondary_model from action>",
+  "prompt": "task_id: review-phase-<N>"
+}
+```
+
+Both reviewers run in parallel. As each reviewer message arrives, call `tina-session orchestrate advance` with the verdict. The state machine returns `Wait` on the first verdict and resolves on the second (pass/gaps/disagreement).
+
 **Model override from CLI:**
 
 If the action response includes a `model` field, pass it to the spawn:
@@ -812,25 +840,37 @@ if message contains "session_died" or "error":
     # If can_retry: respawn executor; else escalate
 ```
 
-**On reviewer-N message:**
+**On reviewer-N message (including consensus):**
+
+Each reviewer verdict (from reviewer-N or reviewer-N-secondary) is handled the same way:
+call `advance` with the verdict. The state machine handles consensus internally:
+- If consensus is enabled and this is the first verdict, the CLI returns `wait`
+- If this is the second verdict, the CLI resolves (pass/gaps/disagreement)
+- If consensus is disabled, the CLI resolves immediately
+
 ```
 if message contains "review-N complete (pass)":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event review_pass
-    TaskUpdate: review-phase-N, status: completed, metadata: { status: "pass" }
-    # Dispatch NEXT_ACTION (spawn next planner, finalize, or complete)
+    # If NEXT_ACTION is "wait": do nothing, wait for second reviewer
+    # Otherwise: mark review-phase-N complete and dispatch NEXT_ACTION
+    if NEXT_ACTION.action != "wait":
+        TaskUpdate: review-phase-N, status: completed, metadata: { status: "pass" }
+        # Dispatch NEXT_ACTION (spawn next planner, finalize, or complete)
 
 if message contains "review-N complete (gaps)":
     Parse: issues from message
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event review_gaps --issues "issue1,issue2"
-    TaskUpdate: review-phase-N, status: completed, metadata: { status: "gaps", issues: [...] }
+    # If NEXT_ACTION is "wait": do nothing, wait for second reviewer
+    if NEXT_ACTION.action != "wait":
+        TaskUpdate: review-phase-N, status: completed, metadata: { status: "gaps", issues: [...] }
 
-    # If NEXT_ACTION is "remediate":
-    #   Create remediation tasks (plan/execute/review for .remediation_phase)
-    #   Set up dependencies
-    #   Spawn planner for .remediation_phase
-    # If NEXT_ACTION is "error" with can_retry: false:
-    #   Print: "ERROR: Phase N failed after 2 remediation attempts"
-    #   Exit orchestration
+        # If NEXT_ACTION is "remediate":
+        #   Create remediation tasks (plan/execute/review for .remediation_phase)
+        #   Set up dependencies
+        #   Spawn planner for .remediation_phase
+        # If NEXT_ACTION is "error" with can_retry: false:
+        #   Print: "ERROR: Phase N failed after 2 remediation attempts"
+        #   Exit orchestration
 
 if message contains "error":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
