@@ -92,102 +92,131 @@ Team name file is no longer needed. The executor already knows the team name sin
 
 ---
 
-## STEP 4: Create tasks from plan (NO worker spawn yet)
+## STEP 4: Create tasks from plan with dependencies
 
 Read the plan file and create tasks via TaskCreate for each task in the plan.
 
-**Parse model from each task:** Look for `**Model:** <model>` line in each task section. Store in task metadata:
+**Parse model and dependencies from each task:** Look for `**Model:** <model>` and `**Depends on:**` lines in each task section. Store model in task metadata:
 ```json
 TaskCreate {
   "subject": "Task N: <description>",
   "description": "<full task content>",
-  "metadata": { "model": "<haiku|opus>" }
+  "metadata": { "model": "<haiku|opus>", "task_number": N }
 }
+```
+
+**Record task_number -> task_id mapping** as you create tasks. You will need this to set up dependency relationships.
+
+**After ALL tasks are created**, set up dependencies using TaskUpdate:
+
+For each task, parse its `**Depends on:**` value:
+- `"none"` → no blockedBy (task is immediately ready)
+- `"1, 3"` → look up task IDs for task numbers 1 and 3, then:
+```json
+TaskUpdate({
+  "taskId": "<this-task-id>",
+  "addBlockedBy": ["<task-1-id>", "<task-3-id>"]
+})
 ```
 
 Do NOT spawn workers or reviewers yet. The team is just a container at this point.
 
 ---
 
-## STEP 5: Begin task execution loop
+## STEP 5: DAG scheduler - concurrent task execution
 
-For each task in priority order:
+Replace the sequential task loop with a ready-queue DAG scheduler that runs independent tasks in parallel.
 
-### 5.1 Assign and spawn worker for this task
-First, assign the task to the worker:
+### 5.1 Find ready tasks
+
+Query `TaskList` to find all tasks with status=pending and empty blockedBy list. These are "ready" tasks — their dependencies are satisfied.
+
+### 5.2 Spawn workers for ALL ready tasks in parallel
+
+For each ready task N, assign it and spawn a worker with a task-specific name:
+
 ```json
 TaskUpdate({
-  "taskId": "<task-id>",
+  "taskId": "<task-N-id>",
   "status": "in_progress",
-  "owner": "worker"
+  "owner": "worker-N"
 })
 ```
 
-Then get the model from task metadata (via TaskGet), and spawn:
+Get the model from task metadata (via TaskGet), then spawn:
 ```json
 {
   "subagent_type": "tina:implementer",
   "team_name": "<team-name>",
-  "name": "worker",
+  "name": "worker-N",
   "model": "<model from task metadata>",
   "prompt": "Implement task: <task subject and description>. Use TDD."
 }
 ```
-The `model` field controls which model the implementer uses (haiku or opus).
 
-### 5.2 Wait for worker to complete implementation
-Monitor for Teammate messages from worker indicating completion.
+**Worker/reviewer naming:** Use task-number suffixes: `worker-1`, `worker-2`, `spec-reviewer-1`, `code-quality-reviewer-1`, etc. This avoids name collisions when multiple tasks run in parallel.
 
-### 5.3 Spawn reviewers for this task
-- spec-reviewer (haiku): Review implementation against spec
-- code-quality-reviewer (opus): Review code quality
+### 5.3 Wait for ANY worker to complete
 
-### 5.4 Wait for both reviews to pass
-Monitor for Teammate messages from reviewers. Both must approve.
+Monitor for Teammate messages from any active worker indicating completion. Track active workers in a map: task-number -> worker-name.
 
-### 5.5 Shut down ALL agents for this task
+### 5.4 Review the completed task
 
-Request shutdown for each agent in order:
+When worker-N reports completion, spawn reviewers for task N:
 
-1. **Worker:**
-   ```json
-   SendMessage({
-     type: "shutdown_request",
-     recipient: "worker",
-     content: "Task complete"
-   })
-   ```
+```json
+{
+  "subagent_type": "tina:spec-reviewer",
+  "team_name": "<team-name>",
+  "name": "spec-reviewer-N",
+  "prompt": "Review implementation for task: <task subject>. Check spec compliance."
+}
+```
 
-2. **Spec-reviewer:**
-   ```json
-   SendMessage({
-     type: "shutdown_request",
-     recipient: "spec-reviewer",
-     content: "Review complete"
-   })
-   ```
+```json
+{
+  "subagent_type": "tina:code-quality-reviewer",
+  "team_name": "<team-name>",
+  "name": "code-quality-reviewer-N",
+  "prompt": "Review code quality for task: <task subject>. Check architecture and patterns."
+}
+```
 
-3. **Code-quality-reviewer:**
-   ```json
-   SendMessage({
-     type: "shutdown_request",
-     recipient: "code-quality-reviewer",
-     content: "Review complete"
-   })
-   ```
+Wait for both reviewers to approve.
 
-**Wait for acknowledgments** from all three before proceeding.
-Timeout: 30 seconds per agent. If no acknowledgment, log warning and proceed.
+### 5.5 Shut down task-N's agents
 
-### 5.6 Mark task complete
+After reviews pass for task N, shut down that task's agents only:
 
-Update task status to complete via TaskUpdate.
+```json
+SendMessage({ type: "shutdown_request", recipient: "worker-N", content: "Task complete" })
+SendMessage({ type: "shutdown_request", recipient: "spec-reviewer-N", content: "Review complete" })
+SendMessage({ type: "shutdown_request", recipient: "code-quality-reviewer-N", content: "Review complete" })
+```
 
-### 5.7 Loop to next task
+**Wait for acknowledgments** (30s timeout per agent). Do NOT wait for other tasks' agents.
 
-Only after all agents have been shut down (acknowledged or timed out).
+### 5.6 Mark task complete and check for newly ready tasks
 
-This ephemeral model gives each task a fresh context window.
+Mark task N complete:
+```json
+TaskUpdate({ "taskId": "<task-N-id>", "status": "completed" })
+```
+
+Then **re-check the ready queue**: query `TaskList` again. Tasks that were blocked by task N may now be unblocked. Spawn workers for any newly ready tasks (go to 5.2 for those tasks).
+
+### 5.7 Loop until all tasks complete
+
+Continue the wait-for-any/review/shutdown/re-check cycle until `TaskList` shows all tasks completed. At any point, multiple tasks may be executing in parallel.
+
+**Key invariant:** A task's agents are independent of other tasks' agents. Shutting down task-1's agents does not affect task-2's agents.
+
+### Error handling per task
+
+Current retry/escalation logic applies per-task:
+- Worker fails → shut down, retry with fresh `worker-N` (one retry)
+- Reviewer rejects 3x → escalate, set status=blocked
+- A blocked task does NOT block unrelated tasks — only its dependents stay blocked
 
 ---
 
@@ -348,47 +377,47 @@ Extract phase number from plan path:
 }
 ```
 
-## The Process (Ephemeral Model)
+## The Process (DAG Scheduler)
 
 ```dot
-digraph team_lead_init_ephemeral {
+digraph team_lead_dag {
     rankdir=TB;
 
     "Read plan file" [shape=box];
     "Extract phase number from path" [shape=box];
     "Initialize status.json" [shape=box];
     "Create team container" [shape=box];
-    "Create tasks from plan" [shape=box];
-    "More tasks?" [shape=diamond];
-    "Spawn worker for task" [shape=box];
-    "Wait for implementation" [shape=box];
-    "Spawn reviewers" [shape=box];
-    "Wait for reviews" [shape=box];
-    "Shut down worker + reviewers" [shape=box];
+    "Create tasks with dependencies" [shape=box];
+    "Check ready queue" [shape=diamond];
+    "Spawn workers for ready tasks" [shape=box];
+    "Wait for any completion" [shape=box];
+    "Review completed task" [shape=box];
+    "Shut down task agents" [shape=box];
     "Mark task complete" [shape=box];
+    "All tasks done?" [shape=diamond];
     "Set status = complete" [shape=box];
     "Wait for supervisor" [shape=box];
 
     "Read plan file" -> "Extract phase number from path";
     "Extract phase number from path" -> "Initialize status.json";
     "Initialize status.json" -> "Create team container";
-    "Create team container" -> "Create tasks from plan";
-    "Create tasks from plan" -> "More tasks?";
-    "More tasks?" -> "Spawn worker for task" [label="yes"];
-    "More tasks?" -> "Set status = complete" [label="no"];
-    "Spawn worker for task" -> "Wait for implementation";
-    "Wait for implementation" -> "Spawn reviewers";
-    "Spawn reviewers" -> "Wait for reviews";
-    "Wait for reviews" -> "Shut down worker + reviewers";
-    "Shut down worker + reviewers" -> "Mark task complete";
-    "Mark task complete" -> "More tasks?";
+    "Create team container" -> "Create tasks with dependencies";
+    "Create tasks with dependencies" -> "Check ready queue";
+    "Check ready queue" -> "Spawn workers for ready tasks" [label="ready tasks exist"];
+    "Spawn workers for ready tasks" -> "Wait for any completion";
+    "Wait for any completion" -> "Review completed task";
+    "Review completed task" -> "Shut down task agents";
+    "Shut down task agents" -> "Mark task complete";
+    "Mark task complete" -> "All tasks done?";
+    "All tasks done?" -> "Check ready queue" [label="no"];
+    "All tasks done?" -> "Set status = complete" [label="yes"];
     "Set status = complete" -> "Wait for supervisor";
 }
 ```
 
-## Team Spawning (Ephemeral Model)
+## Team Spawning (DAG Scheduler)
 
-Team-lead uses an ephemeral spawning model where workers and reviewers are created per-task, not per-phase.
+Team-lead uses an ephemeral spawning model where workers and reviewers are created per-task, not per-phase. With the DAG scheduler, multiple tasks' agents can be active simultaneously.
 
 **Why ephemeral?**
 - Fresh context window for each task (no accumulated context)
@@ -411,40 +440,41 @@ The team name is provided by the phase executor in the invocation prompt. The ex
 
 No file-based discovery is needed - the executor knows the team name because it defined it.
 
-**Per-task spawning:**
+**Parallel task spawning (DAG-driven):**
 
-For each task:
+When the ready queue has tasks, spawn workers for ALL of them:
 
-1. Spawn ONE worker for the current task
-2. Wait for implementation
-3. Spawn reviewers (spec-reviewer, code-quality-reviewer)
+1. For each ready task N: spawn `worker-N`
+2. Wait for ANY worker to complete
+3. Spawn `spec-reviewer-N` and `code-quality-reviewer-N` for completed task
 4. Wait for reviews to pass
-5. Shut down all three agents
-6. Move to next task
+5. Shut down task-N's agents (`worker-N`, `spec-reviewer-N`, `code-quality-reviewer-N`)
+6. Mark task N complete, re-check ready queue for newly unblocked tasks
+7. Spawn workers for any newly ready tasks (repeat from step 1 for those)
 
-**Worker spawn:**
+**Worker spawn (per task N):**
 
-First, assign the task to the worker before spawning:
+First, assign the task before spawning:
 ```json
 TaskUpdate({
-  "taskId": "<current-task-id>",
+  "taskId": "<task-N-id>",
   "status": "in_progress",
-  "owner": "worker"
+  "owner": "worker-N"
 })
 ```
 
-Then get the model from the current task's metadata:
+Then get the model from the task's metadata:
 ```json
-TaskGet { "taskId": "<current-task-id>" }
+TaskGet { "taskId": "<task-N-id>" }
 # Read metadata.model from response
 ```
 
-Then spawn with that model:
+Then spawn with task-specific name:
 ```json
 {
   "subagent_type": "tina:implementer",
-  "team_name": "phase-N-execution",
-  "name": "worker",
+  "team_name": "<team-name>",
+  "name": "worker-N",
   "model": "<metadata.model>",
   "prompt": "Implement task: <task subject and description>. Use TDD."
 }
@@ -452,12 +482,12 @@ Then spawn with that model:
 
 The model field accepts: `haiku` or `opus`. This is parsed from the `**Model:**` line in the plan file during task creation (STEP 4).
 
-**Reviewer spawns:**
+**Reviewer spawns (per task N):**
 ```json
 {
   "subagent_type": "tina:spec-reviewer",
-  "team_name": "phase-N-execution",
-  "name": "spec-reviewer",
+  "team_name": "<team-name>",
+  "name": "spec-reviewer-N",
   "prompt": "Review implementation for task: <task subject>. Check spec compliance."
 }
 ```
@@ -465,30 +495,27 @@ The model field accepts: `haiku` or `opus`. This is parsed from the `**Model:**`
 ```json
 {
   "subagent_type": "tina:code-quality-reviewer",
-  "team_name": "phase-N-execution",
-  "name": "code-quality-reviewer",
+  "team_name": "<team-name>",
+  "name": "code-quality-reviewer-N",
   "prompt": "Review code quality for task: <task subject>. Check architecture and patterns."
 }
 ```
 
 ## Team Shutdown
 
-With the ephemeral model, shutdown happens at two levels:
+With the DAG scheduler, shutdown happens per-task independently:
 
-**Per-task shutdown (after each task completes):**
+**Per-task shutdown (after task N's reviews pass):**
 
-After reviews pass for a task, shut down worker and reviewers:
+Shut down task-N's agents only — do NOT touch other tasks' agents:
 
 ```json
-SendMessage({
-  type: "shutdown_request",
-  recipient: "worker",
-  content: "Task complete"
-})
+SendMessage({ type: "shutdown_request", recipient: "worker-N", content: "Task complete" })
+SendMessage({ type: "shutdown_request", recipient: "spec-reviewer-N", content: "Review complete" })
+SendMessage({ type: "shutdown_request", recipient: "code-quality-reviewer-N", content: "Review complete" })
 ```
 
-Repeat for each agent (worker, spec-reviewer, code-quality-reviewer if spawned).
-Monitor for shutdown acknowledgment messages before spawning agents for the next task.
+Monitor for shutdown acknowledgment messages. Other tasks' workers continue running during this shutdown.
 
 **Phase-end:**
 
@@ -499,16 +526,16 @@ When all tasks complete:
 
 ## Shutdown Verification
 
-Shutdown is a two-step process:
+Shutdown is a two-step process, applied per-task:
 
 ### Step 1: Request Shutdown
 
-For each active agent (worker, spec-reviewer, code-quality-reviewer):
+For each of task N's agents (`worker-N`, `spec-reviewer-N`, `code-quality-reviewer-N`):
 
 ```json
 SendMessage({
   type: "shutdown_request",
-  recipient: "<agent-name>",
+  recipient: "worker-N",
   content: "Task complete"
 })
 ```
@@ -520,16 +547,16 @@ After requesting shutdown, monitor for acknowledgment message from each agent:
 ```json
 {
   "type": "shutdown_acknowledged",
-  "from": "<agent-name>",
+  "from": "worker-N",
   "requestId": "<request-id>"
 }
 ```
 
 **Timeout:** If acknowledgment not received within 30 seconds:
-1. Log warning: "Agent <name> did not acknowledge shutdown within timeout"
+1. Log warning: "Agent worker-N did not acknowledge shutdown within timeout"
 2. Proceed anyway (agent process may have already terminated)
 
-**IMPORTANT:** Do NOT spawn agents for the next task until all current agents have acknowledged shutdown OR timed out.
+**IMPORTANT:** Task-N's shutdown is independent of other tasks. Other tasks' workers continue running during shutdown. You do NOT need to wait for task-N's shutdown before spawning workers for newly unblocked tasks.
 
 ## Checkpoint Protocol
 
@@ -569,27 +596,26 @@ See: `skills/checkpoint/SKILL.md` and `skills/rehydrate/SKILL.md`
 - If still fails: Set status = blocked with reason: "Failed to spawn team: <error>"
 - Exit
 
-**Worker fails during task:**
-- Shut down failed worker
-- Retry with fresh worker (one retry)
-- If still fails: Set status = blocked with reason
-- Exit
+**Worker-N fails during task:**
+- Shut down failed worker-N
+- Retry with fresh worker-N (one retry)
+- If still fails: Mark task N blocked. Other tasks continue unaffected.
+- Only set phase status=blocked if a blocked task blocks all remaining tasks.
 
-**Reviewer rejects repeatedly:**
+**Reviewer rejects repeatedly for task N:**
 - After 3 rejections for same task, escalate
-- Shut down active worker/reviewers
-- Set status = blocked with rejection context
-- Exit
+- Shut down task-N's active worker/reviewers
+- Mark task N blocked. Dependents of task N remain blocked; unrelated tasks continue.
 
 **Worker/reviewer unresponsive:**
 - Shut down unresponsive agent
-- Spawn replacement (ephemeral model makes this easy)
-- If replacement also fails: Set status = blocked
+- Spawn replacement with same name (ephemeral model makes this easy)
+- If replacement also fails: Mark task blocked
 
 **Shutdown request not acknowledged:**
 - Wait 30 seconds for acknowledgment
-- Log warning: "Agent <name> did not acknowledge shutdown"
-- Proceed to next task (agent may have already terminated)
+- Log warning: "Agent worker-N did not acknowledge shutdown"
+- Proceed (agent may have already terminated)
 
 ## Escalation Protocol
 
@@ -642,10 +668,10 @@ Handoff written to .claude/tina/phase-N/handoff.md
 **Invoked by:**
 - `tina:orchestrate` - Spawns team-lead-init in tmux for each phase
 
-**Spawns (per-task):**
-- `tina:implementer` - Worker to implement current task
-- `tina:spec-reviewer` - Reviews implementation against spec
-- `tina:code-quality-reviewer` - Reviews code quality
+**Spawns (per-task, with task-number suffix):**
+- `tina:implementer` as `worker-N` - Worker to implement task N
+- `tina:spec-reviewer` as `spec-reviewer-N` - Reviews task N implementation against spec
+- `tina:code-quality-reviewer` as `code-quality-reviewer-N` - Reviews task N code quality
 
 **Responds to:**
 - `/checkpoint` - Invokes checkpoint skill for context management
@@ -666,19 +692,21 @@ Note: `team-name.txt` is no longer used. Team names are passed explicitly from o
 - Mark phase complete if complexity gate fails
 - Skip or bypass completion gates for any reason
 - Claim success without running `tina-session check verify`
-- Spawn agents for next task before current agents are shut down
 - Skip shutdown verification (always wait for acknowledgment or timeout)
 - Leave teammates running after phase completes
 - Proceed without requesting shutdown for ALL active agents
+- Use bare names like `worker` or `spec-reviewer` — always use task-suffixed names (`worker-N`)
 
 **Always:**
 - Update status.json at each state transition
 - Include timestamps for debugging
 - Include reasons when blocked
-- **Assign task before spawning worker:** `TaskUpdate({ taskId, status: "in_progress", owner: "worker" })`
+- **Assign task before spawning worker:** `TaskUpdate({ taskId, status: "in_progress", owner: "worker-N" })`
+- **Parse and set dependencies** from `**Depends on:**` before starting execution
+- **Spawn workers for ALL ready tasks** — do not serialize independent tasks
 - Run BOTH gates (verify AND complexity) before completion
 - Set status to "blocked" with gate details if any gate fails
-- Request shutdown for worker, spec-reviewer, and code-quality-reviewer after each task
-- Wait for shutdown acknowledgment (or 30s timeout) before next task
+- Request shutdown for `worker-N`, `spec-reviewer-N`, and `code-quality-reviewer-N` after each task
+- Wait for shutdown acknowledgment (or 30s timeout) per task
 - Do NOT run team cleanup at phase end (daemon needs the dirs)
 - Log warning if agent doesn't acknowledge shutdown

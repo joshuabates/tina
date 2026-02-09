@@ -33,7 +33,8 @@ pub fn run(feature: &str, phase: &str, team: Option<&str>) -> anyhow::Result<u8>
 
     // Get current status
     let status = get_current_status(&status_path);
-    let (tasks_complete, tasks_total, current_task) = get_task_progress(team_name);
+    let (tasks_complete, tasks_total, current_task, tasks_in_progress) =
+        get_task_progress(team_name);
     let last_commit = get_last_commit(&cwd);
 
     // Check if complete/blocked for git_range/blocked_reason
@@ -66,6 +67,7 @@ pub fn run(feature: &str, phase: &str, team: Option<&str>) -> anyhow::Result<u8>
         tasks_total,
         current_task,
         last_commit,
+        tasks_in_progress,
         git_range,
         blocked_reason,
     };

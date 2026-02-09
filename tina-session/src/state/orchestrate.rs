@@ -814,15 +814,6 @@ fn is_plan_ahead(state: &SupervisorState, phase: &str) -> bool {
     }
 }
 
-/// Determine if plan-ahead is available for the next phase after the given one.
-///
-/// Returns `Some(PlanAhead)` when:
-/// - The current phase is a main phase (not remediation)
-/// - A next main phase exists
-/// - The next phase has NOT already started planning
-///
-/// This allows the orchestrator to spawn a planner for the next phase in
-/// parallel with the reviewer for the current phase.
 /// Determine if plan-ahead is available for the next phase after the given one,
 /// and if so, create the phase entry in state so the planner can advance it.
 ///

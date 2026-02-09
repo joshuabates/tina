@@ -42,6 +42,9 @@ pub struct StatusUpdate {
     /// Git range if complete
     #[serde(skip_serializing_if = "Option::is_none")]
     pub git_range: Option<String>,
+    /// All tasks currently in progress (parallel visibility)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tasks_in_progress: Option<Vec<String>>,
     /// Blocked reason if blocked
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocked_reason: Option<String>,
@@ -179,6 +182,7 @@ pub fn watch_status_streaming(
             tasks_total: None,
             current_task: None,
             last_commit: None,
+            tasks_in_progress: None,
             git_range: result.git_range.clone(),
             blocked_reason: result.reason.clone(),
         };
@@ -227,7 +231,8 @@ pub fn watch_status_streaming(
         // Output status update if interval has passed
         if last_update.elapsed() >= interval {
             let current_status = get_current_status(status_path);
-            let (tasks_complete, tasks_total, current_task) = get_task_progress(team_name);
+            let (tasks_complete, tasks_total, current_task, tasks_in_progress) =
+                get_task_progress(team_name);
             let last_commit = get_last_commit(worktree_path);
 
             let update = StatusUpdate {
@@ -237,6 +242,7 @@ pub fn watch_status_streaming(
                 tasks_total,
                 current_task,
                 last_commit,
+                tasks_in_progress,
                 git_range: None,
                 blocked_reason: None,
             };
@@ -247,7 +253,7 @@ pub fn watch_status_streaming(
         // Check status file for completion
         if let Some(result) = check_status_file(status_path) {
             // Output final status
-            let (tasks_complete, tasks_total, _) = get_task_progress(team_name);
+            let (tasks_complete, tasks_total, _, _) = get_task_progress(team_name);
             let update = StatusUpdate {
                 elapsed_secs: start.elapsed().as_secs(),
                 status: result.status.clone(),
@@ -255,6 +261,7 @@ pub fn watch_status_streaming(
                 tasks_total,
                 current_task: None,
                 last_commit: None,
+                tasks_in_progress: None,
                 git_range: result.git_range.clone(),
                 blocked_reason: result.reason.clone(),
             };
@@ -277,6 +284,7 @@ pub fn watch_status_streaming(
                     tasks_total: None,
                     current_task: None,
                     last_commit: None,
+                    tasks_in_progress: None,
                     git_range: None,
                     blocked_reason: result.reason.clone(),
                 };
@@ -312,17 +320,19 @@ struct TaskFile {
 }
 
 /// Get task progress from the team's task directory.
-/// Returns (completed, total, current_task_subject).
-pub fn get_task_progress(team_name: Option<&str>) -> (Option<u32>, Option<u32>, Option<String>) {
+/// Returns (completed, total, current_task_subject, tasks_in_progress).
+pub fn get_task_progress(
+    team_name: Option<&str>,
+) -> (Option<u32>, Option<u32>, Option<String>, Option<Vec<String>>) {
     let team = match team_name {
         Some(t) => t,
-        None => return (None, None, None),
+        None => return (None, None, None, None),
     };
 
     // Task directory: ~/.claude/tasks/{team_name}/
     let home = match std::env::var("HOME") {
         Ok(h) => h,
-        Err(_) => return (None, None, None),
+        Err(_) => return (None, None, None, None),
     };
 
     let task_dir = Path::new(&home)
@@ -330,19 +340,26 @@ pub fn get_task_progress(team_name: Option<&str>) -> (Option<u32>, Option<u32>, 
         .join("tasks")
         .join(team);
 
+    get_task_progress_from_dir(&task_dir)
+}
+
+/// Get task progress from a specific task directory.
+/// Returns (completed, total, current_task_subject, tasks_in_progress).
+pub fn get_task_progress_from_dir(
+    task_dir: &Path,
+) -> (Option<u32>, Option<u32>, Option<String>, Option<Vec<String>>) {
     if !task_dir.exists() {
-        return (None, None, None);
+        return (None, None, None, None);
     }
 
-    // Read all .json files in the task directory
-    let entries = match fs::read_dir(&task_dir) {
+    let entries = match fs::read_dir(task_dir) {
         Ok(e) => e,
-        Err(_) => return (None, None, None),
+        Err(_) => return (None, None, None, None),
     };
 
     let mut total = 0u32;
     let mut completed = 0u32;
-    let mut current_task: Option<String> = None;
+    let mut in_progress_subjects: Vec<String> = Vec::new();
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -353,13 +370,12 @@ pub fn get_task_progress(team_name: Option<&str>) -> (Option<u32>, Option<u32>, 
                     match task.status.as_str() {
                         "completed" => completed += 1,
                         "in_progress" => {
-                            // Capture the in-progress task subject
                             let subject = if task.subject.len() > 50 {
                                 format!("{}...", &task.subject[..47])
                             } else {
                                 task.subject
                             };
-                            current_task = Some(subject);
+                            in_progress_subjects.push(subject);
                         }
                         _ => {}
                     }
@@ -369,9 +385,15 @@ pub fn get_task_progress(team_name: Option<&str>) -> (Option<u32>, Option<u32>, 
     }
 
     if total == 0 {
-        (None, None, None)
+        (None, None, None, None)
     } else {
-        (Some(completed), Some(total), current_task)
+        let current_task = in_progress_subjects.first().cloned();
+        let tasks_in_progress = if in_progress_subjects.is_empty() {
+            None
+        } else {
+            Some(in_progress_subjects)
+        };
+        (Some(completed), Some(total), current_task, tasks_in_progress)
     }
 }
 
@@ -506,5 +528,91 @@ mod tests {
         let result = check_status_file(&status_path).unwrap();
         assert_eq!(result.status, "complete");
         assert_eq!(result.git_range, Some("abc..def".to_string()));
+    }
+
+    #[test]
+    fn test_get_task_progress_multiple_in_progress() {
+        let temp = TempDir::new().unwrap();
+        let task_dir = temp.path().join("tasks").join("test-team");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        // Create task files: 2 in-progress, 1 completed, 1 pending
+        fs::write(
+            task_dir.join("task-1.json"),
+            r#"{"subject": "Implement auth", "status": "completed"}"#,
+        )
+        .unwrap();
+        fs::write(
+            task_dir.join("task-2.json"),
+            r#"{"subject": "Add validation", "status": "in_progress"}"#,
+        )
+        .unwrap();
+        fs::write(
+            task_dir.join("task-3.json"),
+            r#"{"subject": "Write tests", "status": "in_progress"}"#,
+        )
+        .unwrap();
+        fs::write(
+            task_dir.join("task-4.json"),
+            r#"{"subject": "Update docs", "status": "pending"}"#,
+        )
+        .unwrap();
+
+        let (completed, total, current_task, tasks_in_progress) =
+            get_task_progress_from_dir(&task_dir);
+
+        assert_eq!(completed, Some(1));
+        assert_eq!(total, Some(4));
+        // current_task should be one of the in-progress tasks (backward compat)
+        assert!(current_task.is_some());
+        // tasks_in_progress should contain both in-progress task subjects
+        let in_progress = tasks_in_progress.unwrap();
+        assert_eq!(in_progress.len(), 2);
+        assert!(in_progress.contains(&"Add validation".to_string()));
+        assert!(in_progress.contains(&"Write tests".to_string()));
+    }
+
+    #[test]
+    fn test_get_task_progress_single_in_progress() {
+        let temp = TempDir::new().unwrap();
+        let task_dir = temp.path().join("tasks").join("test-team");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        fs::write(
+            task_dir.join("task-1.json"),
+            r#"{"subject": "Implement feature", "status": "in_progress"}"#,
+        )
+        .unwrap();
+
+        let (completed, total, current_task, tasks_in_progress) =
+            get_task_progress_from_dir(&task_dir);
+
+        assert_eq!(completed, Some(0));
+        assert_eq!(total, Some(1));
+        assert_eq!(current_task, Some("Implement feature".to_string()));
+        let in_progress = tasks_in_progress.unwrap();
+        assert_eq!(in_progress.len(), 1);
+        assert_eq!(in_progress[0], "Implement feature");
+    }
+
+    #[test]
+    fn test_get_task_progress_none_in_progress() {
+        let temp = TempDir::new().unwrap();
+        let task_dir = temp.path().join("tasks").join("test-team");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        fs::write(
+            task_dir.join("task-1.json"),
+            r#"{"subject": "Done task", "status": "completed"}"#,
+        )
+        .unwrap();
+
+        let (completed, total, current_task, tasks_in_progress) =
+            get_task_progress_from_dir(&task_dir);
+
+        assert_eq!(completed, Some(1));
+        assert_eq!(total, Some(1));
+        assert!(current_task.is_none());
+        assert!(tasks_in_progress.is_none());
     }
 }
