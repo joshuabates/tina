@@ -12,3 +12,6 @@
 *.tsbuildinfo
 
 .env.local
+
+*storybook.log
+storybook-static
