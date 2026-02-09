@@ -112,6 +112,17 @@ describe('SelectionService', () => {
     expect(listener).not.toHaveBeenCalled()
   })
 
+  it('should not notify on redundant set - null orchestration', () => {
+    const service = createSelectionService()
+    const listener = vi.fn()
+
+    // Initial state is already null, subscribe, then try to set null again
+    service.subscribe(listener)
+    service.selectOrchestration(null)
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('should support multiple listeners', () => {
     const service = createSelectionService()
     const listener1 = vi.fn()

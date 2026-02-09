@@ -18,7 +18,7 @@ export function createSelectionService() {
   }
 
   function selectOrchestration(orchestrationId: string | null) {
-    if (state.orchestrationId === orchestrationId && orchestrationId !== null) {
+    if (state.orchestrationId === orchestrationId) {
       return // No change, don't notify
     }
 
