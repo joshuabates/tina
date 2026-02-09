@@ -8,6 +8,7 @@ pub mod config;
 pub mod convex;
 pub mod daemon;
 pub mod error;
+pub mod routing;
 pub mod session;
 pub mod state;
 pub mod tmux;
