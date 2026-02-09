@@ -1,6 +1,6 @@
 ---
 name: automated-refactoring
-description: Use when renaming symbols across 5+ files, changing function signatures used in many places, migrating APIs/dependencies, or any refactoring touching more than a handful of files. When you're about to open 10 files and Edit each one manually — STOP and use this.
+description: Use when making repetitive edits across multiple files - renaming symbols, changing function signatures, migrating APIs, updating imports, or ANY pattern-based change touching 5+ files. If you're about to Edit the same kind of change file-by-file — STOP and use this skill. Covers ast-grep, fastmod, and language-specific tools for Rust, TypeScript, and Ruby.
 ---
 
 # Automated Refactoring

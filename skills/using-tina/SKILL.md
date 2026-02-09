@@ -29,6 +29,7 @@ This is not negotiable. This is not optional. You cannot rationalize your way ou
 - `quick-plan` - Lightweight planning for clear-scope tasks (research, present once, execute)
 - `systematic-debugging` - Find root causes, not symptoms
 - `test-driven-development` - Tests first, always
+- `automated-refactoring` - Use ast-grep/fastmod for renames, transforms, migrations across 5+ files. NEVER manually Edit the same pattern across many files.
 
 **Code Quality** - Verification and review:
 - `requesting-code-review` - Get your work reviewed
@@ -67,6 +68,8 @@ Use the `Skill` tool. When you invoke a skill, its content is loaded and present
 "Let's add X" (vague) → `brainstorming` first
 "Add X to the Y system" (clear scope) → `quick-plan` first
 "Fix this bug" → `systematic-debugging` first
+"Rename X across the codebase" → `automated-refactoring` first
+About to Edit the same change in 5+ files → `automated-refactoring` IMMEDIATELY
 "I'm done" → `verification-before-completion` first
 
 ## Red Flags
@@ -83,6 +86,7 @@ These thoughts mean STOP—you're rationalizing:
 | "The skill is overkill" | Simple things become complex. Use it. |
 | "I'll just do this one thing first" | Check BEFORE doing anything. |
 | "I know what that means" | Knowing the concept ≠ using the skill. Invoke it. |
+| "I'll just Edit each file" | If it's the same change in 5+ files, use `automated-refactoring`. |
 
 ## Skill Types
 
