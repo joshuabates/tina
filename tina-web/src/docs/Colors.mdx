@@ -1,0 +1,129 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { ColorGrid, ColorSwatch, TokenSection } from "./TokenDisplay";
+
+<Meta title="Foundations/Colors" />
+
+# Colors
+
+All colors are defined as CSS custom properties in HSL format, mapped through Tailwind config.
+The HSL format allows opacity modifiers like `bg-primary/80`.
+
+## Core
+
+<ColorGrid>
+  <ColorSwatch
+    name="Background"
+    cssVar="--background"
+    tailwind="bg-background"
+    hex="#020617"
+  />
+  <ColorSwatch
+    name="Foreground"
+    cssVar="--foreground"
+    tailwind="text-foreground"
+    hex="#f8fafc"
+  />
+  <ColorSwatch
+    name="Card"
+    cssVar="--card"
+    tailwind="bg-card"
+    hex="#0b1222"
+  />
+  <ColorSwatch
+    name="Card Foreground"
+    cssVar="--card-foreground"
+    tailwind="text-card-foreground"
+    hex="#e2e8f0"
+  />
+  <ColorSwatch
+    name="Sidebar"
+    cssVar="--sidebar"
+    tailwind="bg-sidebar"
+    hex="#060914"
+  />
+  <ColorSwatch
+    name="Sidebar Foreground"
+    cssVar="--sidebar-foreground"
+    tailwind="text-sidebar-foreground"
+    hex="#94a3b8"
+  />
+  <ColorSwatch
+    name="Primary"
+    cssVar="--primary"
+    tailwind="bg-primary"
+    hex="#0ea5e9"
+  />
+  <ColorSwatch
+    name="Primary Foreground"
+    cssVar="--primary-foreground"
+    tailwind="text-primary-foreground"
+    hex="#f0f9ff"
+  />
+  <ColorSwatch
+    name="Muted"
+    cssVar="--muted"
+    tailwind="bg-muted"
+    hex="#1e293b"
+  />
+  <ColorSwatch
+    name="Muted Foreground"
+    cssVar="--muted-foreground"
+    tailwind="text-muted-foreground"
+    hex="#64748b"
+  />
+  <ColorSwatch
+    name="Border"
+    cssVar="--border"
+    tailwind="border-border"
+    hex="#1e293b"
+  />
+  <ColorSwatch
+    name="Ring"
+    cssVar="--ring"
+    tailwind="ring-ring"
+    hex="#0ea5e9"
+  />
+</ColorGrid>
+
+## Status
+
+Semantic colors for orchestration states.
+
+<ColorGrid>
+  <ColorSwatch
+    name="Complete"
+    cssVar="--status-complete"
+    tailwind="bg-status-complete"
+    hex="#10b981"
+  />
+  <ColorSwatch
+    name="Executing"
+    cssVar="--status-executing"
+    tailwind="bg-status-executing"
+    hex="#0ea5e9"
+  />
+  <ColorSwatch
+    name="Active"
+    cssVar="--status-active"
+    tailwind="bg-status-active"
+    hex="#0ea5e9"
+  />
+  <ColorSwatch
+    name="Planning"
+    cssVar="--status-planning"
+    tailwind="bg-status-planning"
+    hex="#6b7280"
+  />
+  <ColorSwatch
+    name="Blocked"
+    cssVar="--status-blocked"
+    tailwind="bg-status-blocked"
+    hex="#ef4444"
+  />
+  <ColorSwatch
+    name="Warning"
+    cssVar="--status-warning"
+    tailwind="bg-status-warning"
+    hex="#f59e0b"
+  />
+</ColorGrid>

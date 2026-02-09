@@ -1,0 +1,37 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { FontFamilySample, TypeSample, TokenSection } from "./TokenDisplay";
+
+<Meta title="Foundations/Typography" />
+
+# Typography
+
+A compact type scale designed for dense dashboard UI. Sizes range from 9px to 17px.
+
+## Font Families
+
+<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+  <FontFamilySample
+    name="Inter"
+    tailwind="font-display"
+    family="Inter, sans-serif"
+  />
+  <FontFamilySample
+    name="JetBrains Mono"
+    tailwind="font-mono"
+    family="JetBrains Mono, monospace"
+  />
+</div>
+
+## Type Scale
+
+<TokenSection>
+  <TypeSample name="2xs" tailwind="text-2xs" size="9px" lineHeight="12px" />
+  <TypeSample name="xs" tailwind="text-xs" size="11px" lineHeight="14px" />
+  <TypeSample name="sm" tailwind="text-sm" size="13px" lineHeight="18px" />
+  <TypeSample name="base" tailwind="text-base" size="13px" lineHeight="20px" />
+  <TypeSample name="lg" tailwind="text-lg" size="15px" lineHeight="22px" />
+  <TypeSample name="xl" tailwind="text-xl" size="17px" lineHeight="24px" />
+</TokenSection>
+
+Note: `text-sm` and `text-base` share the same font size (13px) but differ in line height.
+Use `text-sm` for tighter layouts and `text-base` for body text.

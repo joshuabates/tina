@@ -1,0 +1,41 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { SpacingRow, TokenSection } from "./TokenDisplay";
+
+<Meta title="Foundations/Spacing" />
+
+# Spacing
+
+Uses Tailwind's default spacing scale. Values work with `p-`, `m-`, `gap-`, `w-`, `h-`, and other spacing utilities.
+
+## Scale
+
+<TokenSection>
+  <SpacingRow name="0" rem="0rem" px="0px" />
+  <SpacingRow name="px" rem="1px" px="1px" />
+  <SpacingRow name="0.5" rem="0.125rem" px="2px" />
+  <SpacingRow name="1" rem="0.25rem" px="4px" />
+  <SpacingRow name="1.5" rem="0.375rem" px="6px" />
+  <SpacingRow name="2" rem="0.5rem" px="8px" />
+  <SpacingRow name="2.5" rem="0.625rem" px="10px" />
+  <SpacingRow name="3" rem="0.75rem" px="12px" />
+  <SpacingRow name="4" rem="1rem" px="16px" />
+  <SpacingRow name="5" rem="1.25rem" px="20px" />
+  <SpacingRow name="6" rem="1.5rem" px="24px" />
+  <SpacingRow name="8" rem="2rem" px="32px" />
+  <SpacingRow name="10" rem="2.5rem" px="40px" />
+  <SpacingRow name="12" rem="3rem" px="48px" />
+  <SpacingRow name="16" rem="4rem" px="64px" />
+  <SpacingRow name="20" rem="5rem" px="80px" />
+  <SpacingRow name="24" rem="6rem" px="96px" />
+</TokenSection>
+
+## Usage
+
+| Utility | Example | Description |
+|---------|---------|-------------|
+| `p-{n}` | `p-4` | Padding (16px) |
+| `m-{n}` | `m-2` | Margin (8px) |
+| `gap-{n}` | `gap-3` | Flex/grid gap (12px) |
+| `w-{n}` | `w-6` | Width (24px) |
+| `h-{n}` | `h-8` | Height (32px) |
+| `space-x-{n}` | `space-x-2` | Horizontal spacing (8px) |

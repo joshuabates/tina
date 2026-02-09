@@ -1,0 +1,29 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+import { RadiusSample, TokenSection } from "./TokenDisplay";
+
+<Meta title="Foundations/Border Radius" />
+
+# Border Radius
+
+All radii derive from a single `--radius` CSS custom property (0.5rem / 8px).
+
+## Variants
+
+<TokenSection>
+  <RadiusSample name="Large" tailwind="rounded-lg" value="8px" />
+  <RadiusSample name="Medium" tailwind="rounded-md" value="6px" />
+  <RadiusSample name="Small" tailwind="rounded-sm" value="4px" />
+  <RadiusSample name="Full" tailwind="rounded-full" value="9999px" />
+</TokenSection>
+
+## How It Works
+
+The base token `--radius: 0.5rem` feeds the scale:
+
+| Token | Tailwind | Calculation | Result |
+|-------|----------|-------------|--------|
+| `--radius` | `rounded-lg` | `var(--radius)` | 8px |
+| — | `rounded-md` | `calc(var(--radius) - 2px)` | 6px |
+| — | `rounded-sm` | `calc(var(--radius) - 4px)` | 4px |
+
+Changing `--radius` shifts the entire scale proportionally.
