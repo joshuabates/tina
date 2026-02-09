@@ -285,7 +285,7 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 | `spawn_executor` | Spawn `tina:phase-executor` for `.phase` (plan at `.plan_path`, model from `.model` if present) |
 | `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`, model from `.model` if present). If `.secondary_model` is present, spawn a second reviewer with that model in parallel for consensus review. |
 | `consensus_disagreement` | Surface to user: "Reviewers disagree on phase `.phase`. Verdict 1: `.verdict_1`, Verdict 2: `.verdict_2`. Please resolve manually." |
-| `reuse_plan` | Skip planning, auto-complete plan task, dispatch executor |
+| `reuse_plan` | Run plan staleness check: if `tina:plan-validator` agent exists, spawn it to validate the plan. On Pass/Warning: auto-complete plan task, dispatch executor. On Stop: discard stale plan and spawn planner instead. If no validator agent exists, proceed directly to executor. |
 | `wait` | No action required; keep waiting for teammate updates |
 | `finalize` | Invoke `tina:finishing-a-development-branch` |
 | `complete` | Report orchestration complete |
@@ -597,17 +597,20 @@ When: validate-design task is unblocked (always first)
 ```
 Then: Mark validate-design as in_progress
 
-**Phase planner spawn (with plan reuse check):**
+**Phase planner spawn (with plan reuse gate):**
 
 When: validate-design complete (for phase 1) OR review-phase-(N-1) complete with pass (for phase N>1)
 
-Before spawning, check if a plan already exists:
+Before spawning, check if a plan already exists (the CLI `reuse_plan` action handles this):
 ```bash
 PLAN_FILE="${WORKTREE_PATH}/.claude/tina/phase-${N}/plan.md"
 if [ -f "$PLAN_FILE" ]; then
-    # Reuse existing plan - skip planning entirely
+    # CLI returned reuse_plan action. Validate staleness before reusing:
+    # If tina:plan-validator agent exists, spawn it with the plan path.
+    # On Pass/Warning: proceed to executor
+    # On Stop: discard stale plan, spawn planner normally
     TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: "$PLAN_FILE" }
-    # Proceed to spawning executor for phase N (same as "plan-phase-N complete" handler)
+    # Proceed to spawning executor for phase N
 else
     # Spawn planner as normal
 fi
