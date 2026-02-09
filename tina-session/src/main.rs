@@ -394,6 +394,17 @@ enum ConfigCommands {
         #[arg(long)]
         env: Option<String>,
     },
+
+    /// Print which CLI handles a given model name ("claude" or "codex")
+    CliForModel {
+        /// Model name to check routing for
+        #[arg(long)]
+        model: String,
+
+        /// Environment profile (`prod` or `dev`). Defaults to prod.
+        #[arg(long)]
+        env: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -610,6 +621,9 @@ fn run() -> anyhow::Result<u8> {
         Commands::Config { command } => match command {
             ConfigCommands::ConvexUrl { env } => commands::config::convex_url(env.as_deref()),
             ConfigCommands::Show { env } => commands::config::show(env.as_deref()),
+            ConfigCommands::CliForModel { model, env } => {
+                commands::config::cli_for_model(&model, env.as_deref())
+            }
         },
 
         Commands::List => commands::list::run(),
