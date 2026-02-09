@@ -21,6 +21,10 @@ VITE_TINA_ENV="$TINA_ENV" VITE_CONVEX_URL="$CONVEX_URL" npm run dev
 description = "Start frontend dev server against dev Convex profile"
 run = "TINA_ENV=dev mise run dev:web"
 
+[tasks."dev:storybook"]
+description = "Start Storybook dev server"
+run = "cd tina-web && npm run storybook"
+
 [tasks."dev:convex"]
 description = "Start Convex dev server only"
 run = "npx convex dev"
