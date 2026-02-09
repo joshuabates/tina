@@ -274,16 +274,36 @@ ACTION=$(echo "$NEXT_ACTION" | jq -r '.action')
 | `review-N complete (gaps): issues` | `review_gaps` | `--issues "issue1,issue2"` |
 | `error: reason` or `session_died` | `error` | `--issues "reason"` |
 
+### Routing Check
+
+Before spawning any teammate, check whether the model routes to codex or claude. This determines the agent type to use.
+
+```bash
+# Get model for this action (from .model field in CLI response, or from task metadata)
+MODEL="${ACTION_MODEL:-}"
+if [ -n "$MODEL" ]; then
+    CLI=$(tina-session config cli-for-model --model "$MODEL")
+else
+    CLI="claude"  # default when no model specified
+fi
+```
+
+If `CLI == "codex"`: spawn `tina:codex-cli` instead of the native agent type. The codex-cli teammate wraps execution through `tina-session exec-codex`. The spawn prompt must include: `role` (executor/reviewer/planner/validator), `feature`, `phase`, `task_id`, `cwd` (worktree path), `model`, and `prompt_content` (the task context that would normally go to the native agent).
+
+If `CLI == "claude"`: spawn the native agent type as before (e.g., `tina:phase-executor`, `tina:phase-planner`, etc.).
+
+The codex-cli skill produces the same message format as native Claude teammates, so the event loop (STEP 5) needs no changes to message parsing.
+
 ### Action Dispatch
 
 The CLI returns a JSON object with an `action` field. Dispatch based on action type:
 
 | Action | What to Do |
 |--------|------------|
-| `spawn_validator` | Spawn `tina:design-validator` teammate (model from `.model` if present) |
-| `spawn_planner` | Spawn `tina:phase-planner` for `.phase` (model from `.model` if present) |
-| `spawn_executor` | Spawn `tina:phase-executor` for `.phase` (plan at `.plan_path`, model from `.model` if present) |
-| `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`, model from `.model` if present). If `.secondary_model` is present, spawn a second reviewer with that model in parallel for consensus review. |
+| `spawn_validator` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=validator. If claude: spawn `tina:design-validator`. |
+| `spawn_planner` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=planner. If claude: spawn `tina:phase-planner`. |
+| `spawn_executor` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=executor. If claude: spawn `tina:phase-executor`. |
+| `spawn_reviewer` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=reviewer. If claude: spawn `tina:phase-reviewer`. If `.secondary_model` is present, spawn a second reviewer with that model (also routing-checked) in parallel for consensus review. |
 | `consensus_disagreement` | Surface to user: "Reviewers disagree on phase `.phase`. Verdict 1: `.verdict_1`, Verdict 2: `.verdict_2`. Please resolve manually." |
 | `reuse_plan` | Run plan staleness check: if `tina:plan-validator` agent exists, spawn it to validate the plan. On Pass/Warning: auto-complete plan task, dispatch executor. On Stop: discard stale plan and spawn planner instead. If no validator agent exists, proceed directly to executor. |
 | `wait` | No action required; keep waiting for teammate updates |
@@ -587,6 +607,13 @@ TaskUpdate {
 **Design validator spawn:**
 
 When: validate-design task is unblocked (always first)
+
+Run routing check on the action's model (if present):
+```bash
+CLI=$(tina-session config cli-for-model --model "$MODEL")  # if MODEL set
+```
+
+If `CLI == "claude"` (or no model specified):
 ```json
 {
   "subagent_type": "tina:design-validator",
@@ -595,6 +622,17 @@ When: validate-design task is unblocked (always first)
   "prompt": "task_id: validate-design"
 }
 ```
+
+If `CLI == "codex"`:
+```json
+{
+  "subagent_type": "tina:codex-cli",
+  "team_name": "<TEAM_NAME>",
+  "name": "validator",
+  "prompt": "feature: <FEATURE_NAME>\nphase: validation\ntask_id: validate-design\nrole: validator\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <design doc content>"
+}
+```
+
 Then: Mark validate-design as in_progress
 
 **Phase planner spawn (with plan reuse gate):**
@@ -616,7 +654,9 @@ else
 fi
 ```
 
-If no existing plan:
+If no existing plan, run routing check on the action's model:
+
+If `CLI == "claude"` (or no model):
 ```json
 {
   "subagent_type": "tina:phase-planner",
@@ -625,12 +665,27 @@ If no existing plan:
   "prompt": "task_id: plan-phase-<N>"
 }
 ```
+
+If `CLI == "codex"`:
+```json
+{
+  "subagent_type": "tina:codex-cli",
+  "team_name": "<TEAM_NAME>",
+  "name": "planner-<N>",
+  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: plan-phase-<N>\nrole: planner\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <design doc and phase context>"
+}
+```
+
 Then: Mark plan-phase-N as in_progress
 
 **Phase executor spawn:**
 
 When: plan-phase-N complete
 Before spawning: Update execute-phase-N metadata with worktree_path and plan_path
+
+Run routing check on the action's model:
+
+If `CLI == "claude"` (or no model):
 ```json
 {
   "subagent_type": "tina:phase-executor",
@@ -639,12 +694,27 @@ Before spawning: Update execute-phase-N metadata with worktree_path and plan_pat
   "prompt": "task_id: execute-phase-<N>"
 }
 ```
+
+If `CLI == "codex"`:
+```json
+{
+  "subagent_type": "tina:codex-cli",
+  "team_name": "<TEAM_NAME>",
+  "name": "executor-<N>",
+  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: execute-phase-<N>\nrole: executor\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <plan content and execution context>"
+}
+```
+
 Then: Mark execute-phase-N as in_progress
 
 **Phase reviewer spawn:**
 
 When: execute-phase-N complete
 Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, and git_range
+
+Run routing check on the action's model:
+
+If `CLI == "claude"` (or no model):
 ```json
 {
   "subagent_type": "tina:phase-reviewer",
@@ -653,16 +723,31 @@ Before spawning: Update review-phase-N metadata with worktree_path, design_doc_p
   "prompt": "task_id: review-phase-<N>"
 }
 ```
+
+If `CLI == "codex"`:
+```json
+{
+  "subagent_type": "tina:codex-cli",
+  "team_name": "<TEAM_NAME>",
+  "name": "reviewer-<N>",
+  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: review-phase-<N>\nrole: reviewer\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <review context, git range, design doc path>"
+}
+```
+
 Then: Mark review-phase-N as in_progress
 
 **Parallel consensus reviewer spawn:**
 
-When the `spawn_reviewer` action includes a `secondary_model` field, spawn TWO reviewers in parallel:
-1. Primary reviewer: use `.model` (or default)
-2. Secondary reviewer: use `.secondary_model`
+When the `spawn_reviewer` action includes a `secondary_model` field, spawn TWO reviewers in parallel. Each reviewer is independently routing-checked:
+
+1. Primary reviewer: run routing check on `.model`
+2. Secondary reviewer: run routing check on `.secondary_model`
+
+For each reviewer, if its model routes to codex, spawn `tina:codex-cli` with role=reviewer. Otherwise spawn `tina:phase-reviewer`.
 
 ```json
-// Primary reviewer
+// Primary reviewer (after routing check on .model)
+// If claude:
 {
   "subagent_type": "tina:phase-reviewer",
   "team_name": "<TEAM_NAME>",
@@ -670,14 +755,22 @@ When the `spawn_reviewer` action includes a `secondary_model` field, spawn TWO r
   "model": "<model from action, if present>",
   "prompt": "task_id: review-phase-<N>"
 }
-
-// Secondary reviewer (spawned simultaneously)
+// If codex:
 {
-  "subagent_type": "tina:phase-reviewer",
+  "subagent_type": "tina:codex-cli",
+  "team_name": "<TEAM_NAME>",
+  "name": "reviewer-<N>",
+  "prompt": "feature: ...\nphase: <N>\ntask_id: review-phase-<N>\nrole: reviewer\ncwd: ...\nmodel: <model>\nprompt_content: |\n  <review context>"
+}
+
+// Secondary reviewer (after routing check on .secondary_model)
+// Same pattern: codex-cli if codex, phase-reviewer if claude
+{
+  "subagent_type": "<tina:phase-reviewer or tina:codex-cli>",
   "team_name": "<TEAM_NAME>",
   "name": "reviewer-<N>-secondary",
   "model": "<secondary_model from action>",
-  "prompt": "task_id: review-phase-<N>"
+  "prompt": "<appropriate prompt for routing result>"
 }
 ```
 
@@ -1186,10 +1279,11 @@ To minimize recovery needs:
 ## Integration
 
 **Spawns:**
-- `tina:design-validator` - Validates design before work begins
-- `tina:phase-planner` - Creates implementation plans
-- `tina:phase-executor` - Executes phase plans
-- `tina:phase-reviewer` - Reviews completed phases
+- `tina:design-validator` - Validates design before work begins (when model routes to claude)
+- `tina:phase-planner` - Creates implementation plans (when model routes to claude)
+- `tina:phase-executor` - Executes phase plans (when model routes to claude)
+- `tina:phase-reviewer` - Reviews completed phases (when model routes to claude)
+- `tina:codex-cli` - Adapter for executing tasks via Codex CLI (when model routes to codex)
 
 **Invokes:**
 - `tina:finishing-a-development-branch` - Handles merge/PR/cleanup

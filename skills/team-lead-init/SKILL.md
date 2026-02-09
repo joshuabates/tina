@@ -101,7 +101,7 @@ Read the plan file and create tasks via TaskCreate for each task in the plan.
 TaskCreate {
   "subject": "Task N: <description>",
   "description": "<full task content>",
-  "metadata": { "model": "<haiku|opus>", "task_number": N }
+  "metadata": { "model": "<model-string>", "task_number": N }
 }
 ```
 
@@ -143,7 +143,13 @@ TaskUpdate({
 })
 ```
 
-Get the model from task metadata (via TaskGet), then spawn:
+Get the model from task metadata (via TaskGet), then run a routing check:
+```bash
+MODEL=$(TaskGet metadata.model)
+CLI=$(tina-session config cli-for-model --model "$MODEL")
+```
+
+If `CLI == "claude"` (or no model specified):
 ```json
 {
   "subagent_type": "tina:implementer",
@@ -151,6 +157,16 @@ Get the model from task metadata (via TaskGet), then spawn:
   "name": "worker-N",
   "model": "<model from task metadata>",
   "prompt": "Implement task: <task subject and description>. Use TDD."
+}
+```
+
+If `CLI == "codex"`:
+```json
+{
+  "subagent_type": "tina:codex-cli",
+  "team_name": "<team-name>",
+  "name": "worker-N",
+  "prompt": "feature: <FEATURE_NAME>\nphase: <PHASE_NUM>\ntask_id: <task-id>\nrole: executor\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <full task text and context>"
 }
 ```
 
@@ -162,8 +178,14 @@ Monitor for Teammate messages from any active worker indicating completion. Trac
 
 ### 5.4 Review the completed task
 
-When worker-N reports completion, spawn reviewers for task N:
+When worker-N reports completion, spawn reviewers for task N. Run a routing check using the task's model:
 
+```bash
+MODEL=$(TaskGet metadata.model for task N)
+CLI=$(tina-session config cli-for-model --model "$MODEL")
+```
+
+If `CLI == "claude"` (or no model specified):
 ```json
 {
   "subagent_type": "tina:spec-reviewer",
@@ -179,6 +201,25 @@ When worker-N reports completion, spawn reviewers for task N:
   "team_name": "<team-name>",
   "name": "code-quality-reviewer-N",
   "prompt": "Review code quality for task: <task subject>. Check architecture and patterns."
+}
+```
+
+If `CLI == "codex"`:
+```json
+{
+  "subagent_type": "tina:codex-cli",
+  "team_name": "<team-name>",
+  "name": "spec-reviewer-N",
+  "prompt": "feature: <FEATURE_NAME>\nphase: <PHASE_NUM>\ntask_id: <task-id>\nrole: reviewer\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  Review implementation for task: <task subject>. Check spec compliance.\n  Git range: <range>\n  Files changed: <list>"
+}
+```
+
+```json
+{
+  "subagent_type": "tina:codex-cli",
+  "team_name": "<team-name>",
+  "name": "code-quality-reviewer-N",
+  "prompt": "feature: <FEATURE_NAME>\nphase: <PHASE_NUM>\ntask_id: <task-id>\nrole: reviewer\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  Review code quality for task: <task subject>. Check architecture and patterns.\n  Git range: <range>\n  Files changed: <list>"
 }
 ```
 
@@ -480,7 +521,7 @@ Then spawn with task-specific name:
 }
 ```
 
-The model field accepts: `haiku` or `opus`. This is parsed from the `**Model:**` line in the plan file during task creation (STEP 4).
+The model field accepts any model string supported by `tina-session config cli-for-model` (e.g., `opus`, `haiku`, `codex`, `gpt-5.3-codex`, etc.). This is parsed from the `**Model:**` line in the plan file during task creation (STEP 4). The routing decision happens at spawn time, not at plan parse time.
 
 **Reviewer spawns (per task N):**
 ```json
@@ -669,9 +710,10 @@ Handoff written to .claude/tina/phase-N/handoff.md
 - `tina:orchestrate` - Spawns team-lead-init in tmux for each phase
 
 **Spawns (per-task, with task-number suffix):**
-- `tina:implementer` as `worker-N` - Worker to implement task N
-- `tina:spec-reviewer` as `spec-reviewer-N` - Reviews task N implementation against spec
-- `tina:code-quality-reviewer` as `code-quality-reviewer-N` - Reviews task N code quality
+- `tina:implementer` as `worker-N` - Worker to implement task N (when model routes to claude)
+- `tina:spec-reviewer` as `spec-reviewer-N` - Reviews task N implementation against spec (when model routes to claude)
+- `tina:code-quality-reviewer` as `code-quality-reviewer-N` - Reviews task N code quality (when model routes to claude)
+- `tina:codex-cli` as `worker-N` / `spec-reviewer-N` / `code-quality-reviewer-N` - Adapter for executing tasks via Codex CLI (when model routes to codex)
 
 **Responds to:**
 - `/checkpoint` - Invokes checkpoint skill for context management

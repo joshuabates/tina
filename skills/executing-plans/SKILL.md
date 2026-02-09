@@ -157,7 +157,17 @@ for task in plan.tasks:
 
 **2. Per-Task Execution:**
 
-For each task, assign ownership and spawn fresh worker with context in prompt:
+For each task, assign ownership and spawn fresh worker with context in prompt. If the task has a model in its metadata, run a routing check first:
+
+```bash
+# Get model from task metadata (if plan specifies one)
+MODEL="${TASK_MODEL:-}"
+if [ -n "$MODEL" ]; then
+    CLI=$(tina-session config cli-for-model --model "$MODEL")
+else
+    CLI="claude"
+fi
+```
 
 ```
 # Assign task to worker BEFORE spawning
@@ -166,7 +176,10 @@ TaskUpdate({
   status: "in_progress",
   owner: "worker"
 })
+```
 
+If `CLI == "claude"`:
+```
 Task tool:
   team_name: "phase-N-execution"
   name: "worker"
@@ -177,10 +190,39 @@ Task tool:
     Files likely involved: [file list]
 ```
 
+If `CLI == "codex"`:
+```
+Task tool:
+  team_name: "phase-N-execution"
+  name: "worker"
+  agent: "tina:codex-cli"
+  prompt: |
+    feature: [feature-name]
+    phase: [phase-number]
+    task_id: [task-id]
+    role: executor
+    cwd: [worktree-path]
+    model: [model]
+    prompt_content: |
+      Task: [full task text]
+      Context: [scene-setting context]
+      Files likely involved: [file list]
+```
+
 **3. Spawn Reviewers Based on Review Field:**
 
-After worker completes, spawn reviewers based on task's review requirements:
+After worker completes, spawn reviewers based on task's review requirements. Use the same routing check as for workers:
 
+```bash
+MODEL="${TASK_MODEL:-}"
+if [ -n "$MODEL" ]; then
+    CLI=$(tina-session config cli-for-model --model "$MODEL")
+else
+    CLI="claude"
+fi
+```
+
+If `CLI == "claude"`:
 ```
 # If task.review includes "spec" or default:
 Task tool:
@@ -200,6 +242,44 @@ Task tool:
   prompt: |
     Git range: abc123..def456
     Files changed: [list]
+```
+
+If `CLI == "codex"`:
+```
+# Spec review via codex:
+Task tool:
+  team_name: "phase-N-execution"
+  name: "spec-reviewer"
+  agent: "tina:codex-cli"
+  prompt: |
+    feature: [feature-name]
+    phase: [phase-number]
+    task_id: [task-id]
+    role: reviewer
+    cwd: [worktree-path]
+    model: [model]
+    prompt_content: |
+      Review implementation for spec compliance.
+      Task: [full task text]
+      Git range: abc123..def456
+      Files changed: [list]
+
+# Quality review via codex:
+Task tool:
+  team_name: "phase-N-execution"
+  name: "code-quality-reviewer"
+  agent: "tina:codex-cli"
+  prompt: |
+    feature: [feature-name]
+    phase: [phase-number]
+    task_id: [task-id]
+    role: reviewer
+    cwd: [worktree-path]
+    model: [model]
+    prompt_content: |
+      Review code quality and architecture.
+      Git range: abc123..def456
+      Files changed: [list]
 ```
 
 **4. Review Notification:**
@@ -390,10 +470,11 @@ No special handling needed - ephemeral model naturally handles resume by startin
 ## Agents
 
 Use the Task tool with these agent types:
-- `tina:implementer` - Implements a single task
-- `tina:spec-reviewer` - Verifies implementation matches spec
-- `tina:code-quality-reviewer` - Reviews code quality after spec compliance passes
+- `tina:implementer` - Implements a single task (when model routes to claude)
+- `tina:spec-reviewer` - Verifies implementation matches spec (when model routes to claude)
+- `tina:code-quality-reviewer` - Reviews code quality after spec compliance passes (when model routes to claude)
 - `tina:phase-reviewer` - Verifies phase follows architecture after all tasks complete
+- `tina:codex-cli` - Adapter for executing tasks via Codex CLI (when model routes to codex)
 
 ## Team Composition (Ephemeral Model)
 
@@ -612,6 +693,10 @@ Phase reviewer checks:
 - **tina:writing-plans** - Creates the plan this skill executes
 - **tina:requesting-code-review** - Code review template for reviewer subagents
 - **tina:finishing-a-development-branch** - Complete development after all tasks
+
+**Routing:**
+- **tina-session config cli-for-model** - Determines whether a model routes to claude or codex
+- **tina:codex-cli** - Used when task model routes to codex (replaces implementer/reviewer agents)
 
 **Subagents should use:**
 - **tina:test-driven-development** - Subagents follow TDD for each task
