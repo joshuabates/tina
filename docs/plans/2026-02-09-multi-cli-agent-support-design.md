@@ -190,3 +190,49 @@ default_model = "gpt-5.3-codex"
 
 - A design review dispatched to Codex appears in the Convex event timeline with start/complete events and team member registration.
 - An orchestration configured with `--reviewer-model codex` routes all phase reviews through Codex automatically, with results fed back into the orchestration flow.
+
+## Architectural Context
+
+Reviewed against the TINA codebase on 2026-02-09. This design integrates cleanly with the existing architecture.
+
+### How It Integrates
+
+**State machine (unchanged).** The orchestration state machine in `tina-session/src/state/orchestrate.rs` already propagates model names through `Action` variants (`SpawnValidator`, `SpawnPlanner`, `SpawnExecutor`, `SpawnReviewer`) via `Option<String>` model fields. The `non_default_model()` helper passes through any non-default model string. Codex model names (e.g., `"gpt-5.3-codex"`) will naturally flow through as `Some("gpt-5.3-codex")` without any state machine changes. The routing decision (`cli_for_model()`) happens at the dispatch layer -- either in the skill (for Claude-orchestrated dispatch) or in the new `exec-codex` command -- not in the state machine itself. This separation is correct.
+
+**ModelPolicy struct** (`tina-session/src/state/schema.rs`) already stores model names as free-form strings with serde defaults. No structural changes are needed. The existing defaults (`"opus"`, `"haiku"`) continue working. Setting `reviewer: "gpt-5.3-codex"` just stores a different string -- the struct is model-name-agnostic by design.
+
+**Command registration** follows the established pattern: a new variant in the `Commands` enum in `main.rs`, delegating to a new `commands/exec_codex.rs` module. The 18 existing subcommands provide a clear template.
+
+**Convex tracking** uses existing tables with no schema changes. The `orchestrationEvents` table accepts arbitrary `eventType` strings (`v.string()`), so `"codex_run_started"` / `"codex_run_completed"` work immediately. The `teamMembers` table already has optional `agentType` and `model` fields. The `ConvexWriter` has `record_event()` and the Convex `EventArgs` struct ready to use.
+
+**Config extension** adds a `[codex]` section to the TOML config. The current `ConfigFile` struct in `tina-session/src/config.rs` uses `serde(Deserialize)` on a flat struct -- adding an optional `codex: Option<CodexConfig>` field follows the same pattern as the existing `prod`/`dev` profile sections.
+
+**Init command** (`tina-session/src/commands/init.rs`) already has a well-defined sequence: validate inputs, create worktree, write statusline config, create supervisor state, write to Convex, register team, output JSON. AGENTS.md generation slots in after worktree creation and before Convex writes, as a new step alongside `write_statusline_config()`.
+
+**Skill layer** is where the routing decision actually executes. The `executing-plans` skill already dispatches subagents per task with full context in the prompt. The new `codex-cli` skill follows the same pattern but calls `tina-session exec-codex` via Bash instead of spawning a Claude subagent. Claude interprets results and manages orchestration state -- Codex is treated as a subprocess tool, not a team participant. This keeps the team protocol (SendMessage, TaskUpdate) entirely within Claude Code, which is the right boundary.
+
+### Key Integration Points
+
+| Component | File | Change Type |
+|-----------|------|-------------|
+| `cli_for_model()` routing | `tina-session/src/state/orchestrate.rs` (or new module) | New function, no changes to existing state machine |
+| `exec-codex` command | `tina-session/src/commands/exec_codex.rs` + `main.rs` | New subcommand, new module |
+| `[codex]` config | `tina-session/src/config.rs` | Add `CodexConfig` struct + optional field on `ConfigFile` |
+| AGENTS.md generation | `tina-session/src/commands/init.rs` | New step in `run()` |
+| `codex-cli` skill | `skills/codex-cli/SKILL.md` | New skill file |
+| `--reviewer-model` etc. | `main.rs` Init command args | New CLI flags, wired to `ModelPolicy` |
+| Team member registration | Existing `ConvexWriter::register_team()` path | Data-only: `agentType: "codex"` |
+
+### Caveats and Recommendations
+
+1. **Add a timeout to `exec-codex`.** The design specifies "wait for completion" but does not address hangs. Add a `--timeout` flag (default 30 minutes) with clear error reporting on timeout. The `--tmux` mode is especially risky without this.
+
+2. **Codex team member naming must be deterministic.** The `agentName` field (e.g., `"codex-reviewer-1"`) should be derived from task ID or phase+role to avoid duplicate registrations on retries. The Convex `teamMembers` table has a unique index on `[orchestrationId, phaseNumber, agentName]`, so collisions would cause upsert rather than duplicates -- but the name should still be predictable.
+
+3. **`cli_for_model()` prefix matching is brittle.** `starts_with("gpt-")` works for current OpenAI naming but may break with future models. Consider making the routing explicit in config (e.g., `[cli_routing] codex_prefixes = ["gpt-", "o1-", "o3-"]`) as a follow-up if more model families are added.
+
+4. **Task-level model override validation** belongs in the skill layer, not in Rust. The `executing-plans` skill reads task metadata before dispatch -- it should check the `model` field there and route accordingly. No Rust validation needed since task metadata is a JSON blob managed by Claude's TaskUpdate tool.
+
+5. **AGENTS.md generation can be best-effort.** If CLAUDE.md parsing fails or produces empty output, skip silently. The inline prompt from the `codex-cli` skill carries task-specific instructions regardless, so AGENTS.md is a convenience, not a requirement.
+
+6. **The `exec-codex` command should capture stderr separately.** Codex CLI may write progress/status to stderr and results to stdout. The command should capture both and include stderr in the Convex event detail for debugging, while returning only stdout to the calling Claude agent.
