@@ -16,15 +16,6 @@ use crate::state::schema::{
 };
 use crate::state::timing::duration_mins;
 
-/// Plan-ahead information: the orchestrator should spawn a planner for this
-/// phase in parallel with the current reviewer.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct PlanAhead {
-    pub phase: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-}
-
 /// An action the orchestrator should take next.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -60,10 +51,6 @@ pub enum Action {
         /// in parallel for consensus review.
         #[serde(skip_serializing_if = "Option::is_none")]
         secondary_model: Option<String>,
-        /// When set, the orchestrator should also spawn a planner for this phase
-        /// in parallel (plan-ahead). Contains the phase number to plan.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        plan_ahead: Option<PlanAhead>,
     },
 
     /// Reuse an existing plan (skip planning).
@@ -298,7 +285,6 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                         git_range,
                         model: non_default_model(&state.model_policy.reviewer, "opus"),
                         secondary_model: consensus_secondary_model(state),
-                        plan_ahead: None,
                     });
                 }
                 PhaseStatus::Blocked => {
@@ -384,18 +370,6 @@ pub fn advance_state(
                 phase_state.breakdown.planning_mins = Some(duration_mins(start, now));
             }
 
-            // Plan-ahead check: if the previous phase is still reviewing,
-            // this plan was produced ahead of time. Store it but don't
-            // spawn the executor yet - wait for the previous review to complete.
-            if is_plan_ahead(state, phase) {
-                return Ok(Action::Wait {
-                    reason: format!(
-                        "plan-ahead: phase {} planned, waiting for previous review",
-                        phase
-                    ),
-                });
-            }
-
             let plan_str = plan_path.to_string_lossy().to_string();
             Ok(Action::SpawnExecutor {
                 phase: phase.to_string(),
@@ -443,16 +417,11 @@ pub fn advance_state(
                 state.current_phase = num;
             }
 
-            // Plan-ahead: if there's a next phase and it hasn't started planning yet,
-            // signal the orchestrator to spawn a planner in parallel with the reviewer.
-            let plan_ahead = plan_ahead_for_next_phase(state, phase, now);
-
             Ok(Action::SpawnReviewer {
                 phase: phase.to_string(),
                 git_range,
                 model: non_default_model(&state.model_policy.reviewer, "opus"),
                 secondary_model: consensus_secondary_model(state),
-                plan_ahead,
             })
         }
 
@@ -509,43 +478,6 @@ pub fn advance_state(
             match next_phase {
                 Some(next) => {
                     let next_key = next.to_string();
-                    state.current_phase = next;
-
-                    // Check if plan-ahead already created this phase entry
-                    let plan_ahead_active = state.phases.contains_key(&next_key);
-
-                    if plan_ahead_active {
-                        let next_state = state.phases.get(&next_key).unwrap();
-
-                        // Plan-ahead completed: skip planning, go to executor
-                        if next_state.status == PhaseStatus::Planned {
-                            if let Some(plan_path) = next_state.plan_path.as_ref() {
-                                let plan_str = plan_path.to_string_lossy().to_string();
-                                state.status = OrchestrationStatus::Executing;
-                                return Ok(Action::SpawnExecutor {
-                                    phase: next_key,
-                                    plan_path: plan_str,
-                                    model: non_default_model(
-                                        &state.model_policy.executor,
-                                        "haiku",
-                                    ),
-                                });
-                            }
-                        }
-
-                        // Plan-ahead in progress: planner is still running
-                        if next_state.status == PhaseStatus::Planning {
-                            state.status = OrchestrationStatus::Planning;
-                            return Ok(Action::Wait {
-                                reason: format!(
-                                    "plan-ahead: waiting for phase {} planner to complete",
-                                    next_key
-                                ),
-                            });
-                        }
-                    }
-
-                    // No plan-ahead: start planning normally
                     ensure_phase(state, &next_key);
                     let worktree_path = state.worktree_path.clone();
                     let feature = state.feature.clone();
@@ -553,6 +485,7 @@ pub fn advance_state(
                     next_state.planning_started_at = Some(now);
                     next_state.status = PhaseStatus::Planning;
                     state.status = OrchestrationStatus::Planning;
+                    state.current_phase = next;
 
                     if let Some(action) =
                         reuse_plan_if_present(&worktree_path, &feature, &next_key, next_state, now)
@@ -674,7 +607,6 @@ pub fn advance_state(
                     git_range,
                     model: non_default_model(&state.model_policy.reviewer, "opus"),
                     secondary_model: consensus_secondary_model(state),
-                    plan_ahead: None,
                 });
             }
 
@@ -787,78 +719,6 @@ fn next_main_phase(phase: &str, total_phases: u32) -> Option<u32> {
     }
 }
 
-/// Check if a phase's plan was produced ahead of time (plan-ahead).
-///
-/// Returns true when the previous main phase has NOT completed yet,
-/// meaning this plan was produced in parallel with the previous phase's review.
-fn is_plan_ahead(state: &SupervisorState, phase: &str) -> bool {
-    // Only main phases can be plan-ahead targets (not remediation phases)
-    if phase.contains('.') {
-        return false;
-    }
-
-    let phase_num: u32 = match phase.parse() {
-        Ok(n) => n,
-        Err(_) => return false,
-    };
-
-    // Phase 1 can't be plan-ahead (there's no previous phase)
-    if phase_num <= 1 {
-        return false;
-    }
-
-    let prev_key = (phase_num - 1).to_string();
-    match state.phases.get(&prev_key) {
-        Some(prev) => prev.status != PhaseStatus::Complete,
-        None => false,
-    }
-}
-
-/// Determine if plan-ahead is available for the next phase after the given one,
-/// and if so, create the phase entry in state so the planner can advance it.
-///
-/// Returns `Some(PlanAhead)` when:
-/// - The current phase is a main phase (not remediation)
-/// - A next main phase exists
-/// - The next phase has NOT already started planning
-///
-/// When plan-ahead is available, also creates the phase entry in `Planning` status.
-fn plan_ahead_for_next_phase(
-    state: &mut SupervisorState,
-    phase: &str,
-    now: chrono::DateTime<Utc>,
-) -> Option<PlanAhead> {
-    // Only plan-ahead for main phases (not remediation phases like "1.5")
-    if phase.contains('.') {
-        return None;
-    }
-
-    let phase_num: u32 = phase.parse().ok()?;
-    let next_phase = phase_num + 1;
-
-    if next_phase > state.total_phases {
-        return None;
-    }
-
-    let next_key = next_phase.to_string();
-
-    // If the next phase already exists in state, it has already started (or was planned ahead)
-    if state.phases.contains_key(&next_key) {
-        return None;
-    }
-
-    // Create the phase entry so PlanComplete can find it
-    let mut next_state = PhaseState::new();
-    next_state.planning_started_at = Some(now);
-    next_state.status = PhaseStatus::Planning;
-    state.phases.insert(next_key.clone(), next_state);
-
-    Some(PlanAhead {
-        phase: next_key,
-        model: non_default_model(&state.model_policy.planner, "opus"),
-    })
-}
-
 /// Compute the remediation phase number for a given phase.
 /// "1" -> "1.5", "1.5" -> "1.5.5"
 fn compute_remediation_phase(phase: &str) -> String {
@@ -914,7 +774,6 @@ fn find_remediation_action(state: &SupervisorState, phase_num: u32) -> Result<Ac
                         git_range,
                         model: non_default_model(&state.model_policy.reviewer, "opus"),
                         secondary_model: consensus_secondary_model(state),
-                        plan_ahead: None,
                     })
                 }
                 PhaseStatus::Blocked => {
@@ -1748,8 +1607,7 @@ mod tests {
     }
 
     #[test]
-    fn test_full_lifecycle_multi_phase_plan_ahead_planner_first() {
-        // Scenario: planner-2 finishes before reviewer-1 (plan-ahead)
+    fn test_full_lifecycle_multi_phase() {
         let mut state = test_state(2);
 
         // Validation
@@ -1757,7 +1615,7 @@ mod tests {
             advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
         assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "1"));
 
-        // Phase 1: plan -> execute
+        // Phase 1: plan -> execute -> review
         let action = advance_state(
             &mut state,
             "1",
@@ -1771,7 +1629,6 @@ mod tests {
         let action = advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
         assert!(matches!(action, Action::Wait { .. }));
 
-        // ExecuteComplete triggers plan-ahead: reviewer-1 AND planner-2
         let action = advance_state(
             &mut state,
             "1",
@@ -1780,20 +1637,17 @@ mod tests {
             },
         )
         .unwrap();
-        match &action {
-            Action::SpawnReviewer {
-                phase, plan_ahead, ..
-            } => {
-                assert_eq!(phase, "1");
-                let pa = plan_ahead.as_ref().expect("should have plan_ahead");
-                assert_eq!(pa.phase, "2");
-            }
-            other => panic!("Expected SpawnReviewer with plan_ahead, got {:?}", other),
-        }
-        // Phase 2 entry created in Planning status by plan-ahead
+        assert!(matches!(action, Action::SpawnReviewer { ref phase, .. } if phase == "1"));
+
+        // ReviewPass on phase 1 (not last) -> advance to phase 2 planning
+        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
+        assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "2"));
+        assert_eq!(state.status, OrchestrationStatus::Planning);
+        assert_eq!(state.current_phase, 2);
+        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
         assert_eq!(state.phases["2"].status, PhaseStatus::Planning);
 
-        // Planner-2 finishes first -> Wait (plan-ahead, previous review not done)
+        // Phase 2: plan -> execute -> review
         let action = advance_state(
             &mut state,
             "2",
@@ -1802,19 +1656,8 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(matches!(action, Action::Wait { .. }));
-        assert_eq!(state.phases["2"].status, PhaseStatus::Planned);
+        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "2"));
 
-        // ReviewPass on phase 1 -> skip planning, SpawnExecutor for phase 2
-        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
-        assert!(
-            matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "2")
-        );
-        assert_eq!(state.status, OrchestrationStatus::Executing);
-        assert_eq!(state.current_phase, 2);
-        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
-
-        // Phase 2: execute -> review
         let action = advance_state(&mut state, "2", AdvanceEvent::ExecuteStarted).unwrap();
         assert!(matches!(action, Action::Wait { .. }));
 
@@ -1834,71 +1677,9 @@ mod tests {
         assert_eq!(state.status, OrchestrationStatus::Complete);
         assert_eq!(state.phases["2"].status, PhaseStatus::Complete);
 
+        // next_action confirms Complete
         let action = next_action(&state).unwrap();
         assert!(matches!(action, Action::Complete));
-    }
-
-    #[test]
-    fn test_full_lifecycle_multi_phase_plan_ahead_reviewer_first() {
-        // Scenario: reviewer-1 finishes before planner-2 (plan-ahead)
-        let mut state = test_state(2);
-
-        // Validation + Phase 1 plan + execute
-        advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
-        advance_state(
-            &mut state,
-            "1",
-            AdvanceEvent::PlanComplete {
-                plan_path: PathBuf::from("/tmp/plan-1.md"),
-            },
-        )
-        .unwrap();
-        advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
-
-        // ExecuteComplete triggers plan-ahead
-        let action = advance_state(
-            &mut state,
-            "1",
-            AdvanceEvent::ExecuteComplete {
-                git_range: "abc..def".to_string(),
-            },
-        )
-        .unwrap();
-        assert!(matches!(action, Action::SpawnReviewer { ref plan_ahead, .. } if plan_ahead.is_some()));
-
-        // ReviewPass on phase 1 BEFORE planner-2 finishes -> Wait for planner
-        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
-        assert!(matches!(action, Action::Wait { .. }));
-        assert_eq!(state.status, OrchestrationStatus::Planning);
-        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
-        assert_eq!(state.phases["2"].status, PhaseStatus::Planning);
-
-        // Planner-2 finishes -> SpawnExecutor (previous review now complete)
-        let action = advance_state(
-            &mut state,
-            "2",
-            AdvanceEvent::PlanComplete {
-                plan_path: PathBuf::from("/tmp/plan-2.md"),
-            },
-        )
-        .unwrap();
-        assert!(
-            matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "2")
-        );
-
-        // Phase 2: execute -> review -> finalize
-        advance_state(&mut state, "2", AdvanceEvent::ExecuteStarted).unwrap();
-        advance_state(
-            &mut state,
-            "2",
-            AdvanceEvent::ExecuteComplete {
-                git_range: "ghi..jkl".to_string(),
-            },
-        )
-        .unwrap();
-        let action = advance_state(&mut state, "2", AdvanceEvent::ReviewPass).unwrap();
-        assert!(matches!(action, Action::Finalize));
-        assert_eq!(state.status, OrchestrationStatus::Complete);
     }
 
     #[test]
@@ -2126,287 +1907,5 @@ mod tests {
         let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
         assert!(matches!(action, Action::Finalize));
         assert_eq!(state.status, OrchestrationStatus::Complete);
-    }
-
-    // ====================================================================
-    // Plan-Ahead Tests
-    // ====================================================================
-
-    #[test]
-    fn test_plan_ahead_execute_complete_includes_plan_ahead() {
-        // ExecuteComplete on phase 1 of a 2-phase orchestration should
-        // include plan_ahead for phase 2
-        let mut state = test_state(2);
-        state.phases.insert(
-            "1".to_string(),
-            PhaseState {
-                status: PhaseStatus::Executing,
-                execution_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        let action = advance_state(
-            &mut state,
-            "1",
-            AdvanceEvent::ExecuteComplete {
-                git_range: "abc..def".to_string(),
-            },
-        )
-        .unwrap();
-        match &action {
-            Action::SpawnReviewer { plan_ahead, .. } => {
-                let pa = plan_ahead.as_ref().expect("should have plan_ahead");
-                assert_eq!(pa.phase, "2");
-            }
-            other => panic!("Expected SpawnReviewer, got {:?}", other),
-        }
-        // Phase 2 entry should be created in Planning status
-        assert!(state.phases.contains_key("2"));
-        assert_eq!(state.phases["2"].status, PhaseStatus::Planning);
-    }
-
-    #[test]
-    fn test_plan_ahead_not_on_last_phase() {
-        // ExecuteComplete on the LAST phase should NOT include plan_ahead
-        let mut state = test_state(1);
-        state.phases.insert(
-            "1".to_string(),
-            PhaseState {
-                status: PhaseStatus::Executing,
-                execution_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        let action = advance_state(
-            &mut state,
-            "1",
-            AdvanceEvent::ExecuteComplete {
-                git_range: "abc..def".to_string(),
-            },
-        )
-        .unwrap();
-        match &action {
-            Action::SpawnReviewer { plan_ahead, .. } => {
-                assert!(plan_ahead.is_none(), "last phase should not have plan_ahead");
-            }
-            other => panic!("Expected SpawnReviewer, got {:?}", other),
-        }
-    }
-
-    #[test]
-    fn test_plan_ahead_not_on_remediation_phase() {
-        // ExecuteComplete on a remediation phase should NOT include plan_ahead
-        let mut state = test_state(2);
-        state.phases.insert(
-            "1.5".to_string(),
-            PhaseState {
-                status: PhaseStatus::Executing,
-                execution_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        let action = advance_state(
-            &mut state,
-            "1.5",
-            AdvanceEvent::ExecuteComplete {
-                git_range: "abc..def".to_string(),
-            },
-        )
-        .unwrap();
-        match &action {
-            Action::SpawnReviewer { plan_ahead, .. } => {
-                assert!(
-                    plan_ahead.is_none(),
-                    "remediation phase should not have plan_ahead"
-                );
-            }
-            other => panic!("Expected SpawnReviewer, got {:?}", other),
-        }
-    }
-
-    #[test]
-    fn test_plan_ahead_not_when_next_phase_exists() {
-        // If next phase already exists in state, plan_ahead should be None
-        let mut state = test_state(2);
-        state.phases.insert(
-            "1".to_string(),
-            PhaseState {
-                status: PhaseStatus::Executing,
-                execution_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        // Phase 2 already exists (e.g. from a previous attempt)
-        state
-            .phases
-            .insert("2".to_string(), PhaseState::new());
-        let action = advance_state(
-            &mut state,
-            "1",
-            AdvanceEvent::ExecuteComplete {
-                git_range: "abc..def".to_string(),
-            },
-        )
-        .unwrap();
-        match &action {
-            Action::SpawnReviewer { plan_ahead, .. } => {
-                assert!(plan_ahead.is_none(), "should not plan_ahead when next phase exists");
-            }
-            other => panic!("Expected SpawnReviewer, got {:?}", other),
-        }
-    }
-
-    #[test]
-    fn test_plan_ahead_plan_complete_waits_when_prev_reviewing() {
-        // When plan-ahead produces a plan but the previous phase is still reviewing,
-        // PlanComplete should return Wait
-        let mut state = test_state(2);
-        state.phases.insert(
-            "1".to_string(),
-            PhaseState {
-                status: PhaseStatus::Reviewing,
-                review_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        state.phases.insert(
-            "2".to_string(),
-            PhaseState {
-                status: PhaseStatus::Planning,
-                planning_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        let action = advance_state(
-            &mut state,
-            "2",
-            AdvanceEvent::PlanComplete {
-                plan_path: PathBuf::from("/tmp/plan-2.md"),
-            },
-        )
-        .unwrap();
-        assert!(matches!(action, Action::Wait { .. }));
-        assert_eq!(state.phases["2"].status, PhaseStatus::Planned);
-    }
-
-    #[test]
-    fn test_plan_ahead_plan_complete_executes_when_prev_complete() {
-        // When plan-ahead produces a plan and the previous phase is already complete,
-        // PlanComplete should return SpawnExecutor (no longer plan-ahead)
-        let mut state = test_state(2);
-        state.phases.insert(
-            "1".to_string(),
-            PhaseState {
-                status: PhaseStatus::Complete,
-                completed_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        state.phases.insert(
-            "2".to_string(),
-            PhaseState {
-                status: PhaseStatus::Planning,
-                planning_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        let action = advance_state(
-            &mut state,
-            "2",
-            AdvanceEvent::PlanComplete {
-                plan_path: PathBuf::from("/tmp/plan-2.md"),
-            },
-        )
-        .unwrap();
-        assert!(
-            matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "2")
-        );
-    }
-
-    #[test]
-    fn test_plan_ahead_review_pass_skips_planning_when_planned() {
-        // When review passes and next phase is already Planned (plan-ahead completed),
-        // should skip to SpawnExecutor
-        let mut state = test_state(2);
-        state.phases.insert(
-            "1".to_string(),
-            PhaseState {
-                status: PhaseStatus::Reviewing,
-                planning_started_at: Some(Utc::now()),
-                review_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        state.phases.insert(
-            "2".to_string(),
-            PhaseState {
-                status: PhaseStatus::Planned,
-                plan_path: Some(PathBuf::from("/tmp/plan-2.md")),
-                planning_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
-        assert!(
-            matches!(action, Action::SpawnExecutor { ref phase, ref plan_path, .. } if phase == "2" && plan_path == "/tmp/plan-2.md")
-        );
-        assert_eq!(state.status, OrchestrationStatus::Executing);
-    }
-
-    #[test]
-    fn test_plan_ahead_review_pass_waits_when_planning() {
-        // When review passes and next phase is still Planning (plan-ahead in progress),
-        // should return Wait
-        let mut state = test_state(2);
-        state.phases.insert(
-            "1".to_string(),
-            PhaseState {
-                status: PhaseStatus::Reviewing,
-                planning_started_at: Some(Utc::now()),
-                review_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        state.phases.insert(
-            "2".to_string(),
-            PhaseState {
-                status: PhaseStatus::Planning,
-                planning_started_at: Some(Utc::now()),
-                ..PhaseState::default()
-            },
-        );
-        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
-        assert!(matches!(action, Action::Wait { .. }));
-        assert_eq!(state.status, OrchestrationStatus::Planning);
-        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
-    }
-
-    #[test]
-    fn test_plan_ahead_serialization() {
-        // PlanAhead struct should serialize correctly in SpawnReviewer action JSON
-        let action = Action::SpawnReviewer {
-            phase: "1".to_string(),
-            git_range: "abc..def".to_string(),
-            model: None,
-            secondary_model: None,
-            plan_ahead: Some(PlanAhead {
-                phase: "2".to_string(),
-                model: None,
-            }),
-        };
-        let json = serde_json::to_string(&action).unwrap();
-        assert!(json.contains("plan_ahead"));
-        assert!(json.contains("\"phase\":\"2\""));
-
-        // Without plan_ahead, it should be omitted
-        let action = Action::SpawnReviewer {
-            phase: "1".to_string(),
-            git_range: "abc..def".to_string(),
-            model: None,
-            secondary_model: None,
-            plan_ahead: None,
-        };
-        let json = serde_json::to_string(&action).unwrap();
-        assert!(!json.contains("plan_ahead"));
     }
 }
