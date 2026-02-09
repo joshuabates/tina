@@ -141,10 +141,12 @@ Create tasks representing all orchestration work. Dependencies enforce sequencin
 
 1. `validate-design` - No dependencies
 2. For each phase N (1 to TOTAL_PHASES):
-   - `plan-phase-N` - Blocked by: validate-design (if N=1) or review-phase-(N-1)
-   - `execute-phase-N` - Blocked by: plan-phase-N
+   - `plan-phase-N` - Blocked by: validate-design only (enables plan-ahead)
+   - `execute-phase-N` - Blocked by: plan-phase-N AND review-phase-(N-1) (if N>1)
    - `review-phase-N` - Blocked by: execute-phase-N
 3. `finalize` - Blocked by: review-phase-(TOTAL_PHASES)
+
+**Plan-ahead:** Planning for phase N+1 can start as soon as phase N's execution completes (while phase N is being reviewed). The state machine handles this by including `plan_ahead` in the `SpawnReviewer` action when applicable. Execute tasks still depend on the previous review completing, ensuring phases execute in order.
 
 Note: Worktree creation is handled by `tina-session init` in STEP 1c. There is no setup-worktree task.
 
@@ -164,8 +166,8 @@ TaskCreate: finalize
 TaskUpdate: plan-phase-1, addBlockedBy: [validate-design]
 TaskUpdate: execute-phase-1, addBlockedBy: [plan-phase-1]
 TaskUpdate: review-phase-1, addBlockedBy: [execute-phase-1]
-TaskUpdate: plan-phase-2, addBlockedBy: [review-phase-1]
-TaskUpdate: execute-phase-2, addBlockedBy: [plan-phase-2]
+TaskUpdate: plan-phase-2, addBlockedBy: [validate-design]
+TaskUpdate: execute-phase-2, addBlockedBy: [plan-phase-2, review-phase-1]
 TaskUpdate: review-phase-2, addBlockedBy: [execute-phase-2]
 TaskUpdate: finalize, addBlockedBy: [review-phase-2]
 ```
@@ -283,9 +285,9 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 | `spawn_validator` | Spawn `tina:design-validator` teammate (model from `.model` if present) |
 | `spawn_planner` | Spawn `tina:phase-planner` for `.phase` (model from `.model` if present) |
 | `spawn_executor` | Spawn `tina:phase-executor` for `.phase` (plan at `.plan_path`, model from `.model` if present) |
-| `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`, model from `.model` if present). If `.secondary_model` is present, spawn a second reviewer with that model in parallel for consensus review. |
+| `spawn_reviewer` | Spawn `tina:phase-reviewer` for `.phase` (range at `.git_range`, model from `.model` if present). If `.secondary_model` is present, spawn a second reviewer with that model in parallel for consensus review. If `.plan_ahead` is present, also spawn `tina:phase-planner` for `.plan_ahead.phase` in parallel (plan-ahead). |
 | `consensus_disagreement` | Surface to user: "Reviewers disagree on phase `.phase`. Verdict 1: `.verdict_1`, Verdict 2: `.verdict_2`. Please resolve manually." |
-| `reuse_plan` | Skip planning, auto-complete plan task, dispatch executor |
+| `reuse_plan` | Run plan staleness check: if `tina:plan-validator` agent exists, spawn it to validate the plan. On Pass/Warning: auto-complete plan task, dispatch executor. On Stop: discard stale plan and spawn planner instead. If no validator agent exists, proceed directly to executor. |
 | `wait` | No action required; keep waiting for teammate updates |
 | `finalize` | Invoke `tina:finishing-a-development-branch` |
 | `complete` | Report orchestration complete |
@@ -313,13 +315,20 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 2. If message is `execute-N started`: call `tina-session orchestrate advance --feature X --phase N --event execute_started` and dispatch returned action (likely `wait`)
 3. If message is `execute-N complete`: call `tina-session orchestrate advance --feature X --phase N --event execute_complete --git-range R`
 4. Mark execute-phase-N task complete, store git_range in metadata
-5. Dispatch returned action (spawn reviewer)
+5. Dispatch returned action (spawn reviewer). If action includes `plan_ahead`, also spawn planner for the next phase in parallel.
+
+**On planner-N message (plan-ahead):**
+If this planner was spawned via plan-ahead (the previous phase is still being reviewed):
+1. Parse PLAN_PATH from message
+2. Call: `tina-session orchestrate advance --feature X --phase N --event plan_complete --plan-path P`
+3. If the CLI returns `wait` (previous review not done), mark plan-phase-N complete and store plan_path. The planner finished ahead of time; the orchestrator continues waiting for the reviewer.
+4. If the CLI returns `spawn_executor` (previous review already done), dispatch normally.
 
 **On reviewer-N message:**
 1. Determine if pass or gaps
 2. Call: `tina-session orchestrate advance --feature X --phase N --event review_pass` (or `review_gaps --issues "..."`)
 3. Mark review-phase-N task complete
-4. Dispatch returned action (spawn next planner, finalize, or create remediation)
+4. Dispatch returned action. If plan-ahead completed, the CLI returns `spawn_executor` (skipping planning). If plan-ahead is still in progress, the CLI returns `wait`.
 
 **On error message:**
 1. Call: `tina-session orchestrate advance --feature X --phase N --event error --issues "reason"`
@@ -370,7 +379,8 @@ The orchestrator creates a team (e.g., `auth-feature-orchestration`) and populat
 [] plan-phase-1            (blocked by: validate-design)
 [] execute-phase-1         (blocked by: plan-1)
 [] review-phase-1          (blocked by: execute-1)
-[] plan-phase-2            (blocked by: review-1)
+[] plan-phase-2            (blocked by: validate-design)     # plan-ahead enabled
+[] execute-phase-2         (blocked by: plan-2, review-1)    # waits for both
 ...
 [] finalize                (blocked by: review-N)
 ```
@@ -540,9 +550,10 @@ TaskUpdate: { taskId: "plan-phase-1", addBlockedBy: ["validate-design"] }
 TaskUpdate: { taskId: "execute-phase-1", addBlockedBy: ["plan-phase-1"] }
 TaskUpdate: { taskId: "review-phase-1", addBlockedBy: ["execute-phase-1"] }
 
-# For phase 2 onwards:
-TaskUpdate: { taskId: "plan-phase-2", addBlockedBy: ["review-phase-1"] }
-TaskUpdate: { taskId: "execute-phase-2", addBlockedBy: ["plan-phase-2"] }
+# For phase 2 onwards (plan-ahead: planning blocked by validate-design only,
+# execution blocked by both plan and previous review):
+TaskUpdate: { taskId: "plan-phase-2", addBlockedBy: ["validate-design"] }
+TaskUpdate: { taskId: "execute-phase-2", addBlockedBy: ["plan-phase-2", "review-phase-1"] }
 TaskUpdate: { taskId: "review-phase-2", addBlockedBy: ["execute-phase-2"] }
 # ... continue for all phases
 
@@ -597,17 +608,20 @@ When: validate-design task is unblocked (always first)
 ```
 Then: Mark validate-design as in_progress
 
-**Phase planner spawn (with plan reuse check):**
+**Phase planner spawn (with plan reuse gate):**
 
-When: validate-design complete (for phase 1) OR review-phase-(N-1) complete with pass (for phase N>1)
+When: validate-design complete (for phase 1), OR review-phase-(N-1) complete with pass (for phase N>1), OR plan-ahead triggered by execute-N complete
 
-Before spawning, check if a plan already exists:
+Before spawning, check if a plan already exists (the CLI `reuse_plan` action handles this):
 ```bash
 PLAN_FILE="${WORKTREE_PATH}/.claude/tina/phase-${N}/plan.md"
 if [ -f "$PLAN_FILE" ]; then
-    # Reuse existing plan - skip planning entirely
+    # CLI returned reuse_plan action. Validate staleness before reusing:
+    # If tina:plan-validator agent exists, spawn it with the plan path.
+    # On Pass/Warning: proceed to executor
+    # On Stop: discard stale plan, spawn planner normally
     TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: "$PLAN_FILE" }
-    # Proceed to spawning executor for phase N (same as "plan-phase-N complete" handler)
+    # Proceed to spawning executor for phase N
 else
     # Spawn planner as normal
 fi
@@ -679,6 +693,32 @@ When the `spawn_reviewer` action includes a `secondary_model` field, spawn TWO r
 ```
 
 Both reviewers run in parallel. As each reviewer message arrives, call `tina-session orchestrate advance` with the verdict. The state machine returns `Wait` on the first verdict and resolves on the second (pass/gaps/disagreement).
+
+**Plan-ahead planner spawn:**
+
+When the `spawn_reviewer` action includes a `plan_ahead` field, also spawn a planner for the next phase in parallel with the reviewer:
+```json
+// Reviewer (always spawned)
+{
+  "subagent_type": "tina:phase-reviewer",
+  "team_name": "<TEAM_NAME>",
+  "name": "reviewer-<N>",
+  "prompt": "task_id: review-phase-<N>"
+}
+
+// Plan-ahead planner (spawned in parallel when plan_ahead present)
+{
+  "subagent_type": "tina:phase-planner",
+  "team_name": "<TEAM_NAME>",
+  "name": "planner-<N+1>",
+  "model": "<plan_ahead.model from action, if present>",
+  "prompt": "task_id: plan-phase-<N+1>"
+}
+```
+
+The plan-ahead planner runs concurrently with the reviewer. Two completion orderings:
+1. **Planner finishes first:** CLI returns `wait` for `PlanComplete` (previous review not done). Mark plan task complete. When the reviewer finishes and passes, CLI returns `spawn_executor` (skips planning).
+2. **Reviewer finishes first:** CLI returns `wait` for `ReviewPass` (planner still running). When the planner finishes, CLI returns `spawn_executor`.
 
 **Model override from CLI:**
 
@@ -820,7 +860,10 @@ if message contains "plan-phase-N complete":
     Parse: PLAN_PATH from "PLAN_PATH: X"
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event plan_complete --plan-path $PLAN_PATH
     TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: $PLAN_PATH }
-    # Dispatch NEXT_ACTION (spawn executor)
+    # If NEXT_ACTION is "wait": plan-ahead completed before previous review.
+    #   Just store the plan and wait for the reviewer to finish.
+    # If NEXT_ACTION is "spawn_executor": plan completed normally or after review passed.
+    #   Dispatch executor.
 
 if message contains "error":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
@@ -833,20 +876,23 @@ if message contains "execute-N complete":
     Parse: git_range from "Git range: X..Y"
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event execute_complete --git-range $GIT_RANGE
     TaskUpdate: execute-phase-N, status: completed, metadata: { git_range: $GIT_RANGE }
-    # Dispatch NEXT_ACTION (spawn reviewer)
+    # Dispatch NEXT_ACTION (spawn reviewer).
+    # If NEXT_ACTION includes plan_ahead, ALSO spawn planner for the next phase.
 
 if message contains "session_died" or "error":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
     # If can_retry: respawn executor; else escalate
 ```
 
-**On reviewer-N message (including consensus):**
+**On reviewer-N message (including consensus and plan-ahead):**
 
 Each reviewer verdict (from reviewer-N or reviewer-N-secondary) is handled the same way:
-call `advance` with the verdict. The state machine handles consensus internally:
+call `advance` with the verdict. The state machine handles consensus and plan-ahead internally:
 - If consensus is enabled and this is the first verdict, the CLI returns `wait`
 - If this is the second verdict, the CLI resolves (pass/gaps/disagreement)
 - If consensus is disabled, the CLI resolves immediately
+- If plan-ahead completed for the next phase, the CLI returns `spawn_executor` (skips planning)
+- If plan-ahead is still in progress, the CLI returns `wait` (planner still running)
 
 ```
 if message contains "review-N complete (pass)":
