@@ -4,6 +4,7 @@ pub mod check;
 pub mod cleanup;
 pub mod config;
 pub mod daemon;
+pub mod exec_codex;
 pub mod exists;
 pub mod init;
 pub mod list;

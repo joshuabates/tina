@@ -231,6 +231,45 @@ enum Commands {
         parent_team_id: Option<String>,
     },
 
+    /// Run a task via the Codex CLI, track in Convex, return JSON output
+    ExecCodex {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Phase identifier (e.g., "1", "2", "1.5")
+        #[arg(long)]
+        phase: String,
+
+        /// Task ID for tracking
+        #[arg(long)]
+        task_id: String,
+
+        /// Prompt text or @filepath to read prompt from file
+        #[arg(long)]
+        prompt: String,
+
+        /// Working directory for the codex subprocess
+        #[arg(long)]
+        cwd: PathBuf,
+
+        /// Model name (overrides config default_model)
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Sandbox mode (overrides config default_sandbox)
+        #[arg(long)]
+        sandbox: Option<String>,
+
+        /// Timeout in seconds (overrides config timeout_secs)
+        #[arg(long)]
+        timeout_secs: Option<u64>,
+
+        /// Write codex stdout to this file path
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
     /// Clean up orchestration state
     Cleanup {
         /// Feature name
@@ -641,6 +680,31 @@ fn run() -> anyhow::Result<u8> {
             phase_number.as_deref(),
             parent_team_id.as_deref(),
         ),
+
+        Commands::ExecCodex {
+            feature,
+            phase,
+            task_id,
+            prompt,
+            cwd,
+            model,
+            sandbox,
+            timeout_secs,
+            output,
+        } => {
+            check_phase(&phase)?;
+            commands::exec_codex::run(
+                &feature,
+                &phase,
+                &task_id,
+                &prompt,
+                &cwd,
+                model.as_deref(),
+                sandbox.as_deref(),
+                timeout_secs,
+                output.as_deref(),
+            )
+        }
 
         Commands::Cleanup { feature } => commands::cleanup::run(&feature),
 
