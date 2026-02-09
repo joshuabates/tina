@@ -1,16 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { createKeyboardService } from "../keyboard-service"
-import type { ActionRegistry } from "../action-registry"
+import type { ActionRegistry, ActionContext } from "../action-registry"
 import type { FocusService } from "../focus-service"
 
 describe("KeyboardService", () => {
   let actionRegistry: ActionRegistry
   let focusService: FocusService
-  let mockExecute: ReturnType<typeof vi.fn>
+  let mockExecute: (ctx: ActionContext) => void
 
   beforeEach(() => {
     // Mock ActionRegistry
-    mockExecute = vi.fn()
+    mockExecute = vi.fn() as unknown as (ctx: ActionContext) => void
     actionRegistry = {
       register: vi.fn(),
       get: vi.fn(),
@@ -154,7 +154,7 @@ describe("KeyboardService", () => {
         label: "Delete",
         key: "d",
         when: "sidebar.focused",
-        execute: mockExecute,
+        execute: mockExecute as (ctx: ActionContext) => void,
       }
 
       vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
@@ -188,7 +188,7 @@ describe("KeyboardService", () => {
         label: "Command Palette",
         key: "Ctrl+p",
         when: undefined,
-        execute: mockExecute,
+        execute: mockExecute as (ctx: ActionContext) => void,
       }
 
       vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
@@ -311,7 +311,7 @@ describe("KeyboardService", () => {
         label: "Confirm",
         key: "Enter",
         when: "modal",
-        execute: mockExecute,
+        execute: mockExecute as (ctx: ActionContext) => void,
       }
 
       vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
@@ -346,7 +346,7 @@ describe("KeyboardService", () => {
         label: "Confirm",
         key: "Ctrl+Enter",
         when: "modal",
-        execute: mockExecute,
+        execute: mockExecute as (ctx: ActionContext) => void,
       }
 
       vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
@@ -404,7 +404,7 @@ describe("KeyboardService", () => {
       const mockAction = {
         id: "test",
         label: "Test",
-        execute: mockExecute,
+        execute: mockExecute as (ctx: ActionContext) => void,
       }
 
       vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
@@ -432,7 +432,7 @@ describe("KeyboardService", () => {
       const mockAction = {
         id: "test",
         label: "Test",
-        execute: mockExecute,
+        execute: mockExecute as (ctx: ActionContext) => void,
       }
 
       vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
@@ -465,7 +465,7 @@ describe("KeyboardService", () => {
       const mockAction = {
         id: "test",
         label: "Test",
-        execute: mockExecute,
+        execute: mockExecute as (ctx: ActionContext) => void,
       }
 
       vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
@@ -493,7 +493,7 @@ describe("KeyboardService", () => {
       const mockAction = {
         id: "test",
         label: "Test",
-        execute: mockExecute,
+        execute: mockExecute as (ctx: ActionContext) => void,
       }
 
       vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
@@ -534,7 +534,6 @@ describe("KeyboardService", () => {
         key: "a",
         bubbles: true,
         cancelable: true,
-        // @ts-expect-error - isComposing is valid but types may be incomplete
         isComposing: true,
       })
       document.dispatchEvent(event)

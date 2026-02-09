@@ -114,7 +114,7 @@ describe("useTypedQuery", () => {
       key: "test.array.query",
       query: "api.test.arrayQuery" as any,
       args: Schema.Struct({}),
-      schema: ArraySchema,
+      schema: ArraySchema as any,
     }
 
     const validData = [
@@ -137,7 +137,7 @@ describe("useTypedQuery", () => {
       key: "test.array.query",
       query: "api.test.arrayQuery" as any,
       args: Schema.Struct({}),
-      schema: ArraySchema,
+      schema: ArraySchema as any,
     }
 
     const invalidData = [
