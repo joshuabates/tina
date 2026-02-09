@@ -12,9 +12,12 @@ export function createSelectionService() {
   }
 
   const listeners = new Set<Listener>()
+  let cachedState: SelectionState | null = null
 
   function notifyListeners() {
-    listeners.forEach(listener => listener({ ...state }))
+    cachedState = null // Invalidate cache when notifying
+    const snapshot = getState()
+    listeners.forEach(listener => listener(snapshot))
   }
 
   function selectOrchestration(orchestrationId: string | null) {
@@ -77,7 +80,10 @@ export function createSelectionService() {
   }
 
   function getState(): SelectionState {
-    return { ...state }
+    if (cachedState) return cachedState
+
+    cachedState = { ...state }
+    return cachedState
   }
 
   function subscribe(listener: Listener): () => void {

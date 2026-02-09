@@ -12,8 +12,10 @@ export function createFocusService() {
   let activeSection: string | undefined
   let activeIndex = 0
   const listeners = new Set<Listener>()
+  let cachedState: FocusState | null = null
 
   function notify() {
+    cachedState = null // Invalidate cache when notifying
     const state = getState()
     listeners.forEach((listener) => listener(state))
   }
@@ -114,11 +116,14 @@ export function createFocusService() {
   }
 
   function getState(): FocusState {
-    return {
+    if (cachedState) return cachedState
+
+    cachedState = {
       activeSection,
       activeIndex,
       sections: Object.fromEntries(sections),
     }
+    return cachedState
   }
 
   return {
