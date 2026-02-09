@@ -36,23 +36,25 @@ Starting with the main orchestration monitoring page, the architecture supports 
 
 Four core services composed via Effect Layers:
 
-**DataService** — abstract query/mutation interface. Convex implementation behind it. All data access goes through here. Effect Schema validates at the boundary, producing typed errors (`ValidationError | QueryError | NetworkError`).
+**DataService** — query definition registry. Provides `QueryDef` objects pairing Convex API references with Effect Schemas. Does NOT execute queries itself — React hooks consume definitions and call `useSuspenseQuery` + `Schema.decodeUnknownSync`. The adapter boundary is at the hook level: Convex hooks for production, mock hooks for tests. Schemas are the shared contract.
 
 ```typescript
-interface DataService {
-  query<T>(def: QueryDef<T>): Effect<T, DataError, never>
-  mutation<T>(def: MutationDef<T>, args: unknown): Effect<T, DataError, never>
-  subscribe<T>(def: QueryDef<T>): Stream<T, DataError, never>
-}
-```
-
-A `QueryDef` pairs a Convex API reference with an Effect Schema:
-
-```typescript
+// QueryDef pairs a query reference with its validation schema
 const OrchestrationList = QueryDef({
   query: api.orchestrations.listOrchestrations,
   schema: Schema.Array(Orchestration),
 })
+
+// React hooks consume definitions — this is where execution happens
+function useOrchestrations() {
+  const raw = useSuspenseQuery(OrchestrationList.query)
+  return Schema.decodeUnknownSync(OrchestrationList.schema)(raw)
+}
+
+// For tests, swap the hook implementation — schemas still validate
+function useMockOrchestrations() {
+  return Schema.decodeUnknownSync(OrchestrationList.schema)(mockData)
+}
 ```
 
 **ActionRegistry** — named actions with metadata (label, icon, keybinding, context). Actions are plain functions wrapped in descriptors. Components register actions, keyboard/command palette invoke them by name.
@@ -273,6 +275,47 @@ Effect Schemas replace the current `types.ts` interfaces. They serve double duty
 - Responsive behavior for panel sizing
 - Accessibility pass (aria attributes, screen reader labels)
 - **Deliverable: production-ready main page with test coverage**
+
+## Architectural Context
+
+**Patterns to follow:**
+- Primitive compound components (named exports, forwardRef): `tina-web/src/components/ui/card.tsx`
+- CVA variant components: `tina-web/src/components/ui/button.tsx`, `tina-web/src/components/ui/status-badge.tsx`
+- Domain components (plain function, props interface extends HTMLAttributes): `tina-web/src/components/ui/phase-card.tsx`
+- List/composition components (data as `Omit<ChildProps, "className">[]`): `tina-web/src/components/ui/phase-timeline.tsx`
+- Storybook story structure (Meta/StoryObj, autodocs tag, category prefixes): `tina-web/src/components/ui/phase-card.stories.tsx`
+- Convex client setup with env-based profile selection: `tina-web/src/convex.ts`
+- Convex server-side joins via `ctx.db.get()` + `Promise.all`: `convex/orchestrations.ts:55-63`
+- Task event deduplication (keep latest per taskId): `convex/tasks.ts:4-15`
+
+**Code to reuse:**
+- `tina-web/src/lib/utils.ts` — `cn()` class merging utility (keep for primitives)
+- `tina-web/src/convex.ts` — Convex client singleton with profile selection (keep as-is)
+- `tina-web/src/index.css` — CSS custom properties (design tokens, referenced by both Tailwind and `_tokens.scss`)
+- `tina-web/.storybook/*` — Storybook config, dark theme, story sort order
+- All 18 UI primitives in `tina-web/src/components/ui/` — compose, don't modify
+
+**Anti-patterns:**
+- Don't cast Convex query results with `as Type[]` — use Effect Schema `decodeUnknownSync` instead (replaces pattern in `tina-web/src/hooks/useOrchestrations.ts:6`)
+- Don't collapse loading + null with `?? []` — let Suspense handle loading, let ErrorBoundary handle errors (replaces pattern in `tina-web/src/hooks/useOrchestrations.ts:6`)
+- Don't hand-write interfaces that mirror Convex schema — derive types from Effect Schemas (replaces `tina-web/src/types.ts`)
+
+**New dependencies required (Phase 1):**
+- `effect` — Effect-TS core (services, layers, schema, typed errors)
+- `sass` — SCSS compilation (Vite handles `.module.scss` natively with this installed)
+- No extra Vite plugin needed for SCSS — just `sass` as devDependency
+
+**Convention notes:**
+- New app-level compound components use dot notation (`Panel.Header`) — distinct from existing primitive compounds which use named exports (`Card`, `CardHeader`). Two conventions coexist intentionally: primitives follow shadcn pattern, app components follow compound pattern.
+- Storybook story categories: `Foundations/`, `Primitives/`, `Domain/` (existing), plus new `App/` category for app-level components
+- Root `vitest.config.ts` is for Convex function tests (edge-runtime). tina-web needs its own `vitest.config.ts` for component tests (browser or jsdom environment).
+- `react-router-dom` is already installed — use it for the `<Outlet />` pattern in AppShell even though initial routing is minimal
+
+**Integration:**
+- Entry: `tina-web/src/main.tsx` (rewritten with RuntimeProvider + ConvexProvider + BrowserRouter)
+- Convex schema unchanged: `convex/schema.ts` — no server-side changes needed
+- Convex queries unchanged: `convex/orchestrations.ts`, `convex/projects.ts`, etc.
+- Design reference: `designs/mockups/base-design/screen.png`
 
 ## Files Removed (Phase 1)
 
