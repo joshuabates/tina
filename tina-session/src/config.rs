@@ -3,6 +3,45 @@ use std::path::PathBuf;
 use anyhow::bail;
 use serde::Deserialize;
 
+use crate::routing::CliRouting;
+
+/// Codex-specific configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodexConfig {
+    #[serde(default = "default_codex_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_codex_binary")]
+    pub binary: String,
+    #[serde(default = "default_codex_model")]
+    pub default_model: String,
+    #[serde(default = "default_codex_sandbox")]
+    pub default_sandbox: String,
+    #[serde(default = "default_codex_timeout")]
+    pub timeout_secs: u64,
+    #[serde(default = "default_codex_max_output")]
+    pub max_output_bytes: usize,
+}
+
+fn default_codex_enabled() -> bool { true }
+fn default_codex_binary() -> String { "codex".to_string() }
+fn default_codex_model() -> String { "gpt-5.3-codex".to_string() }
+fn default_codex_sandbox() -> String { "workspace-write".to_string() }
+fn default_codex_timeout() -> u64 { 1800 }
+fn default_codex_max_output() -> usize { 200_000 }
+
+impl Default for CodexConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_codex_enabled(),
+            binary: default_codex_binary(),
+            default_model: default_codex_model(),
+            default_sandbox: default_codex_sandbox(),
+            timeout_secs: default_codex_timeout(),
+            max_output_bytes: default_codex_max_output(),
+        }
+    }
+}
+
 /// Tina configuration read from `~/.config/tina/config.toml`.
 ///
 /// Uses the same config file as tina-daemon.
@@ -13,6 +52,8 @@ pub struct TinaConfig {
     pub convex_url: Option<String>,
     pub auth_token: Option<String>,
     pub node_name: Option<String>,
+    pub codex: CodexConfig,
+    pub cli_routing: CliRouting,
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -33,6 +74,10 @@ struct ConfigFile {
     active_env: Option<String>,
     prod: Option<ProfileConfig>,
     dev: Option<ProfileConfig>,
+
+    // Codex and routing config.
+    codex: Option<CodexConfig>,
+    cli_routing: Option<CliRouting>,
 }
 
 pub fn config_path() -> PathBuf {
@@ -67,6 +112,8 @@ fn parse_config(content: &str, env_override: Option<&str>) -> anyhow::Result<Tin
         active_env,
         prod,
         dev,
+        codex,
+        cli_routing,
     } = file_config;
 
     let env = resolve_env(env_override, active_env.as_deref())?;
@@ -96,6 +143,8 @@ fn parse_config(content: &str, env_override: Option<&str>) -> anyhow::Result<Tin
         convex_url: resolved_convex_url,
         auth_token: resolved_auth_token,
         node_name: resolved_node_name,
+        codex: codex.unwrap_or_default(),
+        cli_routing: cli_routing.unwrap_or_default(),
     })
 }
 
@@ -235,5 +284,73 @@ auth_token = "dev-token"
     fn test_parse_config_toml_invalid_env_errors() {
         let err = parse_config("", Some("staging")).unwrap_err();
         assert!(err.to_string().contains("Invalid Tina environment"));
+    }
+
+    #[test]
+    fn test_parse_config_with_codex_section() {
+        let toml_str = r#"
+convex_url = "https://test.convex.cloud"
+
+[codex]
+enabled = false
+binary = "/usr/local/bin/codex"
+default_model = "gpt-4o"
+default_sandbox = "yolo"
+timeout_secs = 600
+max_output_bytes = 100000
+"#;
+        let config = parse_config(toml_str, Some("prod")).unwrap();
+        assert!(!config.codex.enabled);
+        assert_eq!(config.codex.binary, "/usr/local/bin/codex");
+        assert_eq!(config.codex.default_model, "gpt-4o");
+        assert_eq!(config.codex.default_sandbox, "yolo");
+        assert_eq!(config.codex.timeout_secs, 600);
+        assert_eq!(config.codex.max_output_bytes, 100000);
+    }
+
+    #[test]
+    fn test_parse_config_without_codex_uses_defaults() {
+        let config = parse_config("", Some("prod")).unwrap();
+        assert!(config.codex.enabled);
+        assert_eq!(config.codex.binary, "codex");
+        assert_eq!(config.codex.default_model, "gpt-5.3-codex");
+        assert_eq!(config.codex.default_sandbox, "workspace-write");
+        assert_eq!(config.codex.timeout_secs, 1800);
+        assert_eq!(config.codex.max_output_bytes, 200_000);
+    }
+
+    #[test]
+    fn test_parse_config_partial_codex_section() {
+        let toml_str = r#"
+[codex]
+binary = "my-codex"
+"#;
+        let config = parse_config(toml_str, Some("prod")).unwrap();
+        assert!(config.codex.enabled);
+        assert_eq!(config.codex.binary, "my-codex");
+        assert_eq!(config.codex.default_model, "gpt-5.3-codex");
+        assert_eq!(config.codex.timeout_secs, 1800);
+    }
+
+    #[test]
+    fn test_parse_config_with_cli_routing() {
+        let toml_str = r#"
+[cli_routing]
+codex_exact = ["my-model", "another"]
+codex_prefixes = ["x-"]
+"#;
+        let config = parse_config(toml_str, Some("prod")).unwrap();
+        assert_eq!(config.cli_routing.codex_exact, vec!["my-model", "another"]);
+        assert_eq!(config.cli_routing.codex_prefixes, vec!["x-"]);
+    }
+
+    #[test]
+    fn test_parse_config_without_cli_routing_uses_defaults() {
+        let config = parse_config("", Some("prod")).unwrap();
+        assert_eq!(config.cli_routing.codex_exact, vec!["codex"]);
+        assert_eq!(
+            config.cli_routing.codex_prefixes,
+            vec!["gpt-", "o1-", "o3-", "o4-"]
+        );
     }
 }

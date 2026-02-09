@@ -46,6 +46,17 @@ pub struct EventArgs {
     pub recorded_at: String,
 }
 
+/// Team member upsert data for Convex.
+pub struct UpsertTeamMemberArgs {
+    pub orchestration_id: String,
+    pub phase_number: String,
+    pub agent_name: String,
+    pub agent_type: Option<String>,
+    pub model: Option<String>,
+    pub joined_at: Option<String>,
+    pub recorded_at: String,
+}
+
 /// Team registration data for Convex.
 pub struct RegisterTeamArgs {
     pub team_name: String,
@@ -247,6 +258,45 @@ impl ConvexWriter {
         let result = self
             .client
             .mutation("supervisorStates:upsertSupervisorState", args)
+            .await?;
+        extract_string(result)
+    }
+
+    /// Upsert a team member record. Returns the team member doc ID.
+    pub async fn upsert_team_member(
+        &mut self,
+        args: &UpsertTeamMemberArgs,
+    ) -> anyhow::Result<String> {
+        let mut map = BTreeMap::new();
+        map.insert(
+            "orchestrationId".into(),
+            Value::from(args.orchestration_id.as_str()),
+        );
+        map.insert(
+            "phaseNumber".into(),
+            Value::from(args.phase_number.as_str()),
+        );
+        map.insert(
+            "agentName".into(),
+            Value::from(args.agent_name.as_str()),
+        );
+        if let Some(ref at) = args.agent_type {
+            map.insert("agentType".into(), Value::from(at.as_str()));
+        }
+        if let Some(ref m) = args.model {
+            map.insert("model".into(), Value::from(m.as_str()));
+        }
+        if let Some(ref ja) = args.joined_at {
+            map.insert("joinedAt".into(), Value::from(ja.as_str()));
+        }
+        map.insert(
+            "recordedAt".into(),
+            Value::from(args.recorded_at.as_str()),
+        );
+
+        let result = self
+            .client
+            .mutation("teamMembers:upsertTeamMember", map)
             .await?;
         extract_string(result)
     }
@@ -574,6 +624,47 @@ fn extract_orchestration_list(
         }
         FunctionResult::ErrorMessage(msg) => anyhow::bail!("Convex error: {}", msg),
         FunctionResult::ConvexError(err) => anyhow::bail!("Convex error: {:?}", err),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upsert_team_member_args_construction() {
+        let args = UpsertTeamMemberArgs {
+            orchestration_id: "orch-123".to_string(),
+            phase_number: "1".to_string(),
+            agent_name: "codex-worker-1-abcd1234".to_string(),
+            agent_type: Some("codex".to_string()),
+            model: Some("gpt-5.3-codex".to_string()),
+            joined_at: Some("2026-02-09T12:00:00Z".to_string()),
+            recorded_at: "2026-02-09T12:00:00Z".to_string(),
+        };
+        assert_eq!(args.orchestration_id, "orch-123");
+        assert_eq!(args.phase_number, "1");
+        assert_eq!(args.agent_name, "codex-worker-1-abcd1234");
+        assert_eq!(args.agent_type.as_deref(), Some("codex"));
+        assert_eq!(args.model.as_deref(), Some("gpt-5.3-codex"));
+        assert_eq!(args.joined_at.as_deref(), Some("2026-02-09T12:00:00Z"));
+        assert_eq!(args.recorded_at, "2026-02-09T12:00:00Z");
+    }
+
+    #[test]
+    fn upsert_team_member_args_optional_fields() {
+        let args = UpsertTeamMemberArgs {
+            orchestration_id: "orch-456".to_string(),
+            phase_number: "2".to_string(),
+            agent_name: "claude-executor-2".to_string(),
+            agent_type: None,
+            model: None,
+            joined_at: None,
+            recorded_at: "2026-02-09T12:00:00Z".to_string(),
+        };
+        assert!(args.agent_type.is_none());
+        assert!(args.model.is_none());
+        assert!(args.joined_at.is_none());
     }
 }
 

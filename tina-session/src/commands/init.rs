@@ -76,6 +76,11 @@ pub fn run(
     // Write statusline config files
     write_statusline_config(&worktree_path)?;
 
+    // Best-effort: generate AGENTS.md for Codex agents
+    if let Err(e) = generate_agents_md(&worktree_path) {
+        eprintln!("Warning: Failed to generate AGENTS.md: {}", e);
+    }
+
     // Create supervisor state file in worktree
     let state = SupervisorState::new(
         feature,
@@ -224,6 +229,92 @@ fn write_statusline_config(worktree_path: &Path) -> anyhow::Result<()> {
     fs::write(&settings_path, settings)?;
 
     Ok(())
+}
+
+/// Generate an AGENTS.md file in the worktree from the project's CLAUDE.md.
+/// Extracts project-relevant sections and excludes orchestration internals.
+/// Best-effort: returns Ok(()) if CLAUDE.md is missing (no AGENTS.md created).
+fn generate_agents_md(worktree_path: &Path) -> anyhow::Result<()> {
+    let claude_md_path = worktree_path.join("CLAUDE.md");
+    if !claude_md_path.exists() {
+        return Ok(());
+    }
+
+    let contents = fs::read_to_string(&claude_md_path)?;
+    let sections = extract_sections(&contents);
+
+    if sections.is_empty() {
+        return Ok(());
+    }
+
+    let mut output = String::from("# Project Context\n");
+    for (heading, body) in &sections {
+        output.push_str(&format!("\n## {}\n\n{}\n", heading, body.trim()));
+    }
+
+    fs::write(worktree_path.join("AGENTS.md"), output)?;
+    Ok(())
+}
+
+/// Extract relevant sections from CLAUDE.md content.
+/// Returns (heading, body) pairs for sections we want in AGENTS.md.
+fn extract_sections(contents: &str) -> Vec<(String, String)> {
+    let wanted = [
+        "Project Overview",
+        "Build & Development Commands",
+        "Architecture",
+        "Conventions",
+    ];
+
+    // Orchestration-internal keywords to filter out of extracted content
+    let internal_keywords = ["worktree", "supervisor state", "tmux", "tina-session", "tina-daemon"];
+
+    let mut sections = Vec::new();
+    let mut current_heading: Option<String> = None;
+    let mut current_body = String::new();
+
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("## ") {
+            // Flush previous section
+            if let Some(heading) = current_heading.take() {
+                if wanted.iter().any(|w| heading.contains(w)) {
+                    let filtered = filter_internal_lines(&current_body, &internal_keywords);
+                    if !filtered.trim().is_empty() {
+                        sections.push((heading, filtered));
+                    }
+                }
+            }
+            current_heading = Some(trimmed.trim_start_matches('#').trim().to_string());
+            current_body.clear();
+        } else if current_heading.is_some() {
+            current_body.push_str(line);
+            current_body.push('\n');
+        }
+    }
+
+    // Flush last section
+    if let Some(heading) = current_heading {
+        if wanted.iter().any(|w| heading.contains(w)) {
+            let filtered = filter_internal_lines(&current_body, &internal_keywords);
+            if !filtered.trim().is_empty() {
+                sections.push((heading, filtered));
+            }
+        }
+    }
+
+    sections
+}
+
+/// Remove lines that contain orchestration-internal keywords.
+fn filter_internal_lines(body: &str, keywords: &[&str]) -> String {
+    body.lines()
+        .filter(|line| {
+            let lower = line.to_lowercase();
+            !keywords.iter().any(|kw| lower.contains(kw))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Pre-register the orchestration team in Convex so the daemon can resolve
@@ -495,6 +586,120 @@ mod tests {
         let contents = fs::read_to_string(path.join(".gitignore")).unwrap();
         let count = contents.lines().filter(|l| l.trim() == ".worktrees").count();
         assert_eq!(count, 1, "Should only have one .worktrees entry");
+    }
+
+    #[test]
+    fn test_generate_agents_md_from_claude_md() {
+        let temp = TempDir::new().unwrap();
+        let worktree = temp.path();
+
+        let claude_md = r#"# CLAUDE.md
+
+## Project Overview
+
+TINA is a workflow system.
+
+## Build & Development Commands
+
+```bash
+cargo build
+cargo test
+```
+
+## Architecture
+
+Mixed Rust/TypeScript monorepo.
+
+## Conventions
+
+- Features are kebab-case.
+"#;
+        fs::write(worktree.join("CLAUDE.md"), claude_md).unwrap();
+        generate_agents_md(worktree).unwrap();
+
+        let agents_md = worktree.join("AGENTS.md");
+        assert!(agents_md.exists(), "AGENTS.md should be created");
+
+        let content = fs::read_to_string(&agents_md).unwrap();
+        assert!(content.contains("# Project Context"));
+        assert!(content.contains("## Project Overview"));
+        assert!(content.contains("## Build & Development Commands"));
+        assert!(content.contains("## Architecture"));
+        assert!(content.contains("## Conventions"));
+        assert!(content.contains("cargo build"));
+    }
+
+    #[test]
+    fn test_generate_agents_md_missing_claude_md() {
+        let temp = TempDir::new().unwrap();
+        let worktree = temp.path();
+
+        // No CLAUDE.md exists
+        let result = generate_agents_md(worktree);
+        assert!(result.is_ok(), "Should succeed silently");
+        assert!(!worktree.join("AGENTS.md").exists(), "AGENTS.md should not be created");
+    }
+
+    #[test]
+    fn test_generate_agents_md_partial_claude_md() {
+        let temp = TempDir::new().unwrap();
+        let worktree = temp.path();
+
+        let claude_md = r#"# CLAUDE.md
+
+## Project Overview
+
+A simple project.
+
+## Some Other Section
+
+Not relevant.
+"#;
+        fs::write(worktree.join("CLAUDE.md"), claude_md).unwrap();
+        generate_agents_md(worktree).unwrap();
+
+        let agents_md = worktree.join("AGENTS.md");
+        assert!(agents_md.exists(), "AGENTS.md should be created with partial content");
+
+        let content = fs::read_to_string(&agents_md).unwrap();
+        assert!(content.contains("## Project Overview"));
+        assert!(!content.contains("Some Other Section"));
+    }
+
+    #[test]
+    fn test_generate_agents_md_does_not_include_orchestration_internals() {
+        let temp = TempDir::new().unwrap();
+        let worktree = temp.path();
+
+        let claude_md = r#"# CLAUDE.md
+
+## Project Overview
+
+A project that uses worktree isolation.
+Clean line about the project.
+
+## Architecture
+
+Uses tmux for session management.
+Clean architecture description.
+tina-session handles lifecycle.
+tina-daemon watches files.
+Supervisor state tracks progress.
+"#;
+        fs::write(worktree.join("CLAUDE.md"), claude_md).unwrap();
+        generate_agents_md(worktree).unwrap();
+
+        let agents_md = worktree.join("AGENTS.md");
+        assert!(agents_md.exists());
+
+        let content = fs::read_to_string(&agents_md).unwrap();
+        assert!(!content.contains("worktree"), "Should not contain 'worktree'");
+        assert!(!content.contains("tmux"), "Should not contain 'tmux'");
+        assert!(!content.contains("tina-session"), "Should not contain 'tina-session'");
+        assert!(!content.contains("tina-daemon"), "Should not contain 'tina-daemon'");
+        assert!(!content.contains("Supervisor state"), "Should not contain 'supervisor state'");
+        assert!(content.contains("Clean line about the project"));
+        assert!(content.contains("Clean architecture description"));
     }
 
     #[test]
