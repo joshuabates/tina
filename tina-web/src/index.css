@@ -58,3 +58,9 @@
   ::-webkit-scrollbar-track { background: hsl(var(--background)); }
   ::-webkit-scrollbar-thumb { background: hsl(var(--muted)); border-radius: 10px; }
 }
+
+@layer components {
+  .phase-glow {
+    box-shadow: 0 0 12px color-mix(in srgb, hsl(var(--primary)) 40%, transparent);
+  }
+}
