@@ -118,6 +118,8 @@ mise run check                  # fast cargo check, all crates
 mise run build                  # release build, all crates
 mise run install                # build + symlink CLIs to ~/.local/bin
 mise run plugin:bundle          # build minimal local plugin bundle (no target artifacts)
+mise run plugin:install         # bundle + install plugin + refresh symlinks + restart daemon if running
+mise run plugin:update          # bundle + update plugin + refresh symlinks + restart daemon if running
 
 mise run test:web               # test a single crate
 mise run test:skills            # run skill test suite
@@ -219,23 +221,22 @@ Subagent types for the Task tool:
 
 ## Installation
 
-For local production-like plugin installs (without copying Cargo artifacts), build the bundle first:
+For local production-like plugin installs (without copying Cargo artifacts), use:
+
+```bash
+mise run plugin:install
+```
+
+To pick up new local changes later:
+
+```bash
+mise run plugin:update
+```
+
+If you only want to build the bundle (without installing/updating):
 
 ```bash
 mise run plugin:bundle
-```
-
-Then add the generated local marketplace:
-
-```bash
-claude plugins add-marketplace /absolute/path/to/tina/.claude-plugin/.plugin-dist/marketplace.json
-claude plugins add tina
-```
-
-For GitHub-hosted installs, first add the TINA marketplace:
-
-```bash
-claude plugins add-marketplace https://raw.githubusercontent.com/joshuabates/tina/refs/heads/main/marketplace.json
 ```
 
 Requires:

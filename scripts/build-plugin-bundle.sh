@@ -97,8 +97,22 @@ cp "$MONITOR_BIN" "$PLUGIN_DIR/bin/tina-monitor"
 chmod +x "$PLUGIN_DIR/bin/tina-session" "$PLUGIN_DIR/bin/tina-daemon" "$PLUGIN_DIR/bin/tina-monitor"
 chmod +x "$PLUGIN_DIR/hooks/session-start.sh"
 
+MARKETPLACE_TEMPLATE="$PROJECT_DIR/.claude-plugin/marketplace.json"
+DIST_MARKETPLACE="$DIST_DIR/marketplace.json"
+
+if [[ ! -f "$MARKETPLACE_TEMPLATE" ]]; then
+  echo "Missing marketplace template: $MARKETPLACE_TEMPLATE" >&2
+  exit 1
+fi
+
+escaped_plugin_dir="$(printf '%s' "$PLUGIN_DIR" | sed 's/[\/&]/\\&/g')"
+sed -E "s#\"source\": \"[^\"]+\"#\"source\": \"$escaped_plugin_dir\"#g" \
+  "$MARKETPLACE_TEMPLATE" > "$DIST_MARKETPLACE"
+
 echo "Plugin bundle ready:"
+echo "  Marketplace: $DIST_MARKETPLACE"
 echo "  Plugin root: $PLUGIN_DIR"
 echo ""
-echo "Update with:"
-echo "  claude plugin update tina@tina"
+echo "Install or update with:"
+echo "  mise run plugin:install"
+echo "  mise run plugin:update"

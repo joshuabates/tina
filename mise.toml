@@ -75,19 +75,7 @@ VITE_TINA_ENV="$TINA_ENV" VITE_CONVEX_URL="$CONVEX_URL" npm run build
 
 [tasks.install]
 description = "Build CLIs and symlink to ~/.local/bin"
-depends = ["build"]
-run = """
-set -e
-BIN_DIR="$HOME/.local/bin"
-mkdir -p "$BIN_DIR"
-ln -sf "$MISE_PROJECT_ROOT/tina-session/target/release/tina-session" "$BIN_DIR/tina-session"
-ln -sf "$MISE_PROJECT_ROOT/tina-monitor/target/release/tina-monitor" "$BIN_DIR/tina-monitor"
-ln -sf "$MISE_PROJECT_ROOT/tina-daemon/target/release/tina-daemon" "$BIN_DIR/tina-daemon"
-echo "Installed:"
-echo "  $BIN_DIR/tina-session"
-echo "  $BIN_DIR/tina-monitor"
-echo "  $BIN_DIR/tina-daemon"
-"""
+run = "./scripts/install.sh"
 
 # --- Test ---
 
