@@ -185,6 +185,37 @@ Added to mise tasks:
 - No existing component is modified or deleted during this work
 - The existing app builds and runs throughout
 
+## Architectural Context
+
+**Patterns to follow:**
+- shadcn/ui CSS variable convention: tokens in `:root`/`.dark` blocks in `index.css`, referenced via `hsl(var(--token))` in `tailwind.config.ts`
+- Existing component prop pattern: typed `interface Props` with domain types from `src/types.ts:1-107`
+- Status mapping pattern: switch on string status returning style classes -- currently duplicated in `Dashboard.tsx:5-13`, `OrchestrationList.tsx:15-26`, `TaskList.tsx:17-28`, `OrchestrationDetail.tsx:12-22`. The new `StatusBadge` component consolidates this.
+
+**Code to reuse:**
+- `src/types.ts` -- domain types (Orchestration, Phase, TaskEvent, TeamMember) that domain components should accept as props
+- `src/hooks/` -- Convex hooks remain unchanged; domain components are presentational (props only, no data fetching)
+- `designs/mockups/base-design/code.html:11-33` -- exact Tailwind config with color values and font families to extract
+- `designs/mockups/base-design/code.html:35-60` -- CSS classes (`.task-card`, `.phase-glow`, `.sidebar-item-active`) to port into component styles
+
+**Anti-patterns:**
+- Don't duplicate status-color logic -- the existing pattern of per-file `statusColor()` switch statements is exactly what `StatusBadge` eliminates
+- Don't use `@fontsource` packages for fonts -- the mockup loads Inter and JetBrains Mono via Google Fonts CDN, which is simpler and matches existing `code.html` approach. Use CDN links in `index.html` instead.
+- Don't add shadcn's `cn()` utility with `clsx` + `tailwind-merge` unless actually needed for conditional class merging. Start without it; add when a component genuinely needs it.
+
+**Integration:**
+- Entry: `tina-web/src/index.css` (tokens) + `tina-web/tailwind.config.ts` (theme extension)
+- shadcn config: `tina-web/components.json` (created by `npx shadcn@latest init`)
+- Storybook config: `tina-web/.storybook/` (new directory)
+- Components: `tina-web/src/components/ui/` (shadcn convention, new directory alongside existing `src/components/`)
+- Vite alias: `tsconfig.json` needs `"@/*": ["./src/*"]` path alias for shadcn imports; `vite.config.ts` needs matching `resolve.alias`
+- mise: add `dev:storybook` task to `mise.toml`
+
+**Notes:**
+- The `tsconfig.json` currently only has a `@convex/_generated/*` path alias. shadcn requires a `@/*` alias pointing to `src/`. This requires adding the alias to both `tsconfig.json` and `vite.config.ts`.
+- Existing components in `src/components/` are untouched. New components go in `src/components/ui/`. The future redesign phase will replace `src/components/` screens with compositions of `src/components/ui/` primitives.
+- Storybook stories should use static mock data, not Convex hooks. Components in `ui/` are pure presentational.
+
 ## Design Reference
 
 - Mockup screenshot: `designs/mockups/base-design/screen.png`
