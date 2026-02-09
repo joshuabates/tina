@@ -169,6 +169,16 @@ run = "python3 tests/claude-code/analyze-token-usage.py {{arg(name=\"session_fil
 description = "Build a minimal plugin bundle (skills + hooks + binaries, no build artifacts)"
 run = "./scripts/build-plugin-bundle.sh"
 
+[tasks."plugin:install"]
+description = "Build plugin bundle, install it, update symlinks, and bounce daemon"
+depends = ["plugin:bundle"]
+run = "./scripts/plugin-post-install.sh install"
+
+[tasks."plugin:update"]
+description = "Build plugin bundle, update it, update symlinks, and bounce daemon"
+depends = ["plugin:bundle"]
+run = "./scripts/plugin-post-install.sh update"
+
 [tasks."bump:version"]
 description = "Set version across all crates"
 run = """
