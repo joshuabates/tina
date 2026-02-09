@@ -7,11 +7,11 @@ import {
   OrchestrationEvent,
 } from "@/schemas"
 
-export interface QueryDef<A, Args = Record<string, never>> {
+export interface QueryDef<A = unknown, Args = Record<string, never>> {
   key: string
   query: unknown // Convex FunctionReference — typed at use site
   args: Schema.Schema<Args>
-  schema: Schema.Schema<A>
+  schema: Schema.Schema<A, any, never>
 }
 
 function queryDef<A, Args = Record<string, never>>(def: QueryDef<A, Args>): QueryDef<A, Args> {
