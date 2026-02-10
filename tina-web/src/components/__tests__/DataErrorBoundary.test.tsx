@@ -111,7 +111,8 @@ describe("DataErrorBoundary", () => {
 
     const alert = screen.getByRole("alert")
     expect(alert).toBeInTheDocument()
-    expect(alert).toHaveTextContent(/access denied: insufficient permissions/i)
+    expect(alert).toHaveTextContent(/access denied/i)
+    expect(alert).toHaveTextContent(/insufficient permissions/i)
 
     consoleErrorSpy.mockRestore()
   })
@@ -133,7 +134,8 @@ describe("DataErrorBoundary", () => {
 
     const alert = screen.getByRole("alert")
     expect(alert).toBeInTheDocument()
-    expect(alert).toHaveTextContent(/temporary error loading TestPanel/i)
+    expect(alert).toHaveTextContent(/temporary error/i)
+    expect(alert).toHaveTextContent(/unable to load TestPanel/i)
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument()
 
     consoleErrorSpy.mockRestore()
@@ -153,7 +155,8 @@ describe("DataErrorBoundary", () => {
 
     const alert = screen.getByRole("alert")
     expect(alert).toBeInTheDocument()
-    expect(alert).toHaveTextContent(/unexpected error in TestPanel/i)
+    expect(alert).toHaveTextContent(/unexpected error/i)
+    expect(alert).toHaveTextContent(/something went wrong in TestPanel/i)
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument()
 
     consoleErrorSpy.mockRestore()
@@ -222,6 +225,52 @@ describe("DataErrorBoundary", () => {
     expect(screen.getByText("Custom error UI")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /custom retry/i })).toBeInTheDocument()
     expect(customFallback).toHaveBeenCalledWith(error, expect.any(Function))
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it("retry button in QueryValidationError resets boundary", async () => {
+    const user = userEvent.setup()
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    let shouldThrow = true
+    function ToggleableErrorThrower() {
+      if (shouldThrow) {
+        throw new QueryValidationError({
+          query: "orchestrations.list",
+          message: "Invalid schema",
+        })
+      }
+      return <div>Child content recovered</div>
+    }
+
+    const { rerender } = render(
+      <DataErrorBoundary panelName="TestPanel">
+        <ToggleableErrorThrower />
+      </DataErrorBoundary>
+    )
+
+    // Error should be displayed
+    expect(screen.getByRole("alert")).toBeInTheDocument()
+    expect(screen.getByText(/data error/i)).toBeInTheDocument()
+
+    // Stop throwing after retry
+    shouldThrow = false
+
+    // Click retry button
+    const retryButton = screen.getByRole("button", { name: /retry/i })
+    await user.click(retryButton)
+
+    // Force re-render to simulate recovery
+    rerender(
+      <DataErrorBoundary panelName="TestPanel">
+        <ToggleableErrorThrower />
+      </DataErrorBoundary>
+    )
+
+    // Children should be rendered again
+    expect(screen.getByText("Child content recovered")).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
 
     consoleErrorSpy.mockRestore()
   })
