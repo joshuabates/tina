@@ -5,6 +5,9 @@ edition = "2021"
 description = "Phase lifecycle management for Tina orchestrations"
 
 [dependencies]
+# Shared Convex data/client/mapping layer
+tina-data = { path = "../tina-data" }
+
 # CLI
 clap = { version = "4", features = ["derive"] }
 

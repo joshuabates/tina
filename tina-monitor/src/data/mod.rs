@@ -14,6 +14,3 @@ pub use local::{DataSource, LoadedOrchestration};
 
 /// Type alias for backward compatibility with app.rs
 pub type Orchestration = LoadedOrchestration;
-
-// Keep tina_state for legacy fixture reads (supervisor-state.json, context-metrics.json)
-pub use tina_data::tina_state;

@@ -1,28 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+pub use crate::generated::orchestration_core_fields::OrchestrationRecord;
+
 /// Registration data for a node (laptop).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeRegistration {
     pub name: String,
     pub os: String,
     pub auth_token_hash: String,
-}
-
-/// Orchestration record matching the Convex `orchestrations` table.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OrchestrationRecord {
-    pub node_id: String,
-    pub project_id: Option<String>,
-    pub feature_name: String,
-    pub design_doc_path: String,
-    pub branch: String,
-    pub worktree_path: Option<String>,
-    pub total_phases: f64,
-    pub current_phase: f64,
-    pub status: String,
-    pub started_at: String,
-    pub completed_at: Option<String>,
-    pub total_elapsed_mins: Option<f64>,
 }
 
 /// Phase record matching the Convex `phases` table.
@@ -77,6 +62,17 @@ pub struct TeamMemberRecord {
     pub model: Option<String>,
     pub joined_at: Option<String>,
     pub recorded_at: String,
+}
+
+/// Team registration input (for `teams:registerTeam`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterTeamRecord {
+    pub team_name: String,
+    pub orchestration_id: String,
+    pub lead_session_id: String,
+    pub phase_number: Option<String>,
+    pub parent_team_id: Option<String>,
+    pub created_at: f64,
 }
 
 /// An inbound action from the Convex `inboundActions` table.
@@ -158,4 +154,12 @@ pub struct OrchestrationDetailResponse {
     pub phases: Vec<PhaseRecord>,
     pub tasks: Vec<TaskEventRecord>,
     pub team_members: Vec<TeamMemberRecord>,
+}
+
+/// Orchestration as returned by `orchestrations:getByFeature`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeatureOrchestrationRecord {
+    pub id: String,
+    #[serde(flatten)]
+    pub record: OrchestrationRecord,
 }

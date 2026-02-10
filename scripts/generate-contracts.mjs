@@ -81,13 +81,13 @@ fs.writeFileSync(
 
 const rustLines = [
   generatedHeader,
-  "macro_rules! orchestration_core_fields {",
-  "    () => {",
-  ...fields.map((f) => `        pub ${f.rust}: ${rustTypeExpr(f)},`),
-  "    };",
-  "}",
+  "use serde::{Deserialize, Serialize};",
   "",
-  "pub(crate) use orchestration_core_fields;",
+  "#[derive(Debug, Clone, Serialize, Deserialize)]",
+  "pub struct OrchestrationRecord {",
+  "    pub project_id: Option<String>,",
+  ...fields.map((f) => `    pub ${f.rust}: ${rustTypeExpr(f)},`),
+  "}",
   "",
 ];
 

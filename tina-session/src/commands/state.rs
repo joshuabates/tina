@@ -3,9 +3,10 @@ use std::path::Path;
 use chrono::Utc;
 
 use tina_session::state::schema::{OrchestrationStatus, PhaseState, PhaseStatus, SupervisorState};
-use tina_session::state::transitions::validate_transition;
 use tina_session::state::timing::duration_mins;
+use tina_session::state::transitions::validate_transition;
 
+use crate::commands::state_sync::{orchestration_args_from_state, phase_args_from_state};
 use tina_session::convex;
 
 pub fn update(
@@ -212,51 +213,6 @@ pub fn blocked(feature: &str, phase: &str, reason: &str) -> anyhow::Result<u8> {
     Ok(0)
 }
 
-/// Upsert a single phase record to Convex.
-/// Build an OrchestrationRecord from SupervisorState (no node_id - filled by writer).
-fn state_to_orch_args(feature: &str, state: &SupervisorState) -> convex::OrchestrationArgs {
-    use tina_session::state::schema::OrchestrationStatus;
-
-    let (completed_at, total_elapsed_mins) = if state.status == OrchestrationStatus::Complete {
-        let now = chrono::Utc::now();
-        let elapsed = tina_session::state::timing::duration_mins(state.orchestration_started_at, now);
-        (Some(now.to_rfc3339()), Some(elapsed as f64))
-    } else {
-        (None, None)
-    };
-
-    convex::OrchestrationArgs {
-        node_id: String::new(), // filled by writer
-        project_id: None,
-        feature_name: feature.to_string(),
-        design_doc_path: state.design_doc.to_string_lossy().to_string(),
-        branch: state.branch.clone(),
-        worktree_path: Some(state.worktree_path.to_string_lossy().to_string()),
-        total_phases: state.total_phases as f64,
-        current_phase: state.current_phase as f64,
-        status: orch_status_str(state.status).to_string(),
-        started_at: state.orchestration_started_at.to_rfc3339(),
-        completed_at,
-        total_elapsed_mins,
-    }
-}
-
-/// Build a PhaseRecord from PhaseState (orchestration_id filled after upsert).
-fn phase_state_to_args(phase_key: &str, ps: &PhaseState) -> convex::PhaseArgs {
-    convex::PhaseArgs {
-        orchestration_id: String::new(), // filled after upsert
-        phase_number: phase_key.to_string(),
-        status: ps.status.to_string(),
-        plan_path: ps.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-        git_range: ps.git_range.clone(),
-        planning_mins: ps.breakdown.planning_mins.map(|m| m as f64),
-        execution_mins: ps.breakdown.execution_mins.map(|m| m as f64),
-        review_mins: ps.breakdown.review_mins.map(|m| m as f64),
-        started_at: ps.planning_started_at.map(|dt| dt.to_rfc3339()),
-        completed_at: ps.completed_at.map(|dt| dt.to_rfc3339()),
-    }
-}
-
 fn upsert_phase_to_convex(
     feature: &str,
     phase: &str,
@@ -267,8 +223,8 @@ fn upsert_phase_to_convex(
         None => return Ok(()),
     };
 
-    let mut orch = state_to_orch_args(feature, state);
-    let mut phase_args = phase_state_to_args(phase, phase_state);
+    let mut orch = orchestration_args_from_state(feature, state);
+    let mut phase_args = phase_args_from_state(phase, phase_state);
 
     convex::run_convex_write(|mut writer| async move {
         orch.node_id = writer.node_id().to_string();
@@ -280,13 +236,12 @@ fn upsert_phase_to_convex(
 }
 
 /// Sync both orchestration status and phase to Convex.
-fn sync_state_to_convex(
-    feature: &str,
-    phase: &str,
-    state: &SupervisorState,
-) -> anyhow::Result<()> {
-    let mut orch = state_to_orch_args(feature, state);
-    let phase_args = state.phases.get(phase).map(|ps| phase_state_to_args(phase, ps));
+fn sync_state_to_convex(feature: &str, phase: &str, state: &SupervisorState) -> anyhow::Result<()> {
+    let mut orch = orchestration_args_from_state(feature, state);
+    let phase_args = state
+        .phases
+        .get(phase)
+        .map(|phase_state| phase_args_from_state(phase, phase_state));
 
     convex::run_convex_write(|mut writer| async move {
         orch.node_id = writer.node_id().to_string();
@@ -299,16 +254,6 @@ fn sync_state_to_convex(
 
         Ok(())
     })
-}
-
-fn orch_status_str(status: OrchestrationStatus) -> &'static str {
-    match status {
-        OrchestrationStatus::Planning => "planning",
-        OrchestrationStatus::Executing => "executing",
-        OrchestrationStatus::Reviewing => "reviewing",
-        OrchestrationStatus::Complete => "complete",
-        OrchestrationStatus::Blocked => "blocked",
-    }
 }
 
 pub fn show(feature: &str, phase: Option<&str>, json: bool) -> anyhow::Result<u8> {
@@ -404,7 +349,10 @@ pub fn show(feature: &str, phase: Option<&str>, json: bool) -> anyhow::Result<u8
                         PhaseStatus::Blocked => "✗",
                         _ => "○",
                     };
-                    println!("  {} Phase {} (remediation): {}", status_icon, key, ps.status);
+                    println!(
+                        "  {} Phase {} (remediation): {}",
+                        status_icon, key, ps.status
+                    );
                 }
             }
         }

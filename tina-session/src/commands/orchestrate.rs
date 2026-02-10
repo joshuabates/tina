@@ -2,6 +2,7 @@ use std::path::Path;
 
 use tina_session::state::orchestrate::{advance_state, next_action, Action, AdvanceEvent};
 
+use crate::commands::state_sync::{all_phase_args_from_state, orchestration_args_from_state};
 use tina_session::convex;
 
 /// Determine the next action to take based on current orchestration state.
@@ -46,16 +47,18 @@ fn parse_event(
 ) -> anyhow::Result<AdvanceEvent> {
     match event {
         "plan_complete" => {
-            let path = plan_path
-                .ok_or_else(|| anyhow::anyhow!("--plan-path is required for plan_complete event"))?;
+            let path = plan_path.ok_or_else(|| {
+                anyhow::anyhow!("--plan-path is required for plan_complete event")
+            })?;
             Ok(AdvanceEvent::PlanComplete {
                 plan_path: path.to_path_buf(),
             })
         }
         "execute_started" => Ok(AdvanceEvent::ExecuteStarted),
         "execute_complete" => {
-            let range = git_range
-                .ok_or_else(|| anyhow::anyhow!("--git-range is required for execute_complete event"))?;
+            let range = git_range.ok_or_else(|| {
+                anyhow::anyhow!("--git-range is required for execute_complete event")
+            })?;
             Ok(AdvanceEvent::ExecuteComplete {
                 git_range: range.to_string(),
             })
@@ -66,7 +69,10 @@ fn parse_event(
             let issue_list: Vec<String> = if issues_str.is_empty() {
                 vec![]
             } else {
-                issues_str.split(',').map(|s| s.trim().to_string()).collect()
+                issues_str
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect()
             };
             Ok(AdvanceEvent::ReviewGaps { issues: issue_list })
         }
@@ -101,55 +107,8 @@ fn sync_to_convex(
     action: &Action,
     event: Option<&AdvanceEvent>,
 ) -> anyhow::Result<()> {
-    use tina_session::state::schema::OrchestrationStatus;
-
-    let status_str = match state.status {
-        OrchestrationStatus::Planning => "planning",
-        OrchestrationStatus::Executing => "executing",
-        OrchestrationStatus::Reviewing => "reviewing",
-        OrchestrationStatus::Complete => "complete",
-        OrchestrationStatus::Blocked => "blocked",
-    };
-
-    let (completed_at, total_elapsed_mins) = if state.status == OrchestrationStatus::Complete {
-        let now = chrono::Utc::now();
-        let elapsed = tina_session::state::timing::duration_mins(state.orchestration_started_at, now);
-        (Some(now.to_rfc3339()), Some(elapsed as f64))
-    } else {
-        (None, None)
-    };
-
-    let mut orch = convex::OrchestrationArgs {
-        node_id: String::new(), // filled by writer
-        project_id: None,
-        feature_name: feature.to_string(),
-        design_doc_path: state.design_doc.to_string_lossy().to_string(),
-        branch: state.branch.clone(),
-        worktree_path: Some(state.worktree_path.to_string_lossy().to_string()),
-        total_phases: state.total_phases as f64,
-        current_phase: state.current_phase as f64,
-        status: status_str.to_string(),
-        started_at: state.orchestration_started_at.to_rfc3339(),
-        completed_at,
-        total_elapsed_mins,
-    };
-
-    let phase_args_list: Vec<_> = state
-        .phases
-        .iter()
-        .map(|(k, ps)| convex::PhaseArgs {
-            orchestration_id: String::new(), // filled after upsert
-            phase_number: k.clone(),
-            status: ps.status.to_string(),
-            plan_path: ps.plan_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-            git_range: ps.git_range.clone(),
-            planning_mins: ps.breakdown.planning_mins.map(|m| m as f64),
-            execution_mins: ps.breakdown.execution_mins.map(|m| m as f64),
-            review_mins: ps.breakdown.review_mins.map(|m| m as f64),
-            started_at: ps.planning_started_at.map(|dt| dt.to_rfc3339()),
-            completed_at: ps.completed_at.map(|dt| dt.to_rfc3339()),
-        })
-        .collect();
+    let mut orch = orchestration_args_from_state(feature, state);
+    let phase_args_list = all_phase_args_from_state(state);
 
     let (event_type, summary, detail) = event_from_action(phase, action, event);
     let phase_number = if phase == "validation" {

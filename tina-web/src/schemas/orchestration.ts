@@ -1,9 +1,9 @@
 import { Schema } from "effect"
-import { convexDocumentFields, optionalString, orchestrationCoreFields } from "./common"
+import { convexDocumentFields, optionalString, orchestrationQueryFields } from "./common"
 
 export const OrchestrationSummary = Schema.Struct({
   ...convexDocumentFields,
-  ...orchestrationCoreFields,
+  ...orchestrationQueryFields,
   projectId: optionalString,
 })
 

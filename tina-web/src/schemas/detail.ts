@@ -2,11 +2,11 @@ import { Schema } from "effect"
 import { Phase } from "./phase"
 import { TaskEvent } from "./task"
 import { TeamMember } from "./team"
-import { convexDocumentFields, orchestrationCoreFields } from "./common"
+import { convexDocumentFields, orchestrationQueryFields } from "./common"
 
 export const OrchestrationDetail = Schema.Struct({
   ...convexDocumentFields,
-  ...orchestrationCoreFields,
+  ...orchestrationQueryFields,
   phases: Schema.Array(Phase),
   tasks: Schema.Array(TaskEvent),
   orchestratorTasks: Schema.Array(TaskEvent),

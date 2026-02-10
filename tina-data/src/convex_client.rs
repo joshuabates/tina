@@ -29,7 +29,7 @@ pub fn orchestration_to_args(orch: &OrchestrationRecord) -> BTreeMap<String, Val
     let mut args = BTreeMap::new();
     args.insert("nodeId".into(), Value::from(orch.node_id.as_str()));
     if let Some(ref pid) = orch.project_id {
-        args.insert("projectId".into(), Value::from(pid.as_str()));
+        args.insert("projectId".into(), Value::from(pid.clone()));
     }
     args.insert(
         "featureName".into(),
@@ -41,14 +41,14 @@ pub fn orchestration_to_args(orch: &OrchestrationRecord) -> BTreeMap<String, Val
     );
     args.insert("branch".into(), Value::from(orch.branch.as_str()));
     if let Some(ref wp) = orch.worktree_path {
-        args.insert("worktreePath".into(), Value::from(wp.as_str()));
+        args.insert("worktreePath".into(), Value::from(wp.clone()));
     }
     args.insert("totalPhases".into(), Value::from(orch.total_phases));
     args.insert("currentPhase".into(), Value::from(orch.current_phase));
     args.insert("status".into(), Value::from(orch.status.as_str()));
     args.insert("startedAt".into(), Value::from(orch.started_at.as_str()));
     if let Some(ref ca) = orch.completed_at {
-        args.insert("completedAt".into(), Value::from(ca.as_str()));
+        args.insert("completedAt".into(), Value::from(ca.clone()));
     }
     if let Some(mins) = orch.total_elapsed_mins {
         args.insert("totalElapsedMins".into(), Value::from(mins));
@@ -115,10 +115,7 @@ fn task_event_to_args(event: &TaskEventRecord) -> BTreeMap<String, Value> {
     if let Some(ref md) = event.metadata {
         args.insert("metadata".into(), Value::from(md.as_str()));
     }
-    args.insert(
-        "recordedAt".into(),
-        Value::from(event.recorded_at.as_str()),
-    );
+    args.insert("recordedAt".into(), Value::from(event.recorded_at.as_str()));
     args
 }
 
@@ -137,10 +134,7 @@ pub fn orchestration_event_to_args(event: &OrchestrationEventRecord) -> BTreeMap
     if let Some(ref detail) = event.detail {
         args.insert("detail".into(), Value::from(detail.as_str()));
     }
-    args.insert(
-        "recordedAt".into(),
-        Value::from(event.recorded_at.as_str()),
-    );
+    args.insert("recordedAt".into(), Value::from(event.recorded_at.as_str()));
     args
 }
 
@@ -171,6 +165,27 @@ fn team_member_to_args(member: &TeamMemberRecord) -> BTreeMap<String, Value> {
     args
 }
 
+fn register_team_to_args(team: &RegisterTeamRecord) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert("teamName".into(), Value::from(team.team_name.as_str()));
+    args.insert(
+        "orchestrationId".into(),
+        Value::from(team.orchestration_id.as_str()),
+    );
+    args.insert(
+        "leadSessionId".into(),
+        Value::from(team.lead_session_id.as_str()),
+    );
+    if let Some(ref pn) = team.phase_number {
+        args.insert("phaseNumber".into(), Value::from(pn.as_str()));
+    }
+    if let Some(ref ptid) = team.parent_team_id {
+        args.insert("parentTeamId".into(), Value::from(ptid.as_str()));
+    }
+    args.insert("createdAt".into(), Value::from(team.created_at));
+    args
+}
+
 /// Extract a string ID from a Convex FunctionResult.
 fn extract_id(result: FunctionResult) -> Result<String> {
     match result {
@@ -196,6 +211,24 @@ fn extract_claim_result(result: FunctionResult) -> Result<ClaimResult> {
             Ok(ClaimResult { success, reason })
         }
         FunctionResult::Value(other) => bail!("expected object for claim result, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+/// Extract optional state JSON from `supervisorStates:getSupervisorState`.
+fn extract_optional_state_json(result: FunctionResult) -> Result<Option<String>> {
+    match result {
+        FunctionResult::Value(Value::Null) => Ok(None),
+        FunctionResult::Value(Value::Object(map)) => match map.get("stateJson") {
+            Some(Value::String(s)) => Ok(Some(s.clone())),
+            Some(other) => bail!("expected stateJson string, got: {:?}", other),
+            None => Ok(None),
+        },
+        FunctionResult::Value(other) => bail!(
+            "expected object from supervisor state query, got: {:?}",
+            other
+        ),
         FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
         FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
     }
@@ -274,6 +307,15 @@ fn extract_orchestration_from_obj(obj: &BTreeMap<String, Value>) -> Orchestratio
     }
 }
 
+fn extract_feature_orchestration_from_obj(
+    obj: &BTreeMap<String, Value>,
+) -> FeatureOrchestrationRecord {
+    FeatureOrchestrationRecord {
+        id: value_as_id(obj, "_id"),
+        record: extract_orchestration_record(obj),
+    }
+}
+
 fn extract_phase_from_obj(obj: &BTreeMap<String, Value>) -> PhaseRecord {
     PhaseRecord {
         orchestration_id: value_as_id(obj, "orchestrationId"),
@@ -316,6 +358,34 @@ fn extract_team_member_from_obj(obj: &BTreeMap<String, Value>) -> TeamMemberReco
     }
 }
 
+fn extract_optional_feature_orchestration(
+    result: FunctionResult,
+) -> Result<Option<FeatureOrchestrationRecord>> {
+    match result {
+        FunctionResult::Value(Value::Null) => Ok(None),
+        FunctionResult::Value(Value::Object(obj)) => {
+            Ok(Some(extract_feature_orchestration_from_obj(&obj)))
+        }
+        FunctionResult::Value(other) => {
+            bail!("expected object or null for getByFeature, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_optional_phase_record(result: FunctionResult) -> Result<Option<PhaseRecord>> {
+    match result {
+        FunctionResult::Value(Value::Null) => Ok(None),
+        FunctionResult::Value(Value::Object(obj)) => Ok(Some(extract_phase_from_obj(&obj))),
+        FunctionResult::Value(other) => {
+            bail!("expected object or null for phase status, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
 fn extract_orchestration_list(result: FunctionResult) -> Result<Vec<OrchestrationListEntry>> {
     match result {
         FunctionResult::Value(Value::Array(items)) => {
@@ -328,13 +398,17 @@ fn extract_orchestration_list(result: FunctionResult) -> Result<Vec<Orchestratio
             Ok(entries)
         }
         FunctionResult::Value(Value::Null) => Ok(vec![]),
-        FunctionResult::Value(other) => bail!("expected array for orchestration list, got: {:?}", other),
+        FunctionResult::Value(other) => {
+            bail!("expected array for orchestration list, got: {:?}", other)
+        }
         FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
         FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
     }
 }
 
-fn extract_orchestration_detail(result: FunctionResult) -> Result<Option<OrchestrationDetailResponse>> {
+fn extract_orchestration_detail(
+    result: FunctionResult,
+) -> Result<Option<OrchestrationDetailResponse>> {
     match result {
         FunctionResult::Value(Value::Null) => Ok(None),
         FunctionResult::Value(Value::Object(obj)) => {
@@ -380,7 +454,9 @@ fn extract_orchestration_detail(result: FunctionResult) -> Result<Option<Orchest
                 team_members,
             }))
         }
-        FunctionResult::Value(other) => bail!("expected object for orchestration detail, got: {:?}", other),
+        FunctionResult::Value(other) => {
+            bail!("expected object for orchestration detail, got: {:?}", other)
+        }
         FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
         FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
     }
@@ -455,7 +531,9 @@ fn extract_active_team_list(result: FunctionResult) -> Result<Vec<ActiveTeamReco
             Ok(teams)
         }
         FunctionResult::Value(Value::Null) => Ok(vec![]),
-        FunctionResult::Value(other) => bail!("expected array for active team list, got: {:?}", other),
+        FunctionResult::Value(other) => {
+            bail!("expected array for active team list, got: {:?}", other)
+        }
         FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
         FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
     }
@@ -484,11 +562,7 @@ impl TinaConvexClient {
     }
 
     /// Find or create a project by repo path.
-    pub async fn find_or_create_project(
-        &mut self,
-        name: &str,
-        repo_path: &str,
-    ) -> Result<String> {
+    pub async fn find_or_create_project(&mut self, name: &str, repo_path: &str) -> Result<String> {
         let mut args = BTreeMap::new();
         args.insert("name".into(), Value::from(name));
         args.insert("repoPath".into(), Value::from(repo_path));
@@ -540,6 +614,13 @@ impl TinaConvexClient {
         extract_id(result)
     }
 
+    /// Register a team in Convex.
+    pub async fn register_team(&mut self, team: &RegisterTeamRecord) -> Result<String> {
+        let args = register_team_to_args(team);
+        let result = self.client.mutation("teams:registerTeam", args).await?;
+        extract_id(result)
+    }
+
     /// Claim an inbound action (atomic pending -> claimed transition).
     pub async fn claim_action(&mut self, action_id: &str) -> Result<ClaimResult> {
         let mut args = BTreeMap::new();
@@ -559,19 +640,13 @@ impl TinaConvexClient {
         args.insert("actionId".into(), Value::from(action_id));
         args.insert("result".into(), Value::from(result_msg));
         args.insert("success".into(), Value::from(success));
-        let result = self
-            .client
-            .mutation("actions:completeAction", args)
-            .await?;
+        let result = self.client.mutation("actions:completeAction", args).await?;
         extract_unit(result)
     }
 
     /// Subscribe to pending actions for a node.
     /// Returns a raw QuerySubscription that the caller can stream.
-    pub async fn subscribe_pending_actions(
-        &mut self,
-        node_id: &str,
-    ) -> Result<QuerySubscription> {
+    pub async fn subscribe_pending_actions(&mut self, node_id: &str) -> Result<QuerySubscription> {
         let mut args = BTreeMap::new();
         args.insert("nodeId".into(), Value::from(node_id));
         let sub = self
@@ -579,6 +654,42 @@ impl TinaConvexClient {
             .subscribe("actions:pendingActions", args)
             .await?;
         Ok(sub)
+    }
+
+    /// Upsert supervisor state JSON for node+feature.
+    pub async fn upsert_supervisor_state(
+        &mut self,
+        node_id: &str,
+        feature_name: &str,
+        state_json: &str,
+        updated_at: f64,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("nodeId".into(), Value::from(node_id));
+        args.insert("featureName".into(), Value::from(feature_name));
+        args.insert("stateJson".into(), Value::from(state_json));
+        args.insert("updatedAt".into(), Value::from(updated_at));
+        let result = self
+            .client
+            .mutation("supervisorStates:upsertSupervisorState", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Fetch supervisor state JSON for node+feature.
+    pub async fn get_supervisor_state(
+        &mut self,
+        node_id: &str,
+        feature_name: &str,
+    ) -> Result<Option<String>> {
+        let mut args = BTreeMap::new();
+        args.insert("nodeId".into(), Value::from(node_id));
+        args.insert("featureName".into(), Value::from(feature_name));
+        let result = self
+            .client
+            .query("supervisorStates:getSupervisorState", args)
+            .await?;
+        extract_optional_state_json(result)
     }
 
     // --- Query methods (for tina-monitor reads) ---
@@ -617,10 +728,7 @@ impl TinaConvexClient {
     /// List all active teams (teams whose orchestration is not complete/blocked).
     pub async fn list_active_teams(&mut self) -> Result<Vec<ActiveTeamRecord>> {
         let args = BTreeMap::new();
-        let result = self
-            .client
-            .query("teams:listActiveTeams", args)
-            .await?;
+        let result = self.client.query("teams:listActiveTeams", args).await?;
         extract_active_team_list(result)
     }
 
@@ -630,6 +738,48 @@ impl TinaConvexClient {
         args.insert("teamName".into(), Value::from(team_name));
         let result = self.client.query("teams:getByTeamName", args).await?;
         extract_team_record(result)
+    }
+
+    /// Get latest orchestration by feature name.
+    pub async fn get_by_feature(
+        &mut self,
+        feature_name: &str,
+    ) -> Result<Option<FeatureOrchestrationRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("featureName".into(), Value::from(feature_name));
+        let result = self
+            .client
+            .query("orchestrations:getByFeature", args)
+            .await?;
+        extract_optional_feature_orchestration(result)
+    }
+
+    /// Get phase status for orchestration+phase pair.
+    pub async fn get_phase_status(
+        &mut self,
+        orchestration_id: &str,
+        phase_number: &str,
+    ) -> Result<Option<PhaseRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        args.insert("phaseNumber".into(), Value::from(phase_number));
+        let result = self.client.query("phases:getPhaseStatus", args).await?;
+        extract_optional_phase_record(result)
+    }
+
+    /// Subscribe to phase status updates.
+    pub async fn subscribe_phase_status(
+        &mut self,
+        orchestration_id: &str,
+        phase_number: &str,
+    ) -> Result<QuerySubscription> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        args.insert("phaseNumber".into(), Value::from(phase_number));
+        self.client
+            .subscribe("phases:getPhaseStatus", args)
+            .await
+            .map_err(Into::into)
     }
 }
 
@@ -696,10 +846,7 @@ mod tests {
             args.get("completedAt"),
             Some(&Value::from("2026-02-07T12:00:00Z"))
         );
-        assert_eq!(
-            args.get("totalElapsedMins"),
-            Some(&Value::from(120.0f64))
-        );
+        assert_eq!(args.get("totalElapsedMins"), Some(&Value::from(120.0f64)));
         assert_eq!(args.len(), 11);
     }
 
@@ -748,10 +895,7 @@ mod tests {
         assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-123")));
         assert_eq!(args.get("phaseNumber"), Some(&Value::from("1")));
         assert_eq!(args.get("status"), Some(&Value::from("executing")));
-        assert_eq!(
-            args.get("planPath"),
-            Some(&Value::from("/path/to/plan.md"))
-        );
+        assert_eq!(args.get("planPath"), Some(&Value::from("/path/to/plan.md")));
         assert_eq!(args.get("gitRange"), Some(&Value::from("abc..def")));
         assert_eq!(args.get("planningMins"), Some(&Value::from(5.0f64)));
         assert_eq!(args.get("executionMins"), Some(&Value::from(15.0f64)));
@@ -798,10 +942,7 @@ mod tests {
 
         let args = task_event_to_args(&event);
 
-        assert_eq!(
-            args.get("orchestrationId"),
-            Some(&Value::from("orch-123"))
-        );
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-123")));
         assert_eq!(args.get("phaseNumber"), Some(&Value::from("1")));
         assert_eq!(args.get("taskId"), Some(&Value::from("42")));
         assert_eq!(
@@ -858,10 +999,7 @@ mod tests {
 
         let args = orchestration_event_to_args(&event);
 
-        assert_eq!(
-            args.get("orchestrationId"),
-            Some(&Value::from("orch-123"))
-        );
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-123")));
         assert_eq!(args.get("phaseNumber"), Some(&Value::from("1")));
         assert_eq!(args.get("eventType"), Some(&Value::from("phase_started")));
         assert_eq!(args.get("source"), Some(&Value::from("orchestrator")));
@@ -887,17 +1025,11 @@ mod tests {
 
         let args = team_member_to_args(&member);
 
-        assert_eq!(
-            args.get("orchestrationId"),
-            Some(&Value::from("orch-123"))
-        );
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-123")));
         assert_eq!(args.get("phaseNumber"), Some(&Value::from("1")));
         assert_eq!(args.get("agentName"), Some(&Value::from("executor-1")));
         assert_eq!(args.get("agentType"), Some(&Value::from("executor")));
-        assert_eq!(
-            args.get("model"),
-            Some(&Value::from("claude-opus-4-6"))
-        );
+        assert_eq!(args.get("model"), Some(&Value::from("claude-opus-4-6")));
         assert_eq!(args.len(), 7);
     }
 
@@ -999,7 +1131,10 @@ mod tests {
     fn test_extract_team_record_found() {
         let mut map = BTreeMap::new();
         map.insert("_id".to_string(), Value::from("team-id-123"));
-        map.insert("teamName".to_string(), Value::from("my-feature-orchestration"));
+        map.insert(
+            "teamName".to_string(),
+            Value::from("my-feature-orchestration"),
+        );
         map.insert("orchestrationId".to_string(), Value::from("orch-456"));
         map.insert("leadSessionId".to_string(), Value::from("session-789"));
         map.insert("phaseNumber".to_string(), Value::from("1"));

@@ -18,4 +18,11 @@ export const orchestrationScopedDocumentFields = {
   orchestrationId: Schema.String,
 } as const
 
+// Core orchestration fields as returned by read-side queries
+// (table fields plus derived nodeName)
+export const orchestrationQueryFields = {
+  ...orchestrationCoreFields,
+  nodeName: Schema.String,
+} as const
+
 export const ConvexDocument = Schema.Struct(convexDocumentFields)

@@ -1,5 +1,5 @@
-use crate::panel::{Panel, HandleResult, Direction};
-use crate::panels::{border_style, border_type};
+use crate::panel::{HandleResult, Panel};
+use crate::panels::{border_style, border_type, clamp_selection, handle_selectable_list_key};
 use crate::types::{Task, TaskStatus};
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
@@ -31,12 +31,7 @@ impl TasksPanel {
 
     pub fn set_tasks(&mut self, tasks: Vec<Task>) {
         self.tasks = tasks;
-        // Reset selection if out of bounds
-        if self.selected >= self.tasks.len() && !self.tasks.is_empty() {
-            self.selected = self.tasks.len() - 1;
-        } else if self.tasks.is_empty() {
-            self.selected = 0;
-        }
+        clamp_selection(&mut self.selected, self.tasks.len());
     }
 
     pub fn selected_task(&self) -> Option<&Task> {
@@ -46,31 +41,7 @@ impl TasksPanel {
 
 impl Panel for TasksPanel {
     fn handle_key(&mut self, key: KeyEvent) -> HandleResult {
-        match key.code {
-            crossterm::event::KeyCode::Char('j') | crossterm::event::KeyCode::Down => {
-                if self.selected < self.tasks.len().saturating_sub(1) {
-                    self.selected += 1;
-                    HandleResult::Consumed
-                } else {
-                    HandleResult::MoveFocus(Direction::Down)
-                }
-            }
-            crossterm::event::KeyCode::Char('k') | crossterm::event::KeyCode::Up => {
-                if self.selected > 0 {
-                    self.selected -= 1;
-                    HandleResult::Consumed
-                } else {
-                    HandleResult::MoveFocus(Direction::Up)
-                }
-            }
-            crossterm::event::KeyCode::Char('l') | crossterm::event::KeyCode::Right => {
-                HandleResult::MoveFocus(Direction::Right)
-            }
-            crossterm::event::KeyCode::Char('h') | crossterm::event::KeyCode::Left => {
-                HandleResult::MoveFocus(Direction::Left)
-            }
-            _ => HandleResult::Ignored,
-        }
+        handle_selectable_list_key(key.code, &mut self.selected, self.tasks.len())
     }
 
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
@@ -87,16 +58,26 @@ impl Panel for TasksPanel {
                 .iter()
                 .map(|task| {
                     let status_icon = match task.status {
-                        TaskStatus::Completed => Span::styled("[x]", Style::default().fg(Color::Green)),
-                        TaskStatus::InProgress => Span::styled("[>]", Style::default().fg(Color::Yellow)),
-                        TaskStatus::Pending => Span::styled("[ ]", Style::default().fg(Color::DarkGray)),
+                        TaskStatus::Completed => {
+                            Span::styled("[x]", Style::default().fg(Color::Green))
+                        }
+                        TaskStatus::InProgress => {
+                            Span::styled("[>]", Style::default().fg(Color::Yellow))
+                        }
+                        TaskStatus::Pending => {
+                            Span::styled("[ ]", Style::default().fg(Color::DarkGray))
+                        }
                     };
 
-                    let mut spans = vec![status_icon, Span::raw(" "), Span::raw(task.subject.clone())];
+                    let mut spans =
+                        vec![status_icon, Span::raw(" "), Span::raw(task.subject.clone())];
 
                     if let Some(owner) = &task.owner {
                         spans.push(Span::raw(" <- "));
-                        spans.push(Span::styled(owner.clone(), Style::default().fg(Color::Cyan)));
+                        spans.push(Span::styled(
+                            owner.clone(),
+                            Style::default().fg(Color::Cyan),
+                        ));
                     }
 
                     if !task.blocked_by.is_empty() {
@@ -314,6 +295,9 @@ pub mod tests {
             panel.render(frame, area, true);
         });
 
-        assert!(result.is_ok(), "Should render tasks with all attributes without error");
+        assert!(
+            result.is_ok(),
+            "Should render tasks with all attributes without error"
+        );
     }
 }

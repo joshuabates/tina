@@ -1,5 +1,5 @@
-use crate::panel::{Panel, HandleResult, Direction};
-use crate::panels::{border_style, border_type};
+use crate::panel::{HandleResult, Panel};
+use crate::panels::{border_style, border_type, clamp_selection, handle_selectable_list_key};
 use crate::types::TeamMember;
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
@@ -31,12 +31,7 @@ impl TeamPanel {
 
     pub fn set_members(&mut self, members: Vec<TeamMember>) {
         self.members = members;
-        // Reset selection if out of bounds
-        if self.selected >= self.members.len() && !self.members.is_empty() {
-            self.selected = self.members.len() - 1;
-        } else if self.members.is_empty() {
-            self.selected = 0;
-        }
+        clamp_selection(&mut self.selected, self.members.len());
     }
 
     pub fn selected_member(&self) -> Option<&TeamMember> {
@@ -58,31 +53,7 @@ fn shorten_model(model: &str) -> String {
 
 impl Panel for TeamPanel {
     fn handle_key(&mut self, key: KeyEvent) -> HandleResult {
-        match key.code {
-            crossterm::event::KeyCode::Char('j') | crossterm::event::KeyCode::Down => {
-                if self.selected < self.members.len().saturating_sub(1) {
-                    self.selected += 1;
-                    HandleResult::Consumed
-                } else {
-                    HandleResult::MoveFocus(Direction::Down)
-                }
-            }
-            crossterm::event::KeyCode::Char('k') | crossterm::event::KeyCode::Up => {
-                if self.selected > 0 {
-                    self.selected -= 1;
-                    HandleResult::Consumed
-                } else {
-                    HandleResult::MoveFocus(Direction::Up)
-                }
-            }
-            crossterm::event::KeyCode::Char('l') | crossterm::event::KeyCode::Right => {
-                HandleResult::MoveFocus(Direction::Right)
-            }
-            crossterm::event::KeyCode::Char('h') | crossterm::event::KeyCode::Left => {
-                HandleResult::MoveFocus(Direction::Left)
-            }
-            _ => HandleResult::Ignored,
-        }
+        handle_selectable_list_key(key.code, &mut self.selected, self.members.len())
     }
 
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
@@ -195,9 +166,11 @@ mod tests {
         panel.set_members(initial_members);
         panel.selected = 2; // Select charlie
 
-        let new_members = vec![
-            create_test_member("alice", "claude-opus-4", Some("0".to_string())),
-        ];
+        let new_members = vec![create_test_member(
+            "alice",
+            "claude-opus-4",
+            Some("0".to_string()),
+        )];
         panel.set_members(new_members);
 
         // Selection should reset to 0 since old selection is out of bounds
@@ -207,7 +180,11 @@ mod tests {
     #[test]
     fn set_members_with_empty_list_resets_selection() {
         let mut panel = TeamPanel::new();
-        let members = vec![create_test_member("alice", "claude-opus-4", Some("0".to_string()))];
+        let members = vec![create_test_member(
+            "alice",
+            "claude-opus-4",
+            Some("0".to_string()),
+        )];
         panel.set_members(members);
         panel.selected = 0;
 

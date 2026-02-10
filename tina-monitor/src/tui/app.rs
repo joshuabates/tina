@@ -7,9 +7,9 @@ use std::time::{Duration, Instant};
 use super::ui;
 use crate::config::Config;
 use crate::data::MonitorOrchestration;
+use crate::terminal::{get_handler, TerminalResult};
 use crate::types::Team;
 use crate::watcher::DataWatcher;
-use crate::terminal::{get_handler, TerminalResult};
 
 /// Result type for TUI operations
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -127,6 +127,15 @@ pub struct PhaseData {
     pub members: Vec<crate::types::Agent>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct PhaseDetailState {
+    focus: PaneFocus,
+    task_index: usize,
+    member_index: usize,
+    layout: PhaseDetailLayout,
+    selected_phase: u32,
+}
+
 /// Main TUI application state
 pub struct App {
     /// Whether the application should quit
@@ -235,6 +244,42 @@ impl App {
     pub fn get_phase_data(&mut self, phase: u32) -> Option<&PhaseData> {
         self.load_phase_data(phase);
         self.phase_cache.as_ref().map(|(_, _, data)| data)
+    }
+
+    fn phase_detail_state(&self) -> Option<PhaseDetailState> {
+        match self.view_state {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                layout,
+                selected_phase,
+            } => Some(PhaseDetailState {
+                focus,
+                task_index,
+                member_index,
+                layout,
+                selected_phase,
+            }),
+            _ => None,
+        }
+    }
+
+    fn set_phase_detail_state(&mut self, state: PhaseDetailState) {
+        self.view_state = ViewState::PhaseDetail {
+            focus: state.focus,
+            task_index: state.task_index,
+            member_index: state.member_index,
+            layout: state.layout,
+            selected_phase: state.selected_phase,
+        };
+    }
+
+    fn current_phase_or_default(&self) -> u32 {
+        self.orchestrations
+            .get(self.selected_index)
+            .map(|orch| orch.current_phase)
+            .unwrap_or(1)
     }
 
     /// Move selection to next orchestration (wraps around)
@@ -355,13 +400,13 @@ impl App {
                 if !self.orchestrations.is_empty() {
                     let current_phase = self.orchestrations[self.selected_index].current_phase;
                     self.load_phase_data(current_phase);
-                    self.view_state = ViewState::PhaseDetail {
+                    self.set_phase_detail_state(PhaseDetailState {
                         focus: PaneFocus::Orchestrations,
                         task_index: 0,
                         member_index: 0,
                         layout: PhaseDetailLayout::OrchPhaseTasks,
                         selected_phase: current_phase,
-                    };
+                    });
                 }
             }
             _ => {}
@@ -727,16 +772,9 @@ impl App {
 
     /// Handle key events in PhaseDetail view
     fn handle_phase_detail_key(&mut self, key: KeyEvent) {
-        // Extract current state
-        let (focus, task_index, member_index, layout, selected_phase) = match self.view_state {
-            ViewState::PhaseDetail {
-                focus,
-                task_index,
-                member_index,
-                layout,
-                selected_phase,
-            } => (focus, task_index, member_index, layout, selected_phase),
-            _ => return,
+        let mut detail = match self.phase_detail_state() {
+            Some(state) => state,
+            None => return,
         };
 
         // Handle global keys first
@@ -759,18 +797,12 @@ impl App {
             }
             KeyCode::Tab => {
                 // Tab switches between Tasks and Members within Tasks+Team area
-                let new_focus = match focus {
+                detail.focus = match detail.focus {
                     PaneFocus::Tasks => PaneFocus::Members,
                     PaneFocus::Members => PaneFocus::Tasks,
-                    _ => focus,
+                    _ => detail.focus,
                 };
-                self.view_state = ViewState::PhaseDetail {
-                    focus: new_focus,
-                    task_index,
-                    member_index,
-                    layout,
-                    selected_phase,
-                };
+                self.set_phase_detail_state(detail);
                 return;
             }
             _ => {}
@@ -779,118 +811,74 @@ impl App {
         // Handle h/l navigation between panels and layouts
         match key.code {
             KeyCode::Char('h') | KeyCode::Left => {
-                match layout {
+                match detail.layout {
                     PhaseDetailLayout::OrchPhaseTasks => {
                         // Screen 1: Orch | Phases | Tasks+Team
-                        match focus {
+                        match detail.focus {
                             PaneFocus::Phases => {
-                                self.view_state = ViewState::PhaseDetail {
-                                    focus: PaneFocus::Orchestrations,
-                                    task_index,
-                                    member_index,
-                                    layout,
-                                    selected_phase,
-                                };
+                                detail.focus = PaneFocus::Orchestrations;
                             }
                             PaneFocus::Tasks | PaneFocus::Members => {
-                                self.view_state = ViewState::PhaseDetail {
-                                    focus: PaneFocus::Phases,
-                                    task_index,
-                                    member_index,
-                                    layout,
-                                    selected_phase,
-                                };
+                                detail.focus = PaneFocus::Phases;
                             }
                             _ => {}
                         }
                     }
                     PhaseDetailLayout::TasksDetail => {
                         // Screen 2: Tasks+Team | Detail
-                        match focus {
+                        match detail.focus {
                             PaneFocus::Tasks | PaneFocus::Members => {
                                 // Switch back to Screen 1
-                                self.view_state = ViewState::PhaseDetail {
-                                    focus: PaneFocus::Tasks,
-                                    task_index,
-                                    member_index,
-                                    layout: PhaseDetailLayout::OrchPhaseTasks,
-                                    selected_phase,
-                                };
+                                detail.focus = PaneFocus::Tasks;
+                                detail.layout = PhaseDetailLayout::OrchPhaseTasks;
                             }
                             PaneFocus::Detail => {
-                                self.view_state = ViewState::PhaseDetail {
-                                    focus: PaneFocus::Tasks,
-                                    task_index,
-                                    member_index,
-                                    layout,
-                                    selected_phase,
-                                };
+                                detail.focus = PaneFocus::Tasks;
                             }
                             _ => {}
                         }
                     }
                 }
+                self.set_phase_detail_state(detail);
                 return;
             }
             KeyCode::Char('l') | KeyCode::Right => {
-                match layout {
+                match detail.layout {
                     PhaseDetailLayout::OrchPhaseTasks => {
                         // Screen 1: Orch | Phases | Tasks+Team
-                        match focus {
+                        match detail.focus {
                             PaneFocus::Orchestrations => {
-                                self.view_state = ViewState::PhaseDetail {
-                                    focus: PaneFocus::Phases,
-                                    task_index,
-                                    member_index,
-                                    layout,
-                                    selected_phase,
-                                };
+                                detail.focus = PaneFocus::Phases;
                             }
                             PaneFocus::Phases => {
-                                self.view_state = ViewState::PhaseDetail {
-                                    focus: PaneFocus::Tasks,
-                                    task_index,
-                                    member_index,
-                                    layout,
-                                    selected_phase,
-                                };
+                                detail.focus = PaneFocus::Tasks;
                             }
                             PaneFocus::Tasks | PaneFocus::Members => {
                                 // Switch to Screen 2
-                                self.view_state = ViewState::PhaseDetail {
-                                    focus: PaneFocus::Tasks,
-                                    task_index,
-                                    member_index,
-                                    layout: PhaseDetailLayout::TasksDetail,
-                                    selected_phase,
-                                };
+                                detail.focus = PaneFocus::Tasks;
+                                detail.layout = PhaseDetailLayout::TasksDetail;
                             }
                             _ => {}
                         }
                     }
                     PhaseDetailLayout::TasksDetail => {
                         // Screen 2: Tasks+Team | Detail
-                        match focus {
+                        match detail.focus {
                             PaneFocus::Tasks | PaneFocus::Members => {
-                                self.view_state = ViewState::PhaseDetail {
-                                    focus: PaneFocus::Detail,
-                                    task_index,
-                                    member_index,
-                                    layout,
-                                    selected_phase,
-                                };
+                                detail.focus = PaneFocus::Detail;
                             }
                             _ => {}
                         }
                     }
                 }
+                self.set_phase_detail_state(detail);
                 return;
             }
             _ => {}
         }
 
         // Handle focus-specific navigation and actions
-        match focus {
+        match detail.focus {
             PaneFocus::Orchestrations => {
                 let orch_count = self.orchestrations.len();
                 if orch_count == 0 {
@@ -900,14 +888,9 @@ impl App {
                     KeyCode::Char('j') | KeyCode::Down => {
                         self.selected_index = (self.selected_index + 1) % orch_count;
                         // Update selected_phase to match new orchestration's current phase
-                        let new_phase = self.orchestrations[self.selected_index].current_phase;
-                        self.view_state = ViewState::PhaseDetail {
-                            focus,
-                            task_index,
-                            member_index,
-                            layout,
-                            selected_phase: new_phase,
-                        };
+                        detail.selected_phase =
+                            self.orchestrations[self.selected_index].current_phase;
+                        self.set_phase_detail_state(detail);
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
                         self.selected_index = if self.selected_index == 0 {
@@ -916,14 +899,9 @@ impl App {
                             self.selected_index - 1
                         };
                         // Update selected_phase to match new orchestration's current phase
-                        let new_phase = self.orchestrations[self.selected_index].current_phase;
-                        self.view_state = ViewState::PhaseDetail {
-                            focus,
-                            task_index,
-                            member_index,
-                            layout,
-                            selected_phase: new_phase,
-                        };
+                        detail.selected_phase =
+                            self.orchestrations[self.selected_index].current_phase;
+                        self.set_phase_detail_state(detail);
                     }
                     _ => {}
                 }
@@ -937,39 +915,33 @@ impl App {
 
                 match key.code {
                     KeyCode::Char('j') | KeyCode::Down => {
-                        let new_phase = if selected_phase >= total_phases {
+                        let new_phase = if detail.selected_phase >= total_phases {
                             1
                         } else {
-                            selected_phase + 1
+                            detail.selected_phase + 1
                         };
                         // Load phase data and reset indices since task/member counts may differ
                         self.load_phase_data(new_phase);
-                        self.view_state = ViewState::PhaseDetail {
-                            focus,
-                            task_index: 0,
-                            member_index: 0,
-                            layout,
-                            selected_phase: new_phase,
-                        };
+                        detail.selected_phase = new_phase;
+                        detail.task_index = 0;
+                        detail.member_index = 0;
+                        self.set_phase_detail_state(detail);
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
-                        let new_phase = if selected_phase <= 1 {
+                        let new_phase = if detail.selected_phase <= 1 {
                             total_phases
                         } else {
-                            selected_phase - 1
+                            detail.selected_phase - 1
                         };
                         // Load phase data and reset indices since task/member counts may differ
                         self.load_phase_data(new_phase);
-                        self.view_state = ViewState::PhaseDetail {
-                            focus,
-                            task_index: 0,
-                            member_index: 0,
-                            layout,
-                            selected_phase: new_phase,
-                        };
+                        detail.selected_phase = new_phase;
+                        detail.task_index = 0;
+                        detail.member_index = 0;
+                        self.set_phase_detail_state(detail);
                     }
                     KeyCode::Char('p') | KeyCode::Enter => {
-                        let _ = self.handle_view_phase_plan(selected_phase);
+                        let _ = self.handle_view_phase_plan(detail.selected_phase);
                     }
                     KeyCode::Char('D') => {
                         let _ = self.handle_view_design_doc();
@@ -990,28 +962,16 @@ impl App {
 
                 match key.code {
                     KeyCode::Char('j') | KeyCode::Down => {
-                        let new_index = (task_index + 1) % task_count;
-                        self.view_state = ViewState::PhaseDetail {
-                            focus,
-                            task_index: new_index,
-                            member_index,
-                            layout,
-                            selected_phase,
-                        };
+                        detail.task_index = (detail.task_index + 1) % task_count;
+                        self.set_phase_detail_state(detail);
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
-                        let new_index = if task_index == 0 {
+                        detail.task_index = if detail.task_index == 0 {
                             task_count - 1
                         } else {
-                            task_index - 1
+                            detail.task_index - 1
                         };
-                        self.view_state = ViewState::PhaseDetail {
-                            focus,
-                            task_index: new_index,
-                            member_index,
-                            layout,
-                            selected_phase,
-                        };
+                        self.set_phase_detail_state(detail);
                     }
                     _ => {}
                 }
@@ -1019,28 +979,18 @@ impl App {
             PaneFocus::Members => {
                 match key.code {
                     KeyCode::Char('j') | KeyCode::Down => {
-                        self.view_state = ViewState::PhaseDetail {
-                            focus,
-                            task_index,
-                            member_index: member_index + 1,
-                            layout,
-                            selected_phase,
-                        };
+                        detail.member_index += 1;
+                        self.set_phase_detail_state(detail);
                     }
                     KeyCode::Char('k') | KeyCode::Up => {
-                        self.view_state = ViewState::PhaseDetail {
-                            focus,
-                            task_index,
-                            member_index: member_index.saturating_sub(1),
-                            layout,
-                            selected_phase,
-                        };
+                        detail.member_index = detail.member_index.saturating_sub(1);
+                        self.set_phase_detail_state(detail);
                     }
                     KeyCode::Enter => {
                         // Open log viewer for selected member
                         // Get pane_id and agent_name from the current orchestration
                         if let Some(orch) = self.orchestrations.get(self.selected_index) {
-                            if let Some(member) = orch.members.get(member_index) {
+                            if let Some(member) = orch.members.get(detail.member_index) {
                                 let pane_id = member.tmux_pane_id.clone().unwrap_or_default();
                                 let agent_name = member.name.clone();
                                 self.log_viewer = Some(super::views::log_viewer::LogViewer::new(
@@ -1048,7 +998,7 @@ impl App {
                                     agent_name.clone(),
                                 ));
                                 self.view_state = ViewState::LogViewer {
-                                    agent_index: member_index,
+                                    agent_index: detail.member_index,
                                     pane_id,
                                     agent_name,
                                 };
@@ -1056,10 +1006,10 @@ impl App {
                         }
                     }
                     KeyCode::Char('a') => {
-                        let _ = self.handle_attach_tmux(member_index);
+                        let _ = self.handle_attach_tmux(detail.member_index);
                     }
                     KeyCode::Char('s') => {
-                        let _ = self.handle_open_send_dialog(member_index);
+                        let _ = self.handle_open_send_dialog(detail.member_index);
                     }
                     _ => {}
                 }
@@ -1073,22 +1023,17 @@ impl App {
     /// Handle key events in TaskInspector view
     fn handle_task_inspector_key(&mut self, key: KeyEvent) {
         if key.code == KeyCode::Esc {
-            // Return to PhaseDetail view with previous state
-            let current_phase = self
-                .orchestrations
-                .get(self.selected_index)
-                .map(|o| o.current_phase)
-                .unwrap_or(1);
-            self.view_state = ViewState::PhaseDetail {
+            let task_index = match &self.view_state {
+                ViewState::TaskInspector { task_index } => *task_index,
+                _ => 0,
+            };
+            self.set_phase_detail_state(PhaseDetailState {
                 focus: PaneFocus::Tasks,
-                task_index: match &self.view_state {
-                    ViewState::TaskInspector { task_index } => *task_index,
-                    _ => 0,
-                },
+                task_index,
                 member_index: 0,
                 layout: PhaseDetailLayout::TasksDetail,
-                                    selected_phase: current_phase,
-            };
+                selected_phase: self.current_phase_or_default(),
+            });
         }
     }
 
@@ -1136,18 +1081,13 @@ impl App {
             }
             KeyCode::Esc => {
                 self.log_viewer = None; // Clean up the viewer
-                let current_phase = self
-                    .orchestrations
-                    .get(self.selected_index)
-                    .map(|o| o.current_phase)
-                    .unwrap_or(1);
-                self.view_state = ViewState::PhaseDetail {
+                self.set_phase_detail_state(PhaseDetailState {
                     focus: PaneFocus::Members,
                     task_index: 0,
                     member_index: agent_index,
                     layout: PhaseDetailLayout::TasksDetail,
-                                    selected_phase: current_phase,
-                };
+                    selected_phase: self.current_phase_or_default(),
+                });
             }
             KeyCode::Char('r') => {
                 if let Some(viewer) = &mut self.log_viewer {
@@ -1163,18 +1103,13 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.send_dialog = None; // Clean up the dialog
-                let current_phase = self
-                    .orchestrations
-                    .get(self.selected_index)
-                    .map(|o| o.current_phase)
-                    .unwrap_or(1);
-                self.view_state = ViewState::PhaseDetail {
+                self.set_phase_detail_state(PhaseDetailState {
                     focus: PaneFocus::Members,
                     task_index: 0,
                     member_index: 0,
                     layout: PhaseDetailLayout::TasksDetail,
-                                    selected_phase: current_phase,
-                };
+                    selected_phase: self.current_phase_or_default(),
+                });
             }
             KeyCode::Char(c) if c.is_ascii_digit() && c == '1' => {
                 if let Some(dialog) = &mut self.send_dialog {
@@ -1253,19 +1188,13 @@ impl App {
         // Close send dialog
         self.send_dialog = None;
 
-        // Return to previous view (PhaseDetail with Members focus)
-        let current_phase = self
-            .orchestrations
-            .get(self.selected_index)
-            .map(|o| o.current_phase)
-            .unwrap_or(1);
-        self.view_state = ViewState::PhaseDetail {
+        self.set_phase_detail_state(PhaseDetailState {
             focus: PaneFocus::Members,
             task_index: 0,
             member_index: 0,
             layout: PhaseDetailLayout::TasksDetail,
-                                    selected_phase: current_phase,
-        };
+            selected_phase: self.current_phase_or_default(),
+        });
     }
 
     /// Handle key events in CommitsView
@@ -1273,18 +1202,13 @@ impl App {
         // Navigation is handled by the CommitsView widget itself
         // We only need to handle Esc to return to PhaseDetail
         if _key.code == KeyCode::Esc {
-            let current_phase = self
-                .orchestrations
-                .get(self.selected_index)
-                .map(|o| o.current_phase)
-                .unwrap_or(1);
-            self.view_state = ViewState::PhaseDetail {
+            self.set_phase_detail_state(PhaseDetailState {
                 focus: PaneFocus::Tasks,
                 task_index: 0,
                 member_index: 0,
                 layout: PhaseDetailLayout::TasksDetail,
-                                    selected_phase: current_phase,
-            };
+                selected_phase: self.current_phase_or_default(),
+            });
         }
     }
 
@@ -1312,18 +1236,13 @@ impl App {
 
         match key.code {
             KeyCode::Esc => {
-                let current_phase = self
-                    .orchestrations
-                    .get(self.selected_index)
-                    .map(|o| o.current_phase)
-                    .unwrap_or(1);
-                self.view_state = ViewState::PhaseDetail {
+                self.set_phase_detail_state(PhaseDetailState {
                     focus: PaneFocus::Tasks,
                     task_index: 0,
                     member_index: 0,
                     layout: PhaseDetailLayout::TasksDetail,
-                                    selected_phase: current_phase,
-                };
+                    selected_phase: self.current_phase_or_default(),
+                });
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 // Create temporary view to get file count
@@ -1449,8 +1368,8 @@ impl App {
 mod tests {
     use super::*;
     use crate::tui::views::log_viewer::LogViewer;
-    use tina_data::OrchestrationListEntry;
     use std::path::PathBuf;
+    use tina_data::OrchestrationListEntry;
 
     fn make_test_task(id: &str) -> crate::types::Task {
         crate::types::Task {
@@ -1486,7 +1405,11 @@ mod tests {
             },
         };
         let mut orch = MonitorOrchestration::from_list_entry(entry);
-        orch.tasks = vec![make_test_task("1"), make_test_task("2"), make_test_task("3")];
+        orch.tasks = vec![
+            make_test_task("1"),
+            make_test_task("2"),
+            make_test_task("3"),
+        ];
         orch
     }
 
@@ -1593,12 +1516,12 @@ mod tests {
 
         // In PhaseDetail, j/k should NOT navigate orchestration list
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
         let initial_index = app.selected_index;
         app.handle_key_event(j_key);
         assert_eq!(
@@ -2039,12 +1962,12 @@ mod tests {
             matches!(
                 app.view_state,
                 ViewState::PhaseDetail {
-                        focus: PaneFocus::Orchestrations,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
-            selected_phase: 1,
-                    }
+                    focus: PaneFocus::Orchestrations,
+                    task_index: 0,
+                    member_index: 0,
+                    layout: PhaseDetailLayout::OrchPhaseTasks,
+                    selected_phase: 1,
+                }
             ),
             "Enter should transition to PhaseDetail view with focus on Orchestrations pane"
         );
@@ -2189,11 +2112,13 @@ mod tests {
         match app.view_state {
             ViewState::PhaseDetail { focus, layout, .. } => {
                 assert_eq!(
-                    layout, PhaseDetailLayout::TasksDetail,
+                    layout,
+                    PhaseDetailLayout::TasksDetail,
                     "Right arrow from Tasks in OrchPhaseTasks should switch to TasksDetail layout"
                 );
                 assert_eq!(
-                    focus, PaneFocus::Tasks,
+                    focus,
+                    PaneFocus::Tasks,
                     "Focus should remain on Tasks when switching layouts"
                 );
             }
@@ -2205,12 +2130,12 @@ mod tests {
     fn test_j_key_navigates_down_in_tasks_pane() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2227,12 +2152,12 @@ mod tests {
     fn test_k_key_navigates_up_in_tasks_pane() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 2,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 2,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2274,12 +2199,12 @@ mod tests {
     fn test_k_key_wraps_around_at_beginning_of_tasks() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2299,12 +2224,12 @@ mod tests {
     fn test_down_arrow_navigates_down_in_tasks_pane() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2324,12 +2249,12 @@ mod tests {
     fn test_up_arrow_navigates_up_in_tasks_pane() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 1,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 1,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2346,12 +2271,12 @@ mod tests {
     fn test_j_key_navigates_down_in_members_pane() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Members,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2368,12 +2293,12 @@ mod tests {
     fn test_k_key_navigates_up_in_members_pane() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Members,
-                        task_index: 0,
-                        member_index: 1,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 1,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2392,19 +2317,21 @@ mod tests {
         // Use 'l' key to navigate to TaskDetail screen instead
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 2,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 2,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         app.handle_key_event(key);
 
         // Should still be in PhaseDetail with same state
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, .. } => {
+            ViewState::PhaseDetail {
+                focus, task_index, ..
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Focus should remain on Tasks");
                 assert_eq!(task_index, 2, "task_index should not change");
             }
@@ -2416,18 +2343,23 @@ mod tests {
     fn test_enter_on_members_does_nothing() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Members,
-                        task_index: 0,
-                        member_index: 1,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 1,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index, .. } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                ..
+            } => {
                 assert_eq!(focus, PaneFocus::Members, "Focus should remain on Members");
                 assert_eq!(task_index, 0, "task_index should not change");
                 assert_eq!(member_index, 1, "member_index should not change");
@@ -2453,11 +2385,13 @@ mod tests {
         match app.view_state {
             ViewState::PhaseDetail { focus, layout, .. } => {
                 assert_eq!(
-                    layout, PhaseDetailLayout::TasksDetail,
+                    layout,
+                    PhaseDetailLayout::TasksDetail,
                     "'l' on members in OrchPhaseTasks should switch to TasksDetail layout"
                 );
                 assert_eq!(
-                    focus, PaneFocus::Tasks,
+                    focus,
+                    PaneFocus::Tasks,
                     "Focus should switch to Tasks when entering TasksDetail"
                 );
             }
@@ -2469,18 +2403,16 @@ mod tests {
     fn test_enter_on_members_opens_log_viewer() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         // Add a member to the orchestration
-        app.orchestrations[0].members.push(
-            crate::types::Agent {
-                agent_id: "agent-1".to_string(),
-                name: "worker-1".to_string(),
-                agent_type: Some("worker".to_string()),
-                model: "claude-sonnet-4".to_string(),
-                joined_at: 0,
-                tmux_pane_id: Some("%5".to_string()),
-                cwd: std::path::PathBuf::from("/test"),
-                subscriptions: vec![],
-            }
-        );
+        app.orchestrations[0].members.push(crate::types::Agent {
+            agent_id: "agent-1".to_string(),
+            name: "worker-1".to_string(),
+            agent_type: Some("worker".to_string()),
+            model: "claude-sonnet-4".to_string(),
+            joined_at: 0,
+            tmux_pane_id: Some("%5".to_string()),
+            cwd: std::path::PathBuf::from("/test"),
+            subscriptions: vec![],
+        });
 
         app.view_state = ViewState::PhaseDetail {
             focus: PaneFocus::Members,
@@ -2519,8 +2451,18 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index, layout, .. } => {
-                assert_eq!(layout, PhaseDetailLayout::TasksDetail, "'l' on Tasks should switch to TasksDetail layout");
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                layout,
+                ..
+            } => {
+                assert_eq!(
+                    layout,
+                    PhaseDetailLayout::TasksDetail,
+                    "'l' on Tasks should switch to TasksDetail layout"
+                );
                 assert_eq!(focus, PaneFocus::Tasks, "Focus should remain on Tasks");
                 assert_eq!(task_index, 1, "task_index should not change");
                 assert_eq!(member_index, 0, "member_index should not change");
@@ -2533,12 +2475,12 @@ mod tests {
     fn test_esc_in_phase_detail_returns_to_orchestration_list() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 1,
-                        member_index: 2,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 1,
+            member_index: 2,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2554,12 +2496,12 @@ mod tests {
     fn test_r_key_in_phase_detail_refreshes() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2582,7 +2524,12 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index, .. } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                ..
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Should return to Tasks pane");
                 assert_eq!(task_index, 2, "Should preserve task_index");
                 assert_eq!(member_index, 0, "Should reset member_index to 0");
@@ -2827,7 +2774,12 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index, .. } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                ..
+            } => {
                 assert_eq!(
                     focus,
                     PaneFocus::Members,
@@ -2975,12 +2927,12 @@ mod tests {
     fn test_a_key_on_members_does_not_panic() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Members,
-                        task_index: 0,
-                        member_index: 2,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 2,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -2997,19 +2949,24 @@ mod tests {
     fn test_a_key_on_tasks_does_nothing() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 1,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 1,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
         app.handle_key_event(key);
 
         // Should remain in PhaseDetail with Tasks focus
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index, .. } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                ..
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Focus should remain on Tasks");
                 assert_eq!(task_index, 1, "task_index should not change");
                 assert_eq!(member_index, 0, "member_index should not change");
@@ -3022,12 +2979,12 @@ mod tests {
     fn test_a_key_does_nothing_when_no_orchestrations() {
         let mut app = App::new_with_orchestrations(vec![]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Members,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -3042,12 +2999,12 @@ mod tests {
     fn test_c_key_does_nothing_when_no_orchestrations() {
         let mut app = App::new_with_orchestrations(vec![]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -3060,12 +3017,12 @@ mod tests {
     fn test_c_key_in_phase_detail_attempts_to_open_commits_view() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 1,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 1,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -3089,7 +3046,12 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index, .. } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                ..
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Should return to Tasks pane");
                 assert_eq!(task_index, 0, "Should reset task_index to 0");
                 assert_eq!(member_index, 0, "Should reset member_index to 0");
@@ -3131,12 +3093,12 @@ mod tests {
     fn test_s_key_on_members_opens_send_dialog() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Members,
-                        task_index: 0,
-                        member_index: 1,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 1,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -3164,19 +3126,24 @@ mod tests {
     fn test_s_key_on_tasks_does_nothing() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 1,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 1,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE);
         app.handle_key_event(key);
 
         // Should remain in PhaseDetail with Tasks focus
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index, .. } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                ..
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Focus should remain on Tasks");
                 assert_eq!(task_index, 1, "task_index should not change");
                 assert_eq!(member_index, 0, "member_index should not change");
@@ -3195,12 +3162,12 @@ mod tests {
     fn test_s_key_does_nothing_when_no_orchestrations() {
         let mut app = App::new_with_orchestrations(vec![]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Members,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Members,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -3221,12 +3188,12 @@ mod tests {
     fn test_d_key_does_nothing_when_no_orchestrations() {
         let mut app = App::new_with_orchestrations(vec![]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 0,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -3239,12 +3206,12 @@ mod tests {
     fn test_d_key_in_phase_detail_attempts_to_open_diff_view() {
         let mut app = App::new_with_orchestrations(vec![make_test_orchestration("project-1")]);
         app.view_state = ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 1,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
+            focus: PaneFocus::Tasks,
+            task_index: 1,
+            member_index: 0,
+            layout: PhaseDetailLayout::OrchPhaseTasks,
             selected_phase: 1,
-                    };
+        };
 
         let key = KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE);
         app.handle_key_event(key);
@@ -3271,7 +3238,12 @@ mod tests {
         app.handle_key_event(key);
 
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index, .. } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                ..
+            } => {
                 assert_eq!(focus, PaneFocus::Tasks, "Should return to Tasks pane");
                 assert_eq!(task_index, 0, "Should reset task_index to 0");
                 assert_eq!(member_index, 0, "Should reset member_index to 0");
@@ -3510,12 +3482,12 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::PhaseDetail {
-                        focus: PaneFocus::Members,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
-            selected_phase: 1,
-                    },
+                focus: PaneFocus::Members,
+                task_index: 0,
+                member_index: 0,
+                layout: PhaseDetailLayout::OrchPhaseTasks,
+                selected_phase: 1,
+            },
             log_viewer: None,
             send_dialog: Some(crate::tui::views::send_dialog::SendDialog {
                 input: "echo test".to_string(),
@@ -3566,12 +3538,12 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::PhaseDetail {
-                        focus: PaneFocus::Members,
-                        task_index: 0,
-                        member_index: 0,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
-            selected_phase: 1,
-                    },
+                focus: PaneFocus::Members,
+                task_index: 0,
+                member_index: 0,
+                layout: PhaseDetailLayout::OrchPhaseTasks,
+                selected_phase: 1,
+            },
             log_viewer: None,
             send_dialog: Some(crate::tui::views::send_dialog::SendDialog {
                 input: "echo logged command".to_string(),
@@ -3622,12 +3594,12 @@ mod tests {
             watcher: None,
             last_refresh: Instant::now(),
             view_state: ViewState::PhaseDetail {
-                        focus: PaneFocus::Tasks,
-                        task_index: 2,
-                        member_index: 3,
-                        layout: PhaseDetailLayout::OrchPhaseTasks,
-            selected_phase: 1,
-                    },
+                focus: PaneFocus::Tasks,
+                task_index: 2,
+                member_index: 3,
+                layout: PhaseDetailLayout::OrchPhaseTasks,
+                selected_phase: 1,
+            },
             log_viewer: None,
             send_dialog: Some(crate::tui::views::send_dialog::SendDialog {
                 input: "/checkpoint".to_string(),
@@ -3646,7 +3618,12 @@ mod tests {
 
         // Verify view state changed to PhaseDetail with Members focus
         match app.view_state {
-            ViewState::PhaseDetail { focus, task_index, member_index, .. } => {
+            ViewState::PhaseDetail {
+                focus,
+                task_index,
+                member_index,
+                ..
+            } => {
                 assert_eq!(focus, PaneFocus::Members, "Should switch to Members focus");
                 assert_eq!(task_index, 0, "Should reset task index to 0");
                 assert_eq!(member_index, 0, "Should reset member index to 0");
@@ -3675,7 +3652,10 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { selected_phase, .. } => {
-                assert_eq!(selected_phase, 2, "'j' should increment selected_phase from 1 to 2");
+                assert_eq!(
+                    selected_phase, 2,
+                    "'j' should increment selected_phase from 1 to 2"
+                );
             }
             _ => panic!("Should still be in PhaseDetail view"),
         }
@@ -3697,7 +3677,10 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { selected_phase, .. } => {
-                assert_eq!(selected_phase, 1, "'k' should decrement selected_phase from 2 to 1");
+                assert_eq!(
+                    selected_phase, 1,
+                    "'k' should decrement selected_phase from 2 to 1"
+                );
             }
             _ => panic!("Should still be in PhaseDetail view"),
         }
@@ -3721,7 +3704,10 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { selected_phase, .. } => {
-                assert_eq!(selected_phase, 1, "'j' at last phase should wrap to phase 1");
+                assert_eq!(
+                    selected_phase, 1,
+                    "'j' at last phase should wrap to phase 1"
+                );
             }
             _ => panic!("Should still be in PhaseDetail view"),
         }
@@ -3740,7 +3726,10 @@ mod tests {
 
         match app.view_state {
             ViewState::PhaseDetail { selected_phase, .. } => {
-                assert_eq!(selected_phase, 3, "'k' at first phase should wrap to last phase (3)");
+                assert_eq!(
+                    selected_phase, 3,
+                    "'k' at first phase should wrap to last phase (3)"
+                );
             }
             _ => panic!("Should still be in PhaseDetail view"),
         }

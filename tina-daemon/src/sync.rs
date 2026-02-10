@@ -8,7 +8,8 @@ use chrono::Utc;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
-use tina_data::{ActiveTeamRecord, Task, TaskEventRecord, Team, TeamMemberRecord, TinaConvexClient};
+use tina_data::{ActiveTeamRecord, TaskEventRecord, TeamMemberRecord, TinaConvexClient};
+use tina_session::state::schema::{Task, Team};
 
 /// Cached state for detecting changes and avoiding redundant Convex writes.
 pub struct SyncCache {
@@ -63,8 +64,8 @@ pub async fn sync_team_members(
             continue;
         }
 
-        let joined_at = chrono::DateTime::from_timestamp_millis(member.joined_at)
-            .map(|dt| dt.to_rfc3339());
+        let joined_at =
+            chrono::DateTime::from_timestamp_millis(member.joined_at).map(|dt| dt.to_rfc3339());
 
         let record = TeamMemberRecord {
             orchestration_id: orchestration_id.to_string(),
@@ -79,9 +80,7 @@ pub async fn sync_team_members(
         let mut client = client.lock().await;
         match client.upsert_team_member(&record).await {
             Ok(_) => {
-                cache
-                    .team_member_state
-                    .insert(cache_key, now.clone());
+                cache.team_member_state.insert(cache_key, now.clone());
                 debug!(agent = %member.name, orchestration = %orchestration_id, "synced team member");
             }
             Err(e) => {
@@ -211,7 +210,10 @@ pub async fn sync_all(
     tasks_dir: &Path,
 ) -> Result<()> {
     let active_teams = fetch_active_teams(client).await?;
-    info!(count = active_teams.len(), "fetched active teams from Convex");
+    info!(
+        count = active_teams.len(),
+        "fetched active teams from Convex"
+    );
 
     for team in &active_teams {
         if let Err(e) = sync_team_members(client, cache, teams_dir, team).await {

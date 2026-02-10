@@ -1,35 +1,10 @@
-use tina_session::convex;
 use tina_session::watch::{get_current_status, get_last_commit, get_task_progress, StatusUpdate};
 
 pub fn run(feature: &str, phase: &str, team: Option<&str>) -> anyhow::Result<u8> {
-    // Resolve worktree path from Convex
-    let orch = convex::run_convex(|mut writer| async move {
-        writer.get_by_feature(feature).await
-    })?
-    .ok_or_else(|| anyhow::anyhow!("No orchestration found for feature '{}'", feature))?;
-
-    let cwd = std::path::PathBuf::from(
-        orch.worktree_path
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Orchestration has no worktree_path"))?,
-    );
-
-    // Construct status file path
-    let status_path = cwd
-        .join(".claude")
-        .join("tina")
-        .join(format!("phase-{}", phase))
-        .join("status.json");
-
-    // Derive team name if not provided: {feature}-phase-{phase}
-    let derived_team;
-    let team_name = match team {
-        Some(t) => Some(t),
-        None => {
-            derived_team = format!("{}-phase-{}", feature, phase);
-            Some(derived_team.as_str())
-        }
-    };
+    let runtime = super::runtime_context::resolve_phase_runtime_context(feature, phase, team)?;
+    let cwd = runtime.cwd;
+    let status_path = runtime.status_path;
+    let team_name = Some(runtime.team_name.as_str());
 
     // Get current status
     let status = get_current_status(&status_path);

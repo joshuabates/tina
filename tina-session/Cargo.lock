@@ -1720,6 +1720,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tina-data"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "convex",
+ "dirs",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "tina-session"
 version = "0.2.0"
 dependencies = [
@@ -1740,6 +1752,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror 1.0.69",
+ "tina-data",
  "tokio",
  "toml",
 ]

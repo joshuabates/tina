@@ -12,6 +12,7 @@ use super::views::log_viewer;
 use super::views::orchestration_list::render_orchestration_list;
 use super::views::phase_detail;
 use super::views::task_inspector::render_task_inspector;
+use crate::overlay::centered_rect;
 
 /// Render the application UI
 pub fn render(frame: &mut Frame, app: &mut App) {
@@ -170,34 +171,13 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(footer, area);
 }
 
-/// Calculate a centered rectangle with given percentage dimensions
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::data::MonitorOrchestration;
     use ratatui::{backend::TestBackend, Terminal};
-    use tina_data::OrchestrationListEntry;
     use std::time::{Duration, Instant};
+    use tina_data::OrchestrationListEntry;
 
     fn make_test_app() -> App {
         use crate::tui::app::ViewState;

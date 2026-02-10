@@ -1,18 +1,14 @@
 //! Shared data layer for Tina orchestration monitoring
 //!
 //! This crate provides the Convex client wrapper and shared types
-//! for orchestration state. Used by tina-daemon, tina-session,
-//! and tina-monitor.
+//! for Convex orchestration data. Used by tina-daemon, tina-session,
+//! tina-monitor, and tina-harness.
 
 pub mod convex_client;
-pub mod tina_state;
 pub mod types;
-
-// Re-export canonical types from tina-session for convenience
-pub use tina_session::state::schema::{
-    Agent, ContextMetrics, OrchestrationStatus, PhaseBreakdown, PhaseState, PhaseStatus,
-    SupervisorState, Task, TaskStatus, Team, TimingGap, TimingStats,
-};
+pub mod generated {
+    pub mod orchestration_core_fields;
+}
 
 pub use convex_client::TinaConvexClient;
 pub use convex_client::{orchestration_event_to_args, orchestration_to_args, phase_to_args};

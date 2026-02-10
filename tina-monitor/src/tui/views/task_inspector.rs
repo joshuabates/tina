@@ -1,7 +1,8 @@
 //! Task inspector modal view showing full task details
 
+use crate::overlay::centered_rect;
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::Alignment,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
@@ -81,12 +82,7 @@ pub fn render_task_inspector(frame: &mut Frame, task: &Task) {
     }
 
     // Metadata section (only if metadata exists and is not null/empty object)
-    if !task.metadata.is_null()
-        && task
-            .metadata
-            .as_object()
-            .is_none_or(|obj| !obj.is_empty())
-    {
+    if !task.metadata.is_null() && task.metadata.as_object().is_none_or(|obj| !obj.is_empty()) {
         lines.push(Line::from(Span::styled(
             "Metadata:",
             Style::default().add_modifier(Modifier::BOLD),
@@ -119,27 +115,6 @@ pub fn render_task_inspector(frame: &mut Frame, task: &Task) {
     frame.render_widget(paragraph, area);
 }
 
-/// Calculate a centered rectangle with given percentage dimensions
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}
-
 /// Truncate a string to a maximum length, adding "..." if truncated
 fn truncate(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
@@ -154,6 +129,7 @@ fn truncate(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::layout::Rect;
     use ratatui::{backend::TestBackend, Terminal};
     use serde_json::json;
 

@@ -1,5 +1,3 @@
-use tina_session::convex;
-use tina_session::session::naming::session_name;
 use tina_session::watch;
 
 pub fn run(
@@ -9,45 +7,23 @@ pub fn run(
     stream_interval: Option<u64>,
     team: Option<&str>,
 ) -> anyhow::Result<u8> {
-    // Resolve worktree path from Convex
-    let orch = convex::run_convex(|mut writer| async move {
-        writer.get_by_feature(feature).await
-    })?
-    .ok_or_else(|| anyhow::anyhow!("No orchestration found for feature '{}'", feature))?;
-
-    let cwd = std::path::PathBuf::from(
-        orch.worktree_path
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Orchestration has no worktree_path"))?,
-    );
-
-    // Construct status file path
-    let status_path = cwd
-        .join(".claude")
-        .join("tina")
-        .join(format!("phase-{}", phase))
-        .join("status.json");
+    let runtime = super::runtime_context::resolve_phase_runtime_context(feature, phase, team)?;
+    let cwd = runtime.cwd;
+    let status_path = runtime.status_path;
 
     eprintln!("Waiting for phase {} completion...", phase);
     eprintln!("Watching: {}", status_path.display());
 
-    // Derive team name if not provided: {feature}-phase-{phase}
-    let derived_team;
-    let team_name = match team {
-        Some(t) => Some(t),
-        None => {
-            derived_team = format!("{}-phase-{}", feature, phase);
-            Some(derived_team.as_str())
-        }
-    };
-
-    // Derive tmux session name for health checking
-    let tmux_session = session_name(feature, phase);
+    let team_name = Some(runtime.team_name.as_str());
+    let tmux_session = runtime.session_name;
 
     // Use streaming or simple wait based on interval
     let result = if let Some(interval) = stream_interval {
         if let Some(t) = team_name {
-            eprintln!("Streaming updates every {}s (tracking team: {})", interval, t);
+            eprintln!(
+                "Streaming updates every {}s (tracking team: {})",
+                interval, t
+            );
         } else {
             eprintln!("Streaming updates every {}s", interval);
         }
@@ -57,10 +33,10 @@ pub fn run(
             team_name,
             timeout,
             interval,
-            Some(&tmux_session),
+            Some(tmux_session.as_str()),
         )
     } else {
-        watch::watch_status(&status_path, timeout, Some(&tmux_session))
+        watch::watch_status(&status_path, timeout, Some(tmux_session.as_str()))
     };
 
     match result {

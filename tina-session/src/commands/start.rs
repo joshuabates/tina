@@ -5,7 +5,6 @@ use std::process::Command;
 use tina_session::claude;
 use tina_session::convex;
 use tina_session::error::SessionError;
-use tina_session::session::naming::session_name;
 use tina_session::state::schema::SupervisorState;
 use tina_session::tmux;
 
@@ -27,18 +26,15 @@ fn detect_claude_binary() -> &'static str {
     "claude"
 }
 
-pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool, parent_team_id: Option<&str>) -> anyhow::Result<u8> {
-    // Resolve worktree path from Convex
-    let orch = convex::run_convex(|mut writer| async move {
-        writer.get_by_feature(feature).await
-    })?
-    .ok_or_else(|| anyhow::anyhow!("No orchestration found for feature '{}'", feature))?;
-
-    let cwd = &std::path::PathBuf::from(
-        orch.worktree_path
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Orchestration has no worktree_path"))?,
-    );
+pub fn run(
+    feature: &str,
+    phase: &str,
+    plan: &Path,
+    install_deps: bool,
+    parent_team_id: Option<&str>,
+) -> anyhow::Result<u8> {
+    let runtime = super::runtime_context::resolve_phase_runtime_context(feature, phase, None)?;
+    let cwd = &runtime.cwd;
 
     // Validate plan exists and resolve to absolute path
     if !plan.exists() {
@@ -64,7 +60,7 @@ pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool, parent_t
     // Decimal phases (e.g., "1.5") are remediation phases - skip validation
 
     // Generate session name
-    let name = session_name(feature, phase);
+    let name = runtime.session_name.clone();
 
     // Check if session already exists (resume case)
     if tmux::session_exists(&name) {
@@ -101,7 +97,10 @@ pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool, parent_t
     tmux::send_keys(&name, &claude_cmd)?;
 
     // Wait for Claude to be ready
-    println!("Waiting for Claude to be ready (up to {}s)...", CLAUDE_READY_TIMEOUT_SECS);
+    println!(
+        "Waiting for Claude to be ready (up to {}s)...",
+        CLAUDE_READY_TIMEOUT_SECS
+    );
     match claude::wait_for_ready(&name, CLAUDE_READY_TIMEOUT_SECS) {
         Ok(_) => {
             println!("Claude is ready.");
@@ -114,13 +113,17 @@ pub fn run(feature: &str, phase: &str, plan: &Path, install_deps: bool, parent_t
 
     // Register the phase execution team in Convex so the daemon can sync
     // phase-level tasks and team members.
-    let team_name = format!("{}-phase-{}", feature, phase);
-    register_phase_team(&orch.id, &team_name, phase, parent_team_id)?;
+    register_phase_team(
+        &runtime.orchestration.id,
+        &runtime.team_name,
+        phase,
+        parent_team_id,
+    )?;
 
     // Send the team-lead-init skill command with team_name
     let skill_cmd = format!(
         "/tina:team-lead-init team_name: {} plan_path: {}",
-        team_name,
+        runtime.team_name,
         plan_abs.display()
     );
     println!("Sending: {}", skill_cmd);

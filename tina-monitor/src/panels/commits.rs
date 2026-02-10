@@ -1,6 +1,6 @@
-use crate::panel::{Panel, HandleResult, Direction};
-use crate::panels::{border_style, border_type};
 use crate::git::commits::Commit;
+use crate::panel::{HandleResult, Panel};
+use crate::panels::{border_style, border_type, clamp_selection, handle_selectable_list_key};
 use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -34,12 +34,7 @@ impl CommitsPanel {
     pub fn set_commits(&mut self, commits: Vec<Commit>, insertions: usize, deletions: usize) {
         self.commits = commits;
         self.stats = Some((insertions, deletions));
-        // Reset selection if out of bounds
-        if self.selected >= self.commits.len() && !self.commits.is_empty() {
-            self.selected = self.commits.len() - 1;
-        } else if self.commits.is_empty() {
-            self.selected = 0;
-        }
+        clamp_selection(&mut self.selected, self.commits.len());
     }
 
     pub fn selected_commit(&self) -> Option<&Commit> {
@@ -49,31 +44,7 @@ impl CommitsPanel {
 
 impl Panel for CommitsPanel {
     fn handle_key(&mut self, key: KeyEvent) -> HandleResult {
-        match key.code {
-            crossterm::event::KeyCode::Char('j') | crossterm::event::KeyCode::Down => {
-                if self.selected < self.commits.len().saturating_sub(1) {
-                    self.selected += 1;
-                    HandleResult::Consumed
-                } else {
-                    HandleResult::MoveFocus(Direction::Down)
-                }
-            }
-            crossterm::event::KeyCode::Char('k') | crossterm::event::KeyCode::Up => {
-                if self.selected > 0 {
-                    self.selected -= 1;
-                    HandleResult::Consumed
-                } else {
-                    HandleResult::MoveFocus(Direction::Up)
-                }
-            }
-            crossterm::event::KeyCode::Char('l') | crossterm::event::KeyCode::Right => {
-                HandleResult::MoveFocus(Direction::Right)
-            }
-            crossterm::event::KeyCode::Char('h') | crossterm::event::KeyCode::Left => {
-                HandleResult::MoveFocus(Direction::Left)
-            }
-            _ => HandleResult::Ignored,
-        }
+        handle_selectable_list_key(key.code, &mut self.selected, self.commits.len())
     }
 
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {

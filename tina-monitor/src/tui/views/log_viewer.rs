@@ -9,6 +9,7 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 
+use crate::overlay::centered_rect;
 use crate::tmux::capture::capture_pane_content;
 use crate::tui::app::{App, ViewState};
 
@@ -199,35 +200,14 @@ pub fn render_with_pane(
     // Implementation will go here
 }
 
-/// Calculate a centered rectangle with given percentage dimensions
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::data::MonitorOrchestration;
     use crate::tui::app::{App, ViewState};
-    use tina_data::OrchestrationListEntry;
     use ratatui::{backend::TestBackend, Terminal};
     use std::time::Duration;
+    use tina_data::OrchestrationListEntry;
 
     #[test]
     fn test_log_viewer_renders_placeholder_when_team_not_loaded() {
