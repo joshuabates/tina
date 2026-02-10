@@ -1,415 +1,201 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
-import { Option } from "effect"
 import { PhaseTimelinePanel } from "../PhaseTimelinePanel"
-import type { OrchestrationDetail } from "@/schemas"
+import { buildPhase, buildPhaseTimelineDetail } from "@/test/builders/domain"
+import {
+  focusableState,
+  selectionState,
+  type SelectionStateMock,
+} from "@/test/harness/hooks"
 
-// Mock hooks
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
 vi.mock("@/hooks/useActionRegistration")
 
 const mockUseFocusable = vi.mocked(
-  await import("@/hooks/useFocusable")
+  await import("@/hooks/useFocusable"),
 ).useFocusable
 const mockUseSelection = vi.mocked(
-  await import("@/hooks/useSelection")
+  await import("@/hooks/useSelection"),
 ).useSelection
 
-describe("PhaseTimelinePanel", () => {
-  const mockSelectPhase = vi.fn()
+const mockSelectPhase = vi.fn()
 
-  beforeEach(() => {
-    vi.clearAllMocks()
-
-    // Default mock for useFocusable
-    mockUseFocusable.mockReturnValue({
-      isSectionFocused: false,
-      activeIndex: -1,
-    })
-
-    // Default mock for useSelection
-    mockUseSelection.mockReturnValue({
-      orchestrationId: null,
+function setSelection(overrides: Partial<SelectionStateMock> = {}) {
+  mockUseSelection.mockReturnValue(
+    selectionState({
+      orchestrationId: "orch1",
       phaseId: null,
       selectOrchestration: vi.fn(),
       selectPhase: mockSelectPhase,
-    })
-  })
+      ...overrides,
+    }),
+  )
+}
 
-  const createMockDetail = (overrides?: Partial<OrchestrationDetail>): OrchestrationDetail => ({
-    _id: "orch1",
-    _creationTime: 1234567890,
-    nodeId: "node1",
-    featureName: "test-feature",
-    designDocPath: "/docs/test.md",
-    branch: "tina/test-feature",
-    worktreePath: Option.none(),
-    totalPhases: 3,
-    currentPhase: 1,
-    status: "executing",
-    startedAt: "2024-01-01T10:00:00Z",
-    completedAt: Option.none(),
-    totalElapsedMins: Option.none(),
-    nodeName: "test-node",
-    phases: [
-      {
-        _id: "phase1",
-        _creationTime: 1234567890,
-        orchestrationId: "orch1",
-        phaseNumber: "1",
-        status: "executing",
-        planPath: Option.some("/path/to/plan1.md"),
-        gitRange: Option.none(),
-        planningMins: Option.some(10),
-        executionMins: Option.some(20),
-        reviewMins: Option.none(),
-        startedAt: Option.some("2024-01-01T10:00:00Z"),
-        completedAt: Option.none(),
-      },
-      {
-        _id: "phase2",
-        _creationTime: 1234567891,
-        orchestrationId: "orch1",
-        phaseNumber: "2",
-        status: "planning",
-        planPath: Option.none(),
-        gitRange: Option.none(),
-        planningMins: Option.none(),
-        executionMins: Option.none(),
-        reviewMins: Option.none(),
-        startedAt: Option.none(),
-        completedAt: Option.none(),
-      },
-      {
-        _id: "phase3",
-        _creationTime: 1234567892,
-        orchestrationId: "orch1",
-        phaseNumber: "3",
-        status: "pending",
-        planPath: Option.none(),
-        gitRange: Option.none(),
-        planningMins: Option.none(),
-        executionMins: Option.none(),
-        reviewMins: Option.none(),
-        startedAt: Option.none(),
-        completedAt: Option.none(),
-      },
-    ],
-    tasks: [],
-    orchestratorTasks: [],
-    phaseTasks: {
-      "1": [
-        {
-          _id: "task1",
-          _creationTime: 1234567890,
-          orchestrationId: "orch1",
-          phaseNumber: Option.some("1"),
-          taskId: "1",
-          subject: "Task 1",
-          description: Option.some("Description 1"),
-          status: "completed",
-          owner: Option.some("worker1"),
-          blockedBy: Option.none(),
-          metadata: Option.none(),
-          recordedAt: "2024-01-01T10:00:00Z",
-        },
-        {
-          _id: "task2",
-          _creationTime: 1234567891,
-          orchestrationId: "orch1",
-          phaseNumber: Option.some("1"),
-          taskId: "2",
-          subject: "Task 2",
-          description: Option.some("Description 2"),
-          status: "in_progress",
-          owner: Option.some("worker2"),
-          blockedBy: Option.none(),
-          metadata: Option.none(),
-          recordedAt: "2024-01-01T10:05:00Z",
-        },
-      ],
-      "2": [],
-    },
-    teamMembers: [
-      {
-        _id: "member1",
-        _creationTime: 1234567890,
-        orchestrationId: "orch1",
-        phaseNumber: "1",
-        agentName: "worker1",
-        agentType: Option.some("implementer"),
-        model: Option.some("sonnet"),
-        joinedAt: Option.some("2024-01-01T10:00:00Z"),
-        recordedAt: "2024-01-01T10:00:00Z",
-      },
-      {
-        _id: "member2",
-        _creationTime: 1234567891,
-        orchestrationId: "orch1",
-        phaseNumber: "1",
-        agentName: "worker2",
-        agentType: Option.some("reviewer"),
-        model: Option.some("sonnet"),
-        joinedAt: Option.some("2024-01-01T10:05:00Z"),
-        recordedAt: "2024-01-01T10:05:00Z",
-      },
-    ],
-    ...overrides,
+function setFocus(isSectionFocused = false, activeIndex = -1) {
+  mockUseFocusable.mockReturnValue(focusableState({ isSectionFocused, activeIndex }))
+}
+
+function renderTimelineView({
+  detail = buildPhaseTimelineDetail(),
+  isSectionFocused = false,
+  activeIndex = -1,
+  selection,
+}: {
+  detail?: ReturnType<typeof buildPhaseTimelineDetail>
+  isSectionFocused?: boolean
+  activeIndex?: number
+  selection?: Partial<SelectionStateMock>
+} = {}) {
+  setSelection(selection)
+  setFocus(isSectionFocused, activeIndex)
+  return { detail, ...render(<PhaseTimelinePanel detail={detail} />) }
+}
+
+function phaseById(container: HTMLElement, phaseId: string) {
+  const phase = container.querySelector(`[_id="${phaseId}"]`)
+  expect(phase).toBeTruthy()
+  return phase
+}
+
+describe("PhaseTimelinePanel", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setFocus()
+    setSelection()
   })
 
   it("renders all phases from detail data", () => {
-    const detail = createMockDetail()
-
-    render(<PhaseTimelinePanel detail={detail} />)
+    renderTimelineView()
 
     expect(screen.getByText(/Phase 1/)).toBeInTheDocument()
     expect(screen.getByText(/Phase 2/)).toBeInTheDocument()
     expect(screen.getByText(/Phase 3/)).toBeInTheDocument()
   })
 
-  it("shows correct task counts per phase", () => {
-    const detail = createMockDetail()
-
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    // Phase 1 has 2 tasks
-    const phase1Element = container.querySelector('[_id="phase1"]')
-    expect(phase1Element).toHaveTextContent("2 tasks")
-
-    // Phase 2 has 0 tasks
-    const phase2Element = container.querySelector('[_id="phase2"]')
-    expect(phase2Element).toHaveTextContent("0 tasks")
-
-    // Phase 3 has 0 tasks
-    const phase3Element = container.querySelector('[_id="phase3"]')
-    expect(phase3Element).toHaveTextContent("0 tasks")
-  })
-
-  it("shows correct completed counts per phase", () => {
-    const detail = createMockDetail()
-
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    // Phase 1 has 1 completed task out of 2
-    const phase1Element = container.querySelector('[_id="phase1"]')
-    expect(phase1Element).toHaveTextContent("1 done")
-
-    // Phase 2 has 0 completed
-    const phase2Element = container.querySelector('[_id="phase2"]')
-    expect(phase2Element).toHaveTextContent("0 done")
-
-    // Phase 3 has 0 completed
-    const phase3Element = container.querySelector('[_id="phase3"]')
-    expect(phase3Element).toHaveTextContent("0 done")
-  })
-
-  it("shows correct team counts per phase", () => {
-    const detail = createMockDetail()
-
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    // Phase 1 has 2 team members
-    const phase1Element = container.querySelector('[_id="phase1"]')
-    expect(phase1Element).toHaveTextContent("2 team")
-
-    // Phase 2 has 0 team members
-    const phase2Element = container.querySelector('[_id="phase2"]')
-    expect(phase2Element).toHaveTextContent("0 team")
-
-    // Phase 3 has 0 team members
-    const phase3Element = container.querySelector('[_id="phase3"]')
-    expect(phase3Element).toHaveTextContent("0 team")
+  it.each([
+    {
+      label: "task counts",
+      expectations: [
+        ["phase1", "2 tasks"],
+        ["phase2", "0 tasks"],
+        ["phase3", "0 tasks"],
+      ],
+    },
+    {
+      label: "completed counts",
+      expectations: [
+        ["phase1", "1 done"],
+        ["phase2", "0 done"],
+        ["phase3", "0 done"],
+      ],
+    },
+    {
+      label: "team counts",
+      expectations: [
+        ["phase1", "2 team"],
+        ["phase2", "0 team"],
+        ["phase3", "0 team"],
+      ],
+    },
+  ])("shows correct $label", ({ expectations }) => {
+    const { container } = renderTimelineView()
+    for (const [phaseId, text] of expectations) {
+      expect(phaseById(container, phaseId)).toHaveTextContent(text)
+    }
   })
 
   it("highlights selected phase", () => {
-    const detail = createMockDetail()
-
-    mockUseSelection.mockReturnValue({
-      orchestrationId: "orch1",
-      phaseId: "phase2",
-      selectOrchestration: vi.fn(),
-      selectPhase: mockSelectPhase,
-    })
-
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    // Phase 2 should be highlighted with ring-2
-    const phase2Element = container.querySelector('[_id="phase2"]')
-    expect(phase2Element).toHaveClass("ring-2")
+    const { container } = renderTimelineView({ selection: { phaseId: "phase2" } })
+    expect(phaseById(container, "phase2")).toHaveAttribute("aria-current", "step")
   })
 
   it("calls selectPhase on click", async () => {
     const user = userEvent.setup()
-    const detail = createMockDetail()
+    const { container } = renderTimelineView()
 
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    const phase2Element = container.querySelector('[_id="phase2"]')
-    await user.click(phase2Element!)
+    await user.click(phaseById(container, "phase2") as Element)
 
     expect(mockSelectPhase).toHaveBeenCalledWith("phase2")
   })
 
   it("registers phaseTimeline focus section with correct item count", () => {
-    const detail = createMockDetail()
-
-    render(<PhaseTimelinePanel detail={detail} />)
-
+    renderTimelineView()
     expect(mockUseFocusable).toHaveBeenCalledWith("phaseTimeline", 3)
   })
 
   it("maps phase status strings to StatusBadge status values", () => {
-    const detail = createMockDetail({
+    const detail = buildPhaseTimelineDetail({
       phases: [
-        {
-          _id: "phase1",
-          _creationTime: 1234567890,
-          orchestrationId: "orch1",
-          phaseNumber: "1",
-          status: "COMPLETE",
-          planPath: Option.none(),
-          gitRange: Option.none(),
-          planningMins: Option.none(),
-          executionMins: Option.none(),
-          reviewMins: Option.none(),
-          startedAt: Option.none(),
-          completedAt: Option.none(),
-        },
-        {
-          _id: "phase2",
-          _creationTime: 1234567891,
-          orchestrationId: "orch1",
-          phaseNumber: "2",
-          status: "EXECUTING",
-          planPath: Option.none(),
-          gitRange: Option.none(),
-          planningMins: Option.none(),
-          executionMins: Option.none(),
-          reviewMins: Option.none(),
-          startedAt: Option.none(),
-          completedAt: Option.none(),
-        },
+        buildPhase({ _id: "phase1", orchestrationId: "orch1", phaseNumber: "1", status: "COMPLETE" }),
+        buildPhase({ _id: "phase2", _creationTime: 1234567891, orchestrationId: "orch1", phaseNumber: "2", status: "EXECUTING" }),
       ],
       phaseTasks: {},
     })
 
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
+    const { container } = renderTimelineView({ detail })
 
-    // Check phase 1 has complete badge
-    const phase1Element = container.querySelector('[_id="phase1"]')
-    expect(phase1Element).toHaveTextContent("complete")
-
-    // Check phase 2 has executing badge
-    const phase2Element = container.querySelector('[_id="phase2"]')
-    expect(phase2Element).toHaveTextContent("executing")
+    expect(phaseById(container, "phase1")).toHaveTextContent("complete")
+    expect(phaseById(container, "phase2")).toHaveTextContent("executing")
   })
 
   it("handles empty phases array", () => {
-    const detail = createMockDetail({
-      phases: [],
-      phaseTasks: {},
-      teamMembers: [],
-      totalPhases: 0,
+    const { container } = renderTimelineView({
+      detail: buildPhaseTimelineDetail({
+        phases: [],
+        phaseTasks: {},
+        teamMembers: [],
+        totalPhases: 0,
+      }),
     })
 
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    // Should not crash and timeline should be empty
-    const phaseElements = container.querySelectorAll('[_id^="phase"]')
-    expect(phaseElements).toHaveLength(0)
+    expect(container.querySelectorAll('[_id^="phase"]')).toHaveLength(0)
   })
 
   it("handles invalid phaseNumber parsing by defaulting to 0", () => {
-    const detail = createMockDetail({
-      phases: [
-        {
-          _id: "phase1",
-          _creationTime: 1234567890,
-          orchestrationId: "orch1",
-          phaseNumber: "invalid",
-          status: "planning",
-          planPath: Option.none(),
-          gitRange: Option.none(),
-          planningMins: Option.none(),
-          executionMins: Option.none(),
-          reviewMins: Option.none(),
-          startedAt: Option.none(),
-          completedAt: Option.none(),
-        },
-      ],
-      phaseTasks: {},
+    renderTimelineView({
+      detail: buildPhaseTimelineDetail({
+        phases: [
+          buildPhase({
+            _id: "phase1",
+            orchestrationId: "orch1",
+            phaseNumber: "invalid",
+            status: "planning",
+          }),
+        ],
+        phaseTasks: {},
+      }),
     })
 
-    render(<PhaseTimelinePanel detail={detail} />)
-
-    // Should render with phase number 0 and not crash
     expect(screen.getByText(/Phase 0/)).toBeInTheDocument()
   })
 
-  it("highlights focused phase when section is focused", () => {
-    const detail = createMockDetail()
+  it("applies focus semantics when section is focused", () => {
+    const { container } = renderTimelineView({ isSectionFocused: true, activeIndex: 1 })
 
-    mockUseFocusable.mockReturnValue({
-      isSectionFocused: true,
-      activeIndex: 1, // Phase 2 (0-indexed)
-    })
-
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    // Phase 2 should be highlighted - find the PhaseCard element with _id
-    const phase2Element = container.querySelector('[_id="phase2"]')
-    expect(phase2Element).toHaveAttribute("data-focused", "true")
-  })
-
-  it("sets aria-activedescendant to focused phase id", () => {
-    const detail = createMockDetail()
-
-    mockUseFocusable.mockReturnValue({
-      isSectionFocused: true,
-      activeIndex: 1, // Phase 2 (0-indexed)
-    })
-
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    // Timeline container should have aria-activedescendant pointing to focused phase
-    const timelineContainer = container.querySelector('.flex.flex-col.gap-8')
-    expect(timelineContainer).toHaveAttribute("aria-activedescendant", "phase-phase2")
-
-    // Focused phase should have matching id
-    const phase2Element = container.querySelector('[_id="phase2"]')
-    expect(phase2Element).toHaveAttribute("id", "phase-phase2")
+    expect(phaseById(container, "phase2")).toHaveAttribute("data-focused", "true")
+    expect(phaseById(container, "phase2")).toHaveAttribute("id", "phase-phase2")
+    expect(container.querySelector('[role="listbox"]')).toHaveAttribute(
+      "aria-activedescendant",
+      "phase-phase2",
+    )
   })
 
   it("does not set aria-activedescendant when section is not focused", () => {
-    const detail = createMockDetail()
+    const { container } = renderTimelineView({ isSectionFocused: false, activeIndex: 1 })
 
-    mockUseFocusable.mockReturnValue({
-      isSectionFocused: false,
-      activeIndex: 1,
-    })
-
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    // Timeline container should not have aria-activedescendant when not focused
-    const timelineContainer = container.querySelector('.flex.flex-col.gap-8')
-    expect(timelineContainer).not.toHaveAttribute("aria-activedescendant")
+    expect(container.querySelector('[role="listbox"]')).not.toHaveAttribute(
+      "aria-activedescendant",
+    )
   })
 
   it("adds id attribute to all phase items", () => {
-    const detail = createMockDetail()
+    const { container } = renderTimelineView()
 
-    const { container } = render(<PhaseTimelinePanel detail={detail} />)
-
-    // All phase items should have id attributes
-    const phase1Element = container.querySelector('[_id="phase1"]')
-    expect(phase1Element).toHaveAttribute("id", "phase-phase1")
-
-    const phase2Element = container.querySelector('[_id="phase2"]')
-    expect(phase2Element).toHaveAttribute("id", "phase-phase2")
-
-    const phase3Element = container.querySelector('[_id="phase3"]')
-    expect(phase3Element).toHaveAttribute("id", "phase-phase3")
+    expect(phaseById(container, "phase1")).toHaveAttribute("id", "phase-phase1")
+    expect(phaseById(container, "phase2")).toHaveAttribute("id", "phase-phase2")
+    expect(phaseById(container, "phase3")).toHaveAttribute("id", "phase-phase3")
   })
 })

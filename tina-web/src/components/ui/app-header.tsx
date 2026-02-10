@@ -17,7 +17,7 @@ function AppHeader({
   return (
     <header
       className={cn(
-        "border-b border-border bg-sidebar px-3 py-1.5 flex justify-between items-center shrink-0",
+        "border-b border-border bg-sidebar px-3 py-1 flex justify-between items-center shrink-0",
         className
       )}
       {...props}

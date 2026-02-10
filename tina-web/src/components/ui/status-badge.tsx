@@ -7,23 +7,23 @@ const statusBadgeVariants = cva(
     variants: {
       status: {
         complete:
-          "text-status-complete border-status-complete/30 bg-status-complete/10",
+          "text-status-complete border-status-complete/30 bg-status-complete/8",
         executing:
-          "text-status-executing border-status-executing/30 bg-status-executing/20",
+          "text-status-executing border-status-executing/30 bg-status-executing/12",
         active:
-          "text-status-active border-status-active/30 bg-status-active/10",
+          "text-status-active border-status-active/30 bg-status-active/8",
         planning:
           "text-status-planning border-muted bg-transparent",
         blocked:
-          "text-status-blocked border-status-blocked/30 bg-status-blocked/10",
+          "text-status-blocked border-status-blocked/30 bg-status-blocked/8",
         reviewing:
-          "text-status-warning border-status-warning/30 bg-status-warning/10",
+          "text-status-warning border-status-warning/30 bg-status-warning/8",
         done:
-          "text-status-complete border-status-complete/30 bg-status-complete/10",
+          "text-status-complete border-status-complete/30 bg-status-complete/8",
         pending:
           "text-status-planning border-muted bg-transparent",
         in_progress:
-          "text-status-executing border-status-executing/30 bg-status-executing/20",
+          "text-status-executing border-status-executing/30 bg-status-executing/12",
       },
     },
     defaultVariants: {

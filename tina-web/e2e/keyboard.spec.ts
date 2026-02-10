@@ -1,52 +1,41 @@
 import { test, expect } from "@playwright/test"
+import { AppPage } from "./support/app.po"
 
 test.describe("Keyboard Navigation", () => {
   test("Tab cycles focus between sidebar, phase timeline, and task list sections", async ({
     page,
   }) => {
-    await page.goto("/")
+    const app = new AppPage(page)
+    await app.goto()
 
-    // Start from body (no focus)
-    await page.keyboard.press("Tab")
-
-    // First Tab should focus an item in the sidebar
-    // Check if any sidebar item is focused (roving tabindex pattern)
-    const firstSidebarItem = page.locator("[id^='sidebar-item-']").first()
-    const itemCount = await page.locator("[id^='sidebar-item-']").count()
-
+    const itemCount = await app.focusSidebarViaTab()
     if (itemCount > 0) {
+      const firstSidebarItem = app.firstSidebarItem()
       await expect(firstSidebarItem).toBeFocused()
 
-      // Second Tab should move focus away from sidebar to main content
-      await page.keyboard.press("Tab")
+      await app.press("Tab")
       await expect(firstSidebarItem).not.toBeFocused()
     }
   })
 
   test("arrow keys navigate within sidebar orchestration list", async ({ page }) => {
-    await page.goto("/")
+    const app = new AppPage(page)
+    await app.goto()
 
-    // Focus sidebar by tabbing
-    await page.keyboard.press("Tab")
-
-    // Check if there are any orchestration items
-    const firstItem = page.locator("[id^='sidebar-item-']").first()
-    const itemCount = await page.locator("[id^='sidebar-item-']").count()
-
+    const itemCount = await app.focusSidebarViaTab()
     if (itemCount > 0) {
-      // First item should be focused (have tabIndex 0)
+      const firstItem = app.firstSidebarItem()
       await expect(firstItem).toBeFocused()
       await expect(firstItem).toHaveAttribute("tabindex", "0")
 
-      // Press down arrow to move to next item (if exists)
       if (itemCount > 1) {
-        await page.keyboard.press("ArrowDown")
-        const secondItem = page.locator("[id='sidebar-item-1']")
+        const secondItem = app.sidebarItem(1)
+
+        await app.press("ArrowDown")
         await expect(secondItem).toHaveAttribute("tabindex", "0")
         await expect(firstItem).toHaveAttribute("tabindex", "-1")
 
-        // Press up arrow to return to first item
-        await page.keyboard.press("ArrowUp")
+        await app.press("ArrowUp")
         await expect(firstItem).toHaveAttribute("tabindex", "0")
         await expect(secondItem).toHaveAttribute("tabindex", "-1")
       }
@@ -54,167 +43,94 @@ test.describe("Keyboard Navigation", () => {
   })
 
   test("Enter key selects an orchestration in sidebar", async ({ page }) => {
-    await page.goto("/")
+    const app = new AppPage(page)
+    await app.goto()
 
-    // Tab to sidebar
-    await page.keyboard.press("Tab")
-
-    // Check if there are orchestration items
-    const itemCount = await page.locator("[id^='sidebar-item-']").count()
-
+    const itemCount = await app.focusSidebarViaTab()
     if (itemCount > 0) {
-      const firstItem = page.locator("[id='sidebar-item-0']")
+      const firstItem = app.sidebarItem(0)
 
-      // Press Enter to select
-      await page.keyboard.press("Enter")
+      await app.press("Enter")
 
-      // Verify selection by checking if item now has active styling
-      // The implementation adds a "ring-2 ring-primary" class or sets active prop
       await expect(firstItem).toHaveClass(/ring-2 ring-primary/)
     }
   })
 
   test("Space key opens quicklook modal in phase timeline", async ({ page }) => {
-    await page.goto("/")
+    const app = new AppPage(page)
+    await app.goto()
 
-    // Tab to sidebar, select an orchestration (if available)
-    await page.keyboard.press("Tab")
-    const itemCount = await page.locator("[id^='sidebar-item-']").count()
-
-    if (itemCount > 0) {
-      await page.keyboard.press("Enter") // Select first orchestration
-
-      // Tab to phase timeline
-      await page.keyboard.press("Tab")
-
-      // Check if there are phase items
-      const phaseCount = await page.locator("[id^='phase-']").count()
-
-      if (phaseCount > 0) {
-        // Press Space to open quicklook
-        await page.keyboard.press("Space")
-
-        // Verify quicklook modal is visible
-        const quicklook = page.getByRole("dialog")
-        await expect(quicklook).toBeVisible()
-      }
+    const phaseCount = await app.moveToPhaseTimelineAfterSidebarSelection()
+    if (phaseCount > 0) {
+      await app.press("Space")
+      await expect(app.dialog()).toBeVisible()
     }
   })
 
   test("Escape key dismisses quicklook modal", async ({ page }) => {
-    await page.goto("/")
+    const app = new AppPage(page)
+    await app.goto()
 
-    // Navigate to sidebar, select orchestration, navigate to phase timeline
-    await page.keyboard.press("Tab")
-    const itemCount = await page.locator("[id^='sidebar-item-']").count()
+    const phaseCount = await app.moveToPhaseTimelineAfterSidebarSelection()
+    if (phaseCount > 0) {
+      const quicklook = app.dialog()
+      await app.press("Space")
+      await expect(quicklook).toBeVisible()
 
-    if (itemCount > 0) {
-      await page.keyboard.press("Enter")
-      await page.keyboard.press("Tab") // To phase timeline
-
-      const phaseCount = await page.locator("[id^='phase-']").count()
-
-      if (phaseCount > 0) {
-        // Open quicklook with Space
-        await page.keyboard.press("Space")
-        const quicklook = page.getByRole("dialog")
-        await expect(quicklook).toBeVisible()
-
-        // Close with Escape
-        await page.keyboard.press("Escape")
-        await expect(quicklook).not.toBeVisible()
-      }
+      await app.press("Escape")
+      await expect(quicklook).not.toBeVisible()
     }
   })
 
   test("arrow keys navigate within phase timeline", async ({ page }) => {
-    await page.goto("/")
+    const app = new AppPage(page)
+    await app.goto()
 
-    // Navigate to an orchestration and then to phase timeline
-    await page.keyboard.press("Tab")
-    const itemCount = await page.locator("[id^='sidebar-item-']").count()
+    const phaseCount = await app.moveToPhaseTimelineAfterSidebarSelection()
+    if (phaseCount > 1) {
+      const firstPhase = app.firstPhaseItem()
+      const secondPhase = app.phaseItem(1)
 
-    if (itemCount > 0) {
-      await page.keyboard.press("Enter")
-      await page.keyboard.press("Tab")
+      await expect(firstPhase).toHaveAttribute("tabindex", "0")
 
-      const phaseCount = await page.locator("[id^='phase-']").count()
+      await app.press("ArrowDown")
+      await expect(firstPhase).toHaveAttribute("tabindex", "-1")
+      await expect(secondPhase).toHaveAttribute("tabindex", "0")
 
-      if (phaseCount > 1) {
-        const firstPhase = page.locator("[id^='phase-']").first()
-        await expect(firstPhase).toHaveAttribute("tabindex", "0")
-
-        // Move down
-        await page.keyboard.press("ArrowDown")
-        await expect(firstPhase).toHaveAttribute("tabindex", "-1")
-
-        const secondPhase = page.locator("[id^='phase-']").nth(1)
-        await expect(secondPhase).toHaveAttribute("tabindex", "0")
-
-        // Move back up
-        await page.keyboard.press("ArrowUp")
-        await expect(firstPhase).toHaveAttribute("tabindex", "0")
-      }
+      await app.press("ArrowUp")
+      await expect(firstPhase).toHaveAttribute("tabindex", "0")
     }
   })
 
   test("Space key opens quicklook modal in task list", async ({ page }) => {
-    await page.goto("/")
+    const app = new AppPage(page)
+    await app.goto()
 
-    // Navigate through sidebar -> select orchestration -> phase timeline -> select phase -> task list
-    await page.keyboard.press("Tab")
-    const itemCount = await page.locator("[id^='sidebar-item-']").count()
-
-    if (itemCount > 0) {
-      await page.keyboard.press("Enter") // Select orchestration
-      await page.keyboard.press("Tab") // To phase timeline
-
-      const phaseCount = await page.locator("[id^='phase-']").count()
-      if (phaseCount > 0) {
-        await page.keyboard.press("Enter") // Select phase
-        await page.keyboard.press("Tab") // To task list
-
-        const taskCount = await page.locator("[id^='task-']").count()
-        if (taskCount > 0) {
-          // Press Space to open task quicklook
-          await page.keyboard.press("Space")
-
-          const quicklook = page.getByRole("dialog")
-          await expect(quicklook).toBeVisible()
-        }
-      }
+    const taskCount = await app.moveToTaskListAfterPhaseSelection()
+    if (taskCount > 0) {
+      await app.press("Space")
+      await expect(app.dialog()).toBeVisible()
     }
   })
 
   test("focus restoration after closing quicklook modal", async ({ page }) => {
-    await page.goto("/")
+    const app = new AppPage(page)
+    await app.goto()
 
-    // Navigate and open a phase quicklook
-    await page.keyboard.press("Tab")
-    const itemCount = await page.locator("[id^='sidebar-item-']").count()
+    const phaseCount = await app.moveToPhaseTimelineAfterSidebarSelection()
+    if (phaseCount > 0) {
+      const firstPhase = app.firstPhaseItem()
+      const phaseId = await firstPhase.getAttribute("id")
 
-    if (itemCount > 0) {
-      await page.keyboard.press("Enter")
-      await page.keyboard.press("Tab")
+      const quicklook = app.dialog()
+      await app.press("Space")
+      await expect(quicklook).toBeVisible()
 
-      const phaseCount = await page.locator("[id^='phase-']").count()
-      if (phaseCount > 0) {
-        const firstPhase = page.locator("[id^='phase-']").first()
-        const phaseId = await firstPhase.getAttribute("id")
+      await app.press("Escape")
+      await expect(quicklook).not.toBeVisible()
 
-        // Open quicklook
-        await page.keyboard.press("Space")
-        const quicklook = page.getByRole("dialog")
-        await expect(quicklook).toBeVisible()
-
-        // Close quicklook
-        await page.keyboard.press("Escape")
-        await expect(quicklook).not.toBeVisible()
-
-        // Verify focus returned to the phase element
-        const focusedPhase = page.locator(`[id='${phaseId}']`)
-        await expect(focusedPhase).toBeFocused()
-      }
+      const focusedPhase = page.locator(`[id='${phaseId}']`)
+      await expect(focusedPhase).toBeFocused()
     }
   })
 })

@@ -6,6 +6,7 @@ interface SidebarItemProps extends React.HTMLAttributes<HTMLDivElement> {
   statusText?: string;
   statusColor?: string;
   "data-orchestration-id"?: string;
+  "data-focused"?: "true";
 }
 
 function SidebarItem({

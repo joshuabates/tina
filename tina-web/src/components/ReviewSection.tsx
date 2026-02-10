@@ -1,40 +1,24 @@
 import { useFocusable } from "@/hooks/useFocusable"
-import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { EventListQuery } from "@/services/data/queryDefs"
-import { toOrchestrationId } from "@/services/data/id"
-import { PanelSection } from "@/components/Panel"
-import type { OrchestrationDetail } from "@/schemas"
+import { StatPanel } from "@/components/ui/stat-panel"
+import type { OrchestrationEvent } from "@/schemas"
 
 interface ReviewSectionProps {
-  detail: OrchestrationDetail
+  reviewEvents: readonly OrchestrationEvent[]
+  isLoading: boolean
 }
 
-export function ReviewSection({ detail }: ReviewSectionProps) {
-  // Fetch events for this orchestration
-  const eventsResult = useTypedQuery(EventListQuery, {
-    orchestrationId: toOrchestrationId(detail._id),
-  })
-
-  // Filter for phase_review_* events
-  const reviewEvents = eventsResult.status === "success"
-    ? eventsResult.data.filter((event) => event.eventType.startsWith("phase_review"))
-    : []
-
+export function ReviewSection({ reviewEvents, isLoading }: ReviewSectionProps) {
   // Register focus section
   useFocusable("rightPanel.review", reviewEvents.length)
 
-  if (eventsResult.status === "error") {
-    throw eventsResult.error
-  }
-
   return (
-    <PanelSection label="Review">
-      {eventsResult.status === "loading" ? (
-        <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+    <StatPanel title="Phase Review">
+      {isLoading ? (
+        <div className="flex items-center justify-center py-6 text-muted-foreground text-sm">
           Loading review events...
         </div>
       ) : reviewEvents.length === 0 ? (
-        <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+        <div className="flex items-center justify-center py-6 text-muted-foreground text-sm">
           No review events yet
         </div>
       ) : (
@@ -54,7 +38,7 @@ export function ReviewSection({ detail }: ReviewSectionProps) {
 
           {/* Action button */}
           <button
-            className="w-full px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            className="w-full px-4 py-2 text-[9px] font-bold uppercase tracking-tight bg-primary/10 border border-primary/20 text-primary rounded-md hover:bg-primary/20 transition-colors"
             onClick={() => {
               // TODO: Handle review approval
             }}
@@ -64,6 +48,6 @@ export function ReviewSection({ detail }: ReviewSectionProps) {
           </button>
         </div>
       )}
-    </PanelSection>
+    </StatPanel>
   )
 }

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { StatusBadge, type StatusBadgeStatus } from "./status-badge";
+import { statusBorderClass } from "./status-styles";
 import { MonoText } from "./mono-text";
 
 interface TaskCardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -11,18 +12,6 @@ interface TaskCardProps extends React.HTMLAttributes<HTMLDivElement> {
   blockedReason?: string;
 }
 
-const borderColorMap: Record<string, string> = {
-  complete: "border-l-status-complete",
-  done: "border-l-status-complete",
-  executing: "border-l-status-executing",
-  active: "border-l-status-warning",
-  in_progress: "border-l-status-warning",
-  blocked: "border-l-status-blocked",
-  planning: "border-l-muted",
-  pending: "border-l-muted",
-  reviewing: "border-l-status-warning",
-};
-
 function TaskCard({
   taskId,
   subject,
@@ -33,7 +22,7 @@ function TaskCard({
   className,
   ...props
 }: TaskCardProps) {
-  const borderClass = borderColorMap[status] ?? "border-l-muted";
+  const borderClass = statusBorderClass(status);
 
   return (
     <div

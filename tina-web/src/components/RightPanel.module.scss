@@ -1,0 +1,13 @@
+@use '../styles/tokens' as *;
+
+.rightPanel {
+  height: 100%;
+  background: color-mix(in srgb, $bg-sidebar 26%, $bg-primary 74%);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}

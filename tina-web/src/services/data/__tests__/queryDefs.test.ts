@@ -7,17 +7,32 @@ import {
   EventListQuery,
 } from "../queryDefs"
 
+function decode<A, I>(schema: Schema.Schema<A, I>, input: unknown): A {
+  return Schema.decodeUnknownSync(schema)(input)
+}
+
+function expectDecodeThrows(schema: Schema.Schema<any, any>, input: unknown) {
+  expect(() => decode(schema, input)).toThrow()
+}
+
+function expectQueryMeta(
+  query: { key: string; query: unknown; args: unknown; schema: unknown },
+  key: string,
+) {
+  expect(query.key).toBe(key)
+  expect(query.query).toBeDefined()
+  expect(query.args).toBeDefined()
+  expect(query.schema).toBeDefined()
+}
+
 describe("queryDefs", () => {
   describe("OrchestrationListQuery", () => {
     it("has key, query reference, and schema", () => {
-      expect(OrchestrationListQuery.key).toBe("orchestrations.list")
-      expect(OrchestrationListQuery.query).toBeDefined()
-      expect(OrchestrationListQuery.args).toBeDefined()
-      expect(OrchestrationListQuery.schema).toBeDefined()
+      expectQueryMeta(OrchestrationListQuery, "orchestrations.list")
     })
 
     it("schema decodes valid orchestration list data", () => {
-      const validData = [
+      const decoded = decode(OrchestrationListQuery.schema, [
         {
           _id: "orch123",
           _creationTime: 1234567890,
@@ -35,45 +50,33 @@ describe("queryDefs", () => {
           totalElapsedMins: 10,
           nodeName: "test-node",
         },
-      ]
+      ])
 
-      const decoded = Schema.decodeUnknownSync(OrchestrationListQuery.schema)(validData)
       expect(decoded).toHaveLength(1)
       expect(decoded[0]._id).toBe("orch123")
     })
 
     it("schema rejects invalid orchestration list data", () => {
-      const invalidData = [{ invalid: "data" }]
-
-      expect(() => {
-        Schema.decodeUnknownSync(OrchestrationListQuery.schema)(invalidData)
-      }).toThrow()
+      expectDecodeThrows(OrchestrationListQuery.schema, [{ invalid: "data" }])
     })
   })
 
   describe("OrchestrationDetailQuery", () => {
     it("has key, query reference, args schema, and result schema", () => {
-      expect(OrchestrationDetailQuery.key).toBe("orchestrations.detail")
-      expect(OrchestrationDetailQuery.query).toBeDefined()
-      expect(OrchestrationDetailQuery.args).toBeDefined()
-      expect(OrchestrationDetailQuery.schema).toBeDefined()
+      expectQueryMeta(OrchestrationDetailQuery, "orchestrations.detail")
     })
 
     it("args schema requires orchestrationId", () => {
-      const validArgs = { orchestrationId: "orch123" }
-      const decoded = Schema.decodeUnknownSync(OrchestrationDetailQuery.args)(validArgs)
+      const decoded = decode(OrchestrationDetailQuery.args, { orchestrationId: "orch123" })
       expect(decoded.orchestrationId).toBe("orch123")
     })
 
     it("args schema rejects missing orchestrationId", () => {
-      const invalidArgs = {}
-      expect(() => {
-        Schema.decodeUnknownSync(OrchestrationDetailQuery.args)(invalidArgs)
-      }).toThrow()
+      expectDecodeThrows(OrchestrationDetailQuery.args, {})
     })
 
     it("schema decodes valid orchestration detail data", () => {
-      const validData = {
+      const decoded = decode(OrchestrationDetailQuery.schema, {
         _id: "orch123",
         _creationTime: 1234567890,
         nodeId: "node1",
@@ -93,9 +96,8 @@ describe("queryDefs", () => {
         orchestratorTasks: [],
         phaseTasks: {},
         teamMembers: [],
-      }
+      })
 
-      const decoded = Schema.decodeUnknownSync(OrchestrationDetailQuery.schema)(validData)
       expect(decoded).not.toBeNull()
       expect(decoded!._id).toBe("orch123")
       expect(decoded!.phases).toEqual([])
@@ -105,14 +107,11 @@ describe("queryDefs", () => {
 
   describe("ProjectListQuery", () => {
     it("has key, query reference, and schema", () => {
-      expect(ProjectListQuery.key).toBe("projects.list")
-      expect(ProjectListQuery.query).toBeDefined()
-      expect(ProjectListQuery.args).toBeDefined()
-      expect(ProjectListQuery.schema).toBeDefined()
+      expectQueryMeta(ProjectListQuery, "projects.list")
     })
 
     it("schema decodes valid project list data", () => {
-      const validData = [
+      const decoded = decode(ProjectListQuery.schema, [
         {
           _id: "proj123",
           _creationTime: 1234567890,
@@ -123,49 +122,39 @@ describe("queryDefs", () => {
           latestFeature: "test-feature",
           latestStatus: "Executing",
         },
-      ]
+      ])
 
-      const decoded = Schema.decodeUnknownSync(ProjectListQuery.schema)(validData)
       expect(decoded).toHaveLength(1)
       expect(decoded[0].name).toBe("Test Project")
     })
 
     it("schema rejects invalid project data", () => {
-      const invalidData = [{ name: 123 }]
-
-      expect(() => {
-        Schema.decodeUnknownSync(ProjectListQuery.schema)(invalidData)
-      }).toThrow()
+      expectDecodeThrows(ProjectListQuery.schema, [{ name: 123 }])
     })
   })
 
   describe("EventListQuery", () => {
     it("has key, query reference, args schema, and result schema", () => {
-      expect(EventListQuery.key).toBe("events.list")
-      expect(EventListQuery.query).toBeDefined()
-      expect(EventListQuery.args).toBeDefined()
-      expect(EventListQuery.schema).toBeDefined()
+      expectQueryMeta(EventListQuery, "events.list")
     })
 
     it("args schema requires orchestrationId", () => {
-      const validArgs = { orchestrationId: "orch123" }
-      const decoded = Schema.decodeUnknownSync(EventListQuery.args)(validArgs)
+      const decoded = decode(EventListQuery.args, { orchestrationId: "orch123" })
       expect(decoded.orchestrationId).toBe("orch123")
     })
 
     it("args schema accepts optional since and limit", () => {
-      const validArgs = {
+      const decoded = decode(EventListQuery.args, {
         orchestrationId: "orch123",
         since: "2024-01-01T00:00:00Z",
         limit: 50,
-      }
-      const decoded = Schema.decodeUnknownSync(EventListQuery.args)(validArgs)
+      })
       expect(decoded.since).toBe("2024-01-01T00:00:00Z")
       expect(decoded.limit).toBe(50)
     })
 
     it("schema decodes valid event list data", () => {
-      const validData = [
+      const decoded = decode(EventListQuery.schema, [
         {
           _id: "evt123",
           _creationTime: 1234567890,
@@ -177,19 +166,14 @@ describe("queryDefs", () => {
           detail: "Starting phase 1",
           recordedAt: "2024-01-01T00:00:00Z",
         },
-      ]
+      ])
 
-      const decoded = Schema.decodeUnknownSync(EventListQuery.schema)(validData)
       expect(decoded).toHaveLength(1)
       expect(decoded[0].eventType).toBe("PhaseStarted")
     })
 
     it("schema rejects invalid event data", () => {
-      const invalidData = [{ eventType: 123 }]
-
-      expect(() => {
-        Schema.decodeUnknownSync(EventListQuery.schema)(invalidData)
-      }).toThrow()
+      expectDecodeThrows(EventListQuery.schema, [{ eventType: 123 }])
     })
   })
 })

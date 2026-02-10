@@ -1,50 +1,36 @@
 import { Option } from "effect"
 import { MonoText } from "@/components/ui/mono-text"
-import { PanelSection } from "@/components/Panel"
-import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { EventListQuery } from "@/services/data/queryDefs"
-import { toOrchestrationId } from "@/services/data/id"
-import type { OrchestrationDetail } from "@/schemas"
+import { StatPanel } from "@/components/ui/stat-panel"
+import type { OrchestrationEvent } from "@/schemas"
 import styles from "./GitOpsSection.module.scss"
 
 export interface GitOpsSectionProps {
-  detail: OrchestrationDetail
+  gitEvents: readonly OrchestrationEvent[]
+  isLoading: boolean
 }
 
-export function GitOpsSection({ detail }: GitOpsSectionProps) {
-  // Fetch events for this orchestration
-  const eventsResult = useTypedQuery(EventListQuery, {
-    orchestrationId: toOrchestrationId(detail._id),
-  })
-
-  // Loading state
-  if (eventsResult.status === "loading") {
+export function GitOpsSection({ gitEvents, isLoading }: GitOpsSectionProps) {
+  if (isLoading) {
     return (
-      <PanelSection label="Git">
+      <StatPanel title="Git Operations">
         <div className={styles.loading}>
           Loading git activity...
         </div>
-      </PanelSection>
+      </StatPanel>
     )
   }
 
-  if (eventsResult.status === "error") {
-    throw eventsResult.error
-  }
-
-  const events = eventsResult.status === "success" ? eventsResult.data : []
-
-  // Filter git events (events with eventType starting with "git_")
-  const gitEvents = events.filter((event) => event.eventType.startsWith("git_"))
-
   return (
-    <PanelSection label="Git">
+    <StatPanel title="Git Operations">
       {gitEvents.length === 0 ? (
-        <div className="text-muted-foreground text-sm">
+        <div className="text-muted-foreground text-sm py-1">
           No git activity yet
         </div>
       ) : (
         <div className="space-y-4">
+          <div className="text-[7px] font-bold text-muted-foreground uppercase tracking-wide">
+            Recent Events
+          </div>
           {gitEvents.map((event) => (
             <div key={event._id} className="space-y-1">
               <div className="text-sm">{event.summary}</div>
@@ -60,6 +46,6 @@ export function GitOpsSection({ detail }: GitOpsSectionProps) {
           ))}
         </div>
       )}
-    </PanelSection>
+    </StatPanel>
   )
 }

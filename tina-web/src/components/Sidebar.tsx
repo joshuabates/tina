@@ -11,11 +11,7 @@ import { ProjectListQuery, OrchestrationListQuery } from "@/services/data/queryD
 import { normalizeStatus, statusColor } from "@/services/data/status"
 import styles from "./Sidebar.module.scss"
 
-interface SidebarProps {
-  collapsed: boolean
-}
-
-function SidebarContent({ collapsed }: SidebarProps) {
+function SidebarContent() {
   const projectsResult = useTypedQuery(ProjectListQuery, {})
   const orchestrationsResult = useTypedQuery(OrchestrationListQuery, {})
   const { orchestrationId, selectOrchestration } = useSelection()
@@ -81,9 +77,10 @@ function SidebarContent({ collapsed }: SidebarProps) {
         onClick: () => selectOrchestration(orchestration._id),
         // Keyboard navigation attributes
         "data-orchestration-id": orchestration._id,
+        "data-focused": isActive ? "true" : undefined,
         id: `sidebar-item-${itemIndex}`,
         tabIndex: isActive ? 0 : -1,
-        className: isActive ? "ring-2 ring-primary" : undefined,
+        className: undefined,
       }
 
       if (Option.isSome(orchestration.projectId)) {
@@ -147,16 +144,16 @@ function SidebarContent({ collapsed }: SidebarProps) {
     : undefined
 
   return (
-    <div className={styles.sidebar} data-collapsed={collapsed}>
+    <div className={styles.sidebar}>
       <SidebarNav projects={projects} activeDescendantId={activeDescendantId} />
     </div>
   )
 }
 
-export function Sidebar({ collapsed }: SidebarProps) {
+export function Sidebar() {
   return (
     <DataErrorBoundary panelName="sidebar">
-      <SidebarContent collapsed={collapsed} />
+      <SidebarContent />
     </DataErrorBoundary>
   )
 }

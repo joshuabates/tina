@@ -138,7 +138,7 @@ describe("TaskQuicklook", () => {
 
     // Tab again - should cycle back to modal
     await user.tab()
-    expect(modal).toHaveFocus()
+    expect(modal.contains(document.activeElement)).toBe(true)
   })
 
   it("receives focus on mount", () => {

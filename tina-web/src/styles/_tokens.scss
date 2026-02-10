@@ -1,24 +1,25 @@
 // Bridge to CSS custom properties defined in index.css
 // App components @use 'tokens' for shared SCSS variables
+// NOTE: CSS variables store HSL channels, so they must be wrapped in hsl(...)
 
-$bg-primary: var(--background);
-$bg-card: var(--card);
-$bg-sidebar: var(--sidebar);
-$text-primary: var(--foreground);
-$text-card: var(--card-foreground);
-$text-sidebar: var(--sidebar-foreground);
-$text-muted: var(--muted-foreground);
-$accent: var(--primary);
-$accent-foreground: var(--primary-foreground);
-$border-color: var(--border);
-$ring-color: var(--ring);
+$bg-primary: hsl(var(--background));
+$bg-card: hsl(var(--card));
+$bg-sidebar: hsl(var(--sidebar));
+$text-primary: hsl(var(--foreground));
+$text-card: hsl(var(--card-foreground));
+$text-sidebar: hsl(var(--sidebar-foreground));
+$text-muted: hsl(var(--muted-foreground));
+$accent: hsl(var(--primary));
+$accent-foreground: hsl(var(--primary-foreground));
+$border-color: hsl(var(--border));
+$ring-color: hsl(var(--ring));
 
 $font-display: 'Inter', sans-serif;
 $font-mono: 'JetBrains Mono', monospace;
 
 $sidebar-width: 208px;
 $sidebar-collapsed-width: 48px;
-$header-height: 44px;
+$header-height: 36px;
 $footer-height: 44px;
 $right-panel-width: 256px;
 

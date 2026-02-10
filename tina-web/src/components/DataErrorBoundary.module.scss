@@ -13,21 +13,21 @@
 .errorTitle {
   font-size: 16px;
   font-weight: 600;
-  color: var(--foreground);
+  color: hsl(var(--foreground));
   margin: 0 0 8px 0;
 }
 
 .errorMessage {
   font-size: 14px;
-  color: var(--muted-foreground);
+  color: hsl(var(--muted-foreground));
   margin: 0 0 16px 0;
 }
 
 .errorDebug {
   font-size: 12px;
   font-family: var(--font-mono);
-  color: var(--muted-foreground);
-  background: var(--muted);
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
   padding: 4px 8px;
   border-radius: 4px;
   margin: 0 0 16px 0;
@@ -36,8 +36,8 @@
 }
 
 .retryButton {
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   border: none;
   border-radius: 6px;
   padding: 8px 16px;
@@ -47,12 +47,12 @@
   transition: background-color 0.2s, opacity 0.2s;
 
   &:hover:not(:disabled) {
-    background: var(--primary-hover, var(--primary));
+    background: hsl(var(--primary));
     filter: brightness(1.1);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--ring);
+    outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
   }
 
@@ -65,18 +65,18 @@
 // Error type specific styles
 .notFound {
   .errorTitle {
-    color: var(--muted-foreground);
+    color: hsl(var(--muted-foreground));
   }
 }
 
 .permission {
   .errorTitle {
-    color: var(--destructive);
+    color: hsl(var(--status-blocked));
   }
 }
 
 .transient {
   .errorMessage {
-    color: var(--foreground);
+    color: hsl(var(--foreground));
   }
 }

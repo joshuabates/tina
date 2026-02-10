@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, afterEach } from "vitest"
-import { render, screen, cleanup } from "@testing-library/react"
+import { describe, it, expect, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
 import {
   QueryValidationError,
@@ -8,188 +8,138 @@ import {
   TransientDataError,
 } from "@/services/errors"
 import { DataErrorBoundary } from "../DataErrorBoundary"
-import { Component, type ReactNode } from "react"
+import type { ReactNode } from "react"
 
-// Test component that throws errors on demand
-class ErrorThrower extends Component<{ error?: Error | null; children: ReactNode }> {
-  override componentDidMount() {
-    if (this.props.error) {
-      throw this.props.error
-    }
-  }
+function ErrorThrower({ error, children }: { error?: Error | null; children: ReactNode }) {
+  if (error) throw error
+  return children
+}
 
-  override componentDidUpdate() {
-    if (this.props.error) {
-      throw this.props.error
-    }
-  }
+function suppressConsoleError() {
+  return vi.spyOn(console, "error").mockImplementation(() => {})
+}
 
-  override render() {
-    return this.props.children
-  }
+function renderBoundary(ui: ReactNode, fallback?: (error: unknown, reset: () => void) => ReactNode) {
+  return render(
+    <DataErrorBoundary panelName="TestPanel" fallback={fallback}>
+      {ui}
+    </DataErrorBoundary>,
+  )
+}
+
+function renderThrowing(error: Error) {
+  return renderBoundary(
+    <ErrorThrower error={error}>
+      <div>Child content</div>
+    </ErrorThrower>,
+  )
 }
 
 describe("DataErrorBoundary", () => {
-  afterEach(() => {
-    cleanup()
-  })
-
   it("renders children when no error", () => {
-    render(
-      <DataErrorBoundary panelName="TestPanel">
-        <div>Child content</div>
-      </DataErrorBoundary>
-    )
-
+    renderBoundary(<div>Child content</div>)
     expect(screen.getByText("Child content")).toBeInTheDocument()
   })
 
-  it("catches QueryValidationError and renders retry fallback", () => {
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    const error = new QueryValidationError({
-      query: "orchestrations.list",
-      message: "Invalid schema",
-    })
+  it.each([
+    {
+      label: "QueryValidationError",
+      error: new QueryValidationError({ query: "orchestrations.list", message: "Invalid schema" }),
+      title: /data error/i,
+      message: /unable to load data for TestPanel/i,
+      debug: /query: orchestrations\.list/i,
+      retry: true,
+    },
+    {
+      label: "NotFoundError",
+      error: new NotFoundError({ resource: "orchestration", id: "abc123" }),
+      title: /orchestration not found/i,
+      message: /does not exist/i,
+      retry: false,
+    },
+    {
+      label: "PermissionError",
+      error: new PermissionError({ message: "Insufficient permissions" }),
+      title: /access denied/i,
+      message: /insufficient permissions/i,
+      retry: false,
+    },
+    {
+      label: "TransientDataError",
+      error: new TransientDataError({ query: "events.list", message: "Connection timeout" }),
+      title: /temporary error/i,
+      message: /unable to load TestPanel/i,
+      retry: true,
+    },
+    {
+      label: "unknown error",
+      error: new Error("Something went wrong"),
+      title: /unexpected error/i,
+      message: /something went wrong in TestPanel/i,
+      retry: true,
+    },
+  ])("renders fallback for $label", ({ error, title, message, debug, retry }) => {
+    const consoleErrorSpy = suppressConsoleError()
+    try {
+      renderThrowing(error)
 
-    render(
-      <DataErrorBoundary panelName="TestPanel">
-        <ErrorThrower error={error}>
-          <div>Child content</div>
-        </ErrorThrower>
-      </DataErrorBoundary>
-    )
+      const alert = screen.getByRole("alert")
+      expect(alert).toHaveTextContent(title)
+      expect(alert).toHaveTextContent(message)
 
-    const alert = screen.getByRole("alert")
-    expect(alert).toBeInTheDocument()
-    expect(alert).toHaveTextContent(/data error/i)
-    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument()
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Error in TestPanel:"),
-      expect.objectContaining({ _tag: "QueryValidationError" }),
-      expect.any(String)
-    )
-
-    consoleErrorSpy.mockRestore()
+      if (debug) expect(alert).toHaveTextContent(debug)
+      expect(screen.queryByRole("button", { name: /retry/i }) !== null).toBe(retry)
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 
-  it("catches NotFoundError and renders empty state", () => {
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    const error = new NotFoundError({
-      resource: "orchestration",
-      id: "abc123",
-    })
+  it("logs tagged errors with panel context", () => {
+    const consoleErrorSpy = suppressConsoleError()
+    try {
+      renderThrowing(
+        new QueryValidationError({ query: "orchestrations.list", message: "Invalid schema" }),
+      )
 
-    render(
-      <DataErrorBoundary panelName="TestPanel">
-        <ErrorThrower error={error}>
-          <div>Child content</div>
-        </ErrorThrower>
-      </DataErrorBoundary>
-    )
-
-    const alert = screen.getByRole("alert")
-    expect(alert).toBeInTheDocument()
-    expect(alert).toHaveTextContent(/orchestration not found/i)
-
-    consoleErrorSpy.mockRestore()
-  })
-
-  it("catches PermissionError and renders access denied message", () => {
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    const error = new PermissionError({
-      message: "Insufficient permissions",
-    })
-
-    render(
-      <DataErrorBoundary panelName="TestPanel">
-        <ErrorThrower error={error}>
-          <div>Child content</div>
-        </ErrorThrower>
-      </DataErrorBoundary>
-    )
-
-    const alert = screen.getByRole("alert")
-    expect(alert).toBeInTheDocument()
-    expect(alert).toHaveTextContent(/access denied/i)
-    expect(alert).toHaveTextContent(/insufficient permissions/i)
-
-    consoleErrorSpy.mockRestore()
-  })
-
-  it("catches TransientDataError and renders temporary error with retry", () => {
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    const error = new TransientDataError({
-      query: "events.list",
-      message: "Connection timeout",
-    })
-
-    render(
-      <DataErrorBoundary panelName="TestPanel">
-        <ErrorThrower error={error}>
-          <div>Child content</div>
-        </ErrorThrower>
-      </DataErrorBoundary>
-    )
-
-    const alert = screen.getByRole("alert")
-    expect(alert).toBeInTheDocument()
-    expect(alert).toHaveTextContent(/temporary error/i)
-    expect(alert).toHaveTextContent(/unable to load TestPanel/i)
-    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument()
-
-    consoleErrorSpy.mockRestore()
-  })
-
-  it("catches unknown error and renders unexpected error with retry", () => {
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    const error = new Error("Something went wrong")
-
-    render(
-      <DataErrorBoundary panelName="TestPanel">
-        <ErrorThrower error={error}>
-          <div>Child content</div>
-        </ErrorThrower>
-      </DataErrorBoundary>
-    )
-
-    const alert = screen.getByRole("alert")
-    expect(alert).toBeInTheDocument()
-    expect(alert).toHaveTextContent(/unexpected error/i)
-    expect(alert).toHaveTextContent(/something went wrong in TestPanel/i)
-    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument()
-
-    consoleErrorSpy.mockRestore()
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Error in TestPanel:"),
+        expect.objectContaining({ _tag: "QueryValidationError" }),
+        expect.any(String),
+      )
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 
   it("custom fallback prop is used when provided", () => {
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    const error = new Error("Test error")
-    const customFallback = vi.fn((_error: unknown, reset: () => void) => (
-      <div>
-        <div>Custom error UI</div>
-        <button onClick={reset}>Custom Retry</button>
-      </div>
-    ))
+    const consoleErrorSpy = suppressConsoleError()
+    try {
+      const error = new Error("Test error")
+      const customFallback = vi.fn((_error: unknown, reset: () => void) => (
+        <div>
+          <div>Custom error UI</div>
+          <button onClick={reset}>Custom Retry</button>
+        </div>
+      ))
 
-    render(
-      <DataErrorBoundary panelName="TestPanel" fallback={customFallback}>
+      renderBoundary(
         <ErrorThrower error={error}>
           <div>Child content</div>
-        </ErrorThrower>
-      </DataErrorBoundary>
-    )
+        </ErrorThrower>,
+        customFallback,
+      )
 
-    expect(screen.getByText("Custom error UI")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /custom retry/i })).toBeInTheDocument()
-    expect(customFallback).toHaveBeenCalledWith(error, expect.any(Function))
-
-    consoleErrorSpy.mockRestore()
+      expect(screen.getByText("Custom error UI")).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: /custom retry/i })).toBeInTheDocument()
+      expect(customFallback).toHaveBeenCalledWith(error, expect.any(Function))
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 
   it("retry button in QueryValidationError resets boundary", async () => {
     const user = userEvent.setup()
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const consoleErrorSpy = suppressConsoleError()
 
     let shouldThrow = true
     function ToggleableErrorThrower() {
@@ -202,34 +152,25 @@ describe("DataErrorBoundary", () => {
       return <div>Child content recovered</div>
     }
 
-    const { rerender } = render(
-      <DataErrorBoundary panelName="TestPanel">
-        <ToggleableErrorThrower />
-      </DataErrorBoundary>
-    )
+    try {
+      const { rerender } = renderBoundary(<ToggleableErrorThrower />)
 
-    // Error should be displayed
-    expect(screen.getByRole("alert")).toBeInTheDocument()
-    expect(screen.getByText(/data error/i)).toBeInTheDocument()
+      expect(screen.getByRole("alert")).toBeInTheDocument()
+      expect(screen.getByText(/data error/i)).toBeInTheDocument()
 
-    // Stop throwing after retry
-    shouldThrow = false
+      shouldThrow = false
+      await user.click(screen.getByRole("button", { name: /retry/i }))
 
-    // Click retry button
-    const retryButton = screen.getByRole("button", { name: /retry/i })
-    await user.click(retryButton)
+      rerender(
+        <DataErrorBoundary panelName="TestPanel">
+          <ToggleableErrorThrower />
+        </DataErrorBoundary>,
+      )
 
-    // Force re-render to simulate recovery
-    rerender(
-      <DataErrorBoundary panelName="TestPanel">
-        <ToggleableErrorThrower />
-      </DataErrorBoundary>
-    )
-
-    // Children should be rendered again
-    expect(screen.getByText("Child content recovered")).toBeInTheDocument()
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-
-    consoleErrorSpy.mockRestore()
+      expect(screen.getByText("Child content recovered")).toBeInTheDocument()
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 })

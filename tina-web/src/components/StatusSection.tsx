@@ -1,56 +1,58 @@
 import { Option } from "effect"
+import { Settings } from "lucide-react"
 import { useFocusable } from "@/hooks/useFocusable"
-import { PanelSection } from "@/components/Panel"
-import { StatusBadge } from "@/components/ui/status-badge"
 import { MonoText } from "@/components/ui/mono-text"
-import type { StatusBadgeStatus } from "@/components/ui/status-badge"
+import { StatPanel } from "@/components/ui/stat-panel"
 import type { OrchestrationDetail } from "@/schemas"
+import type { StatusBadgeStatus } from "@/components/ui/status-badge"
+import { statusTextClass } from "@/components/ui/status-styles"
 
 interface StatusSectionProps {
   detail: OrchestrationDetail
 }
 
 export function StatusSection({ detail }: StatusSectionProps) {
-  // Register focus section
-  useFocusable("rightPanel.status", 2) // 2 action buttons
+  useFocusable("rightPanel.status", 2)
 
-  // Map status to lowercase for StatusBadge
-  const status = detail.status.toLowerCase() as StatusBadgeStatus
+  const normalizedStatus = detail.status.toLowerCase()
+  const statusLabel = normalizedStatus.toUpperCase()
+  const statusColorClass = statusTextClass(normalizedStatus as StatusBadgeStatus)
 
-  // Format phase progress
-  const phaseProgress = `Phase ${detail.currentPhase}/${detail.totalPhases}`
+  const phaseProgress = `PHASE ${detail.currentPhase}/${detail.totalPhases}`
+  const progressPct = detail.totalPhases > 0
+    ? Math.min(100, Math.max(0, (detail.currentPhase / detail.totalPhases) * 100))
+    : 0
 
-  // Format elapsed time with fallback
-  const elapsedTime = Option.getOrElse(
-    detail.totalElapsedMins,
-    () => "--"
-  )
+  const elapsedTime = Option.getOrElse(detail.totalElapsedMins, () => "--")
   const elapsedDisplay = elapsedTime === "--" ? "--" : `${elapsedTime}m`
 
   return (
-    <PanelSection label="Status">
-      <div className="space-y-2">
-        {/* Status Badge */}
-        <div className="flex items-center gap-2">
-          <StatusBadge status={status} />
+    <StatPanel
+      title="Orchestration"
+      headerAction={<Settings className="h-3 w-3 text-muted-foreground/60" aria-hidden="true" />}
+    >
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between">
+          <span className={`text-[8px] font-bold uppercase tracking-wide ${statusColorClass}`}>
+            {statusLabel}
+          </span>
+          <MonoText className="text-[8px] text-muted-foreground">{phaseProgress}</MonoText>
         </div>
 
-        {/* Metadata grid */}
-        <div className="space-y-1 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Progress:</span>
-            <MonoText className="text-foreground">{phaseProgress}</MonoText>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Elapsed:</span>
-            <MonoText className="text-foreground">{elapsedDisplay}</MonoText>
-          </div>
+        <div className="w-full h-1 rounded-full overflow-hidden bg-muted/90">
+          <div
+            className="h-full rounded-full bg-primary transition-[width] duration-300"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
 
-        {/* Action buttons */}
-        <div className="flex flex-col gap-1 pt-2">
+        <div className="flex justify-end">
+          <MonoText className="text-[8px] text-muted-foreground">ELAPSED: {elapsedDisplay}</MonoText>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
           <button
-            className="w-full px-2 py-1 text-xs bg-muted hover:bg-muted/80 rounded transition-colors text-left"
+            className="w-full px-2 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground"
             onClick={() => {
               // TODO: Open design doc
             }}
@@ -59,7 +61,7 @@ export function StatusSection({ detail }: StatusSectionProps) {
             Design Plan
           </button>
           <button
-            className="w-full px-2 py-1 text-xs bg-muted hover:bg-muted/80 rounded transition-colors text-left"
+            className="w-full px-2 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground"
             onClick={() => {
               // TODO: Open phase plan
             }}
@@ -69,6 +71,6 @@ export function StatusSection({ detail }: StatusSectionProps) {
           </button>
         </div>
       </div>
-    </PanelSection>
+    </StatPanel>
   )
 }

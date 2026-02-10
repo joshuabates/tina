@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useMemo } from "react"
 import { Outlet } from "react-router-dom"
 import { Option } from "effect"
 import { AppHeader } from "./ui/app-header"
@@ -6,30 +6,15 @@ import { AppStatusBar } from "./ui/app-status-bar"
 import { Sidebar } from "./Sidebar"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { useActionRegistration } from "@/hooks/useActionRegistration"
 import { OrchestrationListQuery, ProjectListQuery } from "@/services/data/queryDefs"
 import type { OrchestrationSummary, ProjectSummary } from "@/schemas"
 import styles from "./AppShell.module.scss"
 
 export function AppShell() {
-  const [collapsed, setCollapsed] = useState(false)
   const { orchestrationId } = useSelection()
 
   const orchestrationsResult = useTypedQuery(OrchestrationListQuery, {})
   const projectsResult = useTypedQuery(ProjectListQuery, {})
-
-  const toggleCollapsed = () => {
-    setCollapsed((prev) => !prev)
-  }
-
-  // Register Alt+b to toggle sidebar collapse
-  useActionRegistration({
-    id: "sidebar.toggle",
-    label: "Toggle Sidebar",
-    key: "Alt+b",
-    when: "global",
-    execute: toggleCollapsed,
-  })
 
   // Find selected orchestration and its project
   const { projectName, phaseName } = useMemo(() => {
@@ -64,20 +49,17 @@ export function AppShell() {
   }, [orchestrationId, orchestrationsResult, projectsResult])
 
   return (
-    <div className={`${styles.appShell} ${collapsed ? styles.collapsed : ""}`}>
+    <div className={styles.appShell}>
       <div className={styles.header}>
         <AppHeader title="ORCHESTRATOR" version="0.1.0" />
       </div>
 
       <div
-        className={`${styles.sidebar} ${collapsed ? styles.collapsed : ""}`}
+        className={styles.sidebar}
         role="navigation"
         aria-label="Main sidebar"
       >
-        <button onClick={toggleCollapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
-          {collapsed ? ">" : "<"}
-        </button>
-        <Sidebar collapsed={collapsed} />
+        <Sidebar />
       </div>
 
       <main className={styles.main} aria-label="Page content">

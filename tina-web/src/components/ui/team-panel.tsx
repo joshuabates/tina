@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
 import { MonoText } from "./mono-text";
+import { StatPanel } from "./stat-panel";
 import { TeamMember, type MemberStatus } from "./team-member";
 
 interface TeamPanelMember {
@@ -17,31 +17,30 @@ function TeamPanel({ members, className, ...props }: TeamPanelProps) {
   ).length;
 
   return (
-    <div
-      className={cn(
-        "bg-card border border-border rounded flex flex-col overflow-hidden",
-        className
-      )}
-      {...props}
-    >
-      <div className="px-2 py-1 bg-muted/20 border-b border-border flex justify-between items-center">
-        <h3 className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">
-          Team
-        </h3>
+    <StatPanel
+      title="Team"
+      className={className}
+      headerAction={
         <MonoText className="text-[8px] text-status-complete">
           {activeCount} ACTIVE
         </MonoText>
+      }
+      {...props}
+    >
+      <div className="space-y-2">
+        {members.length === 0 ? (
+          <div className="text-xs text-muted-foreground">No team members</div>
+        ) : (
+          members.map((member) => (
+            <TeamMember
+              key={member.name}
+              name={member.name}
+              memberStatus={member.memberStatus}
+            />
+          ))
+        )}
       </div>
-      <div className="p-2 space-y-2">
-        {members.map((member) => (
-          <TeamMember
-            key={member.name}
-            name={member.name}
-            memberStatus={member.memberStatus}
-          />
-        ))}
-      </div>
-    </div>
+    </StatPanel>
   );
 }
 

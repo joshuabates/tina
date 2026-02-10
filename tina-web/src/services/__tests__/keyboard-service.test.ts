@@ -1,15 +1,67 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createKeyboardService } from "../keyboard-service"
 import type { ActionRegistry, ActionContext } from "../action-registry"
 import type { FocusService } from "../focus-service"
+import { dispatchKeyDown } from "@/test/harness/keyboard"
+
+function press(
+  key: string,
+  init: Omit<KeyboardEventInit, "key"> = {},
+  target: EventTarget = document,
+): KeyboardEvent {
+  return dispatchKeyDown(target, key, init)
+}
 
 describe("KeyboardService", () => {
   let actionRegistry: ActionRegistry
   let focusService: FocusService
   let mockExecute: (ctx: ActionContext) => void
 
+  const sidebarContext = { selectedItem: "0", focusedSection: "sidebar" as const }
+  const globalContext = { selectedItem: undefined, focusedSection: "sidebar" as const }
+  const modalContext = { selectedItem: undefined, focusedSection: "modal" as const }
+
+  function createService() {
+    return createKeyboardService({ actionRegistry, focusService })
+  }
+
+  function withAttached(run: (service: ReturnType<typeof createKeyboardService>) => void) {
+    const service = createService()
+    service.attach()
+    try {
+      run(service)
+    } finally {
+      service.detach()
+    }
+  }
+
+  function withTarget<T extends HTMLElement>(target: T, run: (target: T) => void) {
+    document.body.appendChild(target)
+    try {
+      run(target)
+    } finally {
+      document.body.removeChild(target)
+    }
+  }
+
+  function resolvedAction(key: string, scope: string, execute = mockExecute) {
+    const action = {
+      id: `${scope}-${key}`,
+      label: "Action",
+      key,
+      when: scope === "global" ? undefined : scope,
+      execute,
+    }
+
+    vi.mocked(actionRegistry.resolve).mockImplementation((candidateKey, candidateScope) => {
+      if (candidateKey === key && candidateScope === scope) return action
+      return undefined
+    })
+
+    return action
+  }
+
   beforeEach(() => {
-    // Mock ActionRegistry
     mockExecute = vi.fn() as unknown as (ctx: ActionContext) => void
     actionRegistry = {
       register: vi.fn(),
@@ -19,7 +71,6 @@ describe("KeyboardService", () => {
       listAll: vi.fn(),
     }
 
-    // Mock FocusService
     focusService = {
       subscribe: vi.fn(),
       registerSection: vi.fn(),
@@ -36,602 +87,195 @@ describe("KeyboardService", () => {
     }
   })
 
-  afterEach(() => {
-    vi.clearAllMocks()
-  })
-
   describe("Tab navigation", () => {
-    it("Tab dispatches to focusNextSection", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
+    it.each([
+      { init: {}, method: "focusNextSection" as const },
+      { init: { shiftKey: true }, method: "focusPrevSection" as const },
+    ])("dispatches to $method", ({ init, method }) => {
+      withAttached(() => {
+        const event = press("Tab", init)
 
-      const event = new KeyboardEvent("keydown", {
-        key: "Tab",
-        bubbles: true,
-        cancelable: true,
+        expect(focusService[method]).toHaveBeenCalledOnce()
+        expect(event.defaultPrevented).toBe(true)
       })
-      document.dispatchEvent(event)
-
-      expect(focusService.focusNextSection).toHaveBeenCalledOnce()
-      expect(event.defaultPrevented).toBe(true)
-
-      service.detach()
-    })
-
-    it("Shift+Tab dispatches to focusPrevSection", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "Tab",
-        shiftKey: true,
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(focusService.focusPrevSection).toHaveBeenCalledOnce()
-      expect(event.defaultPrevented).toBe(true)
-
-      service.detach()
     })
   })
 
   describe("Arrow key navigation", () => {
-    it("ArrowDown dispatches to moveItem(1)", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
+    it.each([
+      ["ArrowDown", 1],
+      ["ArrowRight", 1],
+      ["ArrowUp", -1],
+      ["ArrowLeft", -1],
+    ])("%s dispatches to moveItem(%s)", (key, delta) => {
+      withAttached(() => {
+        const event = press(key)
 
-      const event = new KeyboardEvent("keydown", {
-        key: "ArrowDown",
-        bubbles: true,
-        cancelable: true,
+        expect(focusService.moveItem).toHaveBeenCalledWith(delta)
+        expect(event.defaultPrevented).toBe(true)
       })
-      document.dispatchEvent(event)
-
-      expect(focusService.moveItem).toHaveBeenCalledWith(1)
-      expect(event.defaultPrevented).toBe(true)
-
-      service.detach()
-    })
-
-    it("ArrowUp dispatches to moveItem(-1)", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "ArrowUp",
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(focusService.moveItem).toHaveBeenCalledWith(-1)
-      expect(event.defaultPrevented).toBe(true)
-
-      service.detach()
-    })
-
-    it("ArrowRight dispatches to moveItem(1)", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "ArrowRight",
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(focusService.moveItem).toHaveBeenCalledWith(1)
-      expect(event.defaultPrevented).toBe(true)
-
-      service.detach()
-    })
-
-    it("ArrowLeft dispatches to moveItem(-1)", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "ArrowLeft",
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(focusService.moveItem).toHaveBeenCalledWith(-1)
-      expect(event.defaultPrevented).toBe(true)
-
-      service.detach()
     })
   })
 
   describe("Scoped action keybinding resolution", () => {
-    it("resolves focused-section action bindings with section scope", () => {
-      const mockAction = {
-        id: "delete-item",
-        label: "Delete",
-        key: "d",
-        when: "sidebar",
-        execute: mockExecute as (ctx: ActionContext) => void,
-      }
-
-      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
-        if (key === "d" && scope === "sidebar") return mockAction
-        return undefined
-      })
-
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "d",
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).toHaveBeenCalledWith("d", "sidebar")
-      expect(mockExecute).toHaveBeenCalledWith({
-        selectedItem: "0",
-        focusedSection: "sidebar",
-      })
-      expect(event.defaultPrevented).toBe(true)
-
-      service.detach()
-    })
-
-    it("resolves focused-section action bindings", () => {
-      const mockAction = {
-        id: "delete-item",
-        label: "Delete",
-        key: "d",
-        when: "sidebar.focused",
-        execute: mockExecute as (ctx: ActionContext) => void,
-      }
-
-      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
-        if (key === "d" && scope === "sidebar.focused") return mockAction
-        return undefined
-      })
-
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "d",
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).toHaveBeenCalledWith("d", "sidebar.focused")
-      expect(mockExecute).toHaveBeenCalledWith({
-        selectedItem: "0",
-        focusedSection: "sidebar",
-      })
-      expect(event.defaultPrevented).toBe(true)
-
-      service.detach()
-    })
-
-    it("resolves global action bindings as fallback", () => {
-      const mockAction = {
-        id: "open-command-palette",
-        label: "Command Palette",
-        key: "Ctrl+p",
-        when: undefined,
-        execute: mockExecute as (ctx: ActionContext) => void,
-      }
-
-      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
-        if (key === "Ctrl+p" && scope === "global") return mockAction
-        return undefined
-      })
-
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
+    it.each([
+      { key: "d", init: {}, scope: "sidebar", context: sidebarContext },
+      { key: "d", init: {}, scope: "sidebar.focused", context: sidebarContext },
+      {
         key: "p",
-        ctrlKey: true,
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
+        init: { ctrlKey: true },
+        scope: "global",
+        resolvedKey: "Ctrl+p",
+        context: globalContext,
+      },
+    ])("resolves $scope bindings", ({ key, init, scope, context, resolvedKey }) => {
+      const normalizedKey = resolvedKey ?? key
+      resolvedAction(normalizedKey, scope)
 
-      expect(actionRegistry.resolve).toHaveBeenCalledWith("Ctrl+p", "global")
-      expect(mockExecute).toHaveBeenCalledWith({
-        selectedItem: undefined,
-        focusedSection: "sidebar",
-      })
-      expect(event.defaultPrevented).toBe(true)
+      withAttached(() => {
+        const event = press(key, init)
 
-      service.detach()
+        expect(actionRegistry.resolve).toHaveBeenCalledWith(normalizedKey, scope)
+        expect(mockExecute).toHaveBeenCalledWith(context)
+        expect(event.defaultPrevented).toBe(true)
+      })
     })
   })
 
   describe("Editable target filtering", () => {
-    it("ignores events from input elements", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
+    it.each([
+      ["input", () => document.createElement("input")],
+      ["textarea", () => document.createElement("textarea")],
+      ["contentEditable", () => {
+        const div = document.createElement("div")
+        div.contentEditable = "true"
+        return div
+      }],
+    ])("ignores events from %s elements", (_, create) => {
+      withAttached(() => {
+        withTarget(create(), (target) => {
+          press("d", {}, target)
 
-      const input = document.createElement("input")
-      document.body.appendChild(input)
-
-      const event = new KeyboardEvent("keydown", {
-        key: "d",
-        bubbles: true,
-        cancelable: true,
+          expect(actionRegistry.resolve).not.toHaveBeenCalled()
+          expect(focusService.moveItem).not.toHaveBeenCalled()
+        })
       })
-      input.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).not.toHaveBeenCalled()
-      expect(focusService.moveItem).not.toHaveBeenCalled()
-
-      document.body.removeChild(input)
-      service.detach()
-    })
-
-    it("ignores events from textarea elements", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const textarea = document.createElement("textarea")
-      document.body.appendChild(textarea)
-
-      const event = new KeyboardEvent("keydown", {
-        key: "d",
-        bubbles: true,
-        cancelable: true,
-      })
-      textarea.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).not.toHaveBeenCalled()
-      expect(focusService.moveItem).not.toHaveBeenCalled()
-
-      document.body.removeChild(textarea)
-      service.detach()
-    })
-
-    it("ignores events from contentEditable elements", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const div = document.createElement("div")
-      div.contentEditable = "true"
-      document.body.appendChild(div)
-
-      const event = new KeyboardEvent("keydown", {
-        key: "d",
-        bubbles: true,
-        cancelable: true,
-      })
-      div.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).not.toHaveBeenCalled()
-      expect(focusService.moveItem).not.toHaveBeenCalled()
-
-      document.body.removeChild(div)
-      service.detach()
     })
 
     it("processes events from non-editable elements", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
+      withAttached(() => {
+        withTarget(document.createElement("div"), (div) => {
+          press("ArrowDown", {}, div)
 
-      const div = document.createElement("div")
-      document.body.appendChild(div)
-
-      const event = new KeyboardEvent("keydown", {
-        key: "ArrowDown",
-        bubbles: true,
-        cancelable: true,
+          expect(focusService.moveItem).toHaveBeenCalledWith(1)
+        })
       })
-      div.dispatchEvent(event)
-
-      expect(focusService.moveItem).toHaveBeenCalledWith(1)
-
-      document.body.removeChild(div)
-      service.detach()
     })
   })
 
   describe("Modal scope precedence", () => {
-    it("modal scope takes precedence over other bindings", () => {
-      const modalAction = {
-        id: "confirm",
-        label: "Confirm",
-        key: "Enter",
-        when: "modal",
-        execute: mockExecute as (ctx: ActionContext) => void,
-      }
+    it("takes precedence over other bindings", () => {
+      resolvedAction("Enter", "modal")
 
-      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
-        if (key === "Enter" && scope === "modal") return modalAction
-        return undefined
+      withAttached((service) => {
+        service.setModalScope("modal")
+        const event = press("Enter")
+
+        expect(actionRegistry.resolve).toHaveBeenCalledWith("Enter", "modal")
+        expect(mockExecute).toHaveBeenCalledWith(modalContext)
+        expect(event.defaultPrevented).toBe(true)
       })
-
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-      service.setModalScope("modal")
-
-      const event = new KeyboardEvent("keydown", {
-        key: "Enter",
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).toHaveBeenCalledWith("Enter", "modal")
-      expect(mockExecute).toHaveBeenCalledWith({
-        selectedItem: undefined,
-        focusedSection: "modal",
-      })
-      expect(event.defaultPrevented).toBe(true)
-
-      service.detach()
     })
 
-    it("modal scope allows events from editable elements", () => {
-      const modalAction = {
-        id: "confirm",
-        label: "Confirm",
-        key: "Ctrl+Enter",
-        when: "modal",
-        execute: mockExecute as (ctx: ActionContext) => void,
-      }
+    it("allows events from editable elements", () => {
+      resolvedAction("Ctrl+Enter", "modal")
 
-      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
-        if (key === "Ctrl+Enter" && scope === "modal") return modalAction
-        return undefined
+      withAttached((service) => {
+        service.setModalScope("modal")
+
+        withTarget(document.createElement("input"), (input) => {
+          const event = press("Enter", { ctrlKey: true }, input)
+
+          expect(actionRegistry.resolve).toHaveBeenCalledWith("Ctrl+Enter", "modal")
+          expect(mockExecute).toHaveBeenCalledWith(modalContext)
+          expect(event.defaultPrevented).toBe(true)
+        })
       })
-
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-      service.setModalScope("modal")
-
-      const input = document.createElement("input")
-      document.body.appendChild(input)
-
-      const event = new KeyboardEvent("keydown", {
-        key: "Enter",
-        ctrlKey: true,
-        bubbles: true,
-        cancelable: true,
-      })
-      input.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).toHaveBeenCalledWith("Ctrl+Enter", "modal")
-      expect(mockExecute).toHaveBeenCalled()
-
-      document.body.removeChild(input)
-      service.detach()
     })
 
     it("clearing modal scope restores normal behavior", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-      service.setModalScope("modal")
-      service.setModalScope(null)
+      withAttached((service) => {
+        service.setModalScope("modal")
+        service.setModalScope(null)
 
-      const input = document.createElement("input")
-      document.body.appendChild(input)
+        withTarget(document.createElement("input"), (input) => {
+          press("d", {}, input)
 
-      const event = new KeyboardEvent("keydown", {
-        key: "d",
-        bubbles: true,
-        cancelable: true,
+          expect(actionRegistry.resolve).not.toHaveBeenCalled()
+        })
       })
-      input.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).not.toHaveBeenCalled()
-
-      document.body.removeChild(input)
-      service.detach()
     })
 
     it("blocks background navigation while aria-modal dialog is open", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
+      withAttached(() => {
+        withTarget(document.createElement("div"), (dialog) => {
+          dialog.setAttribute("role", "dialog")
+          dialog.setAttribute("aria-modal", "true")
 
-      const dialog = document.createElement("div")
-      dialog.setAttribute("role", "dialog")
-      dialog.setAttribute("aria-modal", "true")
-      document.body.appendChild(dialog)
+          const event = press("Tab")
 
-      const event = new KeyboardEvent("keydown", {
-        key: "Tab",
-        bubbles: true,
-        cancelable: true,
+          expect(focusService.focusNextSection).not.toHaveBeenCalled()
+          expect(actionRegistry.resolve).not.toHaveBeenCalled()
+          expect(event.defaultPrevented).toBe(false)
+        })
       })
-      document.dispatchEvent(event)
-
-      expect(focusService.focusNextSection).not.toHaveBeenCalled()
-      expect(actionRegistry.resolve).not.toHaveBeenCalled()
-      expect(event.defaultPrevented).toBe(false)
-
-      document.body.removeChild(dialog)
-      service.detach()
     })
   })
 
   describe("normalizeKey", () => {
-    it("handles single modifier + key", () => {
-      const mockAction = {
-        id: "test",
-        label: "Test",
-        execute: mockExecute as (ctx: ActionContext) => void,
-      }
+    it.each([
+      ["a", { altKey: true }, "Alt+a"],
+      ["a", { altKey: true, ctrlKey: true, shiftKey: true }, "Alt+Ctrl+Shift+a"],
+      ["k", { metaKey: true }, "Meta+k"],
+      ["x", { altKey: true, ctrlKey: true, metaKey: true, shiftKey: true }, "Alt+Ctrl+Meta+Shift+x"],
+    ])("normalizes to %s", (key, init, normalized) => {
+      resolvedAction(normalized, "global")
 
-      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
-        if (key === "Alt+a" && scope === "global") return mockAction
-        return undefined
+      withAttached(() => {
+        press(key, init)
+
+        expect(actionRegistry.resolve).toHaveBeenCalledWith(normalized, "global")
       })
-
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "a",
-        altKey: true,
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).toHaveBeenCalledWith("Alt+a", "global")
-
-      service.detach()
-    })
-
-    it("handles multiple modifiers in order", () => {
-      const mockAction = {
-        id: "test",
-        label: "Test",
-        execute: mockExecute as (ctx: ActionContext) => void,
-      }
-
-      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
-        if (key === "Alt+Ctrl+Shift+a" && scope === "global") return mockAction
-        return undefined
-      })
-
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "a",
-        altKey: true,
-        ctrlKey: true,
-        shiftKey: true,
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).toHaveBeenCalledWith(
-        "Alt+Ctrl+Shift+a",
-        "global"
-      )
-
-      service.detach()
-    })
-
-    it("handles Meta modifier", () => {
-      const mockAction = {
-        id: "test",
-        label: "Test",
-        execute: mockExecute as (ctx: ActionContext) => void,
-      }
-
-      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
-        if (key === "Meta+k" && scope === "global") return mockAction
-        return undefined
-      })
-
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "k",
-        metaKey: true,
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).toHaveBeenCalledWith("Meta+k", "global")
-
-      service.detach()
-    })
-
-    it("handles all modifiers together", () => {
-      const mockAction = {
-        id: "test",
-        label: "Test",
-        execute: mockExecute as (ctx: ActionContext) => void,
-      }
-
-      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
-        if (key === "Alt+Ctrl+Meta+Shift+x" && scope === "global")
-          return mockAction
-        return undefined
-      })
-
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "x",
-        altKey: true,
-        ctrlKey: true,
-        metaKey: true,
-        shiftKey: true,
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
-
-      expect(actionRegistry.resolve).toHaveBeenCalledWith(
-        "Alt+Ctrl+Meta+Shift+x",
-        "global"
-      )
-
-      service.detach()
     })
   })
 
-  describe("IME composition", () => {
-    it("ignores events during IME composition", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
-      service.attach()
-
-      const event = new KeyboardEvent("keydown", {
-        key: "a",
-        bubbles: true,
-        cancelable: true,
-        isComposing: true,
-      })
-      document.dispatchEvent(event)
+  it("ignores events during IME composition", () => {
+    withAttached(() => {
+      press("a", { isComposing: true })
 
       expect(actionRegistry.resolve).not.toHaveBeenCalled()
       expect(focusService.moveItem).not.toHaveBeenCalled()
-
-      service.detach()
     })
   })
 
   describe("attach/detach", () => {
     it("does not handle events when detached", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
+      const service = createService()
       service.attach()
       service.detach()
 
-      const event = new KeyboardEvent("keydown", {
-        key: "ArrowDown",
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
+      press("ArrowDown")
 
       expect(focusService.moveItem).not.toHaveBeenCalled()
     })
 
     it("can be attached multiple times safely", () => {
-      const service = createKeyboardService({ actionRegistry, focusService })
+      const service = createService()
       service.attach()
       service.attach()
 
-      const event = new KeyboardEvent("keydown", {
-        key: "ArrowDown",
-        bubbles: true,
-        cancelable: true,
-      })
-      document.dispatchEvent(event)
+      press("ArrowDown")
 
-      // Should only be called once, not twice
       expect(focusService.moveItem).toHaveBeenCalledOnce()
 
       service.detach()

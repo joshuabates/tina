@@ -116,8 +116,9 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
             ...card,
             className: cn(
               "cursor-pointer transition-all",
-              isFocused && !isSelected && "ring-2 ring-muted-foreground/40 rounded-lg p-2 -m-2",
-              isSelected && "ring-2 ring-primary rounded-lg p-2 -m-2"
+              (isFocused || isSelected) && "rounded-lg p-2 -m-2",
+              isFocused && !isSelected && "bg-muted/25",
+              isSelected && "bg-primary/10"
             ),
             onClick: () => selectPhase(card._id),
             tabIndex: isFocused ? 0 : -1,

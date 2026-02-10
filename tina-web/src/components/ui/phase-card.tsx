@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { StatusBadge, type StatusBadgeStatus } from "./status-badge";
+import { statusIconBgClass, statusTextClass } from "./status-styles";
 
 interface PhaseCardProps extends React.HTMLAttributes<HTMLDivElement> {
   phaseNumber: number;
@@ -9,24 +10,6 @@ interface PhaseCardProps extends React.HTMLAttributes<HTMLDivElement> {
   completedCount: number;
   teamCount: number;
 }
-
-const iconBgMap: Record<string, string> = {
-  complete: "bg-status-complete",
-  done: "bg-status-complete",
-  executing: "bg-primary phase-glow",
-  active: "bg-primary phase-glow",
-  in_progress: "bg-primary phase-glow",
-  reviewing: "bg-status-warning",
-};
-
-const nameColorMap: Record<string, string> = {
-  complete: "text-status-complete",
-  done: "text-status-complete",
-  executing: "text-primary",
-  active: "text-primary",
-  in_progress: "text-primary",
-  reviewing: "text-status-warning",
-};
 
 function PhaseCard({
   phaseNumber,
@@ -43,10 +26,8 @@ function PhaseCard({
     status === "executing" || status === "active" || status === "in_progress";
   const isFuture = status === "planning" || status === "pending";
 
-  const iconBg =
-    iconBgMap[status] ??
-    "border border-muted-foreground/30 bg-card";
-  const nameColor = nameColorMap[status] ?? "text-foreground";
+  const iconBg = statusIconBgClass(status);
+  const nameColor = statusTextClass(status);
 
   return (
     <div

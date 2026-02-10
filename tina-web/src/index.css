@@ -25,6 +25,8 @@
     --status-planning: 220 9% 46%;       /* #6b7280 gray */
     --status-blocked: 0 84% 60%;         /* #ef4444 red */
     --status-warning: 38 92% 50%;        /* #f59e0b amber */
+
+    --font-mono: 'JetBrains Mono', monospace;
   }
 
   .dark {
