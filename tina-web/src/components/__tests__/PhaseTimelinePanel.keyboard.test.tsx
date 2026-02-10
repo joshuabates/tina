@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render } from "@testing-library/react"
 import { PhaseTimelinePanel } from "../PhaseTimelinePanel"
 import { buildPhaseTimelineDetail } from "@/test/builders/domain"
+import { assertRovingFocus } from "@/test/harness/roving"
 import {
   createActionRegistrationCapture,
   focusableState,
@@ -112,13 +113,13 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
   it("sets tabindex and aria-activedescendant for focused phase", () => {
     const { container } = renderTimelineView({ isSectionFocused: true, activeIndex: 1 })
 
-    expect(phaseById(container, "phase2")).toHaveAttribute("tabIndex", "0")
-    expect(phaseById(container, "phase1")).toHaveAttribute("tabIndex", "-1")
-    expect(phaseById(container, "phase3")).toHaveAttribute("tabIndex", "-1")
-    expect(container.querySelector('[role="listbox"]')).toHaveAttribute(
-      "aria-activedescendant",
-      "phase-phase2",
-    )
+    assertRovingFocus({
+      container,
+      listRole: "listbox",
+      itemIds: phaseIds.map((id) => `phase-${id}`),
+      activeId: "phase-phase2",
+      focusedAttr: "data-focused",
+    })
   })
 
   it.each([
@@ -127,10 +128,14 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
   ])("clears active descendant for invalid focus state (%o)", ({ isSectionFocused, activeIndex }) => {
     const { container } = renderTimelineView({ isSectionFocused, activeIndex })
 
-    for (const phaseId of phaseIds) {
-      expect(phaseById(container, phaseId)).toHaveAttribute("tabIndex", "-1")
-    }
-    expect(container.querySelector('[role="listbox"]')).not.toHaveAttribute("aria-activedescendant")
+    assertRovingFocus({
+      container,
+      listRole: "listbox",
+      itemIds: phaseIds.map((id) => `phase-${id}`),
+      activeId: null,
+      focusedAttr: "data-focused",
+      expectActiveDescendant: false,
+    })
   })
 
   it.each([

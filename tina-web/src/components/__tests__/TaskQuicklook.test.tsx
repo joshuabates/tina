@@ -4,6 +4,7 @@ import { userEvent } from "@testing-library/user-event"
 import { Option } from "effect"
 import { TaskQuicklook } from "../TaskQuicklook"
 import type { TaskEvent } from "@/schemas"
+import { assertDialogFocusTrap } from "@/test/harness/quicklook"
 
 // Mock useActionRegistration
 vi.mock("@/hooks/useActionRegistration")
@@ -127,18 +128,9 @@ describe("TaskQuicklook", () => {
 
     render(<TaskQuicklook task={task} onClose={mockOnClose} />)
 
-    // Modal should be focused on mount
     const modal = screen.getByRole("dialog")
-    expect(modal).toHaveFocus()
-
-    // Tab through focusable elements - focus should stay within modal
-    await user.tab()
     const closeButton = screen.getByRole("button", { name: /close/i })
-    expect(closeButton).toHaveFocus()
-
-    // Tab again - should cycle back to modal
-    await user.tab()
-    expect(modal.contains(document.activeElement)).toBe(true)
+    await assertDialogFocusTrap(user, modal, closeButton)
   })
 
   it("receives focus on mount", () => {

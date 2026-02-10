@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, act, waitFor } from "@testing-library/react"
-import { MemoryRouter } from "react-router-dom"
+import { act, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { Sidebar } from "../Sidebar"
-import { RuntimeProvider, useServices } from "@/providers/RuntimeProvider"
+import { useServices } from "@/providers/RuntimeProvider"
 import {
   buildOrchestrationSummary,
   buildProjectSummary,
@@ -15,6 +14,8 @@ import {
   type QueryStateMap,
 } from "@/test/builders/query"
 import { selectionState } from "@/test/harness/hooks"
+import { renderWithRuntime } from "@/test/harness/render"
+import { assertRovingFocus } from "@/test/harness/roving"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("@/hooks/useSelection")
@@ -61,16 +62,8 @@ function setQueryStates(overrides: Partial<QueryStateMap> = {}) {
   mockUseTypedQuery.mockImplementation((def) => queryStateFor(def.key, states))
 }
 
-function wrapper({ children }: { children: ReactNode }) {
-  return (
-    <RuntimeProvider>
-      <MemoryRouter>{children}</MemoryRouter>
-    </RuntimeProvider>
-  )
-}
-
 function renderSidebar(ui: ReactNode = <Sidebar />) {
-  return render(ui, { wrapper })
+  return renderWithRuntime(ui)
 }
 
 function SidebarHarness({
@@ -112,15 +105,13 @@ describe("Sidebar Keyboard Navigation", () => {
   it("applies roving focus attributes and active descendant", () => {
     const { container } = renderSidebar()
 
-    const items = container.querySelectorAll('[data-orchestration-id]')
-    expect(items).toHaveLength(2)
-    expect(items[0]).toHaveAttribute("tabindex", "0")
-    expect(items[0]).toHaveAttribute("data-focused", "true")
-    expect(items[1]).toHaveAttribute("tabindex", "-1")
-    expect(items[1]).not.toHaveAttribute("data-focused")
-
-    const list = container.querySelector('[role="list"]')
-    expect(list).toHaveAttribute("aria-activedescendant", "sidebar-item-0")
+    assertRovingFocus({
+      container,
+      listRole: "list",
+      itemIds: ["sidebar-item-0", "sidebar-item-1"],
+      activeId: "sidebar-item-0",
+      focusedAttr: "data-focused",
+    })
   })
 
   it("updates aria-activedescendant when active index changes", () => {
@@ -141,13 +132,9 @@ describe("Sidebar Keyboard Navigation", () => {
 
   it("registers sidebar.select action for Enter key", async () => {
     let registry: ReturnType<typeof useServices>["actionRegistry"] | undefined
-    renderSidebar(
-      <SidebarHarness
-        onServices={(services) => {
-          registry = services.actionRegistry
-        }}
-      />,
-    )
+    renderSidebar(<SidebarHarness onServices={(services) => {
+      registry = services.actionRegistry
+    }} />)
 
     await waitFor(() => {
       const action = registry?.get("sidebar.select")

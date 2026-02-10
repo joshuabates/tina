@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render } from "@testing-library/react"
 import { TaskListPanel } from "../TaskListPanel"
 import { buildTaskListDetail } from "@/test/builders/domain"
+import { assertRovingFocus } from "@/test/harness/roving"
 import {
   focusableState,
   selectionState,
@@ -86,13 +87,13 @@ describe("TaskListPanel - Keyboard Navigation", () => {
     it("sets tabindex and aria-activedescendant for focused task", () => {
       const { container } = renderTaskListView({ isSectionFocused: true, activeIndex: 1 })
 
-      expect(taskById(container, "task2")).toHaveAttribute("tabIndex", "0")
-      expect(taskById(container, "task1")).toHaveAttribute("tabIndex", "-1")
-      expect(taskById(container, "task3")).toHaveAttribute("tabIndex", "-1")
-      expect(container.querySelector('[role="list"]')).toHaveAttribute(
-        "aria-activedescendant",
-        "task-task2",
-      )
+      assertRovingFocus({
+        container,
+        listRole: "list",
+        itemIds: taskIds.map((id) => `task-${id}`),
+        activeId: "task-task2",
+        focusedAttr: "data-focused",
+      })
     })
 
     it.each([
@@ -104,10 +105,14 @@ describe("TaskListPanel - Keyboard Navigation", () => {
       ({ isSectionFocused, activeIndex }) => {
         const { container } = renderTaskListView({ isSectionFocused, activeIndex })
 
-        for (const taskId of taskIds) {
-          expect(taskById(container, taskId)).toHaveAttribute("tabIndex", "-1")
-        }
-        expect(container.querySelector('[role="list"]')).not.toHaveAttribute("aria-activedescendant")
+        assertRovingFocus({
+          container,
+          listRole: "list",
+          itemIds: taskIds.map((id) => `task-${id}`),
+          activeId: null,
+          focusedAttr: "data-focused",
+          expectActiveDescendant: false,
+        })
       },
     )
   })

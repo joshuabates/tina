@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { screen } from "@testing-library/react"
 import { RightPanel } from "../RightPanel"
 import type { OrchestrationDetail, OrchestrationEvent } from "@/schemas"
 import { buildOrchestrationDetail, buildOrchestrationEvent } from "@/test/builders/domain"
 import { querySuccess, queryLoading, queryError } from "@/test/builders/query"
-import { selectionState } from "@/test/harness/hooks"
-
+import { renderWithRuntime } from "@/test/harness/render"
 // Mock hooks
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("@/hooks/useFocusable")
@@ -29,15 +28,12 @@ describe("RightPanel", () => {
       isSectionFocused: false,
       activeIndex: -1,
     })
-    mockUseSelection.mockReturnValue(
-      selectionState({
-        orchestrationId: "orch1",
-        phaseId: null,
-        selectOrchestration: vi.fn(),
-        selectPhase: vi.fn(),
-      }),
-    )
-
+    mockUseSelection.mockReturnValue({
+      orchestrationId: "orch1",
+      phaseId: null,
+      selectOrchestration: vi.fn(),
+      selectPhase: vi.fn(),
+    })
     // Default mock for useTypedQuery (empty events)
     mockUseTypedQuery.mockReturnValue(querySuccess([]))
   })
@@ -58,7 +54,7 @@ describe("RightPanel", () => {
   it("renders all four sections", () => {
     const detail = createMockDetail()
 
-    render(<RightPanel detail={detail} />)
+    renderWithRuntime(<RightPanel detail={detail} />)
 
     // Should render all section labels
     expect(screen.getByText("Orchestration")).toBeInTheDocument()
@@ -74,7 +70,7 @@ describe("RightPanel", () => {
       totalPhases: 4,
     })
 
-    render(<RightPanel detail={detail} />)
+    renderWithRuntime(<RightPanel detail={detail} />)
 
     // StatusSection should show the status
     expect(screen.getByText("REVIEWING")).toBeInTheDocument()
@@ -90,7 +86,7 @@ describe("RightPanel", () => {
     // Mock empty events for GitOps
     mockUseTypedQuery.mockReturnValue(querySuccess([]))
 
-    render(<RightPanel detail={detail} />)
+    renderWithRuntime(<RightPanel detail={detail} />)
 
     // GitOps should show empty state
     expect(screen.getByText(/no git activity/i)).toBeInTheDocument()
@@ -101,7 +97,7 @@ describe("RightPanel", () => {
   it("has complementary landmark role for accessibility", () => {
     const detail = createMockDetail()
 
-    render(<RightPanel detail={detail} />)
+    renderWithRuntime(<RightPanel detail={detail} />)
 
     const rightPanel = screen.getByRole("complementary", { name: "Orchestration details" })
     expect(rightPanel).toBeInTheDocument()
@@ -116,7 +112,7 @@ describe("RightPanel", () => {
 
     mockUseTypedQuery.mockReturnValue(querySuccess(events))
 
-    render(<RightPanel detail={detail} />)
+    renderWithRuntime(<RightPanel detail={detail} />)
 
     expect(screen.getByText("Git commit")).toBeInTheDocument()
     expect(screen.getByText("Review requested")).toBeInTheDocument()
@@ -126,7 +122,7 @@ describe("RightPanel", () => {
     const detail = createMockDetail()
     mockUseTypedQuery.mockReturnValue(queryLoading())
 
-    render(<RightPanel detail={detail} />)
+    renderWithRuntime(<RightPanel detail={detail} />)
 
     expect(screen.getByText(/loading git activity/i)).toBeInTheDocument()
     expect(screen.getByText(/loading review events/i)).toBeInTheDocument()
@@ -137,6 +133,6 @@ describe("RightPanel", () => {
     const error = new Error("Failed to load events")
     mockUseTypedQuery.mockReturnValue(queryError(error))
 
-    expect(() => render(<RightPanel detail={detail} />)).toThrow(error)
+    expect(() => renderWithRuntime(<RightPanel detail={detail} />)).toThrow(error)
   })
 })

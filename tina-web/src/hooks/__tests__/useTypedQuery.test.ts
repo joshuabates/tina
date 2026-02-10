@@ -117,6 +117,24 @@ describe("useTypedQuery", () => {
     expect(mockUseQuery).toHaveBeenCalledWith("api.test.queryWithArgs", args)
   })
 
+  it("returns error when args validation fails", () => {
+    const queryDefWithArgs: QueryDef<{ id: string; name: string }, { userId: string }> = {
+      key: "test.query.with.args",
+      query: "api.test.queryWithArgs" as any,
+      args: Schema.Struct({ userId: Schema.String }),
+      schema: TestSchema,
+    }
+
+    const result = runQuery({ id: "123", name: "Test" }, queryDefWithArgs, {
+      userId: 123 as unknown as string,
+    })
+
+    expect(result.status).toBe("error")
+    if (result.status === "error") {
+      expect(result.error).toBeInstanceOf(QueryValidationError)
+    }
+  })
+
   it("maintains loading shape across rerenders", () => {
     mockUseQuery.mockReturnValue(undefined)
 

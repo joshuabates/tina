@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, within } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
-import { MemoryRouter } from "react-router-dom"
 import { Sidebar } from "../Sidebar"
 import {
   buildOrchestrationSummary,
@@ -20,6 +19,7 @@ import {
   selectionState,
   type SelectionStateMock,
 } from "@/test/harness/hooks"
+import { renderWithRouter } from "@/test/harness/render"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("@/hooks/useFocusable")
@@ -105,11 +105,7 @@ function renderSidebar({
     }),
   )
 
-  return render(
-    <MemoryRouter>
-      <Sidebar />
-    </MemoryRouter>,
-  )
+  return renderWithRouter(<Sidebar />)
 }
 
 describe("Sidebar", () => {

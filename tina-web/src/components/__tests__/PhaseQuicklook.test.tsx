@@ -10,6 +10,7 @@ import {
   some,
 } from "@/test/builders/domain"
 import type { Phase, TaskEvent, TeamMember } from "@/schemas"
+import { assertDialogFocusTrap } from "@/test/harness/quicklook"
 
 vi.mock("@/hooks/useActionRegistration")
 
@@ -161,13 +162,8 @@ describe("PhaseQuicklook", () => {
     renderQuicklook()
 
     const modal = screen.getByRole("dialog")
-    expect(modal).toHaveFocus()
-
-    await user.tab()
-    expect(screen.getByRole("button", { name: /close/i })).toHaveFocus()
-
-    await user.tab()
-    expect(screen.getByRole("button", { name: /close/i })).toHaveFocus()
+    const closeButton = screen.getByRole("button", { name: /close/i })
+    await assertDialogFocusTrap(user, modal, closeButton)
   })
 
   it("renders as a dialog with appropriate ARIA attributes", () => {

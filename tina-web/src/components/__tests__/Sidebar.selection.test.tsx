@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, within } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { Sidebar } from "../Sidebar"
@@ -14,6 +14,7 @@ import {
   type QueryStateMap,
 } from "@/test/builders/query"
 import { focusableState, selectionState } from "@/test/harness/hooks"
+import { renderWithRouter } from "@/test/harness/render"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("@/hooks/useFocusable")
@@ -72,11 +73,7 @@ function setSelection(orchestrationId: string | null) {
 }
 
 function renderSidebar(route = "/") {
-  return render(
-    <MemoryRouter initialEntries={[route]}>
-      <Sidebar />
-    </MemoryRouter>,
-  )
+  return renderWithRouter(<Sidebar />, route)
 }
 
 describe("Sidebar - Selection Flow", () => {
