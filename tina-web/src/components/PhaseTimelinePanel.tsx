@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useFocusable } from "@/hooks/useFocusable"
 import { useSelection } from "@/hooks/useSelection"
 import { useActionRegistration } from "@/hooks/useActionRegistration"
@@ -38,6 +38,7 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
   const { isSectionFocused, activeIndex } = useFocusable("phaseTimeline", detail.phases.length)
   const { phaseId, selectPhase } = useSelection()
   const [quicklookPhaseId, setQuicklookPhaseId] = useState<string | null>(null)
+  const focusedElementRef = useRef<HTMLElement | null>(null)
 
   // Register actions for Enter and Space keys
   useActionRegistration({
@@ -62,10 +63,26 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
     execute: () => {
       const phase = detail.phases[activeIndex]
       if (phase) {
-        setQuicklookPhaseId(quicklookPhaseId === phase._id ? null : phase._id)
+        if (quicklookPhaseId === phase._id) {
+          // Closing quicklook
+          setQuicklookPhaseId(null)
+        } else {
+          // Opening quicklook - save current focused element
+          focusedElementRef.current = document.activeElement as HTMLElement
+          setQuicklookPhaseId(phase._id)
+        }
       }
     },
   })
+
+  const handleQuicklookClose = () => {
+    setQuicklookPhaseId(null)
+    // Restore focus to the previously focused phase element
+    if (focusedElementRef.current) {
+      focusedElementRef.current.focus()
+      focusedElementRef.current = null
+    }
+  }
 
   const phaseCards: Array<PhaseCardProps & { _id: string }> = detail.phases.map((phase) => ({
     ...mapPhaseToCard(phase, detail.phaseTasks, detail.teamMembers),
@@ -79,9 +96,9 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
 
   // Find quicklook phase data
   const quicklookPhase = quicklookPhaseId ? detail.phases.find(p => p._id === quicklookPhaseId) : null
-  const quicklookTasks = quicklookPhase ? [...(detail.phaseTasks[quicklookPhase.phaseNumber] ?? [])] : []
+  const quicklookTasks = quicklookPhase ? (detail.phaseTasks[quicklookPhase.phaseNumber] ?? []) as TaskEvent[] : []
   const quicklookTeamMembers = quicklookPhase
-    ? [...detail.teamMembers.filter(m => m.phaseNumber === quicklookPhase.phaseNumber)]
+    ? detail.teamMembers.filter(m => m.phaseNumber === quicklookPhase.phaseNumber) as TeamMember[]
     : []
 
   return (
@@ -121,7 +138,7 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
           phase={quicklookPhase}
           tasks={quicklookTasks}
           teamMembers={quicklookTeamMembers}
-          onClose={() => setQuicklookPhaseId(null)}
+          onClose={handleQuicklookClose}
         />
       )}
     </>
