@@ -3,7 +3,6 @@ import { render } from "@testing-library/react"
 import { Option } from "effect"
 import { TaskListPanel } from "../TaskListPanel"
 import type { OrchestrationDetail } from "@/schemas"
-import type { ActionContext } from "@/services/action-registry"
 
 // Mock hooks
 vi.mock("@/hooks/useFocusable")
@@ -21,11 +20,8 @@ const mockUseActionRegistration = vi.mocked(
 ).useActionRegistration
 
 describe("TaskListPanel - Keyboard Navigation", () => {
-  let mockExecute: ((ctx: ActionContext) => void) | undefined
-
   beforeEach(() => {
     vi.clearAllMocks()
-    mockExecute = undefined
 
     // Default mock for useFocusable
     mockUseFocusable.mockReturnValue({
@@ -41,12 +37,8 @@ describe("TaskListPanel - Keyboard Navigation", () => {
       selectPhase: vi.fn() as any,
     })
 
-    // Capture execute function from useActionRegistration
-    mockUseActionRegistration.mockImplementation((config) => {
-      if (config.key === " " || config.key === "Space") {
-        mockExecute = config.execute
-      }
-    })
+    // Default mock for useActionRegistration
+    mockUseActionRegistration.mockImplementation(() => {})
   })
 
   const createMockDetail = (overrides?: Partial<OrchestrationDetail>): OrchestrationDetail => ({
