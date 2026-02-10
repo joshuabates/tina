@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { Option } from "effect"
 import { TaskListPanel } from "../TaskListPanel"
-import type { OrchestrationDetail, TaskEvent } from "@/schemas"
+import type { OrchestrationDetail } from "@/schemas"
 
 // Mock hooks
 vi.mock("@/hooks/useFocusable")
@@ -239,14 +239,11 @@ describe("TaskListPanel", () => {
       selectPhase: vi.fn(),
     })
 
-    const { container } = render(<TaskListPanel detail={detail} />)
+    render(<TaskListPanel detail={detail} />)
 
     // TaskCard should render status badges with lowercase status
-    const completedBadge = container.querySelector('[class*="status"]')
-    expect(completedBadge).toHaveTextContent("completed")
-
-    const inProgressBadge = container.querySelectorAll('[class*="status"]')[1]
-    expect(inProgressBadge).toHaveTextContent("in progress")
+    expect(screen.getByText("completed")).toBeInTheDocument()
+    expect(screen.getByText("in progress")).toBeInTheDocument()
   })
 
   it("maps TaskEvent owner to TaskCard assignee", () => {
