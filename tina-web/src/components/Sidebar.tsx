@@ -16,6 +16,21 @@ import {
 import { firstQueryError, isAnyQueryLoading } from "@/lib/query-state"
 import styles from "./Sidebar.module.scss"
 
+function normalizeLookupKey(value: string): string {
+  return value.trim().replace(/\/+$/, "").toLowerCase()
+}
+
+function basenameFromPath(path: string): string {
+  const normalized = path.replace(/\/+$/, "")
+  const segments = normalized.split("/")
+  return segments[segments.length - 1] ?? normalized
+}
+
+function branchSuffix(branch: string): string {
+  const segments = branch.split("/")
+  return segments[segments.length - 1] ?? branch
+}
+
 function SidebarContent() {
   const projectsResult = useTypedQuery(ProjectListQuery, {})
   const orchestrationsResult = useTypedQuery(OrchestrationListQuery, {})
@@ -61,15 +76,52 @@ function SidebarContent() {
     }
 
     const projectMap = new Map<string, SidebarProject>()
+    const projectLookup = new Map<string, SidebarProject>()
     const ungroupedItems: SidebarItemProps[] = []
+
+    const registerProjectAlias = (alias: string | undefined, project: SidebarProject) => {
+      if (!alias) return
+      const normalized = normalizeLookupKey(alias)
+      if (!normalized) return
+      if (!projectLookup.has(normalized)) {
+        projectLookup.set(normalized, project)
+      }
+    }
+
+    const resolveProject = (
+      projectId: string,
+      worktreePath: string | undefined,
+      branch: string,
+    ): SidebarProject | undefined => {
+      const candidates = [
+        projectId,
+        basenameFromPath(projectId),
+        worktreePath,
+        worktreePath ? basenameFromPath(worktreePath) : undefined,
+        branch,
+        branchSuffix(branch),
+      ]
+
+      for (const candidate of candidates) {
+        if (!candidate) continue
+        const project = projectLookup.get(normalizeLookupKey(candidate))
+        if (project) return project
+      }
+      return undefined
+    }
 
     // Initialize projects
     for (const project of projectsResult.data) {
-      projectMap.set(project._id, {
+      const sidebarProject: SidebarProject = {
         name: project.name,
         active: false,
         items: [],
-      })
+      }
+      projectMap.set(project._id, sidebarProject)
+      registerProjectAlias(project._id, sidebarProject)
+      registerProjectAlias(project.name, sidebarProject)
+      registerProjectAlias(project.repoPath, sidebarProject)
+      registerProjectAlias(basenameFromPath(project.repoPath), sidebarProject)
     }
 
     // Group orchestrations (with index for keyboard navigation)
@@ -91,7 +143,11 @@ function SidebarContent() {
 
       if (Option.isSome(orchestration.projectId)) {
         const projectId = orchestration.projectId.value
-        const project = projectMap.get(projectId)
+        const project = resolveProject(
+          projectId,
+          Option.getOrUndefined(orchestration.worktreePath),
+          orchestration.branch,
+        )
         if (project) {
           project.items.push(item)
         } else {
@@ -104,11 +160,17 @@ function SidebarContent() {
 
     const result = Array.from(projectMap.values())
 
+    for (const project of result) {
+      project.active = project.items.some((item) => item.active === true)
+      project.onClick = project.items[0]?.onClick
+    }
+
     // Add ungrouped section if there are ungrouped orchestrations
     if (ungroupedItems.length > 0) {
       result.push({
         name: "Ungrouped",
-        active: false,
+        active: ungroupedItems.some((item) => item.active === true),
+        onClick: ungroupedItems[0]?.onClick,
         items: ungroupedItems,
       })
     }

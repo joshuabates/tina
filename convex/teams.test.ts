@@ -7,7 +7,7 @@ import {
   createNode,
   createOrchestration,
   registerTeam,
-} from "./test-helpers";
+} from "./test_helpers";
 
 describe("teams:registerTeam", () => {
   test("inserts new team record", async () => {

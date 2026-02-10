@@ -1,4 +1,4 @@
-import { useCallback } from "react"
+import { useCallback, useEffect } from "react"
 import { useFocusable } from "@/hooks/useFocusable"
 
 interface UseRovingSectionOptions {
@@ -26,6 +26,21 @@ export function useRovingSection({
   const activeDescendantId = isValidActiveIndex
     ? getItemDomId(activeIndex)
     : undefined
+
+  useEffect(() => {
+    if (!activeDescendantId) return
+
+    // Avoid stealing focus from active modal dialogs.
+    const hasAriaModalDialog =
+      document.querySelector('[role="dialog"][aria-modal="true"]') !== null
+    if (hasAriaModalDialog) return
+
+    const activeElement = document.getElementById(activeDescendantId)
+    if (!(activeElement instanceof HTMLElement)) return
+    if (document.activeElement === activeElement) return
+
+    activeElement.focus({ preventScroll: true })
+  }, [activeDescendantId])
 
   const isItemFocused = useCallback(
     (index: number) => isSectionFocused && activeIndex === index,

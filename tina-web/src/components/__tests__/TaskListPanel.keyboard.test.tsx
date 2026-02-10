@@ -23,7 +23,7 @@ const mockUseActionRegistration = vi.mocked(
   await import("@/hooks/useActionRegistration"),
 ).useActionRegistration
 
-const taskIds = ["task1", "task2", "task3"] as const
+const taskIds = ["task2", "task3", "task1"] as const
 
 function setSelection(overrides: Partial<SelectionStateMock> = {}) {
   setPanelSelection(
@@ -87,7 +87,7 @@ describe("TaskListPanel - Keyboard Navigation", () => {
         container,
         listRole: "list",
         itemIds: taskIds.map((id) => `task-${id}`),
-        activeId: "task-task2",
+        activeId: "task-task3",
         focusedAttr: "data-focused",
       })
     })
@@ -126,10 +126,10 @@ describe("TaskListPanel - Keyboard Navigation", () => {
       const activeDescendantId = container
         .querySelector("[aria-activedescendant]")
         ?.getAttribute("aria-activedescendant")
-      const task1Id = taskById(container, "task1")?.getAttribute("id")
+      const task2Id = taskById(container, "task2")?.getAttribute("id")
 
-      expect(activeDescendantId).toBe(task1Id)
-      expect(activeDescendantId).toBe("task-task1")
+      expect(activeDescendantId).toBe(task2Id)
+      expect(activeDescendantId).toBe("task-task2")
     })
   })
 
@@ -140,15 +140,15 @@ describe("TaskListPanel - Keyboard Navigation", () => {
     ])("sets data-focused based on section focus (%o)", ({ isSectionFocused, expected }) => {
       const { container } = renderTaskListView({ isSectionFocused, activeIndex: 1 })
       if (expected) {
-        expect(taskById(container, "task2")).toHaveAttribute("data-focused", expected)
+        expect(taskById(container, "task3")).toHaveAttribute("data-focused", expected)
       } else {
-        expect(taskById(container, "task2")).not.toHaveAttribute("data-focused", "true")
+        expect(taskById(container, "task3")).not.toHaveAttribute("data-focused", "true")
       }
     })
 
     it("applies visual focus classes for keyboard-selected task", () => {
       const { container } = renderTaskListView({ isSectionFocused: true, activeIndex: 1 })
-      const focusedTask = taskById(container, "task2")
+      const focusedTask = taskById(container, "task3")
 
       expect(focusedTask).toHaveClass("data-[focused=true]:ring-2")
       expect(focusedTask).toHaveClass("data-[focused=true]:bg-primary/5")
@@ -206,7 +206,7 @@ describe("TaskListPanel - Keyboard Navigation", () => {
       expect(screen.getByRole("dialog")).toBeInTheDocument()
       expect(
         within(screen.getByRole("dialog")).getByRole("heading", {
-          name: "Implement feature A",
+          name: "Write tests for feature A",
         }),
       ).toBeInTheDocument()
 
@@ -216,7 +216,7 @@ describe("TaskListPanel - Keyboard Navigation", () => {
       await waitFor(() => {
         expect(
           within(screen.getByRole("dialog")).getByRole("heading", {
-            name: "Write tests for feature A",
+            name: "Review implementation",
           }),
         ).toBeInTheDocument()
       })

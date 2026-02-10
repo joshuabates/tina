@@ -87,6 +87,16 @@ describe("TaskQuicklook", () => {
     expect(screen.getByText(/task-3,task-5/)).toBeInTheDocument()
   })
 
+  it("formats JSON blockedBy dependencies for display", () => {
+    const task = createMockTask({
+      blockedBy: Option.some("[\"task-3\",\"task-5\"]"),
+    })
+
+    render(<TaskQuicklook task={task} onClose={mockOnClose} />)
+
+    expect(screen.getByText(/task-3,task-5/)).toBeInTheDocument()
+  })
+
   it("closes modal on backdrop click", async () => {
     const user = userEvent.setup()
     const task = createMockTask()

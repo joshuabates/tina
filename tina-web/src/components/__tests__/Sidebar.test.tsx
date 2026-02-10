@@ -134,6 +134,15 @@ describe("Sidebar", () => {
     expect(itemContainer("feature-two")).toHaveClass("bg-muted/50")
   })
 
+  it("clicking a project header selects that project's first orchestration", async () => {
+    const user = userEvent.setup()
+    renderSidebar()
+
+    await user.click(itemContainer("Project Beta"))
+
+    expect(itemContainer("feature-three")).toHaveClass("bg-muted/50")
+  })
+
   it("renders empty state when no orchestrations exist", () => {
     renderSidebar({
       states: {
@@ -164,5 +173,54 @@ describe("Sidebar", () => {
 
     expect(screen.getByText("Ungrouped")).toBeInTheDocument()
     expect(screen.getByText("ungrouped-feature")).toBeInTheDocument()
+  })
+
+  it("groups orchestrations when projectId matches project name (legacy data)", () => {
+    renderSidebar({
+      states: {
+        "projects.list": querySuccess([
+          buildProjectSummary({ _id: "p1", name: "tina-web-rebuild", orchestrationCount: 1 }),
+        ]),
+        "orchestrations.list": querySuccess([
+          buildOrchestrationSummary({
+            _id: "o-legacy",
+            featureName: "legacy-feature",
+            projectId: some("tina-web-rebuild"),
+            status: "planning",
+          }),
+        ]),
+      },
+    })
+
+    expect(screen.getByText("tina-web-rebuild")).toBeInTheDocument()
+    expect(screen.getByText("legacy-feature")).toBeInTheDocument()
+    expect(screen.queryByText("Ungrouped")).not.toBeInTheDocument()
+  })
+
+  it("groups orchestrations when projectId is a legacy repo path", () => {
+    renderSidebar({
+      states: {
+        "projects.list": querySuccess([
+          buildProjectSummary({
+            _id: "p1",
+            name: "tina-web-review",
+            repoPath: "/Users/joshua/Projects/tina/.worktrees/tina-web-review",
+            orchestrationCount: 1,
+          }),
+        ]),
+        "orchestrations.list": querySuccess([
+          buildOrchestrationSummary({
+            _id: "o-path",
+            featureName: "review-fixes",
+            projectId: some("/Users/joshua/Projects/tina/.worktrees/tina-web-review"),
+            status: "planning",
+          }),
+        ]),
+      },
+    })
+
+    expect(screen.getByText("tina-web-review")).toBeInTheDocument()
+    expect(screen.getByText("review-fixes")).toBeInTheDocument()
+    expect(screen.queryByText("Ungrouped")).not.toBeInTheDocument()
   })
 })

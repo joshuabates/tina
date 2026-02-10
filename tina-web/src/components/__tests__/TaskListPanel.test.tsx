@@ -123,6 +123,142 @@ describe("TaskListPanel", () => {
     expect(screen.getByText("Task 2 must complete first")).toBeInTheDocument()
   })
 
+  it("orders tasks by dependency and moves completed tasks below active work", () => {
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
+
+    const detail = buildTaskListDetail({
+      phaseTasks: {
+        "1": [
+          buildTaskEvent({
+            _id: "task3",
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "3",
+            subject: "Review implementation",
+            status: "in_progress",
+            blockedBy: some("[\"2\"]"),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:10:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task1",
+            _creationTime: 1234567891,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "1",
+            subject: "Draft implementation plan",
+            status: "completed",
+            blockedBy: none<string>(),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:00:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task4",
+            _creationTime: 1234567892,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "4",
+            subject: "Parallel prep work",
+            status: "pending",
+            blockedBy: none<string>(),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:12:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task2",
+            _creationTime: 1234567893,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "2",
+            subject: "Implement API endpoints",
+            status: "pending",
+            blockedBy: some("[\"1\"]"),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:05:00Z",
+          }),
+        ],
+      },
+    })
+
+    render(<TaskListPanel detail={detail} />)
+
+    const orderedSubjects = screen
+      .getAllByRole("heading", { level: 4 })
+      .map((node) => node.textContent)
+
+    expect(orderedSubjects).toEqual([
+      "Parallel prep work",
+      "Implement API endpoints",
+      "Review implementation",
+      "Draft implementation plan",
+    ])
+  })
+
+  it("shows blocker details only for unresolved dependencies", () => {
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
+
+    const detail = buildTaskListDetail({
+      phaseTasks: {
+        "1": [
+          buildTaskEvent({
+            _id: "task1",
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "1",
+            subject: "Create migration",
+            status: "completed",
+            blockedBy: none<string>(),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:00:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task2",
+            _creationTime: 1234567891,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "2",
+            subject: "Apply migration",
+            status: "pending",
+            blockedBy: some("[\"1\"]"),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:05:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task3",
+            _creationTime: 1234567892,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "3",
+            subject: "Backfill data",
+            status: "pending",
+            blockedBy: some("[\"2\"]"),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:10:00Z",
+          }),
+        ],
+      },
+    })
+
+    render(<TaskListPanel detail={detail} />)
+
+    expect(screen.queryByText(/Blocked by Create migration/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/Blocked by Apply migration/i)).toBeInTheDocument()
+  })
+
   it("registers taskList focus section with correct item count", () => {
     setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 

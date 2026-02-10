@@ -1,5 +1,7 @@
+import { Option } from "effect"
 import type { TaskEvent } from "@/schemas"
-import { optionNullableText, optionText } from "@/lib/option-display"
+import { optionText } from "@/lib/option-display"
+import { formatBlockedByForDisplay } from "@/lib/task-dependencies"
 import { QuicklookDialog } from "@/components/QuicklookDialog"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import styles from "./QuicklookDialog.module.scss"
@@ -12,7 +14,10 @@ export interface TaskQuicklookProps {
 
 export function TaskQuicklook({ task, onClose }: TaskQuicklookProps) {
   const status = toStatusBadgeStatus(task.status)
-  const blockedBy = optionNullableText(task.blockedBy, (value) => value)
+  const blockedBy = Option.match(task.blockedBy, {
+    onNone: () => null,
+    onSome: (value) => formatBlockedByForDisplay(value) ?? null,
+  })
 
   return (
     <QuicklookDialog title={task.subject} status={status} onClose={onClose}>
