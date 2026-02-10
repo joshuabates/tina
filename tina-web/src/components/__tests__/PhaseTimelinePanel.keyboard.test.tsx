@@ -21,12 +21,13 @@ const mockUseActionRegistration = vi.mocked(
 ).useActionRegistration
 
 describe("PhaseTimelinePanel - Keyboard Navigation", () => {
-  const mockSelectPhase = vi.fn()
+  let mockSelectPhase: ReturnType<typeof vi.fn>
   let mockExecute: ((ctx: ActionContext) => void) | undefined
 
   beforeEach(() => {
     vi.clearAllMocks()
     mockExecute = undefined
+    mockSelectPhase = vi.fn()
 
     // Default mock for useFocusable
     mockUseFocusable.mockReturnValue({
@@ -38,13 +39,17 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
     mockUseSelection.mockReturnValue({
       orchestrationId: null,
       phaseId: null,
-      selectOrchestration: vi.fn(),
-      selectPhase: mockSelectPhase,
+      selectOrchestration: vi.fn() as any,
+      selectPhase: mockSelectPhase as any,
     })
 
     // Capture execute function from useActionRegistration
+    // Note: PhaseTimelinePanel registers multiple actions (Enter and Space)
+    // We want to capture the Enter action specifically
     mockUseActionRegistration.mockImplementation((config) => {
-      mockExecute = config.execute
+      if (config.key === "Enter") {
+        mockExecute = config.execute
+      }
     })
   })
 
