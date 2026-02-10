@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Orchestration Console Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#0ea5e9",
+                        "background-light": "#f8fafc",
+                        "background-dark": "#020617",
+                        "panel-dark": "#0b1222",
+                        "card-dark": "#1e293b",
+                        "sidebar-dark": "#060914",
+                        "accent-green": "#10b981",
+                        "accent-yellow": "#f59e0b",
+                        "accent-red": "#ef4444",
+                        "accent-blue": "#3b82f6",
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                        mono: ["JetBrains Mono", "monospace"],
+                    },
+                },
+            },
+        };
+    </script>
+<style type="text/tailwindcss">
+        body {
+            font-family: 'Inter', sans-serif;
+            scrollbar-width: thin;
+            scrollbar-color: #334155 #0f172a;
+        }
+        .mono-text { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .sidebar-item-active {
+            @apply bg-slate-800/50 text-white rounded;
+        }
+        .sidebar-item-hover:hover {
+            @apply bg-slate-800/30 text-white rounded;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+        }
+        .task-card {
+            @apply bg-slate-50 dark:bg-card-dark/40 border border-slate-200 dark:border-slate-800 rounded transition-all hover:border-slate-400 dark:hover:border-slate-600;
+        }
+        .phase-glow {
+            box-shadow: 0 0 15px 4px rgba(14, 165, 233, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-200 min-h-screen flex flex-col overflow-hidden">
+<header class="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-sidebar-dark px-3 py-1.5 flex justify-between items-center shrink-0 z-10">
+<div class="flex items-center gap-3">
+<span class="text-sm font-bold tracking-tighter text-primary">ORCHESTRATOR</span>
+<div class="h-3 w-px bg-slate-700 mx-1"></div>
+<span class="mono-text text-[9px] opacity-40">v2.4.12-stable</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative flex items-center bg-slate-100 dark:bg-slate-800/50 rounded px-2 py-0.5 w-64">
+<span class="material-icons text-[12px] opacity-50 mr-2">search</span>
+<input class="bg-transparent border-none text-[10px] focus:ring-0 w-full p-0" placeholder="Jump to..." type="text"/>
+</div>
+<div class="flex gap-3 items-center">
+<button class="material-icons text-base opacity-50 hover:opacity-100 transition-opacity">notifications</button>
+<div class="w-6 h-6 rounded bg-primary flex items-center justify-center text-[10px] font-bold text-white">JA</div>
+</div>
+</div>
+</header>
+<main class="flex-1 flex overflow-hidden p-2 gap-2 h-[calc(100vh-44px)]">
+<aside class="w-52 flex flex-col bg-sidebar-dark border border-slate-200 dark:border-slate-800 rounded overflow-hidden shrink-0">
+<div class="px-2 py-1.5 border-b border-slate-800/50 flex items-center justify-between bg-slate-900/40">
+<h2 class="text-[8px] font-bold uppercase tracking-widest text-slate-500">PROJECTS</h2>
+<span class="material-symbols-outlined text-[14px] text-slate-500 cursor-pointer">add_box</span>
+</div>
+<div class="flex-1 overflow-y-auto p-1 space-y-0.5">
+<div class="flex items-center gap-1.5 px-2 py-1 sidebar-item-active cursor-pointer">
+<span class="material-symbols-outlined text-[14px] text-primary">folder_open</span>
+<span class="text-[11px] font-medium flex-1 truncate text-primary">tina-core</span>
+</div>
+<div class="ml-4 space-y-0.5 border-l border-slate-800/50">
+<div class="flex items-center justify-between px-2 py-0.5 text-slate-400 sidebar-item-hover cursor-pointer text-[10px]">
+<span class="truncate">Request handoff</span>
+<span class="text-[7px] text-accent-green font-bold opacity-60">DONE</span>
+</div>
+<div class="flex items-center justify-between px-2 py-0.5 text-slate-400 sidebar-item-hover cursor-pointer text-[10px]">
+<span class="truncate">Core initialization</span>
+<span class="text-[7px] text-accent-green font-bold opacity-60">DONE</span>
+</div>
+<div class="flex items-center justify-between px-2 py-0.5 text-slate-400 sidebar-item-hover cursor-pointer text-[10px]">
+<span class="truncate">Queue workers</span>
+<span class="text-[7px] text-accent-yellow font-bold opacity-60">ACTIVE</span>
+</div>
+<div class="px-2 py-1">
+<span class="text-[8px] text-primary/60 hover:text-primary cursor-pointer transition-colors font-medium">view all...</span>
+</div>
+</div>
+<div class="flex items-center gap-1.5 px-2 py-1 text-slate-400 sidebar-item-hover cursor-pointer mt-1">
+<span class="material-symbols-outlined text-[14px] opacity-70">folder</span>
+<span class="text-[11px] font-medium flex-1 truncate">tina-plugin</span>
+</div>
+<div class="ml-4 space-y-0.5 border-l border-slate-800/50">
+<div class="flex items-center justify-between px-2 py-0.5 text-slate-500 sidebar-item-hover cursor-pointer text-[10px]">
+<span class="truncate">Build pipeline</span>
+<span class="text-[7px] text-accent-green font-bold opacity-60">DONE</span>
+</div>
+<div class="px-2 py-1">
+<span class="text-[8px] text-primary/60 hover:text-primary cursor-pointer transition-colors font-medium">view all...</span>
+</div>
+</div>
+<div class="flex items-center gap-1.5 px-2 py-1 text-slate-400 sidebar-item-hover cursor-pointer mt-1">
+<span class="material-symbols-outlined text-[14px] opacity-70">folder</span>
+<span class="text-[11px] font-medium flex-1 truncate">tina-cli</span>
+</div>
+<div class="ml-4 space-y-0.5 border-l border-slate-800/50">
+<div class="flex items-center justify-between px-2 py-0.5 text-slate-500 sidebar-item-hover cursor-pointer text-[10px]">
+<span class="truncate">Parser logic</span>
+<span class="text-[7px] text-accent-red font-bold opacity-60">BLOCK</span>
+</div>
+<div class="px-2 py-1">
+<span class="text-[8px] text-primary/60 hover:text-primary cursor-pointer transition-colors font-medium">view all...</span>
+</div>
+</div>
+<div class="flex items-center gap-1.5 px-2 py-1 text-slate-400 sidebar-item-hover cursor-pointer mt-1">
+<span class="material-symbols-outlined text-[14px] opacity-70">folder</span>
+<span class="text-[11px] font-medium flex-1 truncate">shared-utils</span>
+</div>
+<div class="ml-4 space-y-0.5 border-l border-slate-800/50">
+<div class="px-2 py-1">
+<span class="text-[8px] text-primary/60 hover:text-primary cursor-pointer transition-colors font-medium">view all...</span>
+</div>
+</div>
+</div>
+</aside>
+<section class="flex-1 flex flex-col bg-white dark:bg-panel-dark border border-slate-200 dark:border-slate-800 rounded overflow-hidden relative">
+<div class="px-3 py-1.5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/30">
+<div class="flex items-center gap-2">
+<span class="mono-text text-[9px] text-slate-500">PROJECT:</span>
+<span class="font-bold text-[9px] uppercase tracking-wider">TINA-CORE / PHASE 03</span>
+</div>
+<button class="text-[9px] bg-slate-800 px-2 py-0.5 rounded text-slate-300 hover:text-white border border-slate-700">CONFIG</button>
+</div>
+<div class="flex-1 overflow-hidden flex">
+<div class="w-64 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 flex flex-col py-6 px-4 gap-8 h-full relative overflow-y-auto">
+<div class="absolute left-6.5 top-0 bottom-0 w-[1px] bg-slate-800/50 ml-1.5"></div>
+<div class="flex items-start gap-3 relative z-10 w-full">
+<div class="w-6 h-6 rounded-full bg-accent-green flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-white text-[16px] font-bold">check</span>
+</div>
+<div class="flex flex-col flex-1 gap-0.5 min-w-0">
+<div class="flex items-center gap-2">
+<h3 class="text-accent-green font-bold text-xs truncate">P1 Design alignment</h3>
+<span class="text-[8px] px-1.5 py-0.5 rounded text-accent-green font-bold uppercase shrink-0 border border-accent-green/30">COMPLETE</span>
+</div>
+<p class="text-[9px] text-slate-500 font-medium">4 tasks | 1 done | 4 team</p>
+</div>
+</div>
+<div class="flex items-start gap-3 relative z-10 w-full">
+<div class="w-6 h-6 rounded-full bg-accent-green flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-white text-[16px] font-bold">check</span>
+</div>
+<div class="flex flex-col flex-1 gap-0.5 min-w-0">
+<div class="flex items-center gap-2">
+<h3 class="text-accent-green font-bold text-xs truncate">P2 Plan generation</h3>
+<span class="text-[8px] px-1.5 py-0.5 rounded text-accent-green font-bold uppercase shrink-0 border border-accent-green/30">COMPLETE</span>
+</div>
+<p class="text-[9px] text-slate-500 font-medium">4 tasks | 1 done | 4 team</p>
+</div>
+</div>
+<div class="flex items-start gap-3 relative z-10 w-full">
+<div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center shrink-0 phase-glow">
+<span class="material-symbols-outlined text-white text-[18px] fill-1" style="font-variation-settings: 'FILL' 1">play_arrow</span>
+</div>
+<div class="flex flex-col flex-1 gap-0.5 min-w-0">
+<div class="flex items-center gap-2">
+<h3 class="text-primary font-bold text-xs truncate">P3 Execution</h3>
+<span class="text-[8px] bg-primary/20 border border-primary/30 px-1.5 py-0.5 rounded text-primary font-bold uppercase shrink-0">EXECUTING</span>
+</div>
+<p class="text-[9px] text-slate-400 font-medium">4 tasks | 1 done | 4 team</p>
+</div>
+</div>
+<div class="flex items-start gap-3 relative z-10 w-full opacity-60">
+<div class="w-6 h-6 rounded-full border border-slate-700 bg-panel-dark flex items-center justify-center shrink-0">
+<span class="text-slate-500 font-bold text-[10px]">4</span>
+</div>
+<div class="flex flex-col flex-1 gap-0.5 min-w-0">
+<div class="flex items-center gap-2">
+<h3 class="text-slate-300 font-bold text-xs truncate">P4 Phase review</h3>
+<span class="text-[8px] border border-slate-700 px-1.5 py-0.5 rounded text-slate-500 font-bold uppercase shrink-0">PLANNING</span>
+</div>
+<p class="text-[9px] text-slate-600 font-medium">4 tasks | 1 done | 4 team</p>
+</div>
+</div>
+<div class="flex items-start gap-3 relative z-10 w-full opacity-40">
+<div class="w-6 h-6 rounded-full border border-slate-700 bg-panel-dark flex items-center justify-center shrink-0">
+<span class="text-slate-500 font-bold text-[10px]">5</span>
+</div>
+<div class="flex flex-col flex-1 gap-0.5 min-w-0">
+<div class="flex items-center gap-2">
+<h3 class="text-slate-300 font-bold text-xs truncate">P5 Wrap-up</h3>
+<span class="text-[8px] border border-slate-700 px-1.5 py-0.5 rounded text-slate-500 font-bold uppercase shrink-0">PLANNING</span>
+</div>
+<p class="text-[9px] text-slate-600 font-medium">4 tasks | 1 done | 4 team</p>
+</div>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto bg-slate-100/30 dark:bg-background-dark/30 p-4">
+<div class="w-full space-y-3">
+<div class="task-card border-l-2 border-l-accent-green p-3 shadow-sm w-full relative">
+<div class="flex justify-between items-start gap-4 w-full">
+<div class="flex-1 min-w-0">
+<span class="mono-text text-[8px] text-slate-500 block leading-none mb-1.5">P3-T1</span>
+<h4 class="font-semibold text-[13px] leading-tight text-slate-700 dark:text-slate-200">Persist feedback payload to queue</h4>
+</div>
+<span class="text-[8px] bg-accent-green/10 text-accent-green border border-accent-green/20 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">DONE</span>
+</div>
+<div class="flex items-center justify-between mt-2 text-[9px] opacity-60 w-full">
+<span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-[12px]">person</span> implementer-a</span>
+<span class="mono-text">45m</span>
+</div>
+</div>
+<div class="task-card border-l-2 border-l-accent-yellow p-3 shadow-sm w-full">
+<div class="flex justify-between items-start gap-4 w-full">
+<div class="flex-1 min-w-0">
+<span class="mono-text text-[8px] text-slate-500 block leading-none mb-1.5">P3-T2</span>
+<h4 class="font-semibold text-[13px] leading-tight text-slate-700 dark:text-slate-200">Add teammate triage loop</h4>
+</div>
+<span class="text-[8px] bg-accent-yellow/10 text-accent-yellow border border-accent-yellow/20 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">ACTIVE</span>
+</div>
+<div class="flex items-center justify-between mt-2 text-[9px] opacity-60 w-full">
+<span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-[12px]">person</span> implementer-b</span>
+<span class="mono-text">1h 12m</span>
+</div>
+</div>
+<div class="task-card border-l-2 border-l-accent-red p-3 shadow-sm w-full">
+<div class="flex justify-between items-start gap-4 w-full">
+<div class="flex-1 min-w-0">
+<span class="mono-text text-[8px] text-slate-500 block leading-none mb-1.5">P3-T4</span>
+<h4 class="font-semibold text-[13px] leading-tight text-slate-700 dark:text-slate-200">Contract test for queue transitions</h4>
+</div>
+<span class="text-[8px] bg-accent-red/10 text-accent-red border border-accent-red/20 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">BLOCK</span>
+</div>
+<div class="mt-2 p-2 bg-red-500/5 rounded text-[10px] text-red-400 border border-red-500/10 w-full">
+                            Awaiting ack semantics (Section 4)
+                        </div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<aside class="w-64 flex flex-col gap-2 shrink-0">
+<div class="bg-panel-dark border border-slate-800 rounded flex flex-col overflow-hidden">
+<div class="px-2 py-1.5 bg-slate-900/50 border-b border-slate-800 flex justify-between items-center">
+<h3 class="text-[9px] font-bold uppercase tracking-tight text-primary">ORCHESTRATION</h3>
+<span class="material-symbols-outlined text-[12px] text-slate-600">settings</span>
+</div>
+<div class="p-2 border-b border-slate-800/50">
+<div class="flex items-center justify-between mb-1">
+<span class="text-[8px] uppercase font-bold text-accent-green">EXECUTING</span>
+<span class="text-[8px] mono-text text-slate-400">PHASE 3/5</span>
+</div>
+<div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+<div class="bg-primary w-3/5 h-full rounded-full"></div>
+</div>
+<div class="flex justify-end mt-1">
+<span class="text-[8px] mono-text text-slate-500">ELAPSED: 46m</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-2 p-2 bg-slate-800/20">
+<button class="bg-slate-800/60 border border-slate-700/50 py-1 px-1 rounded hover:bg-slate-700 text-center transition-colors shadow-sm">
+<span class="text-[8px] font-semibold text-slate-300 uppercase tracking-tight">Design Plan</span>
+</button>
+<button class="bg-slate-800/60 border border-slate-700/50 py-1 px-1 rounded hover:bg-slate-700 text-center transition-colors shadow-sm">
+<span class="text-[8px] font-semibold text-slate-300 uppercase tracking-tight">Phase Plan</span>
+</button>
+</div>
+</div>
+<div class="bg-panel-dark border border-slate-800 rounded flex flex-col overflow-hidden">
+<div class="px-2 py-1 bg-slate-900/50 border-b border-slate-800 flex justify-between items-center">
+<h3 class="text-[8px] font-black uppercase tracking-widest text-slate-500">Team</h3>
+<span class="text-[8px] text-accent-green mono-text">4 ACTIVE</span>
+</div>
+<div class="p-2 space-y-2">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-accent-green"></div>
+<span class="text-[10px] font-medium">implementer-a</span>
+</div>
+<span class="text-[8px] opacity-40 mono-text">IDLE</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+<span class="text-[10px] font-medium">implementer-b</span>
+</div>
+<span class="text-[8px] text-primary mono-text">BUSY</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-1.5 h-1.5 rounded-full bg-slate-600"></div>
+<span class="text-[10px] font-medium opacity-50">lead-dev</span>
+</div>
+<span class="text-[8px] opacity-20 mono-text">AWAY</span>
+</div>
+</div>
+</div>
+<div class="bg-panel-dark border border-slate-800 rounded flex-1 flex flex-col overflow-hidden min-h-[100px]">
+<div class="px-2 py-1 bg-slate-900/50 border-b border-slate-800">
+<h3 class="text-[8px] font-black uppercase tracking-widest text-slate-500">Git Operations</h3>
+</div>
+<div class="flex-1 overflow-y-auto p-2 space-y-3">
+<div>
+<span class="text-[7px] font-bold text-slate-500 uppercase block mb-1">Recent Commits</span>
+<div class="space-y-1">
+<div class="flex gap-2 text-[9px] mono-text group cursor-pointer">
+<span class="text-primary/70">b92ae13</span>
+<span class="truncate opacity-80 group-hover:opacity-100">add queue ingestion worker</span>
+</div>
+<div class="flex gap-2 text-[9px] mono-text group cursor-pointer">
+<span class="text-primary/70">4e332f1</span>
+<span class="truncate opacity-80 group-hover:opacity-100">expose queue states</span>
+</div>
+</div>
+</div>
+<div class="pt-2 border-t border-slate-800/50">
+<span class="text-[7px] font-bold text-slate-500 uppercase block mb-1">Diff Summary</span>
+<div class="flex items-center justify-between text-[10px] mono-text">
+<span>14 files</span>
+<span class="flex gap-2">
+<span class="text-accent-green">+382</span>
+<span class="text-accent-red">-96</span>
+</span>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-panel-dark border border-slate-800 rounded overflow-hidden shrink-0">
+<div class="px-2 py-1 bg-slate-900/50 border-b border-slate-800 flex justify-between items-center">
+<h3 class="text-[8px] font-black uppercase tracking-widest text-slate-500">Phase Review</h3>
+<span class="material-symbols-outlined text-[12px] text-slate-500">open_in_new</span>
+</div>
+<div class="p-2">
+<p class="text-[10px] leading-tight opacity-70">
+                    System awaiting acknowledgment of P3 parameters before transition to P4.
+                </p>
+<button class="w-full mt-2 py-1 bg-primary/10 border border-primary/20 text-primary text-[9px] font-bold uppercase rounded hover:bg-primary/20 transition-colors">
+                    Review and Approve
+                </button>
+</div>
+</div>
+</aside>
+</main>
+<footer class="bg-white dark:bg-sidebar-dark border-t border-slate-200 dark:border-slate-800 px-3 py-1 flex justify-between items-center shrink-0 z-10">
+<div class="mono-text text-[9px] flex gap-3 items-center">
+<span class="flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-accent-green"></span>
+<span class="opacity-60 text-slate-400 uppercase">Session: 46m</span>
+</span>
+<span class="text-slate-700 dark:text-slate-400">/ tina-core / P3 Execution</span>
+</div>
+<div class="flex gap-4">
+<button class="mono-text text-[9px] opacity-40 hover:opacity-100 transition-opacity">TERMINAL</button>
+<button class="mono-text text-[9px] opacity-40 hover:opacity-100 transition-opacity">DOCS</button>
+</div>
+</footer>
+
+</body></html>

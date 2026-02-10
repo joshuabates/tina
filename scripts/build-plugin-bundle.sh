@@ -105,9 +105,9 @@ if [[ ! -f "$MARKETPLACE_TEMPLATE" ]]; then
   exit 1
 fi
 
-escaped_plugin_dir="$(printf '%s' "$PLUGIN_DIR" | sed 's/[\/&]/\\&/g')"
-sed -E "s#\"source\": \"[^\"]+\"#\"source\": \"$escaped_plugin_dir\"#g" \
-  "$MARKETPLACE_TEMPLATE" > "$DIST_MARKETPLACE"
+# Keep marketplace source from template. The template points at
+# ./.claude-plugin/.plugin-dist/plugin relative to repo root.
+cp "$MARKETPLACE_TEMPLATE" "$DIST_MARKETPLACE"
 
 echo "Plugin bundle ready:"
 echo "  Marketplace: $DIST_MARKETPLACE"

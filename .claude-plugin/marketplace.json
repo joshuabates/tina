@@ -10,7 +10,7 @@
       "name": "tina",
       "description": "Personal skills library for Claude Code",
       "version": "0.18.2",
-      "source": "./plugin",
+      "source": "./.claude-plugin/.plugin-dist/plugin",
       "author": {
         "name": "Joshua",
         "email": ""

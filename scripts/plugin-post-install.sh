@@ -5,7 +5,8 @@ set -euo pipefail
 
 ACTION="${1:?Usage: plugin-post-install.sh <install|update>}"
 PROJECT_DIR="${MISE_PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-MARKETPLACE_FILE="$PROJECT_DIR/.claude-plugin/.plugin-dist/marketplace.json"
+MARKETPLACE_FILE="$PROJECT_DIR/.claude-plugin/marketplace.json"
+KNOWN_MARKETPLACES_FILE="$HOME/.claude/plugins/known_marketplaces.json"
 LAST_COMMAND_ERROR=""
 
 require_claude() {
@@ -24,7 +25,7 @@ run_allow_already() {
     return 0
   fi
   lower_output="$(printf '%s' "$output" | tr '[:upper:]' '[:lower:]')"
-  if [[ "$lower_output" == *"already"* || "$lower_output" == *"exists"* || "$lower_output" == *"installed"* ]]; then
+  if [[ "$lower_output" == *"already exists"* || "$lower_output" == *"already installed"* || "$lower_output" == *"already added"* || "$lower_output" == *"already configured"* ]]; then
     [[ -n "$output" ]] && echo "$output"
     return 0
   fi
@@ -36,23 +37,105 @@ run_allow_already() {
 add_marketplace() {
   local path="$1"
   run_allow_already claude plugin marketplace add "$path" && return 0
-  run_allow_already claude plugins add-marketplace "$path" && return 0
   echo "$LAST_COMMAND_ERROR" >&2
   return 1
 }
 
+remove_marketplace() {
+  local name="$1"
+  claude plugin marketplace remove "$name" >/dev/null 2>&1 && return 0
+  return 1
+}
+
+sync_known_marketplace_file() {
+  local expected_path="$1"
+
+  if [[ ! -f "$KNOWN_MARKETPLACES_FILE" ]]; then
+    return 0
+  fi
+
+  python3 - "$KNOWN_MARKETPLACES_FILE" "$expected_path" <<'PY'
+import datetime
+import json
+import os
+import sys
+
+known_file = sys.argv[1]
+expected_path = os.path.abspath(sys.argv[2])
+
+with open(known_file, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+tina = data.get("tina")
+if not isinstance(tina, dict):
+    sys.exit(0)
+
+source = tina.get("source")
+if not isinstance(source, dict):
+    source = {}
+
+changed = False
+if source.get("source") != "file":
+    source["source"] = "file"
+    changed = True
+if source.get("path") != expected_path:
+    source["path"] = expected_path
+    changed = True
+
+if changed:
+    tina["source"] = source
+    tina["lastUpdated"] = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    data["tina"] = tina
+    with open(known_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    print(f"Synchronized tina marketplace source in {known_file}")
+PY
+}
+
+verify_marketplace_source() {
+  local expected_path="$1"
+  if [[ ! -f "$KNOWN_MARKETPLACES_FILE" ]]; then
+    echo "Warning: known marketplaces file not found: $KNOWN_MARKETPLACES_FILE" >&2
+    return 0
+  fi
+
+  python3 - "$KNOWN_MARKETPLACES_FILE" "$expected_path" <<'PY'
+import json
+import os
+import sys
+
+known_file = sys.argv[1]
+expected_path = os.path.abspath(sys.argv[2])
+
+with open(known_file, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+source = data.get("tina", {}).get("source", {})
+actual = source.get("path")
+if actual and os.path.abspath(actual) == expected_path:
+    print(f"Verified tina marketplace source: {actual}")
+    sys.exit(0)
+
+print(f"ERROR: tina marketplace source mismatch. expected={expected_path} actual={actual}", file=sys.stderr)
+sys.exit(1)
+PY
+}
+
 install_plugin() {
   run_allow_already claude plugin install tina@tina && return 0
-  run_allow_already claude plugins add tina@tina && return 0
-  run_allow_already claude plugins add tina && return 0
   echo "$LAST_COMMAND_ERROR" >&2
   return 1
 }
 
 update_plugin() {
-  run_allow_already claude plugin update tina@tina && return 0
-  run_allow_already claude plugins update tina@tina && return 0
-  run_allow_already claude plugins update tina && return 0
+  if run_allow_already claude plugin update tina@tina; then
+    return 0
+  fi
+  if [[ "$(printf '%s' "$LAST_COMMAND_ERROR" | tr '[:upper:]' '[:lower:]')" == *"not installed"* ]]; then
+    echo "Plugin tina@tina is not installed; installing instead..."
+    install_plugin && return 0
+  fi
   echo "$LAST_COMMAND_ERROR" >&2
   return 1
 }
@@ -90,9 +173,12 @@ if [[ ! -f "$MARKETPLACE_FILE" ]]; then
   exit 1
 fi
 
-# Ensure marketplace is registered
-echo "Registering tina marketplace..."
+# Ensure marketplace source is refreshed and registered
+echo "Refreshing tina marketplace source..."
+remove_marketplace tina || true
 add_marketplace "$MARKETPLACE_FILE"
+sync_known_marketplace_file "$MARKETPLACE_FILE"
+verify_marketplace_source "$MARKETPLACE_FILE"
 
 # Install or update
 case "$ACTION" in
