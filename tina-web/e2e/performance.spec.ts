@@ -2,9 +2,9 @@ import { test, expect } from "@playwright/test"
 
 test.describe("Performance Budget", () => {
   test("meets performance budgets for initial load", async ({ page }) => {
-    // This suite runs against Vite dev server (not production build),
-    // often in parallel with other browser workers.
-    const fcpBudgetMs = process.env.CI ? 5000 : 4000
+    // This spec is executed via playwright.perf.config.ts against
+    // a production build served by `vite preview`.
+    const fcpBudgetMs = process.env.CI ? 2500 : 2000
 
     // Capture console errors
     const consoleErrors: string[] = []
@@ -20,7 +20,7 @@ test.describe("Performance Budget", () => {
     // Wait for the page to actually render content
     await page.waitForSelector("body", { state: "visible" })
 
-    // 1. First contentful paint budget for dev server runs
+    // 1. First contentful paint budget for production-like runs.
     // Use Performance API to get paint timing
     const paintTiming = await page.evaluate(() => {
       return new Promise<number>((resolve) => {
@@ -120,10 +120,7 @@ test.describe("Performance Budget", () => {
       }
     })
 
-    // Generous budgets for a React + Vite app with real-time features
-    // These should catch major regressions without being too strict
-    // Based on actual measurements: JS ~3 KB, CSS ~32 KB, Total ~4929 KB
-    // Note: These are development build sizes; production builds will be smaller
+    // Budgets are intentionally broad to catch only major regressions.
     expect(resourceSizes.totalJS).toBeLessThan(2000) // 2MB total JS (generous for dev builds)
     expect(resourceSizes.totalCSS).toBeLessThan(200) // 200KB total CSS
     expect(resourceSizes.totalSize).toBeLessThan(6000) // 6MB total (catches major regressions)
