@@ -1,0 +1,22 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-sidebar);
+  transition: width 0.2s ease;
+
+  &[data-collapsed="true"] {
+    width: 48px;
+  }
+}
+
+.loading,
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.875rem;
+  text-align: center;
+}

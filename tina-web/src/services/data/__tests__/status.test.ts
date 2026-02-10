@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { OrchestrationStatus, PhaseStatus, TaskStatus } from "../status"
+import {
+  OrchestrationStatus,
+  PhaseStatus,
+  TaskStatus,
+  normalizeStatus,
+  statusColor,
+} from "../status"
 
 describe("status constants", () => {
   describe("OrchestrationStatus", () => {
@@ -66,5 +72,51 @@ describe("status constants", () => {
     it("has Blocked constant", () => {
       expect(TaskStatus.Blocked).toBe("blocked")
     })
+  })
+})
+
+describe("normalizeStatus", () => {
+  it("capitalizes first letter and lowercases rest", () => {
+    expect(normalizeStatus("executing")).toBe("Executing")
+    expect(normalizeStatus("EXECUTING")).toBe("Executing")
+    expect(normalizeStatus("complete")).toBe("Complete")
+    expect(normalizeStatus("COMPLETE")).toBe("Complete")
+  })
+
+  it("handles single character strings", () => {
+    expect(normalizeStatus("a")).toBe("A")
+  })
+
+  it("handles empty strings", () => {
+    expect(normalizeStatus("")).toBe("")
+  })
+})
+
+describe("statusColor", () => {
+  it("returns correct color for executing status", () => {
+    expect(statusColor("executing")).toBe("text-status-active")
+    expect(statusColor("Executing")).toBe("text-status-active")
+    expect(statusColor("EXECUTING")).toBe("text-status-active")
+  })
+
+  it("returns correct color for complete status", () => {
+    expect(statusColor("complete")).toBe("text-status-complete")
+    expect(statusColor("Complete")).toBe("text-status-complete")
+  })
+
+  it("returns correct color for blocked status", () => {
+    expect(statusColor("blocked")).toBe("text-status-blocked")
+    expect(statusColor("Blocked")).toBe("text-status-blocked")
+  })
+
+  it("returns correct color for reviewing status", () => {
+    expect(statusColor("reviewing")).toBe("text-status-review")
+    expect(statusColor("Reviewing")).toBe("text-status-review")
+  })
+
+  it("returns default color for unknown status", () => {
+    expect(statusColor("planning")).toBe("text-muted-foreground")
+    expect(statusColor("unknown")).toBe("text-muted-foreground")
+    expect(statusColor("")).toBe("text-muted-foreground")
   })
 })
