@@ -65,7 +65,13 @@ tina-web     ← Convex (React useQuery subscriptions, real-time)
 
 ### Convex (Serverless Backend)
 
-Schema in `convex/schema.ts`. Key tables: `orchestrations`, `phases`, `taskEvents`, `teamMembers`, `teams`, `nodes`, `supervisorStates`. Functions in `convex/*.ts`. Tests use `vitest` + `convex-test` with `edge-runtime` environment.
+Schema in `convex/schema.ts`. Key tables: `orchestrations`, `phases`, `taskEvents`, `teamMembers`, `teams`, `nodes`, `supervisorStates`, `commits`, `plans`, `orchestrationEvents`. Functions in `convex/*.ts`. Tests use `vitest` + `convex-test` with `edge-runtime` environment.
+
+**Real-time features:**
+- Git commits synced from worktree `.git/refs/heads/{branch}` via tina-daemon
+- Plan files synced from `{worktree}/docs/plans/*.md` via tina-daemon
+- Team member shutdowns detected via team config diffs, recorded as events
+- All data flows through Convex subscriptions (no polling)
 
 ### Skills & Agents
 
@@ -83,6 +89,9 @@ Schema in `convex/schema.ts`. Key tables: `orchestrations`, `phases`, `taskEvent
 | Task lists | `~/.claude/tasks/{team-name}/` |
 | Supervisor state | `{worktree}/.claude/tina/supervisor-state.json` |
 | Harness scenarios | `tina-harness/scenarios/` |
+| Git commits (Convex) | `convex/commits.ts` (commits table) |
+| Plans (Convex) | `convex/plans.ts` (plans table) |
+| Shutdown events | `orchestrationEvents` table (eventType: "agent_shutdown") |
 
 ## Conventions
 

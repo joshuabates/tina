@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { deduplicateTaskEvents, loadRecentTaskEventsWithFallback } from "./tasks";
+import { deduplicateTaskEvents, loadTaskEventsForOrchestration } from "./tasks";
 
 export const upsertOrchestration = mutation({
   args: {
@@ -140,7 +140,7 @@ export const getOrchestrationDetail = query({
       )
       .collect();
 
-    const allTaskEvents = await loadRecentTaskEventsWithFallback(
+    const allTaskEvents = await loadTaskEventsForOrchestration(
       ctx,
       args.orchestrationId,
     );

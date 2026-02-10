@@ -186,6 +186,35 @@ fn register_team_to_args(team: &RegisterTeamRecord) -> BTreeMap<String, Value> {
     args
 }
 
+fn commit_to_args(commit: &CommitRecord) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert(
+        "orchestrationId".into(),
+        Value::from(commit.orchestration_id.as_str()),
+    );
+    args.insert("phaseNumber".into(), Value::from(commit.phase_number.as_str()));
+    args.insert("sha".into(), Value::from(commit.sha.as_str()));
+    args.insert("shortSha".into(), Value::from(commit.short_sha.as_str()));
+    args.insert("subject".into(), Value::from(commit.subject.as_str()));
+    args.insert("author".into(), Value::from(commit.author.as_str()));
+    args.insert("timestamp".into(), Value::from(commit.timestamp.as_str()));
+    args.insert("insertions".into(), Value::from(commit.insertions as i64));
+    args.insert("deletions".into(), Value::from(commit.deletions as i64));
+    args
+}
+
+fn plan_to_args(plan: &PlanRecord) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert(
+        "orchestrationId".into(),
+        Value::from(plan.orchestration_id.as_str()),
+    );
+    args.insert("phaseNumber".into(), Value::from(plan.phase_number.as_str()));
+    args.insert("planPath".into(), Value::from(plan.plan_path.as_str()));
+    args.insert("content".into(), Value::from(plan.content.as_str()));
+    args
+}
+
 /// Extract a string ID from a Convex FunctionResult.
 fn extract_id(result: FunctionResult) -> Result<String> {
     match result {
@@ -780,6 +809,20 @@ impl TinaConvexClient {
             .subscribe("phases:getPhaseStatus", args)
             .await
             .map_err(Into::into)
+    }
+
+    /// Record a git commit (deduplicates by SHA).
+    pub async fn record_commit(&mut self, commit: &CommitRecord) -> Result<String> {
+        let args = commit_to_args(commit);
+        let result = self.client.mutation("commits:recordCommit", args).await?;
+        extract_id(result)
+    }
+
+    /// Upsert a plan file (creates or updates by orchestrationId + phaseNumber).
+    pub async fn upsert_plan(&mut self, plan: &PlanRecord) -> Result<String> {
+        let args = plan_to_args(plan);
+        let result = self.client.mutation("plans:upsertPlan", args).await?;
+        extract_id(result)
     }
 }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
+import { Option } from "effect"
 import { TeamSection } from "../TeamSection"
 import type { OrchestrationDetail } from "@/schemas"
 import {
@@ -8,10 +9,17 @@ import {
   buildTeamMember,
 } from "@/test/builders/domain"
 import { setPanelFocus, setPanelSelection } from "@/test/harness/panel-state"
+import { installAppRuntimeQueryMock } from "@/test/harness/app-runtime"
+import { querySuccess } from "@/test/builders/query"
 
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
 vi.mock("@/hooks/useActionRegistration")
+vi.mock("@/hooks/useTypedQuery")
+
+const mockUseTypedQuery = vi.mocked(
+  await import("@/hooks/useTypedQuery"),
+).useTypedQuery
 
 const mockUseFocusable = vi.mocked(
   await import("@/hooks/useFocusable"),
@@ -48,6 +56,11 @@ describe("TeamSection", () => {
     vi.clearAllMocks()
     setPanelFocus(mockUseFocusable)
     setSelection()
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "events.list": querySuccess([]),
+      },
+    })
   })
 
   it("renders team members with correct names", () => {
@@ -121,5 +134,133 @@ describe("TeamSection", () => {
     )
 
     expect(mockUseFocusable).toHaveBeenCalledWith("rightPanel.team", 3)
+  })
+
+  describe("shutdown tracking", () => {
+    it("marks agents as shutdown when shutdown event exists", () => {
+      const shutdownEvents = [
+        {
+          _id: "event1",
+          _creationTime: 1234567890,
+          orchestrationId: "orch1",
+          phaseNumber: Option.some("1"),
+          eventType: "agent_shutdown",
+          source: "tina-daemon",
+          summary: "worker1 shutdown",
+          detail: Option.some(JSON.stringify({
+            agent_name: "worker1",
+            agent_type: "tina:phase-executor",
+            shutdown_detected_at: "2026-02-10T10:00:00Z",
+          })),
+          recordedAt: "2026-02-10T10:00:05Z",
+        },
+      ]
+
+      installAppRuntimeQueryMock(mockUseTypedQuery, {
+        states: {
+          "events.list": querySuccess(shutdownEvents),
+        },
+      })
+
+      render(<TeamSection detail={buildDetail()} />)
+
+      // Verify worker1 shows shutdown status
+      expect(screen.getByText("SHUTDOWN")).toBeInTheDocument()
+
+      // Verify worker2 shows active status
+      expect(screen.getByText("ACTIVE")).toBeInTheDocument()
+    })
+
+    it("does not mark active agents as shutdown", () => {
+      installAppRuntimeQueryMock(mockUseTypedQuery, {
+        states: {
+          "events.list": querySuccess([]),
+        },
+      })
+
+      render(<TeamSection detail={buildDetail()} />)
+
+      // Verify no shutdown status displayed
+      expect(screen.queryByText("SHUTDOWN")).not.toBeInTheDocument()
+
+      // Verify both members are visible (by name, not by status count which includes duplicates)
+      expect(screen.getByText("worker1")).toBeInTheDocument()
+      expect(screen.getByText("worker2")).toBeInTheDocument()
+    })
+
+    it("handles invalid shutdown event JSON gracefully", () => {
+      const invalidShutdownEvents = [
+        {
+          _id: "event1",
+          _creationTime: 1234567890,
+          orchestrationId: "orch1",
+          phaseNumber: Option.some("1"),
+          eventType: "agent_shutdown",
+          source: "tina-daemon",
+          summary: "invalid json",
+          detail: Option.some("invalid json {{{"),
+          recordedAt: "2026-02-10T10:00:05Z",
+        },
+      ]
+
+      installAppRuntimeQueryMock(mockUseTypedQuery, {
+        states: {
+          "events.list": querySuccess(invalidShutdownEvents),
+        },
+      })
+
+      // Should not throw error
+      expect(() => render(<TeamSection detail={buildDetail()} />)).not.toThrow()
+
+      // Verify members shown as active (not crashed, not marked as shutdown)
+      expect(screen.getByText("worker1")).toBeInTheDocument()
+      expect(screen.getByText("worker2")).toBeInTheDocument()
+      expect(screen.queryByText("SHUTDOWN")).not.toBeInTheDocument()
+    })
+
+    it("handles multiple shutdown events correctly", () => {
+      const shutdownEvents = [
+        {
+          _id: "event1",
+          _creationTime: 1234567890,
+          orchestrationId: "orch1",
+          phaseNumber: Option.some("1"),
+          eventType: "agent_shutdown",
+          source: "tina-daemon",
+          summary: "worker1 shutdown",
+          detail: Option.some(JSON.stringify({
+            agent_name: "worker1",
+            shutdown_detected_at: "2026-02-10T10:00:00Z",
+          })),
+          recordedAt: "2026-02-10T10:00:05Z",
+        },
+        {
+          _id: "event2",
+          _creationTime: 1234567891,
+          orchestrationId: "orch1",
+          phaseNumber: Option.some("1"),
+          eventType: "agent_shutdown",
+          source: "tina-daemon",
+          summary: "worker2 shutdown",
+          detail: Option.some(JSON.stringify({
+            agent_name: "worker2",
+            shutdown_detected_at: "2026-02-10T10:01:00Z",
+          })),
+          recordedAt: "2026-02-10T10:01:05Z",
+        },
+      ]
+
+      installAppRuntimeQueryMock(mockUseTypedQuery, {
+        states: {
+          "events.list": querySuccess(shutdownEvents),
+        },
+      })
+
+      render(<TeamSection detail={buildDetail()} />)
+
+      // Verify both members show shutdown status
+      const shutdownLabels = screen.getAllByText("SHUTDOWN")
+      expect(shutdownLabels.length).toBe(2)
+    })
   })
 })

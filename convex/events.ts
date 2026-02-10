@@ -19,6 +19,7 @@ export const recordEvent = mutation({
 export const listEvents = query({
   args: {
     orchestrationId: v.id("orchestrations"),
+    eventType: v.optional(v.string()),
     since: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
@@ -37,6 +38,12 @@ export const listEvents = query({
       .order("asc");
 
     const events = await q.take(pageLimit);
+
+    // Filter by eventType if provided
+    if (args.eventType) {
+      return events.filter((e) => e.eventType === args.eventType);
+    }
+
     return events;
   },
 });

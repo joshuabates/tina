@@ -6,6 +6,15 @@ use notify::{Event, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
 use tracing::info;
 
+/// Worktree information for watching git refs and plans.
+#[derive(Debug, Clone)]
+pub struct WorktreeInfo {
+    pub orchestration_id: String,
+    pub feature: String,
+    pub worktree_path: PathBuf,
+    pub branch: String,
+    pub current_phase: String,
+}
 
 /// Categorized file-system event.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,18 +23,24 @@ pub enum WatchEvent {
     Teams,
     /// A file changed in `~/.claude/tasks/`
     Tasks,
+    /// A git ref changed (commit detected)
+    GitRef(PathBuf),
+    /// A plan file changed
+    Plan(PathBuf),
 }
 
-/// Async file watcher that monitors teams and tasks.
+/// Async file watcher that monitors teams, tasks, git refs, and plans.
 ///
 /// Uses `std::sync::mpsc` internally (safe from any thread) with an async
 /// bridge to a `tokio::sync::mpsc` channel for the consumer.
 pub struct DaemonWatcher {
-    _watcher: notify::RecommendedWatcher,
+    watcher: notify::RecommendedWatcher,
     pub rx: mpsc::Receiver<WatchEvent>,
     _bridge_handle: tokio::task::JoinHandle<()>,
     teams_dir: PathBuf,
     tasks_dir: PathBuf,
+    git_ref_paths: Vec<PathBuf>,
+    plan_dirs: Vec<PathBuf>,
 }
 
 impl DaemonWatcher {
@@ -59,6 +74,14 @@ impl DaemonWatcher {
                         Some(WatchEvent::Teams)
                     } else if path.starts_with(&tkp) {
                         Some(WatchEvent::Tasks)
+                    } else if path.file_name() == Some(std::ffi::OsStr::new("HEAD"))
+                        || path.parent().and_then(|p| p.file_name()) == Some(std::ffi::OsStr::new("heads"))
+                    {
+                        // Git ref file changed
+                        Some(WatchEvent::GitRef(path.clone()))
+                    } else if path.extension() == Some(std::ffi::OsStr::new("md")) {
+                        // Plan file changed (*.md in plans directory)
+                        Some(WatchEvent::Plan(path.clone()))
                     } else {
                         None
                     };
@@ -100,12 +123,36 @@ impl DaemonWatcher {
         });
 
         Ok(Self {
-            _watcher: watcher,
+            watcher,
             rx: tokio_rx,
             _bridge_handle: bridge_handle,
             teams_dir: teams_dir.to_path_buf(),
             tasks_dir: tasks_dir.to_path_buf(),
+            git_ref_paths: Vec::new(),
+            plan_dirs: Vec::new(),
         })
+    }
+
+    /// Watch a specific git ref file (e.g., `.git/refs/heads/main`).
+    pub fn watch_git_ref(&mut self, ref_path: &Path) -> Result<()> {
+        if !self.git_ref_paths.contains(&ref_path.to_path_buf()) {
+            self.watcher
+                .watch(ref_path, RecursiveMode::NonRecursive)
+                .with_context(|| format!("watching git ref: {}", ref_path.display()))?;
+            self.git_ref_paths.push(ref_path.to_path_buf());
+        }
+        Ok(())
+    }
+
+    /// Watch a specific plan directory (e.g., `docs/plans`).
+    pub fn watch_plan_dir(&mut self, plan_dir: &Path) -> Result<()> {
+        if !self.plan_dirs.contains(&plan_dir.to_path_buf()) {
+            self.watcher
+                .watch(plan_dir, RecursiveMode::NonRecursive)
+                .with_context(|| format!("watching plan dir: {}", plan_dir.display()))?;
+            self.plan_dirs.push(plan_dir.to_path_buf());
+        }
+        Ok(())
     }
 
     /// Get the teams directory being watched.
@@ -117,6 +164,7 @@ impl DaemonWatcher {
     pub fn tasks_dir(&self) -> &Path {
         &self.tasks_dir
     }
+
 }
 
 #[cfg(test)]

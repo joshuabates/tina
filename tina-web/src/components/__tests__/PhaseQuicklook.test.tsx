@@ -11,8 +11,15 @@ import {
 import type { Phase, TaskEvent, TeamMember } from "@/schemas"
 import { defineQuicklookDialogContract } from "@/test/harness/quicklook-contract"
 import { expectStatusLabelVisible } from "@/test/harness/status"
+import { installAppRuntimeQueryMock } from "@/test/harness/app-runtime"
+import { querySuccess } from "@/test/builders/query"
 
 vi.mock("@/hooks/useActionRegistration")
+vi.mock("@/hooks/useTypedQuery")
+
+const mockUseTypedQuery = vi.mocked(
+  await import("@/hooks/useTypedQuery"),
+).useTypedQuery
 
 const mockOnClose = vi.fn()
 
@@ -70,6 +77,7 @@ function renderQuicklook(overrides: QuicklookFixtureOverrides = {}) {
   const { phase, tasks, teamMembers } = buildQuicklookFixture(overrides)
   render(
     <PhaseQuicklook
+      orchestrationId="test-orchestration-id"
       phase={phase}
       tasks={tasks}
       teamMembers={teamMembers}
@@ -88,6 +96,12 @@ function sectionByHeading(name: string): HTMLElement {
 describe("PhaseQuicklook", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "commits.list": querySuccess([]),
+        "plans.get": querySuccess(null),
+      },
+    })
   })
 
   it("shows phase number and status badge", () => {
@@ -126,10 +140,13 @@ describe("PhaseQuicklook", () => {
     expect(screen.getByText(value)).toBeInTheDocument()
   })
 
-  it.each(optionalPhaseFields)("shows placeholder when $label is missing", ({ heading, missing }) => {
+  it.each([
+    { heading: "Plan", missing: { planPath: none<string>() } as Partial<Phase>, text: "No plan" },
+    { heading: "Git Range", missing: { gitRange: none<string>() } as Partial<Phase>, text: "—" },
+  ])("shows placeholder when $heading is missing", ({ heading, missing, text }) => {
     renderQuicklook({ phase: missing })
 
-    expect(within(sectionByHeading(heading)).getByText("—")).toBeInTheDocument()
+    expect(within(sectionByHeading(heading)).getByText(text)).toBeInTheDocument()
   })
 
   it("shows task summary with completed count", () => {

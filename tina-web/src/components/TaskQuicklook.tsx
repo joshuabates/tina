@@ -4,8 +4,13 @@ import { optionText } from "@/lib/option-display"
 import { formatBlockedByForDisplay } from "@/lib/task-dependencies"
 import { QuicklookDialog } from "@/components/QuicklookDialog"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism"
 import styles from "./QuicklookDialog.module.scss"
 import taskStyles from "./TaskQuicklook.module.scss"
+import markdownStyles from "./PlanQuicklook.module.scss"
 
 export interface TaskQuicklookProps {
   task: TaskEvent
@@ -23,9 +28,38 @@ export function TaskQuicklook({ task, onClose }: TaskQuicklookProps) {
     <QuicklookDialog title={task.subject} status={status} onClose={onClose}>
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}>Description</h3>
-        <div className={styles.value}>
-          {optionText(task.description, (description) => description, "No description")}
-        </div>
+        {Option.match(task.description, {
+          onNone: () => <div className={styles.value}>No description</div>,
+          onSome: (description) => (
+            <div className={markdownStyles.content}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code(props) {
+                    const { className, children, ...rest } = props
+                    const match = /language-(\w+)/.exec(className || "")
+                    const isInline = !("inline" in rest) || rest.inline === false
+                    return !isInline && match ? (
+                      <SyntaxHighlighter
+                        style={oneDark}
+                        language={match[1]}
+                        PreTag="div"
+                      >
+                        {String(children).replace(/\n$/, "")}
+                      </SyntaxHighlighter>
+                    ) : (
+                      <code className={className} {...rest}>
+                        {children}
+                      </code>
+                    )
+                  },
+                }}
+              >
+                {description}
+              </ReactMarkdown>
+            </div>
+          ),
+        })}
       </section>
 
       <section className={styles.section}>

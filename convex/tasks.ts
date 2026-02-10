@@ -4,7 +4,8 @@ import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
 const ORCHESTRATOR_PHASE_KEY = "__orchestrator__";
-const TASK_EVENT_FETCH_LIMITS = [4000, 2000, 1000, 500, 250, 100, 50] as const;
+const TASK_EVENT_PAGE_SIZE = 256;
+const MAX_TASK_EVENT_PAGES = 5000;
 
 export function deduplicateTaskEvents<
   T extends { taskId: string; recordedAt: string; phaseNumber?: string | null },
@@ -24,37 +25,50 @@ export function deduplicateTaskEvents<
   return Array.from(latest.values());
 }
 
-function isTaskEventReadLimitError(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("Too many bytes read");
-}
-
-export async function loadRecentTaskEventsWithFallback(
+export async function loadTaskEventsForOrchestration(
   ctx: QueryCtx,
   orchestrationId: Id<"orchestrations">,
 ) {
-  for (const limit of TASK_EVENT_FETCH_LIMITS) {
-    try {
-      return await ctx.db
-        .query("taskEvents")
-        .withIndex("by_orchestration_recorded", (q) =>
-          q.eq("orchestrationId", orchestrationId),
-        )
-        .order("desc")
-        .take(limit);
-    } catch (error) {
-      if (!isTaskEventReadLimitError(error)) {
-        throw error;
-      }
+  const query = ctx.db
+    .query("taskEvents")
+    .withIndex("by_orchestration_recorded", (q) =>
+      q.eq("orchestrationId", orchestrationId),
+    )
+    .order("desc");
+
+  const events = [];
+  let cursor: string | null = null;
+  let pageCount = 0;
+
+  while (true) {
+    if (pageCount >= MAX_TASK_EVENT_PAGES) {
+      throw new Error(
+        `Exceeded ${MAX_TASK_EVENT_PAGES} task event pages for orchestration ${orchestrationId}`,
+      );
     }
+
+    const page = await query.paginate({
+      cursor,
+      numItems: TASK_EVENT_PAGE_SIZE,
+    });
+
+    events.push(...page.page);
+    pageCount += 1;
+
+    if (page.isDone) {
+      break;
+    }
+
+    cursor = page.continueCursor;
   }
 
-  return [];
+  return events;
 }
 
 export const getCurrentTasks = query({
   args: { orchestrationId: v.id("orchestrations") },
   handler: async (ctx, args) => {
-    const events = await loadRecentTaskEventsWithFallback(ctx, args.orchestrationId);
+    const events = await loadTaskEventsForOrchestration(ctx, args.orchestrationId);
     return deduplicateTaskEvents(events);
   },
 });

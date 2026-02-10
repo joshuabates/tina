@@ -4,10 +4,17 @@ import { RightPanel } from "../RightPanel"
 import type { OrchestrationDetail, OrchestrationEvent } from "@/schemas"
 import { buildOrchestrationDetail, buildOrchestrationEvent } from "@/test/builders/domain"
 import { renderWithRuntime } from "@/test/harness/render"
+import { installAppRuntimeQueryMock } from "@/test/harness/app-runtime"
+import { querySuccess } from "@/test/builders/query"
 
 vi.mock("@/hooks/useOrchestrationEvents")
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
+vi.mock("@/hooks/useTypedQuery")
+
+const mockUseTypedQuery = vi.mocked(
+  await import("@/hooks/useTypedQuery"),
+).useTypedQuery
 
 const mockUseOrchestrationEvents = vi.mocked(
   await import("@/hooks/useOrchestrationEvents"),
@@ -39,6 +46,11 @@ describe("RightPanel", () => {
       isLoading: false,
       gitEvents: [],
       reviewEvents: [],
+    })
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "events.list": querySuccess([]),
+      },
     })
   })
 

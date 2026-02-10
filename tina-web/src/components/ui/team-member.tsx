@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { MonoText } from "./mono-text";
 
-type MemberStatus = "active" | "busy" | "idle" | "away";
+type MemberStatus = "active" | "busy" | "idle" | "away" | "shutdown";
 
 interface TeamMemberProps extends React.HTMLAttributes<HTMLDivElement> {
   name: string;
@@ -13,6 +13,7 @@ const dotColorMap: Record<MemberStatus, string> = {
   busy: "bg-primary",
   idle: "bg-status-complete",
   away: "bg-muted-foreground",
+  shutdown: "bg-muted-foreground",
 };
 
 const labelMap: Record<MemberStatus, string> = {
@@ -20,6 +21,7 @@ const labelMap: Record<MemberStatus, string> = {
   busy: "BUSY",
   idle: "IDLE",
   away: "AWAY",
+  shutdown: "SHUTDOWN",
 };
 
 const labelColorMap: Record<MemberStatus, string> = {
@@ -27,6 +29,7 @@ const labelColorMap: Record<MemberStatus, string> = {
   busy: "text-primary",
   idle: "opacity-40",
   away: "opacity-20",
+  shutdown: "opacity-20",
 };
 
 function TeamMember({
@@ -35,6 +38,8 @@ function TeamMember({
   className,
   ...props
 }: TeamMemberProps) {
+  const isInactive = memberStatus === "away" || memberStatus === "shutdown";
+
   return (
     <div
       className={cn("flex items-center justify-between", className)}
@@ -44,13 +49,14 @@ function TeamMember({
         <div
           className={cn(
             "w-1.5 h-1.5 rounded-full",
-            dotColorMap[memberStatus]
+            dotColorMap[memberStatus],
+            memberStatus === "shutdown" && "opacity-20"
           )}
         />
         <span
           className={cn(
             "text-xs font-medium",
-            memberStatus === "away" && "opacity-50"
+            isInactive && "opacity-50"
           )}
         >
           {name}

@@ -163,3 +163,26 @@ pub struct FeatureOrchestrationRecord {
     #[serde(flatten)]
     pub record: OrchestrationRecord,
 }
+
+/// Git commit record for Convex `commits` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommitRecord {
+    pub orchestration_id: String,
+    pub phase_number: String,
+    pub sha: String,
+    pub short_sha: String,
+    pub subject: String,
+    pub author: String,
+    pub timestamp: String,
+    pub insertions: u32,
+    pub deletions: u32,
+}
+
+/// Plan record for Convex `plans` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanRecord {
+    pub orchestration_id: String,
+    pub phase_number: String,
+    pub plan_path: String,
+    pub content: String,
+}

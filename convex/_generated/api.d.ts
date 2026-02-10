@@ -10,11 +10,13 @@
 
 import type * as actions from "../actions.js";
 import type * as admin from "../admin.js";
+import type * as commits from "../commits.js";
 import type * as events from "../events.js";
 import type * as generated_orchestrationCore from "../generated/orchestrationCore.js";
 import type * as nodes from "../nodes.js";
 import type * as orchestrations from "../orchestrations.js";
 import type * as phases from "../phases.js";
+import type * as plans from "../plans.js";
 import type * as projects from "../projects.js";
 import type * as supervisorStates from "../supervisorStates.js";
 import type * as tasks from "../tasks.js";
@@ -31,11 +33,13 @@ import type {
 declare const fullApi: ApiFromModules<{
   actions: typeof actions;
   admin: typeof admin;
+  commits: typeof commits;
   events: typeof events;
   "generated/orchestrationCore": typeof generated_orchestrationCore;
   nodes: typeof nodes;
   orchestrations: typeof orchestrations;
   phases: typeof phases;
+  plans: typeof plans;
   projects: typeof projects;
   supervisorStates: typeof supervisorStates;
   tasks: typeof tasks;

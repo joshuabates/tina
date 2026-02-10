@@ -1,75 +1,81 @@
-import { useCallback, useEffect, useSyncExternalStore, useRef } from "react"
+import { useCallback, useEffect, useSyncExternalStore } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useServices } from "@/providers/RuntimeProvider"
 import type { SelectionService } from "@/services/selection-service"
 
-interface SelectionSyncBridge {
-  owner: symbol | null
-  isSyncing: boolean
+interface SelectionUrlSyncState {
+  pendingUrl: string | null
+  lastSeenUrl: string
 }
 
-const selectionSyncBridges = new WeakMap<SelectionService, SelectionSyncBridge>()
+const selectionUrlSyncStates = new WeakMap<SelectionService, SelectionUrlSyncState>()
 
-function getSelectionSyncBridge(
+function getSelectionUrlSyncState(
   selectionService: SelectionService,
-): SelectionSyncBridge {
-  const existing = selectionSyncBridges.get(selectionService)
-  if (existing) return existing
-
-  const created: SelectionSyncBridge = {
-    owner: null,
-    isSyncing: false,
+  initialUrl: string,
+): SelectionUrlSyncState {
+  const existing = selectionUrlSyncStates.get(selectionService)
+  if (existing) {
+    return existing
   }
-  selectionSyncBridges.set(selectionService, created)
+
+  const created: SelectionUrlSyncState = {
+    pendingUrl: null,
+    lastSeenUrl: initialUrl,
+  }
+  selectionUrlSyncStates.set(selectionService, created)
   return created
 }
 
 export function useSelection() {
   const { selectionService } = useServices()
   const [searchParams, setSearchParams] = useSearchParams()
-  const ownerRef = useRef(Symbol("selection-sync-owner"))
-  const syncBridge = getSelectionSyncBridge(selectionService)
-  if (syncBridge.owner === null) {
-    syncBridge.owner = ownerRef.current
-  }
-  const isSyncOwner = syncBridge.owner === ownerRef.current
+  const syncState = getSelectionUrlSyncState(
+    selectionService,
+    searchParams.toString(),
+  )
 
+  // Keep service state in sync with URL query params.
   useEffect(() => {
-    if (syncBridge.owner === null) {
-      syncBridge.owner = ownerRef.current
-    }
+    const currentQuery = searchParams.toString()
+    const pendingQuery = syncState.pendingUrl
 
-    return () => {
-      if (syncBridge.owner === ownerRef.current) {
-        syncBridge.owner = null
-        syncBridge.isSyncing = false
+    if (pendingQuery !== null) {
+      if (currentQuery === pendingQuery) {
+        syncState.pendingUrl = null
+        syncState.lastSeenUrl = currentQuery
+        return
       }
-    }
-  }, [syncBridge])
 
-  // Sync from URL to service (single owner hook)
-  useEffect(() => {
-    if (!isSyncOwner) return
-    if (syncBridge.isSyncing) {
-      syncBridge.isSyncing = false
-      return
+      // Ignore stale URL snapshots while a local URL update is in flight.
+      if (currentQuery === syncState.lastSeenUrl) {
+        return
+      }
+
+      // External navigation won the race. Adopt URL and clear pending write.
+      syncState.pendingUrl = null
     }
-    syncBridge.isSyncing = true
+
+    syncState.lastSeenUrl = currentQuery
     selectionService.syncFromUrl(searchParams)
-    syncBridge.isSyncing = false
-  }, [isSyncOwner, selectionService, searchParams, syncBridge])
+  }, [searchParams, selectionService, syncState])
 
-  // Sync from service to URL (single owner hook)
+  // Keep URL query params in sync with service state.
   useEffect(() => {
-    if (!isSyncOwner) return
-
     return selectionService.subscribe(() => {
-      if (syncBridge.isSyncing) return
-      syncBridge.isSyncing = true
       const params = selectionService.toUrlParams()
+      const nextQuery = params.toString()
+      if (
+        nextQuery === syncState.lastSeenUrl ||
+        nextQuery === syncState.pendingUrl
+      ) {
+        return
+      }
+
+      syncState.pendingUrl = nextQuery
       setSearchParams(params, { replace: true })
     })
-  }, [isSyncOwner, selectionService, setSearchParams, syncBridge])
+  }, [selectionService, setSearchParams, syncState])
 
   const state = useSyncExternalStore(
     selectionService.subscribe,

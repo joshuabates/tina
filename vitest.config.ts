@@ -4,6 +4,12 @@ export default defineConfig({
   test: {
     environment: "edge-runtime",
     server: { deps: { inline: ["convex-test"] } },
-    exclude: ["tina-web/**", "node_modules/**"],
+    include: ["convex/**/*.test.{ts,tsx}"],
+    exclude: [
+      "**/.worktrees/**",
+      "**/node_modules/**",
+      "tina-web/**",
+      "designs/**",
+    ],
   },
 });

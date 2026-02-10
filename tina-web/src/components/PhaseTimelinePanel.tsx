@@ -138,6 +138,7 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
       />
       {quicklookPhase && (
         <PhaseQuicklook
+          orchestrationId={detail._id}
           phase={quicklookPhase}
           tasks={quicklookTasks}
           teamMembers={quicklookTeamMembers}

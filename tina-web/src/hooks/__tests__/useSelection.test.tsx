@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { renderHook, act } from "@testing-library/react"
-import { MemoryRouter } from "react-router-dom"
+import { renderHook, act, waitFor } from "@testing-library/react"
+import { MemoryRouter, useLocation } from "react-router-dom"
 import { RuntimeProvider } from "@/providers/RuntimeProvider"
 import { useSelection } from "../useSelection"
 import type { ReactNode } from "react"
@@ -130,5 +130,27 @@ describe("useSelection", () => {
 
     expect(result.current.first.orchestrationId).toBe("orch-123")
     expect(result.current.second.orchestrationId).toBe("orch-123")
+  })
+
+  it("keeps URL synced to the latest selection when updates happen back-to-back", async () => {
+    const { result } = renderHook(
+      () => {
+        const selection = useSelection()
+        const location = useLocation()
+        return { selection, search: location.search }
+      },
+      { wrapper: createWrapper() },
+    )
+
+    act(() => {
+      result.current.selection.selectOrchestration("orch-a")
+      result.current.selection.selectOrchestration("orch-b")
+    })
+
+    expect(result.current.selection.orchestrationId).toBe("orch-b")
+
+    await waitFor(() => {
+      expect(result.current.search).toContain("orch=orch-b")
+    })
   })
 })

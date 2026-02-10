@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "assertions": {
+    "phases_completed": 2,
+    "final_status": "complete",
+    "tests_pass": true,
+    "file_changes": [
+      { "path": "src/calculator.ts", "contains": "add" },
+      { "path": "src/calculator.ts", "contains": "subtract" },
+      { "path": "src/calculator.ts", "contains": "multiply" },
+      { "path": "src/calculator.ts", "contains": "divide" },
+      { "path": "src/calculator.test.ts", "contains": "test" }
+    ],
+    "convex": {
+      "has_orchestration": true,
+      "expected_status": "complete",
+      "min_phases": 2,
+      "min_tasks": 2,
+      "min_team_members": 2,
+      "min_commits": 2,
+      "min_plans": 2,
+      "min_shutdown_events": 1,
+      "has_markdown_task": true
+    }
+  }
+}

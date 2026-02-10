@@ -6,7 +6,7 @@ use clap::Parser;
 use futures::StreamExt;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use tina_daemon::actions;
 use tina_daemon::config::DaemonConfig;
@@ -82,6 +82,80 @@ async fn main() -> Result<()> {
         error!(error = %e, "initial sync failed");
     }
 
+    // Discover active worktrees and set up git/plan watchers
+    info!("discovering active worktrees");
+    let worktrees = match sync::discover_worktrees(&client).await {
+        Ok(wt) => wt,
+        Err(e) => {
+            error!(error = %e, "worktree discovery failed, git and plan watching disabled");
+            Vec::new()
+        }
+    };
+
+    // Watch git refs for discovered worktrees
+    for worktree in &worktrees {
+        let ref_path = worktree.worktree_path
+            .join(".git")
+            .join("refs")
+            .join("heads")
+            .join(&worktree.branch);
+
+        if ref_path.exists() {
+            if let Err(e) = watcher.watch_git_ref(&ref_path) {
+                warn!(
+                    feature = %worktree.feature,
+                    path = %ref_path.display(),
+                    error = %e,
+                    "failed to watch git ref"
+                );
+            } else {
+                info!(
+                    feature = %worktree.feature,
+                    branch = %worktree.branch,
+                    "watching git ref"
+                );
+            }
+        } else {
+            debug!(
+                feature = %worktree.feature,
+                path = %ref_path.display(),
+                "git ref does not exist yet, skipping watch"
+            );
+        }
+    }
+
+    // Watch plan directories for discovered worktrees
+    for worktree in &worktrees {
+        let plans_dir = worktree.worktree_path.join("docs").join("plans");
+
+        if plans_dir.exists() {
+            if let Err(e) = watcher.watch_plan_dir(&plans_dir) {
+                warn!(
+                    feature = %worktree.feature,
+                    path = %plans_dir.display(),
+                    error = %e,
+                    "failed to watch plans directory"
+                );
+            } else {
+                info!(
+                    feature = %worktree.feature,
+                    "watching plans directory"
+                );
+            }
+        } else {
+            debug!(
+                feature = %worktree.feature,
+                path = %plans_dir.display(),
+                "plans directory does not exist yet, skipping watch"
+            );
+        }
+    }
+
+    // Store worktrees in cache for event handling
+    cache.set_worktrees(worktrees);
+
+    info!("daemon initialization complete");
+
     // Subscribe to pending actions
     let mut action_sub = {
         let mut client_guard = client.lock().await;
@@ -104,8 +178,7 @@ async fn main() -> Result<()> {
                 break;
             }
 
-            // File change events - both team and task changes trigger a full sync
-            // using active teams from Convex as the driver
+            // File change events
             event = watcher.rx.recv() => {
                 match event {
                     Some(WatchEvent::Teams) | Some(WatchEvent::Tasks) => {
@@ -113,6 +186,61 @@ async fn main() -> Result<()> {
                             &client, &mut cache, &teams_dir, &tasks_dir,
                         ).await {
                             error!(error = %e, "sync failed");
+                        }
+                    }
+                    Some(WatchEvent::GitRef(ref_path)) => {
+                        // Git ref changed - sync commits for this worktree
+                        if let Some(worktree) = cache.find_worktree_by_ref_path(&ref_path).cloned() {
+                            info!(
+                                feature = %worktree.feature,
+                                branch = %worktree.branch,
+                                "git ref changed, syncing commits"
+                            );
+                            if let Err(e) = sync::sync_commits(
+                                &client,
+                                &mut cache,
+                                &worktree.orchestration_id,
+                                &worktree.current_phase,
+                                &worktree.worktree_path,
+                                &worktree.branch,
+                            ).await {
+                                error!(
+                                    feature = %worktree.feature,
+                                    error = %e,
+                                    "failed to sync commits"
+                                );
+                            }
+                        } else {
+                            warn!(
+                                path = %ref_path.display(),
+                                "git ref changed but no worktree found in cache"
+                            );
+                        }
+                    }
+                    Some(WatchEvent::Plan(plan_path)) => {
+                        // Plan file changed - sync to Convex
+                        if let Some(worktree) = cache.find_worktree_by_plan_path(&plan_path).cloned() {
+                            info!(
+                                feature = %worktree.feature,
+                                path = %plan_path.display(),
+                                "plan file changed, syncing to Convex"
+                            );
+                            if let Err(e) = sync::sync_plan(
+                                &client,
+                                &worktree.orchestration_id,
+                                &plan_path,
+                            ).await {
+                                error!(
+                                    feature = %worktree.feature,
+                                    error = %e,
+                                    "failed to sync plan"
+                                );
+                            }
+                        } else {
+                            warn!(
+                                path = %plan_path.display(),
+                                "plan file changed but no worktree found in cache"
+                            );
                         }
                     }
                     None => {

@@ -120,4 +120,31 @@ export default defineSchema({
   })
     .index("by_node_status", ["nodeId", "status"])
     .index("by_orchestration", ["orchestrationId"]),
+
+  commits: defineTable({
+    orchestrationId: v.id("orchestrations"),
+    phaseNumber: v.string(),
+    sha: v.string(),
+    shortSha: v.string(),
+    subject: v.string(),
+    author: v.string(),
+    timestamp: v.string(),
+    insertions: v.number(),
+    deletions: v.number(),
+    recordedAt: v.string(),
+  })
+    .index("by_orchestration", ["orchestrationId"])
+    .index("by_phase", ["orchestrationId", "phaseNumber"])
+    .index("by_sha", ["sha"]),
+
+  plans: defineTable({
+    orchestrationId: v.id("orchestrations"),
+    phaseNumber: v.string(),
+    planPath: v.string(),
+    content: v.string(),
+    lastSynced: v.string(),
+  })
+    .index("by_orchestration", ["orchestrationId"])
+    .index("by_phase", ["orchestrationId", "phaseNumber"])
+    .index("by_path", ["planPath"]),
 });
