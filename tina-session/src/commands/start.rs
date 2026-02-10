@@ -1,10 +1,11 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use tina_session::claude;
 use tina_session::convex;
 use tina_session::error::SessionError;
+use tina_session::session::naming::session_name;
 use tina_session::state::schema::SupervisorState;
 use tina_session::tmux;
 
@@ -30,11 +31,15 @@ pub fn run(
     feature: &str,
     phase: &str,
     plan: &Path,
+    cwd_override: Option<&Path>,
     install_deps: bool,
     parent_team_id: Option<&str>,
 ) -> anyhow::Result<u8> {
-    let runtime = super::runtime_context::resolve_phase_runtime_context(feature, phase, None)?;
-    let cwd = &runtime.cwd;
+    let orchestration =
+        convex::run_convex(|mut writer| async move { writer.get_by_feature(feature).await })?
+            .ok_or_else(|| anyhow::anyhow!("No orchestration found for feature '{}'", feature))?;
+
+    let cwd = resolve_working_dir(cwd_override, orchestration.worktree_path.as_deref())?;
 
     // Validate plan exists and resolve to absolute path
     if !plan.exists() {
@@ -60,7 +65,8 @@ pub fn run(
     // Decimal phases (e.g., "1.5") are remediation phases - skip validation
 
     // Generate session name
-    let name = runtime.session_name.clone();
+    let name = session_name(feature, phase);
+    let team_name = format!("{}-phase-{}", feature, phase);
 
     // Check if session already exists (resume case)
     if tmux::session_exists(&name) {
@@ -80,12 +86,12 @@ pub fn run(
 
     // Install dependencies only if explicitly requested
     if install_deps {
-        install_dependencies(cwd);
+        install_dependencies(&cwd);
     }
 
     // Create tmux session (starts a shell)
     println!("Creating session '{}' in {}", name, cwd.display());
-    tmux::create_session(&name, cwd, None)?;
+    tmux::create_session(&name, &cwd, None)?;
 
     // Small delay to let shell initialize
     std::thread::sleep(std::time::Duration::from_millis(500));
@@ -114,8 +120,8 @@ pub fn run(
     // Register the phase execution team in Convex so the daemon can sync
     // phase-level tasks and team members.
     register_phase_team(
-        &runtime.orchestration.id,
-        &runtime.team_name,
+        &orchestration.id,
+        &team_name,
         phase,
         parent_team_id,
     )?;
@@ -123,7 +129,7 @@ pub fn run(
     // Send the team-lead-init skill command with team_name
     let skill_cmd = format!(
         "/tina:team-lead-init team_name: {} plan_path: {}",
-        runtime.team_name,
+        team_name,
         plan_abs.display()
     );
     println!("Sending: {}", skill_cmd);
@@ -131,6 +137,33 @@ pub fn run(
 
     println!("Started phase {} execution in session '{}'", phase, name);
     Ok(0)
+}
+
+fn resolve_working_dir(
+    cwd_override: Option<&Path>,
+    orchestration_worktree: Option<&str>,
+) -> anyhow::Result<PathBuf> {
+    let raw_path = match cwd_override {
+        Some(path) => path.to_path_buf(),
+        None => PathBuf::from(orchestration_worktree.ok_or_else(|| {
+            anyhow::anyhow!("Orchestration has no worktree_path and --cwd was not provided")
+        })?),
+    };
+
+    let cwd = if raw_path.is_absolute() {
+        raw_path
+    } else {
+        std::env::current_dir()?.join(raw_path)
+    };
+
+    if !cwd.exists() {
+        anyhow::bail!("Working directory does not exist: {}", cwd.display());
+    }
+    if !cwd.is_dir() {
+        anyhow::bail!("Working directory is not a directory: {}", cwd.display());
+    }
+
+    Ok(cwd)
 }
 
 /// Register the phase execution team in Convex so the daemon can sync
@@ -201,5 +234,34 @@ fn install_dependencies(cwd: &Path) {
             Ok(status) => eprintln!("Warning: pip install exited with {}", status),
             Err(e) => eprintln!("Warning: Failed to run pip install: {}", e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_working_dir;
+
+    #[test]
+    fn resolve_working_dir_prefers_override() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let resolved = resolve_working_dir(Some(tmp.path()), None).expect("resolve");
+        assert_eq!(resolved, tmp.path());
+    }
+
+    #[test]
+    fn resolve_working_dir_uses_orchestration_path() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let worktree = tmp.path().display().to_string();
+        let resolved = resolve_working_dir(None, Some(&worktree)).expect("resolve");
+        assert_eq!(resolved, tmp.path());
+    }
+
+    #[test]
+    fn resolve_working_dir_requires_path_source() {
+        let err = resolve_working_dir(None, None).expect_err("expected error");
+        assert!(
+            err.to_string()
+                .contains("Orchestration has no worktree_path and --cwd was not provided")
+        );
     }
 }

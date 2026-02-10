@@ -6,7 +6,6 @@ use tina_session::session::naming::session_name;
 /// Runtime context derived from feature + phase for phase-level commands.
 #[derive(Debug, Clone)]
 pub struct PhaseRuntimeContext {
-    pub orchestration: convex::OrchestrationRecord,
     pub cwd: PathBuf,
     pub status_path: PathBuf,
     pub team_name: String,
@@ -42,7 +41,6 @@ pub fn resolve_phase_runtime_context(
     let session_name = session_name(feature, phase);
 
     Ok(PhaseRuntimeContext {
-        orchestration,
         cwd,
         status_path,
         team_name,

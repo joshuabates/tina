@@ -60,6 +60,10 @@ enum Commands {
         #[arg(long)]
         plan: PathBuf,
 
+        /// Working directory for tmux session. Defaults to orchestration worktree from Convex.
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+
         /// Install dependencies before starting (npm, cargo, pip)
         #[arg(long, default_value = "false")]
         install_deps: bool,
@@ -516,6 +520,7 @@ fn run() -> anyhow::Result<u8> {
             feature,
             phase,
             plan,
+            cwd,
             install_deps,
             parent_team_id,
         } => {
@@ -524,6 +529,7 @@ fn run() -> anyhow::Result<u8> {
                 &feature,
                 &phase,
                 &plan,
+                cwd.as_deref(),
                 install_deps,
                 parent_team_id.as_deref(),
             )

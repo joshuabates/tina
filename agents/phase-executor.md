@@ -23,6 +23,11 @@ Your spawn prompt contains: `task_id: <id>`
    - `worktree_path`: Path to worktree
    - `parent_team_id`: Convex doc ID of the orchestration team (optional)
 
+If parsing with shell/jq, extract `worktree_path` explicitly:
+```bash
+WORKTREE_PATH=$(echo "$TASK_JSON" | jq -r '.metadata.worktree_path')
+```
+
 ## Boundaries
 
 **MUST DO:**
@@ -50,7 +55,7 @@ Your spawn prompt contains: `task_id: <id>`
 Run this exact command:
 
 ```bash
-tina-session start --feature "$FEATURE_NAME" --phase "$PHASE_NUM" --plan "$PLAN_PATH" \
+tina-session start --feature "$FEATURE_NAME" --phase "$PHASE_NUM" --plan "$PLAN_PATH" --cwd "$WORKTREE_PATH" \
   ${PARENT_TEAM_ID:+--parent-team-id "$PARENT_TEAM_ID"}
 ```
 
