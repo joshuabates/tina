@@ -121,6 +121,29 @@ describe("OrchestrationPage", () => {
     expect(screen.getByText(/Phase Timeline for test-feature/)).toBeInTheDocument()
   })
 
+  it("renders both PhaseTimelinePanel and TaskListPanel when data loaded", () => {
+    mockUseSelection.mockReturnValue({
+      orchestrationId: "o1",
+      phaseId: null,
+      selectOrchestration: vi.fn(),
+      selectPhase: vi.fn(),
+    })
+
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: mockOrchestration,
+    } as TypedQueryResult<OrchestrationDetail>)
+
+    render(
+      <MemoryRouter>
+        <OrchestrationPage />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByTestId("phase-timeline-panel")).toBeInTheDocument()
+    expect(screen.getByTestId("task-list-panel")).toBeInTheDocument()
+  })
+
   it("shows orchestration feature name in header", () => {
     mockUseSelection.mockReturnValue({
       orchestrationId: "o1",
