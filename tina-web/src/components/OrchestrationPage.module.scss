@@ -30,6 +30,23 @@
 
 .content {
   flex: 1;
+  overflow: hidden;
+}
+
+.centerPanel {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+.timelineColumn {
+  overflow-y: auto;
+  padding: 16px;
+  border-right: 1px solid $border-color;
+}
+
+.taskColumn {
   overflow-y: auto;
 }
 

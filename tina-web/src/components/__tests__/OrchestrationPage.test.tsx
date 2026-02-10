@@ -26,6 +26,15 @@ vi.mock("../PhaseTimelinePanel", () => ({
   ),
 }))
 
+// Mock TaskListPanel
+vi.mock("../TaskListPanel", () => ({
+  TaskListPanel: ({ detail }: { detail: OrchestrationDetail }) => (
+    <div data-testid="task-list-panel">
+      Task List for {detail.featureName}
+    </div>
+  ),
+}))
+
 const mockOrchestration: OrchestrationDetail = {
   _id: "o1",
   _creationTime: 1234567890,
