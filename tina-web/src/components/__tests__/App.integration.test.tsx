@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { Option } from "effect"
@@ -17,92 +17,26 @@ const mockUseTypedQuery = vi.mocked(await import("@/hooks/useTypedQuery")).useTy
 const mockUseFocusable = vi.mocked(await import("@/hooks/useFocusable")).useFocusable
 const mockUseSelection = vi.mocked(await import("@/hooks/useSelection")).useSelection
 
-describe("App - URL synchronization + selection flow", () => {
-  const mockSelectOrchestration = vi.fn()
-  const mockSelectPhase = vi.fn()
+// Shared test fixtures
+const mockProjects: ProjectSummary[] = [
+  {
+    _id: "p1",
+    _creationTime: 1234567890,
+    name: "Project Alpha",
+    repoPath: "/path/to/alpha",
+    createdAt: "2024-01-01T00:00:00Z",
+    orchestrationCount: 1,
+    latestFeature: null,
+    latestStatus: null,
+  },
+]
 
-  const projects: ProjectSummary[] = [
-    {
-      _id: "p1",
-      _creationTime: 1234567890,
-      name: "Project Alpha",
-      repoPath: "/path/to/alpha",
-      createdAt: "2024-01-01T00:00:00Z",
-      orchestrationCount: 1,
-      latestFeature: null,
-      latestStatus: null,
-    },
-  ]
-
-  const orchestrations: OrchestrationSummary[] = [
-    {
-      _id: "abc123",
-      _creationTime: 1234567890,
-      nodeId: "n1",
-      projectId: Option.some("p1"),
-      featureName: "my-feature",
-      designDocPath: "/docs/my-feature.md",
-      branch: "tina/my-feature",
-      worktreePath: Option.none(),
-      totalPhases: 3,
-      currentPhase: 2,
-      status: "executing",
-      startedAt: "2024-01-01T10:00:00Z",
-      completedAt: Option.none(),
-      totalElapsedMins: Option.none(),
-      nodeName: "node1",
-    },
-  ]
-
-  const phases: Phase[] = [
-    {
-      _id: "phase1",
-      _creationTime: 1234567890,
-      orchestrationId: "abc123",
-      phaseNumber: "1",
-      status: "completed",
-      planPath: Option.some("/docs/plans/phase-1.md"),
-      gitRange: Option.some("abc..def"),
-      planningMins: Option.some(10),
-      executionMins: Option.some(20),
-      reviewMins: Option.some(5),
-      startedAt: Option.some("2024-01-01T10:00:00Z"),
-      completedAt: Option.some("2024-01-01T10:35:00Z"),
-    },
-    {
-      _id: "phase2",
-      _creationTime: 1234567891,
-      orchestrationId: "abc123",
-      phaseNumber: "2",
-      status: "executing",
-      planPath: Option.some("/docs/plans/phase-2.md"),
-      gitRange: Option.none(),
-      planningMins: Option.some(15),
-      executionMins: Option.none(),
-      reviewMins: Option.none(),
-      startedAt: Option.some("2024-01-01T10:40:00Z"),
-      completedAt: Option.none(),
-    },
-    {
-      _id: "phase3",
-      _creationTime: 1234567892,
-      orchestrationId: "abc123",
-      phaseNumber: "3",
-      status: "pending",
-      planPath: Option.none(),
-      gitRange: Option.none(),
-      planningMins: Option.none(),
-      executionMins: Option.none(),
-      reviewMins: Option.none(),
-      startedAt: Option.none(),
-      completedAt: Option.none(),
-    },
-  ]
-
-  const orchestrationDetail: OrchestrationDetail = {
+const mockOrchestrations: OrchestrationSummary[] = [
+  {
     _id: "abc123",
     _creationTime: 1234567890,
     nodeId: "n1",
+    projectId: Option.some("p1"),
     featureName: "my-feature",
     designDocPath: "/docs/my-feature.md",
     branch: "tina/my-feature",
@@ -114,41 +48,111 @@ describe("App - URL synchronization + selection flow", () => {
     completedAt: Option.none(),
     totalElapsedMins: Option.none(),
     nodeName: "node1",
-    phases,
-    tasks: [],
-    orchestratorTasks: [],
-    phaseTasks: {},
-    teamMembers: [],
-  }
+  },
+]
+
+const mockPhases: Phase[] = [
+  {
+    _id: "phase1",
+    _creationTime: 1234567890,
+    orchestrationId: "abc123",
+    phaseNumber: "1",
+    status: "completed",
+    planPath: Option.some("/docs/plans/phase-1.md"),
+    gitRange: Option.some("abc..def"),
+    planningMins: Option.some(10),
+    executionMins: Option.some(20),
+    reviewMins: Option.some(5),
+    startedAt: Option.some("2024-01-01T10:00:00Z"),
+    completedAt: Option.some("2024-01-01T10:35:00Z"),
+  },
+  {
+    _id: "phase2",
+    _creationTime: 1234567891,
+    orchestrationId: "abc123",
+    phaseNumber: "2",
+    status: "executing",
+    planPath: Option.some("/docs/plans/phase-2.md"),
+    gitRange: Option.none(),
+    planningMins: Option.some(15),
+    executionMins: Option.none(),
+    reviewMins: Option.none(),
+    startedAt: Option.some("2024-01-01T10:40:00Z"),
+    completedAt: Option.none(),
+  },
+  {
+    _id: "phase3",
+    _creationTime: 1234567892,
+    orchestrationId: "abc123",
+    phaseNumber: "3",
+    status: "pending",
+    planPath: Option.none(),
+    gitRange: Option.none(),
+    planningMins: Option.none(),
+    executionMins: Option.none(),
+    reviewMins: Option.none(),
+    startedAt: Option.none(),
+    completedAt: Option.none(),
+  },
+]
+
+const mockOrchestrationDetail: OrchestrationDetail = {
+  _id: "abc123",
+  _creationTime: 1234567890,
+  nodeId: "n1",
+  featureName: "my-feature",
+  designDocPath: "/docs/my-feature.md",
+  branch: "tina/my-feature",
+  worktreePath: Option.none(),
+  totalPhases: 3,
+  currentPhase: 2,
+  status: "executing",
+  startedAt: "2024-01-01T10:00:00Z",
+  completedAt: Option.none(),
+  totalElapsedMins: Option.none(),
+  nodeName: "node1",
+  phases: mockPhases,
+  tasks: [],
+  orchestratorTasks: [],
+  phaseTasks: {},
+  teamMembers: [],
+}
+
+// Shared setup function
+function setupMocks() {
+  vi.clearAllMocks()
+
+  mockUseFocusable.mockReturnValue({
+    isSectionFocused: false,
+    activeIndex: -1,
+  })
+
+  mockUseTypedQuery.mockImplementation((def) => {
+    if (def.key === "projects.list") {
+      return { status: "success", data: mockProjects } as TypedQueryResult<ProjectSummary[]>
+    }
+    if (def.key === "orchestrations.list") {
+      return {
+        status: "success",
+        data: mockOrchestrations,
+      } as TypedQueryResult<OrchestrationSummary[]>
+    }
+    if (def.key === "orchestrations.detail") {
+      return {
+        status: "success",
+        data: mockOrchestrationDetail,
+      } as TypedQueryResult<OrchestrationDetail>
+    }
+    return { status: "loading" }
+  })
+}
+
+describe("App - URL synchronization + selection flow", () => {
+  const mockSelectOrchestration = vi.fn()
+  const mockSelectPhase = vi.fn()
 
   beforeEach(() => {
-    vi.clearAllMocks()
-
-    // Default mock for useFocusable
-    mockUseFocusable.mockReturnValue({
-      isSectionFocused: false,
-      activeIndex: -1,
-    })
-
-    // Default mock for useTypedQuery
-    mockUseTypedQuery.mockImplementation((def) => {
-      if (def.key === "projects.list") {
-        return { status: "success", data: projects } as TypedQueryResult<ProjectSummary[]>
-      }
-      if (def.key === "orchestrations.list") {
-        return {
-          status: "success",
-          data: orchestrations,
-        } as TypedQueryResult<OrchestrationSummary[]>
-      }
-      if (def.key === "orchestrations.detail") {
-        return {
-          status: "success",
-          data: orchestrationDetail,
-        } as TypedQueryResult<OrchestrationDetail>
-      }
-      return { status: "loading" }
-    })
+    setupMocks()
   })
 
   it("renders AppShell with Sidebar and empty state", () => {
@@ -182,15 +186,17 @@ describe("App - URL synchronization + selection flow", () => {
       selectPhase: mockSelectPhase,
     })
 
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/?orch=abc123"]}>
         <App />
       </MemoryRouter>
     )
 
-    // OrchestrationPage should show the feature name (text appears in both sidebar and main)
-    expect(screen.getAllByText("my-feature").length).toBeGreaterThan(0)
-    expect(screen.getByText("tina/my-feature")).toBeInTheDocument()
+    // OrchestrationPage should show the feature name in main content area
+    const main = container.querySelector('main[role="main"]') as HTMLElement
+    expect(main).toBeInTheDocument()
+    expect(within(main).getByText("my-feature")).toBeInTheDocument()
+    expect(within(main).getByText("tina/my-feature")).toBeInTheDocument()
   })
 
   it("shows error state for invalid orchestration ID", () => {
@@ -204,12 +210,12 @@ describe("App - URL synchronization + selection flow", () => {
     // Mock detail query to return null for invalid ID
     mockUseTypedQuery.mockImplementation((def) => {
       if (def.key === "projects.list") {
-        return { status: "success", data: projects } as TypedQueryResult<ProjectSummary[]>
+        return { status: "success", data: mockProjects } as TypedQueryResult<ProjectSummary[]>
       }
       if (def.key === "orchestrations.list") {
         return {
           status: "success",
-          data: orchestrations,
+          data: mockOrchestrations,
         } as TypedQueryResult<OrchestrationSummary[]>
       }
       if (def.key === "orchestrations.detail") {
@@ -273,9 +279,11 @@ describe("App - URL synchronization + selection flow", () => {
       </MemoryRouter>
     )
 
-    // OrchestrationPage should now show the feature name and branch (text appears in both sidebar and main)
-    expect(screen.getAllByText("my-feature").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("tina/my-feature").length).toBeGreaterThan(0)
+    // OrchestrationPage should now show the feature name and branch in main content
+    const mains = screen.getAllByRole("main")
+    const main = mains[mains.length - 1] // Get the last (most recent) render
+    expect(within(main).getByText("my-feature")).toBeInTheDocument()
+    expect(within(main).getByText("tina/my-feature")).toBeInTheDocument()
   })
 
   it("wildcard route renders AppShell and orchestration page", () => {
@@ -308,134 +316,8 @@ describe("App - OrchestrationPage integration (Phase 4)", () => {
   const mockSelectOrchestration = vi.fn()
   const mockSelectPhase = vi.fn()
 
-  const projects: ProjectSummary[] = [
-    {
-      _id: "p1",
-      _creationTime: 1234567890,
-      name: "Project Alpha",
-      repoPath: "/path/to/alpha",
-      createdAt: "2024-01-01T00:00:00Z",
-      orchestrationCount: 1,
-      latestFeature: null,
-      latestStatus: null,
-    },
-  ]
-
-  const orchestrations: OrchestrationSummary[] = [
-    {
-      _id: "abc123",
-      _creationTime: 1234567890,
-      nodeId: "n1",
-      projectId: Option.some("p1"),
-      featureName: "my-feature",
-      designDocPath: "/docs/my-feature.md",
-      branch: "tina/my-feature",
-      worktreePath: Option.none(),
-      totalPhases: 3,
-      currentPhase: 2,
-      status: "executing",
-      startedAt: "2024-01-01T10:00:00Z",
-      completedAt: Option.none(),
-      totalElapsedMins: Option.none(),
-      nodeName: "node1",
-    },
-  ]
-
-  const phases: Phase[] = [
-    {
-      _id: "phase1",
-      _creationTime: 1234567890,
-      orchestrationId: "abc123",
-      phaseNumber: "1",
-      status: "completed",
-      planPath: Option.some("/docs/plans/phase-1.md"),
-      gitRange: Option.some("abc..def"),
-      planningMins: Option.some(10),
-      executionMins: Option.some(20),
-      reviewMins: Option.some(5),
-      startedAt: Option.some("2024-01-01T10:00:00Z"),
-      completedAt: Option.some("2024-01-01T10:35:00Z"),
-    },
-    {
-      _id: "phase2",
-      _creationTime: 1234567891,
-      orchestrationId: "abc123",
-      phaseNumber: "2",
-      status: "executing",
-      planPath: Option.some("/docs/plans/phase-2.md"),
-      gitRange: Option.none(),
-      planningMins: Option.some(15),
-      executionMins: Option.none(),
-      reviewMins: Option.none(),
-      startedAt: Option.some("2024-01-01T10:40:00Z"),
-      completedAt: Option.none(),
-    },
-    {
-      _id: "phase3",
-      _creationTime: 1234567892,
-      orchestrationId: "abc123",
-      phaseNumber: "3",
-      status: "pending",
-      planPath: Option.none(),
-      gitRange: Option.none(),
-      planningMins: Option.none(),
-      executionMins: Option.none(),
-      reviewMins: Option.none(),
-      startedAt: Option.none(),
-      completedAt: Option.none(),
-    },
-  ]
-
-  const orchestrationDetail: OrchestrationDetail = {
-    _id: "abc123",
-    _creationTime: 1234567890,
-    nodeId: "n1",
-    featureName: "my-feature",
-    designDocPath: "/docs/my-feature.md",
-    branch: "tina/my-feature",
-    worktreePath: Option.none(),
-    totalPhases: 3,
-    currentPhase: 2,
-    status: "executing",
-    startedAt: "2024-01-01T10:00:00Z",
-    completedAt: Option.none(),
-    totalElapsedMins: Option.none(),
-    nodeName: "node1",
-    phases,
-    tasks: [],
-    orchestratorTasks: [],
-    phaseTasks: {},
-    teamMembers: [],
-  }
-
   beforeEach(() => {
-    vi.clearAllMocks()
-
-    // Default mock for useFocusable
-    mockUseFocusable.mockReturnValue({
-      isSectionFocused: false,
-      activeIndex: -1,
-    })
-
-    // Default mock for useTypedQuery
-    mockUseTypedQuery.mockImplementation((def) => {
-      if (def.key === "projects.list") {
-        return { status: "success", data: projects } as TypedQueryResult<ProjectSummary[]>
-      }
-      if (def.key === "orchestrations.list") {
-        return {
-          status: "success",
-          data: orchestrations,
-        } as TypedQueryResult<OrchestrationSummary[]>
-      }
-      if (def.key === "orchestrations.detail") {
-        return {
-          status: "success",
-          data: orchestrationDetail,
-        } as TypedQueryResult<OrchestrationDetail>
-      }
-      return { status: "loading" }
-    })
+    setupMocks()
   })
 
   it("renders OrchestrationPage with phase timeline when orchestration selected", () => {
@@ -446,20 +328,21 @@ describe("App - OrchestrationPage integration (Phase 4)", () => {
       selectPhase: mockSelectPhase,
     })
 
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/?orch=abc123"]}>
         <App />
       </MemoryRouter>
     )
 
-    // Verify orchestration page header renders (text appears in both sidebar and main)
-    expect(screen.getAllByText("my-feature").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("tina/my-feature").length).toBeGreaterThan(0)
+    // Verify orchestration page header renders in main content
+    const main = container.querySelector('main[role="main"]') as HTMLElement
+    expect(within(main).getByText("my-feature")).toBeInTheDocument()
+    expect(within(main).getByText("tina/my-feature")).toBeInTheDocument()
 
-    // Verify phase timeline renders with phases (as headings in phase cards)
-    expect(screen.getAllByText(/P1 Phase 1/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/P2 Phase 2/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/P3 Phase 3/i).length).toBeGreaterThan(0)
+    // Verify phase timeline renders with phases
+    expect(within(main).getByText(/P1 Phase 1/i)).toBeInTheDocument()
+    expect(within(main).getByText(/P2 Phase 2/i)).toBeInTheDocument()
+    expect(within(main).getByText(/P3 Phase 3/i)).toBeInTheDocument()
   })
 
   it("phase timeline is interactive and wired to selection", () => {
@@ -567,21 +450,21 @@ describe("App - OrchestrationPage integration (Phase 4)", () => {
       selectPhase: mockSelectPhase,
     })
 
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/?orch=abc123"]}>
         <App />
       </MemoryRouter>
     )
 
-    // Verify all phases from detail query are rendered
-    phases.forEach((phase) => {
-      const phaseTexts = screen.getAllByText(new RegExp(`P${phase.phaseNumber} Phase ${phase.phaseNumber}`, "i"))
-      expect(phaseTexts.length).toBeGreaterThan(0)
+    // Verify all phases from detail query are rendered in main content
+    const main = container.querySelector('main[role="main"]') as HTMLElement
+    mockPhases.forEach((phase) => {
+      expect(within(main).getByText(new RegExp(`P${phase.phaseNumber} Phase ${phase.phaseNumber}`, "i"))).toBeInTheDocument()
     })
 
-    // Verify status badges match (may appear in multiple renders)
-    expect(screen.getAllByText("completed").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("executing").length).toBeGreaterThan(0)
-    expect(screen.getAllByText("pending").length).toBeGreaterThan(0)
+    // Verify status badges match in main content
+    expect(within(main).getByText("completed")).toBeInTheDocument()
+    expect(within(main).getByText("executing")).toBeInTheDocument()
+    expect(within(main).getByText("pending")).toBeInTheDocument()
   })
 })
