@@ -96,9 +96,10 @@ describe("queryDefs", () => {
       }
 
       const decoded = Schema.decodeUnknownSync(OrchestrationDetailQuery.schema)(validData)
-      expect(decoded._id).toBe("orch123")
-      expect(decoded.phases).toEqual([])
-      expect(decoded.teamMembers).toEqual([])
+      expect(decoded).not.toBeNull()
+      expect(decoded!._id).toBe("orch123")
+      expect(decoded!.phases).toEqual([])
+      expect(decoded!.teamMembers).toEqual([])
     })
   })
 

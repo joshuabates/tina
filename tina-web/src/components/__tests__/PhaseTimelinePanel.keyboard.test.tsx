@@ -21,7 +21,7 @@ const mockUseActionRegistration = vi.mocked(
 ).useActionRegistration
 
 describe("PhaseTimelinePanel - Keyboard Navigation", () => {
-  let mockSelectPhase: ReturnType<typeof vi.fn>
+  let mockSelectPhase: ReturnType<typeof vi.fn<(id: string | null) => void>>
   let mockExecute: ((ctx: ActionContext) => void) | undefined
 
   beforeEach(() => {
