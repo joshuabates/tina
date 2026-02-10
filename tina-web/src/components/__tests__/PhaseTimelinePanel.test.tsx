@@ -295,12 +295,15 @@ describe("PhaseTimelinePanel", () => {
       phaseTasks: {},
     })
 
-    render(<PhaseTimelinePanel detail={detail} />)
+    const { container } = render(<PhaseTimelinePanel detail={detail} />)
 
-    // StatusBadge displays uppercase but the component lowercases the status string before passing
-    // Check that the badge is rendered with correct styling (which validates the mapping)
-    expect(screen.getByText("complete")).toBeInTheDocument()
-    expect(screen.getByText("executing")).toBeInTheDocument()
+    // Check phase 1 has complete badge
+    const phase1Element = container.querySelector('[_id="phase1"]')
+    expect(phase1Element).toHaveTextContent("complete")
+
+    // Check phase 2 has executing badge
+    const phase2Element = container.querySelector('[_id="phase2"]')
+    expect(phase2Element).toHaveTextContent("executing")
   })
 
   it("handles empty phases array", () => {

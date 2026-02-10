@@ -4,7 +4,6 @@ import { MemoryRouter } from "react-router-dom"
 import { OrchestrationPage } from "../OrchestrationPage"
 import type { TypedQueryResult } from "@/hooks/useTypedQuery"
 import type { OrchestrationDetail } from "@/schemas"
-import { NotFoundError } from "@/services/errors"
 import { Option } from "effect"
 
 // Mock hooks
