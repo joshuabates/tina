@@ -264,4 +264,33 @@ describe("ReviewSection", () => {
 
     expect(mockUseFocusable).toHaveBeenCalledWith("rightPanel.review", 2)
   })
+
+  it("review action button has accessible aria-label", () => {
+    const detail = createMockDetail()
+    const events: OrchestrationEvent[] = [
+      {
+        _id: "evt1",
+        _creationTime: 1234567890,
+        orchestrationId: "orch1",
+        phaseNumber: Option.some("1"),
+        eventType: "phase_review_requested",
+        source: "supervisor",
+        summary: "Review requested",
+        detail: Option.none(),
+        recordedAt: "2024-01-01T10:00:00Z",
+      },
+    ]
+
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: events,
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<ReviewSection detail={detail} />)
+
+    // Review action button should have aria-label
+    const reviewButton = screen.getByRole("button", { name: "Review and approve phase" })
+    expect(reviewButton).toBeInTheDocument()
+    expect(reviewButton).toHaveAccessibleName("Review and approve phase")
+  })
 })

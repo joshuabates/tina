@@ -100,4 +100,13 @@ describe("RightPanel", () => {
     // Review should show empty state
     expect(screen.getByText(/no review events/i)).toBeInTheDocument()
   })
+
+  it("has complementary landmark role for accessibility", () => {
+    const detail = createMockDetail()
+
+    render(<RightPanel detail={detail} />)
+
+    const rightPanel = screen.getByRole("complementary", { name: "Orchestration details" })
+    expect(rightPanel).toBeInTheDocument()
+  })
 })

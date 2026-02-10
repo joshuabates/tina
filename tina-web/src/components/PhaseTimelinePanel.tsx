@@ -104,6 +104,8 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
   return (
     <>
       <PhaseTimeline
+        role="listbox"
+        aria-label="Phase timeline"
         aria-activedescendant={activeDescendantId}
         phases={phaseCards.map((card, index) => {
           const isSelected = phaseId === card._id
@@ -121,7 +123,7 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
             tabIndex: isFocused ? 0 : -1,
             id: phaseItemId,
             _id: card._id,
-            "aria-current": isSelected ? ("true" as const) : undefined,
+            "aria-current": isSelected ? ("step" as const) : undefined,
             "data-focused": isFocused ? ("true" as const) : undefined,
           } as PhaseCardProps & {
             id: string

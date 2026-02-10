@@ -74,13 +74,13 @@ export function AppShell() {
         role="navigation"
         aria-label="Main sidebar"
       >
-        <button onClick={toggleCollapsed} aria-label="Collapse sidebar">
+        <button onClick={toggleCollapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
           {collapsed ? ">" : "<"}
         </button>
         <Sidebar collapsed={collapsed} />
       </div>
 
-      <main className={styles.main} role="main" aria-label="Page content">
+      <main className={styles.main} aria-label="Page content">
         <Outlet />
       </main>
 

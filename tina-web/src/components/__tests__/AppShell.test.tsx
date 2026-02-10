@@ -67,6 +67,16 @@ describe("AppShell", () => {
     expect(screen.getByRole("main")).toHaveAttribute("aria-label", "Page content")
   })
 
+  it("uses semantic main element without redundant role attribute", () => {
+    renderWithRouter(<AppShell />)
+
+    const main = screen.getByRole("main")
+    // Should have aria-label but NOT role attribute (semantic <main> already provides the role)
+    expect(main).toHaveAttribute("aria-label", "Page content")
+    expect(main.tagName).toBe("MAIN")
+    expect(main).not.toHaveAttribute("role")
+  })
+
   it("sidebar starts expanded by default", () => {
     renderWithRouter(<AppShell />)
 
@@ -92,6 +102,29 @@ describe("AppShell", () => {
     // Click to expand
     await user.click(collapseButton)
     expect(sidebar.className).not.toContain(styles.collapsed)
+  })
+
+  it("sidebar collapse button label reflects current state", async () => {
+    const user = userEvent.setup()
+    renderWithRouter(<AppShell />)
+
+    // Initially expanded - button should say "Collapse sidebar"
+    let collapseButton = screen.getByRole("button", { name: "Collapse sidebar" })
+    expect(collapseButton).toBeInTheDocument()
+
+    // Click to collapse
+    await user.click(collapseButton)
+
+    // Now collapsed - button should say "Expand sidebar"
+    const expandButton = screen.getByRole("button", { name: "Expand sidebar" })
+    expect(expandButton).toBeInTheDocument()
+
+    // Click to expand
+    await user.click(expandButton)
+
+    // Back to expanded - button should say "Collapse sidebar" again
+    collapseButton = screen.getByRole("button", { name: "Collapse sidebar" })
+    expect(collapseButton).toBeInTheDocument()
   })
 
   describe("Header and Footer Integration", () => {

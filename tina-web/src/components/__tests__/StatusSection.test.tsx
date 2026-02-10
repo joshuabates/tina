@@ -142,4 +142,20 @@ describe("StatusSection", () => {
     // StatusBadge should receive lowercase status
     expect(screen.getByText("executing")).toBeInTheDocument()
   })
+
+  it("action buttons have accessible aria-labels", () => {
+    const detail = createMockDetail()
+
+    render(<StatusSection detail={detail} />)
+
+    // Design Plan button should have aria-label
+    const designButton = screen.getByRole("button", { name: "Open design plan" })
+    expect(designButton).toBeInTheDocument()
+    expect(designButton).toHaveAccessibleName("Open design plan")
+
+    // Phase Plan button should have aria-label
+    const phaseButton = screen.getByRole("button", { name: "Open phase plan" })
+    expect(phaseButton).toBeInTheDocument()
+    expect(phaseButton).toHaveAccessibleName("Open phase plan")
+  })
 })

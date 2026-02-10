@@ -11,7 +11,7 @@ interface RightPanelProps {
 
 export function RightPanel({ detail }: RightPanelProps) {
   return (
-    <ScrollArea>
+    <ScrollArea role="complementary" aria-label="Orchestration details">
       <StatusSection detail={detail} />
       <TeamSection detail={detail} />
       <GitOpsSection detail={detail} />

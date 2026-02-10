@@ -54,6 +54,7 @@ export function ReviewSection({ detail }: ReviewSectionProps) {
             onClick={() => {
               // TODO: Handle review approval
             }}
+            aria-label="Review and approve phase"
           >
             Review and Approve
           </button>

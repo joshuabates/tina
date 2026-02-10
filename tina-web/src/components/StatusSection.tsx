@@ -54,6 +54,7 @@ export function StatusSection({ detail }: StatusSectionProps) {
             onClick={() => {
               // TODO: Open design doc
             }}
+            aria-label="Open design plan"
           >
             Design Plan
           </button>
@@ -62,6 +63,7 @@ export function StatusSection({ detail }: StatusSectionProps) {
             onClick={() => {
               // TODO: Open phase plan
             }}
+            aria-label="Open phase plan"
           >
             Phase Plan
           </button>
