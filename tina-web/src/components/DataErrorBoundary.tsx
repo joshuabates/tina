@@ -3,7 +3,6 @@ import type {
   NotFoundError,
   PermissionError,
   QueryValidationError,
-  TransientDataError,
 } from "@/services/errors"
 import styles from "./DataErrorBoundary.module.scss"
 
