@@ -27,27 +27,16 @@ describe("deduplicateTaskEvents", () => {
 });
 
 describe("loadTaskEventsForOrchestration", () => {
-  it("loads every page until done", async () => {
+  it("loads a bounded recent event slice for an orchestration", async () => {
     const first = { _id: "evt-1" };
     const second = { _id: "evt-2" };
     const third = { _id: "evt-3" };
 
-    const paginate = vi
-      .fn()
-      .mockResolvedValueOnce({
-        page: [first, second],
-        isDone: false,
-        continueCursor: "cursor-1",
-      })
-      .mockResolvedValueOnce({
-        page: [third],
-        isDone: true,
-        continueCursor: "cursor-2",
-      });
+    const take = vi.fn().mockResolvedValue([first, second, third]);
 
     const orderedQuery: any = {
       order: vi.fn(),
-      paginate,
+      take,
     };
     orderedQuery.order.mockReturnValue(orderedQuery);
 
@@ -66,15 +55,9 @@ describe("loadTaskEventsForOrchestration", () => {
 
     expect(events).toEqual([first, second, third]);
     expect(ctx.db.query).toHaveBeenCalledWith("taskEvents");
+    expect(ctx.db.query).toHaveBeenCalledTimes(1);
     expect(indexedQuery.withIndex).toHaveBeenCalled();
     expect(orderedQuery.order).toHaveBeenCalledWith("desc");
-    expect(paginate).toHaveBeenNthCalledWith(1, {
-      cursor: null,
-      numItems: 256,
-    });
-    expect(paginate).toHaveBeenNthCalledWith(2, {
-      cursor: "cursor-1",
-      numItems: 256,
-    });
+    expect(take).toHaveBeenCalledWith(1000);
   });
 });

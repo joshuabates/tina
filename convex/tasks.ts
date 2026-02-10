@@ -4,8 +4,7 @@ import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
 const ORCHESTRATOR_PHASE_KEY = "__orchestrator__";
-const TASK_EVENT_PAGE_SIZE = 256;
-const MAX_TASK_EVENT_PAGES = 5000;
+const TASK_EVENT_SCAN_LIMIT = 1000;
 
 export function deduplicateTaskEvents<
   T extends { taskId: string; recordedAt: string; phaseNumber?: string | null },
@@ -29,40 +28,14 @@ export async function loadTaskEventsForOrchestration(
   ctx: QueryCtx,
   orchestrationId: Id<"orchestrations">,
 ) {
-  const query = ctx.db
+  // Keep task-event reads bounded to avoid Convex per-function read limits.
+  return await ctx.db
     .query("taskEvents")
     .withIndex("by_orchestration_recorded", (q) =>
       q.eq("orchestrationId", orchestrationId),
     )
-    .order("desc");
-
-  const events = [];
-  let cursor: string | null = null;
-  let pageCount = 0;
-
-  while (true) {
-    if (pageCount >= MAX_TASK_EVENT_PAGES) {
-      throw new Error(
-        `Exceeded ${MAX_TASK_EVENT_PAGES} task event pages for orchestration ${orchestrationId}`,
-      );
-    }
-
-    const page = await query.paginate({
-      cursor,
-      numItems: TASK_EVENT_PAGE_SIZE,
-    });
-
-    events.push(...page.page);
-    pageCount += 1;
-
-    if (page.isDone) {
-      break;
-    }
-
-    cursor = page.continueCursor;
-  }
-
-  return events;
+    .order("desc")
+    .take(TASK_EVENT_SCAN_LIMIT);
 }
 
 export const getCurrentTasks = query({
