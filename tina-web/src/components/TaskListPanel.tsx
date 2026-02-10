@@ -1,8 +1,10 @@
+import { useState, useRef } from "react"
 import { Option } from "effect"
 import { useFocusable } from "@/hooks/useFocusable"
 import { useSelection } from "@/hooks/useSelection"
 import { useActionRegistration } from "@/hooks/useActionRegistration"
 import { TaskCard } from "@/components/ui/task-card"
+import { TaskQuicklook } from "@/components/TaskQuicklook"
 import type { StatusBadgeStatus } from "@/components/ui/status-badge"
 import type { OrchestrationDetail } from "@/schemas"
 
@@ -19,6 +21,8 @@ function mapTaskStatus(status: string): StatusBadgeStatus {
 
 export function TaskListPanel({ detail }: TaskListPanelProps) {
   const { phaseId } = useSelection()
+  const [quicklookTaskId, setQuicklookTaskId] = useState<string | null>(null)
+  const focusedElementRef = useRef<HTMLElement | null>(null)
 
   // Find the selected phase
   const selectedPhase = phaseId
@@ -40,9 +44,33 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
     key: " ",
     when: "taskList",
     execute: () => {
-      // TODO: Wire quicklook in Task 5
+      const task = tasks[activeIndex]
+      if (task) {
+        if (quicklookTaskId === task._id) {
+          // Closing quicklook
+          setQuicklookTaskId(null)
+        } else {
+          // Opening quicklook - save current focused element
+          focusedElementRef.current = document.activeElement as HTMLElement
+          setQuicklookTaskId(task._id)
+        }
+      }
     },
   })
+
+  const handleQuicklookClose = () => {
+    setQuicklookTaskId(null)
+    // Restore focus to the previously focused task element
+    if (focusedElementRef.current) {
+      focusedElementRef.current.focus()
+      focusedElementRef.current = null
+    }
+  }
+
+  // Find quicklook task data
+  const quicklookTask = quicklookTaskId
+    ? tasks.find((t) => t._id === quicklookTaskId)
+    : null
 
   // Calculate aria-activedescendant
   const activeDescendantId =
@@ -69,39 +97,44 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-border">
-        <h3 className="text-sm font-semibold">
-          Phase {selectedPhase?.phaseNumber} - {tasks.length} tasks
-        </h3>
-      </div>
+    <>
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-border">
+          <h3 className="text-sm font-semibold">
+            Phase {selectedPhase?.phaseNumber} - {tasks.length} tasks
+          </h3>
+        </div>
 
-      {/* Task list */}
-      <div
-        className="flex-1 overflow-y-auto p-4 space-y-2"
-        role="list"
-        aria-activedescendant={activeDescendantId}
-      >
-        {tasks.map((task, index) => {
-          const isFocused = isSectionFocused && activeIndex === index
-          const tabIndex = isFocused ? 0 : -1
+        {/* Task list */}
+        <div
+          className="flex-1 overflow-y-auto p-4 space-y-2"
+          role="list"
+          aria-activedescendant={activeDescendantId}
+        >
+          {tasks.map((task, index) => {
+            const isFocused = isSectionFocused && activeIndex === index
+            const tabIndex = isFocused ? 0 : -1
 
-          return (
-            <TaskCard
-              key={task._id}
-              id={`task-${task._id}`}
-              taskId={task.taskId}
-              subject={task.subject}
-              status={mapTaskStatus(task.status)}
-              assignee={Option.getOrUndefined(task.owner)}
-              blockedReason={Option.getOrUndefined(task.blockedBy)}
-              tabIndex={tabIndex}
-              data-focused={isFocused ? "true" : undefined}
-            />
-          )
-        })}
+            return (
+              <TaskCard
+                key={task._id}
+                id={`task-${task._id}`}
+                taskId={task.taskId}
+                subject={task.subject}
+                status={mapTaskStatus(task.status)}
+                assignee={Option.getOrUndefined(task.owner)}
+                blockedReason={Option.getOrUndefined(task.blockedBy)}
+                tabIndex={tabIndex}
+                data-focused={isFocused ? "true" : undefined}
+              />
+            )
+          })}
+        </div>
       </div>
-    </div>
+      {quicklookTask && (
+        <TaskQuicklook task={quicklookTask} onClose={handleQuicklookClose} />
+      )}
+    </>
   )
 }
