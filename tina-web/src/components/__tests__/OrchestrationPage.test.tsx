@@ -257,6 +257,60 @@ describe("OrchestrationPage", () => {
     consoleSpy.mockRestore()
   })
 
+  it("resets error boundary when selected orchestration changes", () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    mockUseSelection.mockReturnValue({
+      orchestrationId: "o1",
+      phaseId: null,
+      selectOrchestration: vi.fn(),
+      selectPhase: vi.fn(),
+    })
+
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: null,
+    } as TypedQueryResult<OrchestrationDetail | null>)
+
+    const { rerender, container } = render(
+      <MemoryRouter>
+        <OrchestrationPage />
+      </MemoryRouter>
+    )
+
+    expect(container.textContent).toContain("orchestration not found")
+
+    mockUseSelection.mockReturnValue({
+      orchestrationId: "o2",
+      phaseId: null,
+      selectOrchestration: vi.fn(),
+      selectPhase: vi.fn(),
+    })
+
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: {
+        ...mockOrchestration,
+        _id: "o2",
+        featureName: "next-feature",
+        branch: "tina/next-feature",
+      },
+    } as TypedQueryResult<OrchestrationDetail>)
+
+    rerender(
+      <MemoryRouter>
+        <OrchestrationPage />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByTestId("phase-timeline-panel")).toBeInTheDocument()
+    expect(screen.getByText(/Phase Timeline for next-feature/)).toBeInTheDocument()
+    expect(screen.getByTestId("task-list-panel")).toBeInTheDocument()
+    expect(screen.getByTestId("right-panel")).toBeInTheDocument()
+
+    consoleSpy.mockRestore()
+  })
+
   it("renders RightPanel when data loaded", () => {
     mockUseSelection.mockReturnValue({
       orchestrationId: "o1",

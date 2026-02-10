@@ -23,6 +23,10 @@ export function ReviewSection({ detail }: ReviewSectionProps) {
   // Register focus section
   useFocusable("rightPanel.review", reviewEvents.length)
 
+  if (eventsResult.status === "error") {
+    throw eventsResult.error
+  }
+
   return (
     <PanelSection label="Review">
       {eventsResult.status === "loading" ? (

@@ -293,4 +293,15 @@ describe("ReviewSection", () => {
     expect(reviewButton).toBeInTheDocument()
     expect(reviewButton).toHaveAccessibleName("Review and approve phase")
   })
+
+  it("throws query errors to parent error boundary", () => {
+    const detail = createMockDetail()
+    const error = new Error("Failed to load review events")
+    mockUseTypedQuery.mockReturnValue({
+      status: "error",
+      error,
+    })
+
+    expect(() => render(<ReviewSection detail={detail} />)).toThrow(error)
+  })
 })

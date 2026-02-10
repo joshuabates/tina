@@ -58,7 +58,7 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
   useActionRegistration({
     id: "phaseTimeline.quicklook",
     label: "Quick Look",
-    key: "Space",
+    key: " ",
     when: "phaseTimeline",
     execute: () => {
       const phase = detail.phases[activeIndex]

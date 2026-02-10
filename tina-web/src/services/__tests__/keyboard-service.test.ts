@@ -148,6 +148,40 @@ describe("KeyboardService", () => {
   })
 
   describe("Scoped action keybinding resolution", () => {
+    it("resolves focused-section action bindings with section scope", () => {
+      const mockAction = {
+        id: "delete-item",
+        label: "Delete",
+        key: "d",
+        when: "sidebar",
+        execute: mockExecute as (ctx: ActionContext) => void,
+      }
+
+      vi.mocked(actionRegistry.resolve).mockImplementation((key, scope) => {
+        if (key === "d" && scope === "sidebar") return mockAction
+        return undefined
+      })
+
+      const service = createKeyboardService({ actionRegistry, focusService })
+      service.attach()
+
+      const event = new KeyboardEvent("keydown", {
+        key: "d",
+        bubbles: true,
+        cancelable: true,
+      })
+      document.dispatchEvent(event)
+
+      expect(actionRegistry.resolve).toHaveBeenCalledWith("d", "sidebar")
+      expect(mockExecute).toHaveBeenCalledWith({
+        selectedItem: "0",
+        focusedSection: "sidebar",
+      })
+      expect(event.defaultPrevented).toBe(true)
+
+      service.detach()
+    })
+
     it("resolves focused-section action bindings", () => {
       const mockAction = {
         id: "delete-item",
@@ -395,6 +429,30 @@ describe("KeyboardService", () => {
       expect(actionRegistry.resolve).not.toHaveBeenCalled()
 
       document.body.removeChild(input)
+      service.detach()
+    })
+
+    it("blocks background navigation while aria-modal dialog is open", () => {
+      const service = createKeyboardService({ actionRegistry, focusService })
+      service.attach()
+
+      const dialog = document.createElement("div")
+      dialog.setAttribute("role", "dialog")
+      dialog.setAttribute("aria-modal", "true")
+      document.body.appendChild(dialog)
+
+      const event = new KeyboardEvent("keydown", {
+        key: "Tab",
+        bubbles: true,
+        cancelable: true,
+      })
+      document.dispatchEvent(event)
+
+      expect(focusService.focusNextSection).not.toHaveBeenCalled()
+      expect(actionRegistry.resolve).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+
+      document.body.removeChild(dialog)
       service.detach()
     })
   })

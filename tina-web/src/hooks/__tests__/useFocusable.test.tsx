@@ -114,6 +114,31 @@ describe("useFocusable", () => {
     expect(state.sections["test-section"]).toEqual({ itemCount: 10 })
   })
 
+  it("preserves active section when item count changes", () => {
+    const { result, rerender } = renderHook(
+      ({ count }) => {
+        const services = useServices()
+        useFocusable("section-1", 3)
+        useFocusable("section-2", count)
+        return services
+      },
+      {
+        wrapper,
+        initialProps: { count: 2 },
+      }
+    )
+
+    act(() => {
+      result.current.focusService.focusSection("section-2")
+    })
+    expect(result.current.focusService.getState().activeSection).toBe("section-2")
+
+    rerender({ count: 5 })
+
+    expect(result.current.focusService.getState().activeSection).toBe("section-2")
+    expect(result.current.focusService.getState().sections["section-2"]).toEqual({ itemCount: 5 })
+  })
+
   it("reacts to focus changes from service", () => {
     const { result } = renderHook(
       () => {

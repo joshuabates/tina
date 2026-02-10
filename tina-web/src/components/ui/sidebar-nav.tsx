@@ -41,9 +41,11 @@ function SidebarNav({ projects, activeDescendantId, className, ...props }: Sideb
             </div>
             {project.items.length > 0 && (
               <div className="ml-4 space-y-0.5 border-l border-border/50">
-                {project.items.map((item) => (
-                  <SidebarItem key={item.label} {...item} />
-                ))}
+                {project.items.map((item, index) => {
+                  const itemKey =
+                    item["data-orchestration-id"] ?? item.id ?? `${project.name}-${index}`
+                  return <SidebarItem key={itemKey} {...item} />
+                })}
               </div>
             )}
           </div>

@@ -302,4 +302,15 @@ describe("GitOpsSection", () => {
 
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
   })
+
+  it("throws query errors to parent error boundary", () => {
+    const detail = createMockDetail()
+    const error = new Error("Failed to load events")
+    mockUseTypedQuery.mockReturnValue({
+      status: "error",
+      error,
+    })
+
+    expect(() => render(<GitOpsSection detail={detail} />)).toThrow(error)
+  })
 })

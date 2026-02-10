@@ -43,6 +43,7 @@ export function createKeyboardService(config: KeyboardServiceConfig) {
 
     const key = normalizeKey(e)
     const state = focusService.getState()
+    const hasAriaModal = document.querySelector('[role="dialog"][aria-modal="true"]') !== null
 
     // 1. Modal-local bindings
     if (modalScope) {
@@ -50,8 +51,14 @@ export function createKeyboardService(config: KeyboardServiceConfig) {
       if (action) {
         e.preventDefault()
         action.execute({ selectedItem: undefined, focusedSection: modalScope })
-        return
       }
+      // When a modal scope is active, do not dispatch global navigation/actions.
+      return
+    }
+
+    // If a modal is open but not explicitly scoped yet, avoid background navigation.
+    if (hasAriaModal) {
+      return
     }
 
     // 2. Tab navigation
@@ -79,15 +86,17 @@ export function createKeyboardService(config: KeyboardServiceConfig) {
 
     // 4. Focused-section action bindings
     if (state.activeSection) {
-      const scope = `${state.activeSection}.focused`
-      const action = actionRegistry.resolve(key, scope)
-      if (action) {
-        e.preventDefault()
-        action.execute({
-          selectedItem: String(state.activeIndex),
-          focusedSection: state.activeSection,
-        })
-        return
+      const scopes = [state.activeSection, `${state.activeSection}.focused`]
+      for (const scope of scopes) {
+        const action = actionRegistry.resolve(key, scope)
+        if (action) {
+          e.preventDefault()
+          action.execute({
+            selectedItem: String(state.activeIndex),
+            focusedSection: state.activeSection,
+          })
+          return
+        }
       }
     }
 

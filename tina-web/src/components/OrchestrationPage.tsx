@@ -10,15 +10,20 @@ import { NotFoundError } from "@/services/errors"
 import styles from "./OrchestrationPage.module.scss"
 
 export function OrchestrationPage() {
+  const { orchestrationId } = useSelection()
+
   return (
-    <DataErrorBoundary panelName="orchestration">
-      <OrchestrationPageContent />
+    <DataErrorBoundary key={orchestrationId ?? "none"} panelName="orchestration">
+      <OrchestrationPageContent orchestrationId={orchestrationId} />
     </DataErrorBoundary>
   )
 }
 
-function OrchestrationPageContent() {
-  const { orchestrationId } = useSelection()
+interface OrchestrationPageContentProps {
+  orchestrationId: string | null
+}
+
+function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentProps) {
 
   // No orchestration selected - show empty state
   if (!orchestrationId) {

@@ -7,7 +7,7 @@ export function useFocusable(sectionId: string, itemCount: number) {
   useEffect(() => {
     const cleanup = focusService.registerSection(sectionId, itemCount)
     return cleanup
-  }, [focusService, sectionId, itemCount])
+  }, [focusService, sectionId])
 
   useEffect(() => {
     focusService.setItemCount(sectionId, itemCount)

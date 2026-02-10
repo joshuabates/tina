@@ -28,6 +28,10 @@ export function GitOpsSection({ detail }: GitOpsSectionProps) {
     )
   }
 
+  if (eventsResult.status === "error") {
+    throw eventsResult.error
+  }
+
   const events = eventsResult.status === "success" ? eventsResult.data : []
 
   // Filter git events (events with eventType starting with "git_")
