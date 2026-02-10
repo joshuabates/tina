@@ -198,7 +198,7 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
 
       const { container } = render(<PhaseTimelinePanel detail={detail} />)
 
-      const phase2Element = container.querySelector('[_id="phase2"]')
+      const phase2Element = container.querySelector('[id="phase-phase2"]')
       expect(phase2Element).toHaveAttribute("tabIndex", "0")
     })
 
@@ -212,10 +212,10 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
 
       const { container } = render(<PhaseTimelinePanel detail={detail} />)
 
-      const phase1Element = container.querySelector('[_id="phase1"]')
+      const phase1Element = container.querySelector('[id="phase-phase1"]')
       expect(phase1Element).toHaveAttribute("tabIndex", "-1")
 
-      const phase3Element = container.querySelector('[_id="phase3"]')
+      const phase3Element = container.querySelector('[id="phase-phase3"]')
       expect(phase3Element).toHaveAttribute("tabIndex", "-1")
     })
 
@@ -229,13 +229,13 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
 
       const { container } = render(<PhaseTimelinePanel detail={detail} />)
 
-      const phase1Element = container.querySelector('[_id="phase1"]')
+      const phase1Element = container.querySelector('[id="phase-phase1"]')
       expect(phase1Element).toHaveAttribute("tabIndex", "-1")
 
-      const phase2Element = container.querySelector('[_id="phase2"]')
+      const phase2Element = container.querySelector('[id="phase-phase2"]')
       expect(phase2Element).toHaveAttribute("tabIndex", "-1")
 
-      const phase3Element = container.querySelector('[_id="phase3"]')
+      const phase3Element = container.querySelector('[id="phase-phase3"]')
       expect(phase3Element).toHaveAttribute("tabIndex", "-1")
     })
   })
@@ -295,7 +295,7 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
 
       const { container } = render(<PhaseTimelinePanel detail={detail} />)
 
-      const phase2Element = container.querySelector('[_id="phase2"]')
+      const phase2Element = container.querySelector('[id="phase-phase2"]')
       expect(phase2Element).toHaveAttribute("data-focused", "true")
       // Focus styling: ring-2 with muted color
       expect(phase2Element).toHaveClass("ring-2")
@@ -319,12 +319,12 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
       const { container } = render(<PhaseTimelinePanel detail={detail} />)
 
       // Phase 2 should have focus ring (muted color)
-      const phase2Element = container.querySelector('[_id="phase2"]')
+      const phase2Element = container.querySelector('[id="phase-phase2"]')
       expect(phase2Element).toHaveClass("ring-2")
       expect(phase2Element).toHaveClass("ring-muted-foreground/40")
 
       // Phase 3 should have selection ring (primary color)
-      const phase3Element = container.querySelector('[_id="phase3"]')
+      const phase3Element = container.querySelector('[id="phase-phase3"]')
       expect(phase3Element).toHaveClass("ring-2", "ring-primary")
     })
 
@@ -345,7 +345,7 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
 
       const { container } = render(<PhaseTimelinePanel detail={detail} />)
 
-      const phase2Element = container.querySelector('[_id="phase2"]')
+      const phase2Element = container.querySelector('[id="phase-phase2"]')
       // Should have both focus and selection styling
       // When both are active, selection ring takes precedence (applied last)
       expect(phase2Element).toHaveClass("ring-2", "ring-primary")
@@ -386,13 +386,13 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
 
       const { container } = render(<PhaseTimelinePanel detail={detail} />)
 
-      const phase1Element = container.querySelector('[_id="phase1"]')
+      const phase1Element = container.querySelector('[id="phase-phase1"]')
       expect(phase1Element).toHaveAttribute("id", "phase-phase1")
 
-      const phase2Element = container.querySelector('[_id="phase2"]')
+      const phase2Element = container.querySelector('[id="phase-phase2"]')
       expect(phase2Element).toHaveAttribute("id", "phase-phase2")
 
-      const phase3Element = container.querySelector('[_id="phase3"]')
+      const phase3Element = container.querySelector('[id="phase-phase3"]')
       expect(phase3Element).toHaveAttribute("id", "phase-phase3")
     })
 
@@ -409,7 +409,7 @@ describe("PhaseTimelinePanel - Keyboard Navigation", () => {
       const timelineContainer = container.querySelector('[aria-activedescendant]')
       const activeDescendantId = timelineContainer?.getAttribute("aria-activedescendant")
 
-      const phase1Element = container.querySelector('[_id="phase1"]')
+      const phase1Element = container.querySelector('[id="phase-phase1"]')
       const phase1Id = phase1Element?.getAttribute("id")
 
       expect(activeDescendantId).toBe(phase1Id)
