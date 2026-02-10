@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react"
 import { StatusSection } from "../StatusSection"
 import { buildOrchestrationDetail, none, some } from "@/test/builders/domain"
 import { focusableState } from "@/test/harness/hooks"
+import { expectStatusLabelUpperVisible } from "@/test/harness/status"
 
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useActionRegistration")
@@ -51,7 +52,7 @@ describe("StatusSection", () => {
   it("shows correct status badge for orchestration status", () => {
     renderStatus({ status: "executing" })
 
-    expect(screen.getByText("EXECUTING")).toBeInTheDocument()
+    expectStatusLabelUpperVisible("executing")
   })
 
   it("shows status line for each orchestration status", () => {
@@ -59,7 +60,7 @@ describe("StatusSection", () => {
 
     for (const status of statuses) {
       const { unmount } = renderStatus({ status })
-      expect(screen.getByText(status.toUpperCase())).toBeInTheDocument()
+      expectStatusLabelUpperVisible(status)
       unmount()
     }
   })
@@ -107,7 +108,7 @@ describe("StatusSection", () => {
   it("normalizes status text to uppercase", () => {
     renderStatus({ status: "EXECUTING" })
 
-    expect(screen.getByText("EXECUTING")).toBeInTheDocument()
+    expectStatusLabelUpperVisible("EXECUTING")
   })
 
   it("action buttons have accessible aria-labels", () => {

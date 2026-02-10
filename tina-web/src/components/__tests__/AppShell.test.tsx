@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
-import { MemoryRouter } from "react-router-dom"
+import { screen } from "@testing-library/react"
 import { AppShell } from "../AppShell"
 import styles from "../AppShell.module.scss"
 import {
@@ -10,62 +9,40 @@ import {
 } from "@/test/builders/domain"
 import {
   queryLoading,
-  queryStateFor,
   querySuccess,
   type QueryStateMap,
 } from "@/test/builders/query"
-import { selectionState, type SelectionStateMock } from "@/test/harness/hooks"
+import { renderWithAppRuntime } from "@/test/harness/app-runtime"
+import { expectContainerToContainStatusLabel } from "@/test/harness/status"
 
 vi.mock("../Sidebar", () => ({
   Sidebar: () => <div data-testid="sidebar-mock">Sidebar Mock</div>,
 }))
 
-vi.mock("@/hooks/useSelection")
 vi.mock("@/hooks/useTypedQuery")
-vi.mock("@/hooks/useActionRegistration")
-
-const mockUseSelection = vi.mocked(
-  await import("@/hooks/useSelection"),
-).useSelection
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
 
-function renderShell() {
-  return render(
-    <MemoryRouter>
-      <AppShell />
-    </MemoryRouter>,
-  )
+const defaultStates: Partial<QueryStateMap> = {
+  "orchestrations.list": queryLoading(),
+  "projects.list": queryLoading(),
 }
 
-function setupSelection(overrides: Partial<SelectionStateMock> = {}) {
-  mockUseSelection.mockReturnValue(
-    selectionState({
-      orchestrationId: null,
-      phaseId: null,
-      selectOrchestration: vi.fn(),
-      selectPhase: vi.fn(),
-      ...overrides,
-    }),
-  )
-}
-
-function setupQueryStates(overrides: Partial<QueryStateMap> = {}) {
-  const states: QueryStateMap = {
-    "orchestrations.list": queryLoading(),
-    "projects.list": queryLoading(),
-    ...overrides,
-  }
-
-  mockUseTypedQuery.mockImplementation((def) => queryStateFor(def.key, states))
+function renderShell(
+  route = "/",
+  states: Partial<QueryStateMap> = defaultStates,
+) {
+  return renderWithAppRuntime(<AppShell />, {
+    route,
+    states,
+    mockUseTypedQuery,
+  })
 }
 
 describe("AppShell", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    setupSelection()
-    setupQueryStates()
   })
 
   it("renders header, sidebar, content outlet, and footer", () => {
@@ -116,17 +93,14 @@ describe("AppShell", () => {
     })
 
     it("footer shows 'Connected' when no selection", () => {
-      setupSelection({ orchestrationId: null })
-
       renderShell()
 
       expect(screen.getByText(/connected/i)).toBeInTheDocument()
     })
 
     it("footer shows project/feature breadcrumb when orchestration selected", () => {
-      setupSelection({ orchestrationId: "orch-123" })
-
-      setupQueryStates({
+      renderShell("/?orch=orch-123", {
+        ...defaultStates,
         "orchestrations.list": querySuccess([
           buildOrchestrationSummary({
             _id: "orch-123",
@@ -155,12 +129,13 @@ describe("AppShell", () => {
         ]),
       })
 
-      renderShell()
-
       expect(screen.getByText(/my-project/i)).toBeInTheDocument()
       expect(screen.getByText(/my-feature/i)).toBeInTheDocument()
       expect(screen.getByText(/P2/i)).toBeInTheDocument()
-      expect(screen.getByText(/executing/i)).toBeInTheDocument()
+      expectContainerToContainStatusLabel(
+        screen.getByRole("contentinfo"),
+        "executing",
+      )
     })
 
     it("footer renders status region", () => {

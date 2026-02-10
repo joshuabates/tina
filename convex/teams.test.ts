@@ -2,45 +2,21 @@ import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
-
-// Helper: create a node so we can create orchestrations
-async function createNode(t: ReturnType<typeof convexTest>) {
-  return await t.mutation(api.nodes.registerNode, {
-    name: "test-node",
-    os: "darwin",
-    authTokenHash: "abc123",
-  });
-}
-
-// Helper: create an orchestration and return its ID
-async function createOrchestration(
-  t: ReturnType<typeof convexTest>,
-  nodeId: string,
-  featureName: string,
-) {
-  return await t.mutation(api.orchestrations.upsertOrchestration, {
-    nodeId: nodeId as any,
-    featureName,
-    designDocPath: "/docs/design.md",
-    branch: `tina/${featureName}`,
-    worktreePath: `/repo/.worktrees/${featureName}`,
-    totalPhases: 3,
-    currentPhase: 1,
-    status: "planning",
-    startedAt: "2026-02-08T10:00:00Z",
-  });
-}
+import {
+  createFeatureFixture,
+  createNode,
+  createOrchestration,
+  registerTeam,
+} from "./test-helpers";
 
 describe("teams:registerTeam", () => {
   test("inserts new team record", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
-    const teamId = await t.mutation(api.teams.registerTeam, {
+    const teamId = await registerTeam(t, {
       teamName: "auth-feature-phase-1",
-      orchestrationId: orchId,
-      leadSessionId: "session-abc",
+      orchestrationId,
       phaseNumber: "1",
       createdAt: Date.now(),
     });
@@ -50,21 +26,19 @@ describe("teams:registerTeam", () => {
 
   test("idempotent upsert when same orchestrationId", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
-    const id1 = await t.mutation(api.teams.registerTeam, {
+    const id1 = await registerTeam(t, {
       teamName: "auth-feature-phase-1",
-      orchestrationId: orchId,
+      orchestrationId,
       leadSessionId: "session-abc",
       phaseNumber: "1",
       createdAt: Date.now(),
     });
 
-    // Same team name, same orchestrationId → should update, return same ID
-    const id2 = await t.mutation(api.teams.registerTeam, {
+    const id2 = await registerTeam(t, {
       teamName: "auth-feature-phase-1",
-      orchestrationId: orchId,
+      orchestrationId,
       leadSessionId: "session-xyz",
       phaseNumber: "1",
       createdAt: Date.now(),
@@ -76,21 +50,26 @@ describe("teams:registerTeam", () => {
   test("errors when teamName exists with different orchestrationId", async () => {
     const t = convexTest(schema);
     const nodeId = await createNode(t);
-    const orchId1 = await createOrchestration(t, nodeId, "feature-a");
-    const orchId2 = await createOrchestration(t, nodeId, "feature-b");
+    const orchestrationId1 = await createOrchestration(t, {
+      nodeId,
+      featureName: "feature-a",
+    });
+    const orchestrationId2 = await createOrchestration(t, {
+      nodeId,
+      featureName: "feature-b",
+    });
 
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "shared-team-name",
-      orchestrationId: orchId1,
+      orchestrationId: orchestrationId1,
       leadSessionId: "session-abc",
       createdAt: Date.now(),
     });
 
-    // Same team name, different orchestrationId → should error
     await expect(
-      t.mutation(api.teams.registerTeam, {
+      registerTeam(t, {
         teamName: "shared-team-name",
-        orchestrationId: orchId2,
+        orchestrationId: orchestrationId2,
         leadSessionId: "session-xyz",
         createdAt: Date.now(),
       }),
@@ -99,13 +78,11 @@ describe("teams:registerTeam", () => {
 
   test("allows null phaseNumber for orchestration teams", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
-    const teamId = await t.mutation(api.teams.registerTeam, {
+    const teamId = await registerTeam(t, {
       teamName: "auth-feature-orchestration",
-      orchestrationId: orchId,
-      leadSessionId: "session-abc",
+      orchestrationId,
       createdAt: Date.now(),
     });
 
@@ -114,21 +91,17 @@ describe("teams:registerTeam", () => {
 
   test("stores parentTeamId when provided", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
-    // Create parent team
-    const parentId = await t.mutation(api.teams.registerTeam, {
+    const parentId = await registerTeam(t, {
       teamName: "auth-feature-orchestration",
-      orchestrationId: orchId,
-      leadSessionId: "session-abc",
+      orchestrationId,
       createdAt: Date.now(),
     });
 
-    // Create child team with parentTeamId
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "auth-feature-phase-1",
-      orchestrationId: orchId,
+      orchestrationId,
       leadSessionId: "session-def",
       phaseNumber: "1",
       parentTeamId: parentId,
@@ -145,30 +118,25 @@ describe("teams:registerTeam", () => {
 
   test("updates parentTeamId on upsert", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
-    // Create parent team
-    const parentId = await t.mutation(api.teams.registerTeam, {
+    const parentId = await registerTeam(t, {
       teamName: "auth-feature-orchestration",
-      orchestrationId: orchId,
-      leadSessionId: "session-abc",
+      orchestrationId,
       createdAt: Date.now(),
     });
 
-    // Create child team without parent
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "auth-feature-phase-1",
-      orchestrationId: orchId,
+      orchestrationId,
       leadSessionId: "session-def",
       phaseNumber: "1",
       createdAt: Date.now(),
     });
 
-    // Re-register with parent
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "auth-feature-phase-1",
-      orchestrationId: orchId,
+      orchestrationId,
       leadSessionId: "session-def",
       phaseNumber: "1",
       parentTeamId: parentId,
@@ -186,13 +154,11 @@ describe("teams:registerTeam", () => {
 describe("teams:getByTeamName", () => {
   test("returns team record when exists", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "auth-feature-phase-1",
-      orchestrationId: orchId,
-      leadSessionId: "session-abc",
+      orchestrationId,
       phaseNumber: "1",
       createdAt: 1707350400000,
     });
@@ -203,7 +169,7 @@ describe("teams:getByTeamName", () => {
 
     expect(result).not.toBeNull();
     expect(result!.teamName).toBe("auth-feature-phase-1");
-    expect(result!.orchestrationId).toBe(orchId);
+    expect(result!.orchestrationId).toBe(orchestrationId);
     expect(result!.leadSessionId).toBe("session-abc");
     expect(result!.phaseNumber).toBe("1");
     expect(result!.createdAt).toBe(1707350400000);
@@ -223,13 +189,11 @@ describe("teams:getByTeamName", () => {
 describe("teams:listActiveTeams", () => {
   test("returns teams with active orchestrations", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
+    const { orchestrationId } = await createFeatureFixture(t, "active-feature");
 
-    // Active orchestration (status: planning)
-    const activeOrchId = await createOrchestration(t, nodeId, "active-feature");
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "active-feature-orchestration",
-      orchestrationId: activeOrchId,
+      orchestrationId,
       leadSessionId: "session-1",
       createdAt: Date.now(),
     });
@@ -244,22 +208,20 @@ describe("teams:listActiveTeams", () => {
   test("excludes teams with completed orchestrations", async () => {
     const t = convexTest(schema);
     const nodeId = await createNode(t);
-
-    // Completed orchestration
-    const orchId = await t.mutation(api.orchestrations.upsertOrchestration, {
-      nodeId: nodeId as any,
+    const orchestrationId = await createOrchestration(t, {
+      nodeId,
       featureName: "done-feature",
-      designDocPath: "/docs/design.md",
       branch: "tina/done-feature",
       totalPhases: 1,
       currentPhase: 1,
       status: "complete",
       startedAt: "2026-02-08T10:00:00Z",
+      worktreePath: undefined,
     });
 
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "done-feature-orchestration",
-      orchestrationId: orchId,
+      orchestrationId,
       leadSessionId: "session-1",
       createdAt: Date.now(),
     });
@@ -271,21 +233,20 @@ describe("teams:listActiveTeams", () => {
   test("excludes teams with blocked orchestrations", async () => {
     const t = convexTest(schema);
     const nodeId = await createNode(t);
-
-    const orchId = await t.mutation(api.orchestrations.upsertOrchestration, {
-      nodeId: nodeId as any,
+    const orchestrationId = await createOrchestration(t, {
+      nodeId,
       featureName: "blocked-feature",
-      designDocPath: "/docs/design.md",
       branch: "tina/blocked-feature",
       totalPhases: 1,
       currentPhase: 1,
       status: "blocked",
       startedAt: "2026-02-08T10:00:00Z",
+      worktreePath: undefined,
     });
 
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "blocked-feature-orchestration",
-      orchestrationId: orchId,
+      orchestrationId,
       leadSessionId: "session-1",
       createdAt: Date.now(),
     });
@@ -304,28 +265,26 @@ describe("teams:listActiveTeams", () => {
 describe("teams:listByParent", () => {
   test("returns child teams for a parent", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
-    const parentId = await t.mutation(api.teams.registerTeam, {
+    const parentId = await registerTeam(t, {
       teamName: "auth-feature-orchestration",
-      orchestrationId: orchId,
-      leadSessionId: "session-abc",
+      orchestrationId,
       createdAt: Date.now(),
     });
 
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "auth-feature-phase-1",
-      orchestrationId: orchId,
+      orchestrationId,
       leadSessionId: "session-def",
       phaseNumber: "1",
       parentTeamId: parentId,
       createdAt: Date.now(),
     });
 
-    await t.mutation(api.teams.registerTeam, {
+    await registerTeam(t, {
       teamName: "auth-feature-phase-2",
-      orchestrationId: orchId,
+      orchestrationId,
       leadSessionId: "session-ghi",
       phaseNumber: "2",
       parentTeamId: parentId,
@@ -343,13 +302,11 @@ describe("teams:listByParent", () => {
 
   test("returns empty array when no children", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "solo-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "solo-feature");
 
-    const parentId = await t.mutation(api.teams.registerTeam, {
+    const parentId = await registerTeam(t, {
       teamName: "solo-feature-orchestration",
-      orchestrationId: orchId,
-      leadSessionId: "session-abc",
+      orchestrationId,
       createdAt: Date.now(),
     });
 
@@ -366,9 +323,8 @@ describe("orchestrations:getByFeature", () => {
     const t = convexTest(schema);
     const nodeId = await createNode(t);
 
-    // Create two orchestrations for same feature
-    await t.mutation(api.orchestrations.upsertOrchestration, {
-      nodeId: nodeId as any,
+    await createOrchestration(t, {
+      nodeId,
       featureName: "auth",
       designDocPath: "/docs/old.md",
       branch: "tina/auth",
@@ -376,17 +332,16 @@ describe("orchestrations:getByFeature", () => {
       currentPhase: 1,
       status: "complete",
       startedAt: "2026-02-07T10:00:00Z",
+      worktreePath: undefined,
     });
 
-    // Create second node to avoid upsert collision (same node+feature = update)
-    const nodeId2 = await t.mutation(api.nodes.registerNode, {
+    const nodeId2 = await createNode(t, {
       name: "test-node-2",
-      os: "darwin",
       authTokenHash: "def456",
     });
 
-    const laterId = await t.mutation(api.orchestrations.upsertOrchestration, {
-      nodeId: nodeId2 as any,
+    const laterId = await createOrchestration(t, {
+      nodeId: nodeId2,
       featureName: "auth",
       designDocPath: "/docs/new.md",
       branch: "tina/auth",
@@ -394,6 +349,7 @@ describe("orchestrations:getByFeature", () => {
       currentPhase: 1,
       status: "planning",
       startedAt: "2026-02-08T10:00:00Z",
+      worktreePath: undefined,
     });
 
     const result = await t.query(api.orchestrations.getByFeature, {
@@ -420,18 +376,17 @@ describe("orchestrations:getByFeature", () => {
 describe("phases:getPhaseStatus", () => {
   test("returns phase record when exists", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.phases.upsertPhase, {
-      orchestrationId: orchId,
+      orchestrationId,
       phaseNumber: "1",
       status: "executing",
       startedAt: "2026-02-08T10:00:00Z",
     });
 
     const result = await t.query(api.phases.getPhaseStatus, {
-      orchestrationId: orchId,
+      orchestrationId,
       phaseNumber: "1",
     });
 
@@ -442,11 +397,10 @@ describe("phases:getPhaseStatus", () => {
 
   test("returns null when phase does not exist", async () => {
     const t = convexTest(schema);
-    const nodeId = await createNode(t);
-    const orchId = await createOrchestration(t, nodeId, "auth-feature");
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const result = await t.query(api.phases.getPhaseStatus, {
-      orchestrationId: orchId,
+      orchestrationId,
       phaseNumber: "99",
     });
 

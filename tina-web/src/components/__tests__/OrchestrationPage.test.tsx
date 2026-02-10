@@ -1,21 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
-import { MemoryRouter } from "react-router-dom"
+import { screen } from "@testing-library/react"
+import { userEvent } from "@testing-library/user-event"
 import { OrchestrationPage } from "../OrchestrationPage"
 import type { OrchestrationDetail } from "@/schemas"
 import { buildOrchestrationDetail } from "@/test/builders/domain"
-import { queryError, queryLoading, querySuccess } from "@/test/builders/query"
-import { selectionState } from "@/test/harness/hooks"
+import { queryError, queryLoading, querySuccess, type QueryStateMap } from "@/test/builders/query"
+import { renderWithAppRuntime } from "@/test/harness/app-runtime"
+import { useServices } from "@/providers/RuntimeProvider"
 
 vi.mock("@/hooks/useTypedQuery")
-vi.mock("@/hooks/useSelection")
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
-const mockUseSelection = vi.mocked(
-  await import("@/hooks/useSelection"),
-).useSelection
 
 vi.mock("../PhaseTimelinePanel", () => ({
   PhaseTimelinePanel: ({ detail }: { detail: OrchestrationDetail }) => (
@@ -49,45 +46,40 @@ type DetailQueryResult =
   | ReturnType<typeof queryError<OrchestrationDetail | null>>
   | ReturnType<typeof querySuccess<OrchestrationDetail | null>>
 
-function setSelection(orchestrationId: string | null) {
-  mockUseSelection.mockReturnValue(
-    selectionState({
-      orchestrationId,
-      phaseId: null,
-      selectOrchestration: vi.fn(),
-      selectPhase: vi.fn(),
-    }),
-  )
-}
-
-function setQueryResult(result: DetailQueryResult) {
-  mockUseTypedQuery.mockReturnValue(result)
-}
-
-function renderPage() {
-  return render(
-    <MemoryRouter>
-      <OrchestrationPage />
-    </MemoryRouter>,
-  )
-}
-
 function renderScenario({
-  orchestrationId = "o1",
-  result = querySuccess<OrchestrationDetail | null>(baseOrchestration),
+  route = "/?orch=o1",
+  detailResults = {
+    o1: querySuccess<OrchestrationDetail | null>(baseOrchestration),
+  },
+  detailFallback = querySuccess<OrchestrationDetail | null>(null),
+  states = {},
+  includeHarness = false,
 }: {
-  orchestrationId?: string | null
-  result?: DetailQueryResult
+  route?: string
+  detailResults?: Record<string, DetailQueryResult>
+  detailFallback?: DetailQueryResult
+  states?: Partial<QueryStateMap>
+  includeHarness?: boolean
 } = {}) {
-  setSelection(orchestrationId)
-  setQueryResult(result)
-  return renderPage()
+  return renderWithAppRuntime(
+    <>
+      <OrchestrationPage />
+      {includeHarness ? <SelectionHarness /> : null}
+    </>,
+    {
+      route,
+      states,
+      detailResults,
+      detailFallback,
+      mockUseTypedQuery,
+    },
+  )
 }
 
-function withSuppressedConsoleError(run: () => void) {
+async function withSuppressedConsoleError(run: () => void | Promise<void>) {
   const spy = vi.spyOn(console, "error").mockImplementation(() => {})
   try {
-    run()
+    await run()
   } finally {
     spy.mockRestore()
   }
@@ -100,21 +92,32 @@ function expectPanels(feature = "test-feature") {
   expect(screen.getByTestId("right-panel")).toBeInTheDocument()
 }
 
+function SelectionHarness() {
+  const { selectionService } = useServices()
+
+  return (
+    <button onClick={() => selectionService.selectOrchestration("o2")}>
+      select o2
+    </button>
+  )
+}
+
 describe("OrchestrationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it("renders empty state when no orchestration selected", () => {
-    setSelection(null)
-
-    renderPage()
-
+    renderScenario({ route: "/" })
     expect(screen.getByText(/select an orchestration from the sidebar/i)).toBeInTheDocument()
   })
 
   it("renders loading state while query pending", () => {
-    const { container } = renderScenario({ result: queryLoading<OrchestrationDetail | null>() })
+    const { container } = renderScenario({
+      detailResults: {
+        o1: queryLoading<OrchestrationDetail | null>(),
+      },
+    })
 
     expect(container.querySelectorAll('[class*="skeletonBar"]').length).toBeGreaterThan(0)
     expect(container.querySelector('[aria-busy="true"]')).toBeInTheDocument()
@@ -122,30 +125,29 @@ describe("OrchestrationPage", () => {
 
   it("renders all panels when data loaded", () => {
     renderScenario()
-
     expectPanels()
     expect(screen.getByText(/Right Panel for test-feature/)).toBeInTheDocument()
   })
 
   it("shows orchestration feature name and branch in header", () => {
     const { container } = renderScenario()
-
     expect(container.textContent).toContain("test-feature")
     expect(container.textContent).toContain("tina/test-feature")
   })
 
   it("has aria-live region for status changes", () => {
     const { container } = renderScenario()
-
     const liveRegion = container.querySelector('[aria-live="polite"]')
     expect(liveRegion).toBeInTheDocument()
     expect(liveRegion).toHaveAttribute("aria-atomic", "true")
   })
 
-  it("throws to error boundary on query error", () => {
-    withSuppressedConsoleError(() => {
+  it("throws to error boundary on query error", async () => {
+    await withSuppressedConsoleError(() => {
       const { container } = renderScenario({
-        result: queryError<OrchestrationDetail | null>(new Error("Query failed")),
+        detailResults: {
+          o1: queryError<OrchestrationDetail | null>(new Error("Query failed")),
+        },
       })
 
       expect(container.textContent).toContain("Unexpected error")
@@ -153,40 +155,40 @@ describe("OrchestrationPage", () => {
     })
   })
 
-  it("shows not-found state when OrchestrationDetailQuery returns null", () => {
-    withSuppressedConsoleError(() => {
+  it("shows not-found state when OrchestrationDetailQuery returns null", async () => {
+    await withSuppressedConsoleError(() => {
       const { container } = renderScenario({
-        result: querySuccess<OrchestrationDetail | null>(null),
+        detailResults: {
+          o1: querySuccess<OrchestrationDetail | null>(null),
+        },
       })
 
       expect(container.textContent).toContain("orchestration not found")
     })
   })
 
-  it("resets error boundary when selected orchestration changes", () => {
-    withSuppressedConsoleError(() => {
-      const { rerender, container } = renderScenario({
-        result: querySuccess<OrchestrationDetail | null>(null),
+  it("resets error boundary when selected orchestration changes", async () => {
+    const user = userEvent.setup()
+
+    await withSuppressedConsoleError(async () => {
+      const nextOrchestration = {
+        ...baseOrchestration,
+        _id: "o2",
+        featureName: "next-feature",
+        branch: "tina/next-feature",
+      }
+
+      const { container } = renderScenario({
+        includeHarness: true,
+        detailResults: {
+          o1: querySuccess<OrchestrationDetail | null>(null),
+          o2: querySuccess<OrchestrationDetail | null>(nextOrchestration),
+        },
       })
 
       expect(container.textContent).toContain("orchestration not found")
 
-      setSelection("o2")
-      setQueryResult(
-        querySuccess<OrchestrationDetail | null>({
-          ...baseOrchestration,
-          _id: "o2",
-          featureName: "next-feature",
-          branch: "tina/next-feature",
-        }),
-      )
-
-      rerender(
-        <MemoryRouter>
-          <OrchestrationPage />
-        </MemoryRouter>,
-      )
-
+      await user.click(screen.getByRole("button", { name: "select o2" }))
       expectPanels("next-feature")
     })
   })

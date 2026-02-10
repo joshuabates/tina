@@ -8,6 +8,7 @@ import {
   selectionState,
   type SelectionStateMock,
 } from "@/test/harness/hooks"
+import { expectElementStatusText } from "@/test/harness/status"
 
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
@@ -137,8 +138,8 @@ describe("PhaseTimelinePanel", () => {
 
     const { container } = renderTimelineView({ detail })
 
-    expect(phaseById(container, "phase1")).toHaveTextContent("Complete")
-    expect(phaseById(container, "phase2")).toHaveTextContent("Executing")
+    expectElementStatusText(phaseById(container, "phase1"), "complete")
+    expectElementStatusText(phaseById(container, "phase2"), "executing")
   })
 
   it("handles empty phases array", () => {

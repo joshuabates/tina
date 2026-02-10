@@ -11,6 +11,7 @@ import {
 } from "@/test/builders/domain"
 import type { Phase, TaskEvent, TeamMember } from "@/schemas"
 import { assertDialogFocusTrap } from "@/test/harness/quicklook"
+import { expectStatusLabelVisible } from "@/test/harness/status"
 
 vi.mock("@/hooks/useActionRegistration")
 
@@ -94,7 +95,7 @@ describe("PhaseQuicklook", () => {
     renderQuicklook()
 
     expect(screen.getByText(/Phase 1/)).toBeInTheDocument()
-    expect(screen.getByText("Executing")).toBeInTheDocument()
+    expectStatusLabelVisible("executing")
   })
 
   it.each([

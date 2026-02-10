@@ -10,33 +10,17 @@ import {
 } from "@/test/builders/domain"
 import {
   queryLoading,
-  queryStateFor,
   querySuccess,
   type QueryStateMap,
 } from "@/test/builders/query"
-import {
-  focusableState,
-  selectionState,
-  type SelectionStateMock,
-} from "@/test/harness/hooks"
-import { renderWithRouter } from "@/test/harness/render"
+import { renderWithAppRuntime } from "@/test/harness/app-runtime"
+import { expectStatusLabelVisible } from "@/test/harness/status"
 
 vi.mock("@/hooks/useTypedQuery")
-vi.mock("@/hooks/useFocusable")
-vi.mock("@/hooks/useSelection")
-vi.mock("@/hooks/useActionRegistration")
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
-const mockUseFocusable = vi.mocked(
-  await import("@/hooks/useFocusable"),
-).useFocusable
-const mockUseSelection = vi.mocked(
-  await import("@/hooks/useSelection"),
-).useSelection
-
-const mockSelectOrchestration = vi.fn()
 
 const defaultProjects = [
   buildProjectSummary({ _id: "p1", name: "Project Alpha", orchestrationCount: 2 }),
@@ -63,60 +47,40 @@ const defaultOrchestrations = [
   }),
 ]
 
-function singleQueries(
-  overrides: Parameters<typeof buildOrchestrationSummary>[0] = {},
-): Partial<QueryStateMap> {
-  return {
-    "projects.list": querySuccess([
-      buildProjectSummary({ _id: "p1", name: "Project Alpha", orchestrationCount: 1 }),
-    ]),
-    "orchestrations.list": querySuccess([
-      buildOrchestrationSummary({
-        _id: "o1",
-        featureName: "feature-one",
-        projectId: some("p1"),
-        ...overrides,
-      }),
-    ]),
-  }
+const defaultStates: Partial<QueryStateMap> = {
+  "projects.list": querySuccess(defaultProjects),
+  "orchestrations.list": querySuccess(defaultOrchestrations),
 }
 
 function renderSidebar({
-  queries,
-  selection,
+  route = "/",
+  states = {},
 }: {
-  queries?: Partial<QueryStateMap>
-  selection?: Partial<SelectionStateMock>
+  route?: string
+  states?: Partial<QueryStateMap>
 } = {}) {
-  const states: QueryStateMap = {
-    "projects.list": querySuccess(defaultProjects),
-    "orchestrations.list": querySuccess(defaultOrchestrations),
-    ...queries,
-  }
+  return renderWithAppRuntime(<Sidebar />, {
+    route,
+    mockUseTypedQuery,
+    states: { ...defaultStates, ...states },
+  })
+}
 
-  mockUseTypedQuery.mockImplementation((def) => queryStateFor(def.key, states))
-  mockUseSelection.mockReturnValue(
-    selectionState({
-      orchestrationId: null,
-      phaseId: null,
-      selectOrchestration: mockSelectOrchestration,
-      selectPhase: vi.fn(),
-      ...selection,
-    }),
-  )
-
-  return renderWithRouter(<Sidebar />)
+function itemContainer(label: string): HTMLElement {
+  const labelNode = screen.getByText(label)
+  const container = labelNode.closest("div")
+  expect(container).toBeTruthy()
+  return container as HTMLElement
 }
 
 describe("Sidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockUseFocusable.mockReturnValue(focusableState())
   })
 
   it("renders loading state while queries are pending", () => {
     const { container } = renderSidebar({
-      queries: {
+      states: {
         "projects.list": queryLoading(),
         "orchestrations.list": queryLoading(),
       },
@@ -128,33 +92,51 @@ describe("Sidebar", () => {
   it("renders project tree with orchestrations grouped by project", () => {
     renderSidebar()
 
-    for (const label of ["Project Alpha", "Project Beta", "feature-one", "feature-two", "feature-three"]) {
+    for (const label of [
+      "Project Alpha",
+      "Project Beta",
+      "feature-one",
+      "feature-two",
+      "feature-three",
+    ]) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
   })
 
   it("highlights selected orchestration and shows normalized status text", () => {
     const { container } = renderSidebar({
-      queries: singleQueries(),
-      selection: { orchestrationId: "o1" },
+      route: "/?orch=o1",
+      states: {
+        "projects.list": querySuccess([
+          buildProjectSummary({ _id: "p1", name: "Project Alpha", orchestrationCount: 1 }),
+        ]),
+        "orchestrations.list": querySuccess([
+          buildOrchestrationSummary({
+            _id: "o1",
+            featureName: "feature-one",
+            projectId: some("p1"),
+            status: "executing",
+          }),
+        ]),
+      },
     })
 
     expect(within(container).getByText("feature-one").closest("div")).toHaveClass("bg-muted/50")
-    expect(within(container).getByText("Executing")).toBeInTheDocument()
+    expectStatusLabelVisible("executing", container)
   })
 
-  it("calls selectOrchestration when clicking an orchestration", async () => {
+  it("clicking an orchestration updates active selection styling", async () => {
     const user = userEvent.setup()
-    const { container } = renderSidebar({ queries: singleQueries() })
+    renderSidebar()
 
-    await user.click(within(container).getByText("feature-one"))
+    await user.click(itemContainer("feature-two"))
 
-    expect(mockSelectOrchestration).toHaveBeenCalledWith("o1")
+    expect(itemContainer("feature-two")).toHaveClass("bg-muted/50")
   })
 
   it("renders empty state when no orchestrations exist", () => {
     renderSidebar({
-      queries: {
+      states: {
         "projects.list": querySuccess([]),
         "orchestrations.list": querySuccess([]),
       },
@@ -163,14 +145,9 @@ describe("Sidebar", () => {
     expect(screen.getByText(/no orchestrations/i)).toBeInTheDocument()
   })
 
-  it("registers focus section with correct item count", () => {
-    renderSidebar()
-    expect(mockUseFocusable).toHaveBeenCalledWith("sidebar", 3)
-  })
-
   it("groups orchestrations under ungrouped when projectId is none", () => {
     renderSidebar({
-      queries: {
+      states: {
         "projects.list": querySuccess([]),
         "orchestrations.list": querySuccess([
           buildOrchestrationSummary({

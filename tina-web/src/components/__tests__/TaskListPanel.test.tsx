@@ -9,6 +9,7 @@ import {
   some,
 } from "@/test/builders/domain"
 import { focusableState, selectionState } from "@/test/harness/hooks"
+import { expectStatusLabelVisible } from "@/test/harness/status"
 
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
@@ -112,8 +113,8 @@ describe("TaskListPanel", () => {
 
     render(<TaskListPanel detail={detail} />)
 
-    expect(screen.getByText("Complete")).toBeInTheDocument()
-    expect(screen.getByText("In Progress")).toBeInTheDocument()
+    expectStatusLabelVisible("completed")
+    expectStatusLabelVisible("in_progress")
   })
 
   it("maps TaskEvent owner to TaskCard assignee", () => {
