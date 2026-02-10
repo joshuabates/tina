@@ -41,7 +41,7 @@ describe("TaskQuicklook", () => {
     render(<TaskQuicklook task={task} onClose={mockOnClose} />)
 
     expect(screen.getByText("Implement feature X")).toBeInTheDocument()
-    expect(screen.getByText("in_progress")).toBeInTheDocument()
+    expect(screen.getByText(/in progress/i)).toBeInTheDocument()
   })
 
   it("renders description when present", () => {
