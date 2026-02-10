@@ -696,3 +696,41 @@ export const getPlan = query({
 - Passive shutdown tracking (daemon detects removals, no explicit calls)
 - Real-time git commit tracking (watch refs, not batch at phase end)
 - Markdown rendering with syntax highlighting for plans and tasks
+
+## Architectural Context
+
+**Patterns to follow:**
+
+- **Convex schema:** `convex/schema.ts:1-100` - Use `defineTable()` with `.index()` for efficient lookups
+- **Convex mutations:** `convex/teamMembers.ts:4-37`, `convex/events.ts:4-17` - Check existing before insert/patch, return ID
+- **Convex queries:** `convex/events.ts:19-42`, `convex/teams.ts:41-66` - Use `withIndex()` for filtering, support pagination
+- **Convex tests:** `convex/teams.test.ts:1-80` - Use `convex-test` with schema, `test_helpers.ts` fixtures
+- **tina-daemon watcher:** `tina-daemon/src/watcher.rs:19-120` - Use `notify` crate, bridge std::mpsc to tokio::mpsc
+- **tina-daemon sync:** `tina-daemon/src/sync.rs:14-93` - Maintain cache, detect changes, avoid redundant writes
+- **UI quicklook modals:** `tina-web/src/components/QuicklookDialog.tsx:14-55` - Extend pattern with consistent structure
+- **UI tests:** `tina-web/src/components/__tests__/TaskQuicklook.test.tsx:1-80` - Use vitest + testing-library, mock hooks
+
+**Code to reuse:**
+
+- `convex/test_helpers.ts` - Fixture creation for orchestrations, nodes, teams (createFeatureFixture, registerTeam)
+- `tina-daemon/src/watcher.rs:24-120` - DaemonWatcher pattern for filesystem watching (use for git refs, plan files)
+- `tina-daemon/src/sync.rs:14-36` - SyncCache pattern for change detection (reuse for team member removal)
+- `tina-web/src/components/QuicklookDialog.tsx` - Base modal component (extend for CommitQuicklook, PlanQuicklook)
+- `tina-web/src/lib/option-display.ts` - `optionText()` helper for Effect Option types
+
+**Integration points:**
+
+- **tina-daemon entry:** `tina-daemon/src/main.rs` sync loop - Add git ref watcher and plan file watcher alongside teams/tasks
+- **Convex schema:** `convex/schema.ts` - Add `commits` and `plans` tables
+- **Convex functions:** Create `convex/commits.ts` and `convex/plans.ts` following patterns in `events.ts`, `teamMembers.ts`
+- **UI components:** Add `CommitListPanel.tsx`, `CommitQuicklook.tsx`, `PlanQuicklook.tsx` - integrate into `PhaseQuicklook.tsx` and `OrchestrationPage.tsx`
+- **UI markdown:** Update `TaskQuicklook.tsx:24-29` to use `ReactMarkdown` component
+
+**Key implementation notes:**
+
+- **Git watcher discovery:** Query `teams:listActiveTeams` for orchestrations, then `supervisorStates:getSupervisorState` by feature name to get `worktree_path` and `branch` from JSON
+- **Plan filename parsing:** Extract phase number from pattern `YYYY-MM-DD-{feature}-phase-{N}.md` using regex
+- **Shutdown detection:** Cache previous team members (HashMap keyed by agent_name), compare on config change to detect removals
+- **Dependencies:** Add `react-markdown`, `remark-gfm`, `react-syntax-highlighter` to tina-web package.json
+
+**No anti-patterns detected.** Design follows existing architecture and conventions.
