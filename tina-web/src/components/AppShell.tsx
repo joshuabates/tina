@@ -6,6 +6,7 @@ import { AppStatusBar } from "./ui/app-status-bar"
 import { Sidebar } from "./Sidebar"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
+import { useActionRegistration } from "@/hooks/useActionRegistration"
 import { OrchestrationListQuery, ProjectListQuery } from "@/services/data/queryDefs"
 import type { OrchestrationSummary, ProjectSummary } from "@/schemas"
 import styles from "./AppShell.module.scss"
@@ -20,6 +21,15 @@ export function AppShell() {
   const toggleCollapsed = () => {
     setCollapsed((prev) => !prev)
   }
+
+  // Register Alt+b to toggle sidebar collapse
+  useActionRegistration({
+    id: "sidebar.toggle",
+    label: "Toggle Sidebar",
+    key: "Alt+b",
+    when: "global",
+    execute: toggleCollapsed,
+  })
 
   // Find selected orchestration and its project
   const { projectName, phaseName } = useMemo(() => {

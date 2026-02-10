@@ -1,9 +1,19 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest"
 import { render, screen, cleanup } from "@testing-library/react"
 import { BrowserRouter } from "react-router-dom"
+import { RuntimeProvider } from "@/providers/RuntimeProvider"
 import userEvent from "@testing-library/user-event"
 import { AppShell } from "../AppShell"
 import styles from "../AppShell.module.scss"
+
+// Mock Sidebar component to avoid RuntimeProvider dependency
+vi.mock("../Sidebar", () => ({
+  Sidebar: ({ collapsed }: { collapsed: boolean }) => (
+    <div data-testid="sidebar-mock" data-collapsed={collapsed}>
+      Sidebar Mock
+    </div>
+  ),
+}))
 
 // Mock useSelection hook
 vi.mock("@/hooks/useSelection", () => ({
@@ -20,9 +30,13 @@ vi.mock("@/hooks/useTypedQuery", () => ({
   useTypedQuery: vi.fn(() => ({ status: "loading" })),
 }))
 
-// Wrapper for components that need Router context
+// Wrapper for components that need Router and Runtime context
 const renderWithRouter = (ui: React.ReactElement) => {
-  return render(<BrowserRouter>{ui}</BrowserRouter>)
+  return render(
+    <RuntimeProvider>
+      <BrowserRouter>{ui}</BrowserRouter>
+    </RuntimeProvider>
+  )
 }
 
 describe("AppShell", () => {

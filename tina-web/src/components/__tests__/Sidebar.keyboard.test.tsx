@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, renderHook, act } from "@testing-library/react"
+import { render, act, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { Option } from "effect"
 import type { ReactNode } from "react"
@@ -165,33 +165,28 @@ describe("Sidebar Keyboard Navigation", () => {
     expect(updatedList).toHaveAttribute("aria-activedescendant", "sidebar-item-1")
   })
 
-  it("registers sidebar.select action for Enter key", () => {
-    // Use a single RuntimeProvider instance
+  it("registers sidebar.select action for Enter key", async () => {
+    // Render sidebar and check action after it registers
+    let registry: any
+
     const TestComponent = () => {
       const services = useServices()
-      const action = services.actionRegistry.get("sidebar.select")
-
-      return (
-        <>
-          <Sidebar collapsed={false} />
-          <div data-testid="action-check">
-            {action ? "registered" : "not-registered"}
-          </div>
-        </>
-      )
+      registry = services.actionRegistry
+      return <Sidebar collapsed={false} />
     }
 
-    const { getByTestId } = render(<TestComponent />, { wrapper })
+    render(<TestComponent />, { wrapper })
 
-    // Check that action is registered
-    expect(getByTestId("action-check").textContent).toBe("registered")
-
-    // Also verify the action details via a hook
-    const { result } = renderHook(() => useServices(), { wrapper })
-    const action = result.current.actionRegistry.get("sidebar.select")
-    expect(action?.label).toBe("Select Orchestration")
-    expect(action?.key).toBe("Enter")
-    expect(action?.when).toBe("sidebar.focused")
+    // Wait for action to be registered (useEffect runs after mount)
+    await waitFor(() => {
+      const action = registry.get("sidebar.select")
+      expect(action).toBeDefined()
+      if (action) {
+        expect(action.label).toBe("Select Orchestration")
+        expect(action.key).toBe("Enter")
+        expect(action.when).toBe("sidebar.focused")
+      }
+    })
   })
 
   it("Enter action calls selectOrchestration with correct ID", () => {
@@ -207,11 +202,11 @@ describe("Sidebar Keyboard Navigation", () => {
               const action = services.actionRegistry.get("sidebar.select")
               action?.execute({})
             }}
-            data-testid="execute-action"
+            data-testid="execute-select-action"
           />
           <button
             onClick={() => services.focusService.moveItem(1)}
-            data-testid="move-next"
+            data-testid="move-to-next-item"
           />
         </>
       )
@@ -221,7 +216,7 @@ describe("Sidebar Keyboard Navigation", () => {
 
     // Execute the action (should select first orchestration)
     act(() => {
-      getByTestId("execute-action").click()
+      getByTestId("execute-select-action").click()
     })
     expect(mockSelectOrchestration).toHaveBeenCalledWith("o1")
 
@@ -229,12 +224,12 @@ describe("Sidebar Keyboard Navigation", () => {
 
     // Move to second item
     act(() => {
-      getByTestId("move-next").click()
+      getByTestId("move-to-next-item").click()
     })
 
     // Execute again (should select second orchestration)
     act(() => {
-      getByTestId("execute-action").click()
+      getByTestId("execute-select-action").click()
     })
     expect(mockSelectOrchestration).toHaveBeenCalledWith("o2")
   })
