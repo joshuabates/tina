@@ -48,9 +48,9 @@ export const listActiveTeams = query({
         const orchestration = await ctx.db.get(team.orchestrationId);
         if (!orchestration) return null;
 
-        const isActive =
-          orchestration.status !== "complete" &&
-          orchestration.status !== "blocked";
+        // Keep blocked orchestrations in sync so post-failure team/task state
+        // is still visible in tina-web.
+        const isActive = orchestration.status !== "complete";
         if (!isActive) return null;
 
         return {

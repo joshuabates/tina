@@ -2,8 +2,10 @@ pub mod watcher;
 
 use std::fs;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 
 /// Launch options for controlling which daemon binary/environment to run.
 #[derive(Debug, Clone, Default)]
@@ -38,7 +40,7 @@ pub fn start_with_options(options: &DaemonLaunchOptions) -> anyhow::Result<u32> 
         command.args(["--env", &env]);
     }
 
-    let child = command
+    let mut child = command
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -52,6 +54,19 @@ pub fn start_with_options(options: &DaemonLaunchOptions) -> anyhow::Result<u32> 
         })?;
 
     let pid = child.id();
+
+    // Detect immediate startup failures (e.g. wrong/old daemon binary).
+    std::thread::sleep(Duration::from_millis(250));
+    if let Some(status) = child.try_wait()? {
+        anyhow::bail!(
+            "tina-daemon exited immediately (status: {}) using binary '{}'. \
+             This usually means an incompatible binary was selected. \
+             Start again with --daemon-bin pointing to the repo build.",
+            status,
+            daemon_bin.display()
+        );
+    }
+
     write_pid(pid)?;
     Ok(pid)
 }
@@ -153,7 +168,42 @@ fn resolve_daemon_bin(explicit: Option<&PathBuf>) -> PathBuf {
         }
     }
 
+    if let Some(workspace_bin) = resolve_workspace_daemon_bin() {
+        return workspace_bin;
+    }
+
     PathBuf::from("tina-daemon")
+}
+
+fn resolve_workspace_daemon_bin() -> Option<PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    resolve_workspace_daemon_bin_from(&cwd)
+}
+
+fn resolve_workspace_daemon_bin_from(start: &Path) -> Option<PathBuf> {
+    let mut dir = start.to_path_buf();
+
+    loop {
+        let debug_bin = dir.join("tina-daemon").join("target").join("debug").join("tina-daemon");
+        if debug_bin.exists() {
+            return Some(debug_bin);
+        }
+
+        let release_bin = dir
+            .join("tina-daemon")
+            .join("target")
+            .join("release")
+            .join("tina-daemon");
+        if release_bin.exists() {
+            return Some(release_bin);
+        }
+
+        if !dir.pop() {
+            break;
+        }
+    }
+
+    None
 }
 
 fn resolved_env_arg(options: &DaemonLaunchOptions) -> Option<String> {
@@ -256,5 +306,31 @@ mod tests {
         let explicit = PathBuf::from("/tmp/custom-daemon");
         let resolved = resolve_daemon_bin(Some(&explicit));
         assert_eq!(resolved, explicit);
+    }
+
+    #[test]
+    fn test_resolve_workspace_daemon_bin_from_finds_debug_binary() {
+        let tmp = tempfile::tempdir().unwrap();
+        let nested = tmp.path().join("a").join("b").join("c");
+        fs::create_dir_all(&nested).unwrap();
+
+        let daemon_bin = tmp
+            .path()
+            .join("tina-daemon")
+            .join("target")
+            .join("debug")
+            .join("tina-daemon");
+        fs::create_dir_all(daemon_bin.parent().unwrap()).unwrap();
+        fs::File::create(&daemon_bin).unwrap();
+
+        let found = resolve_workspace_daemon_bin_from(&nested).unwrap();
+        assert_eq!(found, daemon_bin);
+    }
+
+    #[test]
+    fn test_resolve_workspace_daemon_bin_from_none_when_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let found = resolve_workspace_daemon_bin_from(tmp.path());
+        assert!(found.is_none());
     }
 }

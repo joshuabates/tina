@@ -230,7 +230,7 @@ describe("teams:listActiveTeams", () => {
     expect(teams.length).toBe(0);
   });
 
-  test("excludes teams with blocked orchestrations", async () => {
+  test("includes teams with blocked orchestrations", async () => {
     const t = convexTest(schema);
     const nodeId = await createNode(t);
     const orchestrationId = await createOrchestration(t, {
@@ -252,7 +252,9 @@ describe("teams:listActiveTeams", () => {
     });
 
     const teams = await t.query(api.teams.listActiveTeams, {});
-    expect(teams.length).toBe(0);
+    expect(teams.length).toBe(1);
+    expect(teams[0].teamName).toBe("blocked-feature-orchestration");
+    expect(teams[0].orchestrationStatus).toBe("blocked");
   });
 
   test("returns empty array when no teams", async () => {
