@@ -29,7 +29,7 @@ export const OrchestrationDetailQuery = queryDef({
   key: "orchestrations.detail",
   query: api.orchestrations.getOrchestrationDetail,
   args: Schema.Struct({ orchestrationId: Schema.String }),
-  schema: OrchestrationDetail,
+  schema: Schema.NullOr(OrchestrationDetail),
 })
 
 export const ProjectListQuery = queryDef({

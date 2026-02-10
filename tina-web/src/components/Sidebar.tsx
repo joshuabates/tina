@@ -9,7 +9,6 @@ import { useSelection } from "@/hooks/useSelection"
 import { useActionRegistration } from "@/hooks/useActionRegistration"
 import { ProjectListQuery, OrchestrationListQuery } from "@/services/data/queryDefs"
 import { normalizeStatus, statusColor } from "@/services/data/status"
-import type { OrchestrationSummary } from "@/schemas"
 import styles from "./Sidebar.module.scss"
 
 interface SidebarProps {
