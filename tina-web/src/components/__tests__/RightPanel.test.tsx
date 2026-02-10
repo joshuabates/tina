@@ -63,7 +63,7 @@ describe("RightPanel", () => {
     // Should render all section labels
     expect(screen.getByText("Status")).toBeInTheDocument()
     expect(screen.getAllByText("Team").length).toBeGreaterThan(0)
-    expect(screen.getByText("GitOps")).toBeInTheDocument()
+    expect(screen.getByText("Git")).toBeInTheDocument()
     expect(screen.getByText("Review")).toBeInTheDocument()
   })
 

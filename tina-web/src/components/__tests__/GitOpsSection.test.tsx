@@ -1,10 +1,55 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { Option } from "effect"
 import { GitOpsSection } from "../GitOpsSection"
-import type { OrchestrationEvent } from "@/schemas"
+import type { OrchestrationDetail, OrchestrationEvent } from "@/schemas"
+import type { TypedQueryResult } from "@/hooks/useTypedQuery"
+
+// Mock hooks
+vi.mock("@/hooks/useTypedQuery")
+vi.mock("@/hooks/useFocusable")
+
+const mockUseTypedQuery = vi.mocked(
+  await import("@/hooks/useTypedQuery")
+).useTypedQuery
+const mockUseFocusable = vi.mocked(
+  await import("@/hooks/useFocusable")
+).useFocusable
 
 describe("GitOpsSection", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    // Default mock for useFocusable
+    mockUseFocusable.mockReturnValue({
+      isSectionFocused: false,
+      activeIndex: -1,
+    })
+  })
+
+  const createMockDetail = (overrides?: Partial<OrchestrationDetail>): OrchestrationDetail => ({
+    _id: "orch1",
+    _creationTime: 1234567890,
+    nodeId: "node1",
+    featureName: "test-feature",
+    designDocPath: "/docs/test.md",
+    branch: "tina/test-feature",
+    worktreePath: Option.none(),
+    totalPhases: 3,
+    currentPhase: 1,
+    status: "executing",
+    startedAt: "2024-01-01T10:00:00Z",
+    completedAt: Option.none(),
+    totalElapsedMins: Option.none(),
+    nodeName: "test-node",
+    phases: [],
+    tasks: [],
+    orchestratorTasks: [],
+    phaseTasks: {},
+    teamMembers: [],
+    ...overrides,
+  })
+
   const createMockEvent = (overrides?: Partial<OrchestrationEvent>): OrchestrationEvent => ({
     _id: "event1",
     _creationTime: 1234567890,
@@ -19,6 +64,7 @@ describe("GitOpsSection", () => {
   })
 
   it("renders recent commits from git events", () => {
+    const detail = createMockDetail()
     const events: OrchestrationEvent[] = [
       createMockEvent({
         _id: "event1",
@@ -40,7 +86,12 @@ describe("GitOpsSection", () => {
       }),
     ]
 
-    render(<GitOpsSection events={events} />)
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: events,
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<GitOpsSection detail={detail} />)
 
     // Should show git commits
     expect(screen.getByText("Add user authentication")).toBeInTheDocument()
@@ -53,6 +104,7 @@ describe("GitOpsSection", () => {
   })
 
   it("renders diff summary from git_diff events", () => {
+    const detail = createMockDetail()
     const events: OrchestrationEvent[] = [
       createMockEvent({
         _id: "event1",
@@ -62,19 +114,32 @@ describe("GitOpsSection", () => {
       }),
     ]
 
-    render(<GitOpsSection events={events} />)
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: events,
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<GitOpsSection detail={detail} />)
 
     expect(screen.getByText("Changes in 3 files")).toBeInTheDocument()
     expect(screen.getByText("+42 -15")).toBeInTheDocument()
   })
 
   it("handles empty events (no git operations yet)", () => {
-    render(<GitOpsSection events={[]} />)
+    const detail = createMockDetail()
+
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: [],
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<GitOpsSection detail={detail} />)
 
     expect(screen.getByText(/no git activity/i)).toBeInTheDocument()
   })
 
   it("handles events with no git operations", () => {
+    const detail = createMockDetail()
     const events: OrchestrationEvent[] = [
       createMockEvent({
         _id: "event1",
@@ -90,12 +155,18 @@ describe("GitOpsSection", () => {
       }),
     ]
 
-    render(<GitOpsSection events={events} />)
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: events,
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<GitOpsSection detail={detail} />)
 
     expect(screen.getByText(/no git activity/i)).toBeInTheDocument()
   })
 
   it("renders commit hash in monospace font", () => {
+    const detail = createMockDetail()
     const events: OrchestrationEvent[] = [
       createMockEvent({
         _id: "event1",
@@ -105,7 +176,12 @@ describe("GitOpsSection", () => {
       }),
     ]
 
-    const { container } = render(<GitOpsSection events={events} />)
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: events,
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<GitOpsSection detail={detail} />)
 
     // Find the commit hash element
     const hashElement = screen.getByText("abc1234")
@@ -114,6 +190,7 @@ describe("GitOpsSection", () => {
   })
 
   it("renders diff stats in monospace font", () => {
+    const detail = createMockDetail()
     const events: OrchestrationEvent[] = [
       createMockEvent({
         _id: "event1",
@@ -123,7 +200,12 @@ describe("GitOpsSection", () => {
       }),
     ]
 
-    const { container } = render(<GitOpsSection events={events} />)
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: events,
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<GitOpsSection detail={detail} />)
 
     // Find the diff stats element
     const statsElement = screen.getByText("+10 -5")
@@ -132,6 +214,7 @@ describe("GitOpsSection", () => {
   })
 
   it("handles git events with missing detail", () => {
+    const detail = createMockDetail()
     const events: OrchestrationEvent[] = [
       createMockEvent({
         _id: "event1",
@@ -141,7 +224,12 @@ describe("GitOpsSection", () => {
       }),
     ]
 
-    render(<GitOpsSection events={events} />)
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: events,
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<GitOpsSection detail={detail} />)
 
     expect(screen.getByText("Add feature")).toBeInTheDocument()
     // Should show placeholder or just not show hash
@@ -149,6 +237,7 @@ describe("GitOpsSection", () => {
   })
 
   it("filters events by git_ prefix", () => {
+    const detail = createMockDetail()
     const events: OrchestrationEvent[] = [
       createMockEvent({
         _id: "event1",
@@ -176,7 +265,12 @@ describe("GitOpsSection", () => {
       }),
     ]
 
-    render(<GitOpsSection events={events} />)
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: events,
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<GitOpsSection detail={detail} />)
 
     // Should show all git_ events
     expect(screen.getByText("Git commit")).toBeInTheDocument()
@@ -185,5 +279,18 @@ describe("GitOpsSection", () => {
 
     // Should not show non-git event
     expect(screen.queryByText("Non-git event")).not.toBeInTheDocument()
+  })
+
+  it("uses PanelSection for layout with 'Git' label", () => {
+    const detail = createMockDetail()
+
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: [],
+    } as TypedQueryResult<OrchestrationEvent[]>)
+
+    render(<GitOpsSection detail={detail} />)
+
+    expect(screen.getByText("Git")).toBeInTheDocument()
   })
 })
