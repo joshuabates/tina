@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom"
 import { Option } from "effect"
 import { AppHeader } from "./ui/app-header"
 import { AppStatusBar } from "./ui/app-status-bar"
+import { Sidebar } from "./Sidebar"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { OrchestrationListQuery, ProjectListQuery } from "@/services/data/queryDefs"
@@ -58,7 +59,7 @@ export function AppShell() {
         <AppHeader title="ORCHESTRATOR" version="0.1.0" />
       </div>
 
-      <nav
+      <div
         className={`${styles.sidebar} ${collapsed ? styles.collapsed : ""}`}
         role="navigation"
         aria-label="Main sidebar"
@@ -66,7 +67,8 @@ export function AppShell() {
         <button onClick={toggleCollapsed} aria-label="Collapse sidebar">
           {collapsed ? ">" : "<"}
         </button>
-      </nav>
+        <Sidebar collapsed={collapsed} />
+      </div>
 
       <main className={styles.main} role="main" aria-label="Page content">
         <Outlet />

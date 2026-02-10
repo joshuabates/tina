@@ -11,6 +11,7 @@ import type { ProjectSummary, OrchestrationSummary } from "@/schemas"
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
+vi.mock("@/hooks/useActionRegistration")
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery")

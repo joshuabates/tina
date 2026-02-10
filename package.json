@@ -8,8 +8,9 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run && cd tina-web && npx vitest run",
+    "test:watch": "vitest",
+    "lint": "cd tina-web && npx tsc --noEmit"
   },
   "repository": {
     "type": "git",

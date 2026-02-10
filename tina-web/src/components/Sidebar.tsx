@@ -6,8 +6,10 @@ import type { SidebarItemProps } from "./ui/sidebar-item"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { useFocusable } from "@/hooks/useFocusable"
 import { useSelection } from "@/hooks/useSelection"
+import { useActionRegistration } from "@/hooks/useActionRegistration"
 import { ProjectListQuery, OrchestrationListQuery } from "@/services/data/queryDefs"
 import { normalizeStatus, statusColor } from "@/services/data/status"
+import type { OrchestrationSummary } from "@/schemas"
 import styles from "./Sidebar.module.scss"
 
 interface SidebarProps {
@@ -19,17 +21,33 @@ function SidebarContent({ collapsed }: SidebarProps) {
   const orchestrationsResult = useTypedQuery(OrchestrationListQuery, {})
   const { orchestrationId, selectOrchestration } = useSelection()
 
-  // Calculate total orchestrations for focus registration
-  const orchestrationCount = useMemo(() => {
+  // Flat array of orchestrations for keyboard navigation
+  const orchestrations = useMemo(() => {
     if (orchestrationsResult.status === "success") {
-      return orchestrationsResult.data.length
+      return [...orchestrationsResult.data] // Spread to make mutable copy
     }
-    return 0
+    return []
   }, [orchestrationsResult])
 
-  useFocusable("sidebar", orchestrationCount)
+  // Calculate total orchestrations for focus registration
+  const orchestrationCount = orchestrations.length
 
-  // Group orchestrations by project
+  const { isSectionFocused, activeIndex } = useFocusable("sidebar", orchestrationCount)
+
+  // Register Enter action for selecting orchestration
+  useActionRegistration({
+    id: "sidebar.select",
+    label: "Select Orchestration",
+    key: "Enter",
+    when: "sidebar.focused",
+    execute: () => {
+      if (activeIndex >= 0 && activeIndex < orchestrations.length) {
+        selectOrchestration(orchestrations[activeIndex]._id)
+      }
+    },
+  })
+
+  // Group orchestrations by project with keyboard navigation data
   const projects = useMemo<SidebarProject[]>(() => {
     if (
       projectsResult.status !== "success" ||
@@ -39,7 +57,7 @@ function SidebarContent({ collapsed }: SidebarProps) {
     }
 
     const projectMap = new Map<string, SidebarProject>()
-    const ungroupedItems: Omit<SidebarItemProps, "className">[] = []
+    const ungroupedItems: SidebarItemProps[] = []
 
     // Initialize projects
     for (const project of projectsResult.data) {
@@ -50,14 +68,23 @@ function SidebarContent({ collapsed }: SidebarProps) {
       })
     }
 
-    // Group orchestrations
+    // Group orchestrations (with index for keyboard navigation)
+    let globalIndex = 0
     for (const orchestration of orchestrationsResult.data) {
-      const item: Omit<SidebarItemProps, "className"> = {
+      const itemIndex = globalIndex++
+      const isActive = itemIndex === activeIndex && isSectionFocused
+
+      const item: SidebarItemProps = {
         label: orchestration.featureName,
         active: orchestration._id === orchestrationId,
         statusText: normalizeStatus(orchestration.status),
         statusColor: statusColor(orchestration.status),
         onClick: () => selectOrchestration(orchestration._id),
+        // Keyboard navigation attributes
+        "data-orchestration-id": orchestration._id,
+        id: `sidebar-item-${itemIndex}`,
+        tabIndex: isActive ? 0 : -1,
+        className: isActive ? "ring-2 ring-primary" : undefined,
       }
 
       if (Option.isSome(orchestration.projectId)) {
@@ -85,7 +112,7 @@ function SidebarContent({ collapsed }: SidebarProps) {
     }
 
     return result
-  }, [projectsResult, orchestrationsResult, orchestrationId, selectOrchestration])
+  }, [projectsResult, orchestrationsResult, orchestrationId, selectOrchestration, activeIndex, isSectionFocused])
 
   if (projectsResult.status === "loading" || orchestrationsResult.status === "loading") {
     return (
@@ -111,9 +138,13 @@ function SidebarContent({ collapsed }: SidebarProps) {
     )
   }
 
+  const activeDescendantId = isSectionFocused && activeIndex >= 0
+    ? `sidebar-item-${activeIndex}`
+    : undefined
+
   return (
     <div className={styles.sidebar} data-collapsed={collapsed}>
-      <SidebarNav projects={projects} />
+      <SidebarNav projects={projects} activeDescendantId={activeDescendantId} />
     </div>
   )
 }
