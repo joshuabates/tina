@@ -55,11 +55,18 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
     _id: phase._id,
   }))
 
+  // Calculate aria-activedescendant for screen readers
+  const activeDescendantId = isSectionFocused && activeIndex >= 0 && activeIndex < phaseCards.length
+    ? `phase-${phaseCards[activeIndex]._id}`
+    : undefined
+
   return (
     <PhaseTimeline
+      aria-activedescendant={activeDescendantId}
       phases={phaseCards.map((card, index) => {
         const isSelected = phaseId === card._id
         const isFocused = isSectionFocused && activeIndex === index
+        const phaseItemId = `phase-${card._id}`
 
         return {
           ...card,
@@ -70,10 +77,12 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
           ),
           onClick: () => selectPhase(card._id),
           tabIndex: isFocused ? 0 : -1,
+          id: phaseItemId,
           _id: card._id,
           "aria-current": isSelected ? ("true" as const) : undefined,
           "data-focused": isFocused ? ("true" as const) : undefined,
         } as PhaseCardProps & {
+          id: string
           _id: string
           onClick: () => void
           tabIndex: number

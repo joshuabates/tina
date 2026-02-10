@@ -362,4 +362,54 @@ describe("PhaseTimelinePanel", () => {
     const phase2Element = container.querySelector('[_id="phase2"]')
     expect(phase2Element).toHaveAttribute("data-focused", "true")
   })
+
+  it("sets aria-activedescendant to focused phase id", () => {
+    const detail = createMockDetail()
+
+    mockUseFocusable.mockReturnValue({
+      isSectionFocused: true,
+      activeIndex: 1, // Phase 2 (0-indexed)
+    })
+
+    const { container } = render(<PhaseTimelinePanel detail={detail} />)
+
+    // Timeline container should have aria-activedescendant pointing to focused phase
+    const timelineContainer = container.querySelector('.flex.flex-col.gap-8')
+    expect(timelineContainer).toHaveAttribute("aria-activedescendant", "phase-phase2")
+
+    // Focused phase should have matching id
+    const phase2Element = container.querySelector('[_id="phase2"]')
+    expect(phase2Element).toHaveAttribute("id", "phase-phase2")
+  })
+
+  it("does not set aria-activedescendant when section is not focused", () => {
+    const detail = createMockDetail()
+
+    mockUseFocusable.mockReturnValue({
+      isSectionFocused: false,
+      activeIndex: 1,
+    })
+
+    const { container } = render(<PhaseTimelinePanel detail={detail} />)
+
+    // Timeline container should not have aria-activedescendant when not focused
+    const timelineContainer = container.querySelector('.flex.flex-col.gap-8')
+    expect(timelineContainer).not.toHaveAttribute("aria-activedescendant")
+  })
+
+  it("adds id attribute to all phase items", () => {
+    const detail = createMockDetail()
+
+    const { container } = render(<PhaseTimelinePanel detail={detail} />)
+
+    // All phase items should have id attributes
+    const phase1Element = container.querySelector('[_id="phase1"]')
+    expect(phase1Element).toHaveAttribute("id", "phase-phase1")
+
+    const phase2Element = container.querySelector('[_id="phase2"]')
+    expect(phase2Element).toHaveAttribute("id", "phase-phase2")
+
+    const phase3Element = container.querySelector('[_id="phase3"]')
+    expect(phase3Element).toHaveAttribute("id", "phase-phase3")
+  })
 })
