@@ -30,13 +30,7 @@ function OrchestrationPageContent() {
   }
 
   // Convert to Convex ID - throws NotFoundError if invalid
-  let convexId: string
-  try {
-    convexId = toOrchestrationId(orchestrationId)
-  } catch (error) {
-    // toOrchestrationId throws NotFoundError for empty/undefined IDs
-    throw error
-  }
+  const convexId = toOrchestrationId(orchestrationId)
 
   // Query for orchestration detail
   const result = useTypedQuery(OrchestrationDetailQuery, {
