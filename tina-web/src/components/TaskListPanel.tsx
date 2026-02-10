@@ -7,6 +7,10 @@ import { TaskCard } from "@/components/ui/task-card"
 import { TaskQuicklook } from "@/components/TaskQuicklook"
 import type { StatusBadgeStatus } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
+import {
+  orderTasksByDependency,
+  resolveTaskBlockedReason,
+} from "@/lib/task-dependencies"
 import type { OrchestrationDetail } from "@/schemas"
 
 interface TaskListPanelProps {
@@ -31,9 +35,11 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
     : null
 
   // Get tasks for the selected phase
-  const tasks = selectedPhase
+  const rawTasks = selectedPhase
     ? detail.phaseTasks[selectedPhase.phaseNumber] ?? []
     : []
+  const tasks = orderTasksByDependency(rawTasks)
+  const tasksById = new Map(tasks.map((task) => [task.taskId, task]))
 
   // Register focus section with item count
   const { activeIndex, activeDescendantId, getItemProps } = useRovingSection({
@@ -112,15 +118,15 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
     <>
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold">
+        <div className="px-3 py-2 border-b border-border">
+          <h3 className="text-xs font-semibold tracking-tight">
             Phase {selectedPhase?.phaseNumber} - {tasks.length} tasks
           </h3>
         </div>
 
         {/* Task list */}
         <div
-          className="flex-1 overflow-y-auto p-4 space-y-2"
+          className="flex-1 overflow-y-auto p-3 space-y-1.5"
           role="list"
           aria-label="Tasks"
           aria-activedescendant={activeDescendantId}
@@ -135,7 +141,10 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
                 subject={task.subject}
                 status={mapTaskStatus(task.status)}
                 assignee={Option.getOrUndefined(task.owner)}
-                blockedReason={Option.getOrUndefined(task.blockedBy)}
+                blockedReason={resolveTaskBlockedReason(
+                  Option.getOrUndefined(task.blockedBy),
+                  tasksById,
+                )}
                 {...rovingProps}
               />
             )

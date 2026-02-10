@@ -20,17 +20,17 @@ function SidebarItem({
   return (
     <div
       className={cn(
-        "flex items-center justify-between px-2 py-0.5 cursor-pointer text-xs rounded transition-colors",
+        "flex items-center justify-between px-2 py-1 cursor-pointer text-[12px] rounded-md transition-colors",
         active
           ? "bg-muted/50 text-foreground"
-          : "text-muted-foreground hover:bg-muted/30 hover:text-foreground",
+          : "text-muted-foreground hover:bg-muted/25 hover:text-foreground",
         className
       )}
       {...props}
     >
-      <span className="truncate">{label}</span>
+      <span className="truncate leading-tight">{label}</span>
       {statusText && (
-        <span className={cn("text-[7px] font-bold opacity-60 shrink-0 ml-2", statusColor)}>
+        <span className={cn("text-[8px] font-semibold opacity-55 shrink-0 ml-2", statusColor)}>
           {statusText}
         </span>
       )}

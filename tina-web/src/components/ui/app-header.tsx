@@ -8,7 +8,7 @@ interface AppHeaderProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 function AppHeader({
-  title = "ORCHESTRATOR",
+  title,
   version,
   children,
   className,
@@ -17,18 +17,20 @@ function AppHeader({
   return (
     <header
       className={cn(
-        "border-b border-border bg-sidebar px-3 py-1 flex justify-between items-center shrink-0",
+        "border-b border-border bg-sidebar px-3 py-0.5 flex justify-between items-center shrink-0",
         className
       )}
       {...props}
     >
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-bold tracking-tighter text-primary">
-          {title}
-        </span>
+      <div className="flex items-center gap-2">
+        {title && (
+          <span className="text-sm font-bold tracking-tighter text-primary">
+            {title}
+          </span>
+        )}
         {version && (
           <>
-            <div className="h-3 w-px bg-muted-foreground/30 mx-1" />
+            {title && <div className="h-3 w-px bg-muted-foreground/30 mx-0.5" />}
             <MonoText className="text-2xs opacity-40">{version}</MonoText>
           </>
         )}

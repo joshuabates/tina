@@ -82,9 +82,9 @@ describe("AppShell", () => {
   })
 
   describe("Header and Footer Integration", () => {
-    it("header renders title ORCHESTRATOR", () => {
+    it("header omits product title text", () => {
       renderShell()
-      expect(screen.getByText("ORCHESTRATOR")).toBeInTheDocument()
+      expect(screen.queryByText("ORCHESTRATOR")).not.toBeInTheDocument()
     })
 
     it("header renders version", () => {

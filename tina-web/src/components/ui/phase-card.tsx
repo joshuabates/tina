@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
-import { StatusBadge, type StatusBadgeStatus } from "./status-badge";
-import { statusIconBgClass, statusTextClass } from "./status-styles";
+import { statusLabel, type StatusBadgeStatus } from "./status-styles";
 
 interface PhaseCardProps extends React.HTMLAttributes<HTMLDivElement> {
   phaseNumber: number;
@@ -26,42 +25,51 @@ function PhaseCard({
     status === "executing" || status === "active" || status === "in_progress";
   const isFuture = status === "planning" || status === "pending";
 
-  const iconBg = statusIconBgClass(status);
-  const nameColor = statusTextClass(status);
+  const iconTone = isComplete
+    ? "bg-status-complete/25 border border-status-complete/40 text-status-complete"
+    : isActive
+      ? "bg-primary/20 border border-primary/35 text-primary/90"
+      : "bg-card border border-border text-muted-foreground";
+
+  const nameTone = isFuture
+    ? "text-muted-foreground/90"
+    : "text-foreground/90";
 
   return (
     <div
       className={cn(
-        "flex items-start gap-3 relative z-10 w-full",
-        isFuture && "opacity-60",
+        "flex items-start gap-2.5 relative z-10 w-full",
+        isFuture && "opacity-70",
         className
       )}
       {...props}
     >
       <div
         className={cn(
-          "w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-white",
-          iconBg
+          "w-[22px] h-[22px] rounded-full flex items-center justify-center shrink-0",
+          iconTone
         )}
       >
         {isComplete ? (
-          <span className="text-[14px] font-bold leading-none">&#10003;</span>
+          <span className="text-[11px] font-bold leading-none">&#10003;</span>
         ) : isActive ? (
-          <span className="text-[14px] leading-none">&#9654;</span>
+          <span className="text-[10px] leading-none">&#9654;</span>
         ) : (
-          <span className="text-[10px] font-bold text-muted-foreground">
+          <span className="text-[9px] font-semibold">
             {phaseNumber}
           </span>
         )}
       </div>
       <div className="flex flex-col flex-1 gap-0.5 min-w-0">
-        <div className="flex items-center gap-2">
-          <h3 className={cn("font-bold text-xs truncate", nameColor)}>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className={cn("font-semibold text-xs truncate", nameTone)}>
             P{phaseNumber} {name}
           </h3>
-          <StatusBadge status={status} />
+          <span className="text-[8px] font-medium uppercase tracking-wide text-muted-foreground/65 shrink-0">
+            {statusLabel(status)}
+          </span>
         </div>
-        <p className="text-2xs text-muted-foreground font-medium">
+        <p className="text-2xs text-muted-foreground/80 font-medium">
           {taskCount} tasks | {completedCount} done | {teamCount} team
         </p>
       </div>

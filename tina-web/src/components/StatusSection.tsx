@@ -36,15 +36,15 @@ export function StatusSection({ detail }: StatusSectionProps) {
     >
       <div className="space-y-2.5">
         <div className="flex items-center justify-between">
-          <span className={`text-[8px] font-bold uppercase tracking-wide ${statusColorClass}`}>
+          <span className={`text-[8px] font-semibold uppercase tracking-wide opacity-80 ${statusColorClass}`}>
             {statusDisplayLabel}
           </span>
           <MonoText className="text-[8px] text-muted-foreground">{phaseProgress}</MonoText>
         </div>
 
-        <div className="w-full h-1 rounded-full overflow-hidden bg-muted/90">
+        <div className="w-full h-1 rounded-full overflow-hidden bg-muted/70">
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-300"
+            className="h-full rounded-full bg-primary/65 transition-[width] duration-300"
             style={{ width: `${progressPct}%` }}
           />
         </div>

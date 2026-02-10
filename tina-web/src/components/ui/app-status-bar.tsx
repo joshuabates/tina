@@ -19,12 +19,12 @@ function AppStatusBar({
   return (
     <footer
       className={cn(
-        "bg-sidebar border-t border-border px-3 py-1 flex justify-between items-center shrink-0",
+        "bg-sidebar border-t border-border px-3 py-0.5 flex justify-between items-center shrink-0",
         className
       )}
       {...props}
     >
-      <MonoText className="text-2xs flex gap-3 items-center">
+      <MonoText className="text-[10px] leading-none flex gap-2.5 items-center">
         <span className="flex items-center gap-1.5">
           <span
             className={cn(
@@ -32,12 +32,12 @@ function AppStatusBar({
               connected ? "bg-status-complete" : "bg-status-blocked"
             )}
           />
-          <span className="opacity-60 text-muted-foreground uppercase">
+          <span className="opacity-55 text-muted-foreground uppercase">
             {sessionDuration ? `Session: ${sessionDuration}` : connected ? "Connected" : "Disconnected"}
           </span>
         </span>
         {(projectName || phaseName) && (
-          <span className="text-muted-foreground">
+          <span className="text-muted-foreground/90">
             {[projectName, phaseName].filter(Boolean).join(" / ")}
           </span>
         )}

@@ -53,7 +53,7 @@ export function AppShell() {
   return (
     <div className={styles.appShell}>
       <div className={styles.header}>
-        <AppHeader title="ORCHESTRATOR" version="0.1.0" />
+        <AppHeader version="0.1.0" />
       </div>
 
       <div
