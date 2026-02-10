@@ -293,4 +293,13 @@ describe("GitOpsSection", () => {
 
     expect(screen.getByText("Git")).toBeInTheDocument()
   })
+
+  it("renders loading state while events are fetching", () => {
+    const detail = createMockDetail()
+    mockUseTypedQuery.mockReturnValue({ status: "loading" })
+
+    render(<GitOpsSection detail={detail} />)
+
+    expect(screen.getByText(/loading/i)).toBeInTheDocument()
+  })
 })

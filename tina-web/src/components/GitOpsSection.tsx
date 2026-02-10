@@ -16,6 +16,17 @@ export function GitOpsSection({ detail }: GitOpsSectionProps) {
     orchestrationId: toOrchestrationId(detail._id),
   })
 
+  // Loading state
+  if (eventsResult.status === "loading") {
+    return (
+      <PanelSection label="Git">
+        <div className="text-muted-foreground text-sm">
+          Loading git activity...
+        </div>
+      </PanelSection>
+    )
+  }
+
   const events = eventsResult.status === "success" ? eventsResult.data : []
 
   // Filter git events (events with eventType starting with "git_")

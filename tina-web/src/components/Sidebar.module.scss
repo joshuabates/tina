@@ -10,7 +10,17 @@
   }
 }
 
-.loading,
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.875rem;
+  text-align: center;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 .empty {
   display: flex;
   align-items: center;
@@ -19,4 +29,13 @@
   color: var(--color-muted-foreground);
   font-size: 0.875rem;
   text-align: center;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }

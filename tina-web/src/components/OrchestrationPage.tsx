@@ -42,8 +42,8 @@ function OrchestrationPageContent() {
   // Loading state
   if (result.status === "loading") {
     return (
-      <div className={styles.orchestrationPage}>
-        <div className={styles.empty}>Loading...</div>
+      <div className={styles.orchestrationPage} aria-busy="true">
+        <div className={styles.loading}>Loading orchestration...</div>
       </div>
     )
   }
@@ -70,6 +70,24 @@ function OrchestrationPageContent() {
           <div className={styles.title}>{orchestration.featureName}</div>
           <div className={styles.subtitle}>{orchestration.branch}</div>
         </div>
+      </div>
+      {/* Accessibility: Live region for status changes */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        style={{
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          padding: "0",
+          margin: "-1px",
+          overflow: "hidden",
+          clip: "rect(0, 0, 0, 0)",
+          whiteSpace: "nowrap",
+          border: "0",
+        }}
+      >
+        Orchestration status: {orchestration.status}, Phase {orchestration.currentPhase} of {orchestration.totalPhases}
       </div>
       <div className={styles.content}>
         <div className={styles.centerPanel}>

@@ -107,6 +107,26 @@ describe("OrchestrationPage", () => {
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
   })
 
+  it("renders loading state with aria-busy attribute", () => {
+    mockUseSelection.mockReturnValue({
+      orchestrationId: "o1",
+      phaseId: null,
+      selectOrchestration: vi.fn(),
+      selectPhase: vi.fn(),
+    })
+
+    mockUseTypedQuery.mockReturnValue({ status: "loading" })
+
+    const { container } = render(
+      <MemoryRouter>
+        <OrchestrationPage />
+      </MemoryRouter>
+    )
+
+    const loadingElement = container.querySelector('[aria-busy="true"]')
+    expect(loadingElement).toBeInTheDocument()
+  })
+
   it("renders phase timeline when data loaded", () => {
     mockUseSelection.mockReturnValue({
       orchestrationId: "o1",
@@ -280,5 +300,30 @@ describe("OrchestrationPage", () => {
     expect(screen.getByTestId("phase-timeline-panel")).toBeInTheDocument()
     expect(screen.getByTestId("task-list-panel")).toBeInTheDocument()
     expect(screen.getByTestId("right-panel")).toBeInTheDocument()
+  })
+
+  it("has aria-live region for status changes", () => {
+    mockUseSelection.mockReturnValue({
+      orchestrationId: "o1",
+      phaseId: null,
+      selectOrchestration: vi.fn(),
+      selectPhase: vi.fn(),
+    })
+
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: mockOrchestration,
+    } as TypedQueryResult<OrchestrationDetail>)
+
+    const { container } = render(
+      <MemoryRouter>
+        <OrchestrationPage />
+      </MemoryRouter>
+    )
+
+    // Should have an aria-live="polite" region for status updates
+    const liveRegion = container.querySelector('[aria-live="polite"]')
+    expect(liveRegion).toBeInTheDocument()
+    expect(liveRegion).toHaveAttribute("aria-atomic", "true")
   })
 })

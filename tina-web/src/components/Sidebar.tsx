@@ -116,7 +116,7 @@ function SidebarContent({ collapsed }: SidebarProps) {
   if (projectsResult.status === "loading" || orchestrationsResult.status === "loading") {
     return (
       <div className={styles.sidebar}>
-        <div className={styles.loading}>Loading...</div>
+        <div className={styles.loading}>Loading orchestrations...</div>
       </div>
     )
   }
