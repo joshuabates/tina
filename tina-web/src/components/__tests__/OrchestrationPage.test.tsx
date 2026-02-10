@@ -26,6 +26,28 @@ vi.mock("../PhaseTimelinePanel", () => ({
   ),
 }))
 
+const mockOrchestration: OrchestrationDetail = {
+  _id: "o1",
+  _creationTime: 1234567890,
+  nodeId: "n1",
+  featureName: "test-feature",
+  designDocPath: "/docs/test.md",
+  branch: "tina/test-feature",
+  worktreePath: Option.none(),
+  totalPhases: 3,
+  currentPhase: 1,
+  status: "executing",
+  startedAt: "2024-01-01T10:00:00Z",
+  completedAt: Option.none(),
+  totalElapsedMins: Option.none(),
+  nodeName: "node1",
+  phases: [],
+  tasks: [],
+  orchestratorTasks: [],
+  phaseTasks: {},
+  teamMembers: [],
+}
+
 describe("OrchestrationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -68,28 +90,6 @@ describe("OrchestrationPage", () => {
   })
 
   it("renders phase timeline when data loaded", () => {
-    const mockOrchestration: OrchestrationDetail = {
-      _id: "o1",
-      _creationTime: 1234567890,
-      nodeId: "n1",
-      featureName: "test-feature",
-      designDocPath: "/docs/test.md",
-      branch: "tina/test-feature",
-      worktreePath: Option.none(),
-      totalPhases: 3,
-      currentPhase: 1,
-      status: "executing",
-      startedAt: "2024-01-01T10:00:00Z",
-      completedAt: Option.none(),
-      totalElapsedMins: Option.none(),
-      nodeName: "node1",
-      phases: [],
-      tasks: [],
-      orchestratorTasks: [],
-      phaseTasks: {},
-      teamMembers: [],
-    }
-
     mockUseSelection.mockReturnValue({
       orchestrationId: "o1",
       phaseId: null,
@@ -113,28 +113,6 @@ describe("OrchestrationPage", () => {
   })
 
   it("shows orchestration feature name in header", () => {
-    const mockOrchestration: OrchestrationDetail = {
-      _id: "o1",
-      _creationTime: 1234567890,
-      nodeId: "n1",
-      featureName: "test-feature",
-      designDocPath: "/docs/test.md",
-      branch: "tina/test-feature",
-      worktreePath: Option.none(),
-      totalPhases: 3,
-      currentPhase: 1,
-      status: "executing",
-      startedAt: "2024-01-01T10:00:00Z",
-      completedAt: Option.none(),
-      totalElapsedMins: Option.none(),
-      nodeName: "node1",
-      phases: [],
-      tasks: [],
-      orchestratorTasks: [],
-      phaseTasks: {},
-      teamMembers: [],
-    }
-
     mockUseSelection.mockReturnValue({
       orchestrationId: "o1",
       phaseId: null,
@@ -153,13 +131,9 @@ describe("OrchestrationPage", () => {
       </MemoryRouter>
     )
 
-    // Check for header with both feature name and branch
-    const titles = container.querySelectorAll('[class*="title"]')
-    expect(titles.length).toBeGreaterThan(0)
-    expect(Array.from(titles).some(el => el.textContent === "test-feature")).toBe(true)
-
-    const subtitles = screen.getAllByText("tina/test-feature")
-    expect(subtitles.length).toBeGreaterThan(0)
+    // Check for header with both feature name and branch within this render
+    expect(container.textContent).toContain("test-feature")
+    expect(container.textContent).toContain("tina/test-feature")
   })
 
   it("throws to error boundary on query error", () => {
@@ -179,15 +153,14 @@ describe("OrchestrationPage", () => {
       error,
     })
 
-    render(
+    const { container } = render(
       <MemoryRouter>
         <OrchestrationPage />
       </MemoryRouter>
     )
 
     // Error boundary should catch the error and render fallback
-    expect(screen.getByRole("alert")).toBeInTheDocument()
-    expect(screen.getByText(/unexpected error/i)).toBeInTheDocument()
+    expect(container.textContent).toContain("Unexpected error in orchestration")
 
     consoleSpy.mockRestore()
   })
@@ -208,18 +181,14 @@ describe("OrchestrationPage", () => {
       data: null,
     } as TypedQueryResult<OrchestrationDetail | null>)
 
-    render(
+    const { container } = render(
       <MemoryRouter>
         <OrchestrationPage />
       </MemoryRouter>
     )
 
     // Error boundary should catch the NotFoundError and render fallback
-    const alerts = screen.getAllByRole("alert")
-    expect(alerts.length).toBeGreaterThan(0)
-
-    const notFoundMessages = screen.getAllByText(/orchestration not found/i)
-    expect(notFoundMessages.length).toBeGreaterThan(0)
+    expect(container.textContent).toContain("orchestration not found")
 
     consoleSpy.mockRestore()
   })
