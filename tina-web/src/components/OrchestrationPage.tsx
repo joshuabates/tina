@@ -1,6 +1,7 @@
 import { DataErrorBoundary } from "./DataErrorBoundary"
 import { PhaseTimelinePanel } from "./PhaseTimelinePanel"
 import { TaskListPanel } from "./TaskListPanel"
+import { RightPanel } from "./RightPanel"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { OrchestrationDetailQuery } from "@/services/data/queryDefs"
@@ -78,6 +79,9 @@ function OrchestrationPageContent() {
           <div className={styles.taskColumn}>
             <TaskListPanel detail={orchestration} />
           </div>
+        </div>
+        <div className={styles.rightColumn}>
+          <RightPanel detail={orchestration} />
         </div>
       </div>
     </div>

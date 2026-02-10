@@ -31,6 +31,8 @@
 .content {
   flex: 1;
   overflow: hidden;
+  display: grid;
+  grid-template-columns: 280px 1fr 256px;
 }
 
 .centerPanel {
@@ -48,6 +50,11 @@
 
 .taskColumn {
   overflow-y: auto;
+}
+
+.rightColumn {
+  overflow-y: auto;
+  border-left: 1px solid $border-color;
 }
 
 .empty {

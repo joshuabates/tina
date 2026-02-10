@@ -462,9 +462,9 @@ describe("App - OrchestrationPage integration (Phase 4)", () => {
       expect(within(main).getByText(new RegExp(`P${phase.phaseNumber} Phase ${phase.phaseNumber}`, "i"))).toBeInTheDocument()
     })
 
-    // Verify status badges match in main content
-    expect(within(main).getByText("completed")).toBeInTheDocument()
-    expect(within(main).getByText("executing")).toBeInTheDocument()
-    expect(within(main).getByText("pending")).toBeInTheDocument()
+    // Verify status badges match in main content (may appear multiple times due to right panel)
+    expect(within(main).getAllByText("completed").length).toBeGreaterThan(0)
+    expect(within(main).getAllByText("executing").length).toBeGreaterThan(0)
+    expect(within(main).getAllByText("pending").length).toBeGreaterThan(0)
   })
 })

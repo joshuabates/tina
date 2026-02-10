@@ -35,6 +35,15 @@ vi.mock("../TaskListPanel", () => ({
   ),
 }))
 
+// Mock RightPanel
+vi.mock("../RightPanel", () => ({
+  RightPanel: ({ detail }: { detail: OrchestrationDetail }) => (
+    <div data-testid="right-panel">
+      Right Panel for {detail.featureName}
+    </div>
+  ),
+}))
+
 const mockOrchestration: OrchestrationDetail = {
   _id: "o1",
   _creationTime: 1234567890,
@@ -223,5 +232,53 @@ describe("OrchestrationPage", () => {
     expect(container.textContent).toContain("orchestration not found")
 
     consoleSpy.mockRestore()
+  })
+
+  it("renders RightPanel when data loaded", () => {
+    mockUseSelection.mockReturnValue({
+      orchestrationId: "o1",
+      phaseId: null,
+      selectOrchestration: vi.fn(),
+      selectPhase: vi.fn(),
+    })
+
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: mockOrchestration,
+    } as TypedQueryResult<OrchestrationDetail>)
+
+    render(
+      <MemoryRouter>
+        <OrchestrationPage />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByTestId("right-panel")).toBeInTheDocument()
+    expect(screen.getByText(/Right Panel for test-feature/)).toBeInTheDocument()
+  })
+
+  it("renders all three panels in 3-column layout when data loaded", () => {
+    mockUseSelection.mockReturnValue({
+      orchestrationId: "o1",
+      phaseId: null,
+      selectOrchestration: vi.fn(),
+      selectPhase: vi.fn(),
+    })
+
+    mockUseTypedQuery.mockReturnValue({
+      status: "success",
+      data: mockOrchestration,
+    } as TypedQueryResult<OrchestrationDetail>)
+
+    render(
+      <MemoryRouter>
+        <OrchestrationPage />
+      </MemoryRouter>
+    )
+
+    // All three panels should be present
+    expect(screen.getByTestId("phase-timeline-panel")).toBeInTheDocument()
+    expect(screen.getByTestId("task-list-panel")).toBeInTheDocument()
+    expect(screen.getByTestId("right-panel")).toBeInTheDocument()
   })
 })
