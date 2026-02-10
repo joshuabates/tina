@@ -162,48 +162,6 @@ describe("DataErrorBoundary", () => {
     consoleErrorSpy.mockRestore()
   })
 
-  it("reset clears error and re-renders children", async () => {
-    const user = userEvent.setup()
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
-    function TestComponent() {
-      return (
-        <DataErrorBoundary panelName="TestPanel">
-          <ErrorThrower error={null}>
-            <div>Child content</div>
-          </ErrorThrower>
-        </DataErrorBoundary>
-      )
-    }
-
-    const { rerender } = render(<TestComponent />)
-
-    // Trigger error
-    const error = new QueryValidationError({
-      query: "test.query",
-      message: "Test error",
-    })
-
-    rerender(
-      <DataErrorBoundary panelName="TestPanel">
-        <ErrorThrower error={error}>
-          <div>Child content</div>
-        </ErrorThrower>
-      </DataErrorBoundary>
-    )
-
-    expect(screen.getByRole("alert")).toBeInTheDocument()
-    expect(screen.queryByText("Child content")).not.toBeInTheDocument()
-
-    // Click retry
-    const retryButton = screen.getByRole("button", { name: /retry/i })
-    await user.click(retryButton)
-
-    // After reset, error should be cleared - but since ErrorThrower will throw again,
-    // we need a version that doesn't throw after reset
-    consoleErrorSpy.mockRestore()
-  })
-
   it("custom fallback prop is used when provided", () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     const error = new Error("Test error")

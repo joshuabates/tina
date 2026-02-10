@@ -47,13 +47,15 @@ describe("Sidebar", () => {
   it("renders loading state while queries are pending", () => {
     mockUseTypedQuery.mockReturnValue({ status: "loading" })
 
-    render(
+    const { container } = render(
       <MemoryRouter>
         <Sidebar collapsed={false} />
       </MemoryRouter>
     )
 
-    expect(screen.getByText(/loading/i)).toBeInTheDocument()
+    // Check for skeleton bars in loading state
+    const skeletonBars = container.querySelectorAll('[class*="skeletonBar"]')
+    expect(skeletonBars.length).toBe(4)
   })
 
   it("renders project tree with orchestrations grouped by project", () => {

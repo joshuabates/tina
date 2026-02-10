@@ -39,11 +39,37 @@ function OrchestrationPageContent() {
     orchestrationId: convexId,
   })
 
-  // Loading state
+  // Loading state - show skeleton matching three-column layout
   if (result.status === "loading") {
     return (
       <div className={styles.orchestrationPage} aria-busy="true">
-        <div className={styles.loading}>Loading orchestration...</div>
+        <div className={styles.header}>
+          <div className={styles.skeletonText} style={{ width: "150px", height: "14px" }} />
+        </div>
+        <div className={styles.content}>
+          <div className={styles.centerPanel}>
+            <div className={styles.timelineColumn}>
+              <div className={styles.loading}>
+                <div className={styles.skeletonBar} />
+                <div className={styles.skeletonBar} />
+                <div className={styles.skeletonBar} />
+              </div>
+            </div>
+            <div className={styles.taskColumn}>
+              <div className={styles.loading}>
+                <div className={styles.skeletonBar} style={{ width: "80%" }} />
+                <div className={styles.skeletonBar} style={{ width: "60%" }} />
+                <div className={styles.skeletonBar} style={{ width: "70%" }} />
+              </div>
+            </div>
+          </div>
+          <div className={styles.rightColumn}>
+            <div className={styles.loading}>
+              <div className={styles.skeletonBar} style={{ width: "90%" }} />
+              <div className={styles.skeletonBar} style={{ width: "85%" }} />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

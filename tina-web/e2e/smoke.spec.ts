@@ -13,7 +13,10 @@ test.describe("Smoke Tests", () => {
     })
 
     // Navigate to the app
-    await page.goto("/")
+    await page.goto("/", { waitUntil: "networkidle" })
+
+    // Wait for the app shell to be fully rendered
+    await page.waitForSelector("header", { state: "visible", timeout: 10000 })
 
     // Verify page title
     await expect(page).toHaveTitle(/ORCHESTRATOR|TINA/i)

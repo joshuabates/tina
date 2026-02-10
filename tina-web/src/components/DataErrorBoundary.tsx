@@ -56,76 +56,75 @@ export class DataErrorBoundary extends Component<Props, State> {
     }, 500)
   }
 
-  private renderDefaultFallback(error: unknown): ReactNode {
-    // Check error type by _tag property (Effect Schema tagged errors)
+  private getErrorDisplay(error: unknown) {
     const taggedError = error as { _tag?: string }
 
-    if (taggedError._tag === "QueryValidationError") {
-      const queryError = error as QueryValidationError
-      return (
-        <div role="alert" className={styles.errorContainer}>
-          <div className={styles.errorTitle}>Data error</div>
-          <div className={styles.errorMessage}>
-            Unable to load data for {this.props.panelName}
-          </div>
-          <div className={styles.errorDebug}>Query: {queryError.query}</div>
-          <button className={styles.retryButton} onClick={this.reset}>
-            Retry
-          </button>
-        </div>
-      )
-    }
+    switch (taggedError._tag) {
+      case "QueryValidationError": {
+        const queryError = error as QueryValidationError
+        return {
+          title: "Data error",
+          message: `Unable to load data for ${this.props.panelName}`,
+          debug: `Query: ${queryError.query}`,
+          retry: { onClick: this.reset, disabled: false },
+        }
+      }
 
-    if (taggedError._tag === "NotFoundError") {
-      const notFoundError = error as NotFoundError
-      return (
-        <div role="alert" className={`${styles.errorContainer} ${styles.notFound}`}>
-          <div className={styles.errorTitle}>{notFoundError.resource} not found</div>
-          <div className={styles.errorMessage}>
-            The requested {notFoundError.resource.toLowerCase()} does not exist
-          </div>
-        </div>
-      )
-    }
+      case "NotFoundError": {
+        const notFoundError = error as NotFoundError
+        return {
+          className: styles.notFound,
+          title: `${notFoundError.resource} not found`,
+          message: `The requested ${notFoundError.resource.toLowerCase()} does not exist`,
+        }
+      }
 
-    if (taggedError._tag === "PermissionError") {
-      const permissionError = error as PermissionError
-      return (
-        <div role="alert" className={`${styles.errorContainer} ${styles.permission}`}>
-          <div className={styles.errorTitle}>Access denied</div>
-          <div className={styles.errorMessage}>{permissionError.message}</div>
-        </div>
-      )
-    }
+      case "PermissionError": {
+        const permissionError = error as PermissionError
+        return {
+          className: styles.permission,
+          title: "Access denied",
+          message: permissionError.message,
+        }
+      }
 
-    if (taggedError._tag === "TransientDataError") {
-      return (
-        <div role="alert" className={`${styles.errorContainer} ${styles.transient}`}>
-          <div className={styles.errorTitle}>Temporary error</div>
-          <div className={styles.errorMessage}>
-            Unable to load {this.props.panelName}
-          </div>
+      case "TransientDataError":
+        return {
+          className: styles.transient,
+          title: "Temporary error",
+          message: `Unable to load ${this.props.panelName}`,
+          retry: { onClick: this.handleTransientRetry, disabled: this.state.retryDisabled },
+        }
+
+      default:
+        return {
+          title: "Unexpected error",
+          message: `Something went wrong in ${this.props.panelName}`,
+          retry: { onClick: this.reset, disabled: false },
+        }
+    }
+  }
+
+  private renderDefaultFallback(error: unknown): ReactNode {
+    const config = this.getErrorDisplay(error)
+    const containerClass = config.className
+      ? `${styles.errorContainer} ${config.className}`
+      : styles.errorContainer
+
+    return (
+      <div role="alert" className={containerClass}>
+        <div className={styles.errorTitle}>{config.title}</div>
+        <div className={styles.errorMessage}>{config.message}</div>
+        {config.debug && <div className={styles.errorDebug}>{config.debug}</div>}
+        {config.retry && (
           <button
             className={styles.retryButton}
-            onClick={this.handleTransientRetry}
-            disabled={this.state.retryDisabled}
+            onClick={config.retry.onClick}
+            disabled={config.retry.disabled}
           >
             Retry
           </button>
-        </div>
-      )
-    }
-
-    // Unknown error
-    return (
-      <div role="alert" className={styles.errorContainer}>
-        <div className={styles.errorTitle}>Unexpected error</div>
-        <div className={styles.errorMessage}>
-          Something went wrong in {this.props.panelName}
-        </div>
-        <button className={styles.retryButton} onClick={this.reset}>
-          Retry
-        </button>
+        )}
       </div>
     )
   }

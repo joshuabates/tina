@@ -11,13 +11,17 @@
 }
 
 .loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 1rem;
-  color: var(--color-muted-foreground);
-  font-size: 0.875rem;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skeletonBar {
+  height: 32px;
+  width: 100%;
+  background-color: var(--color-border);
+  border-radius: 4px;
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 

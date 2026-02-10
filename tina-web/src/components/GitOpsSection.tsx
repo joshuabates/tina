@@ -5,6 +5,7 @@ import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { EventListQuery } from "@/services/data/queryDefs"
 import { toOrchestrationId } from "@/services/data/id"
 import type { OrchestrationDetail } from "@/schemas"
+import styles from "./GitOpsSection.module.scss"
 
 export interface GitOpsSectionProps {
   detail: OrchestrationDetail
@@ -20,7 +21,7 @@ export function GitOpsSection({ detail }: GitOpsSectionProps) {
   if (eventsResult.status === "loading") {
     return (
       <PanelSection label="Git">
-        <div className="text-muted-foreground text-sm">
+        <div className={styles.loading}>
           Loading git activity...
         </div>
       </PanelSection>

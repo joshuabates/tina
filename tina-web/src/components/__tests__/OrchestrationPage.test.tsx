@@ -98,13 +98,15 @@ describe("OrchestrationPage", () => {
 
     mockUseTypedQuery.mockReturnValue({ status: "loading" })
 
-    render(
+    const { container } = render(
       <MemoryRouter>
         <OrchestrationPage />
       </MemoryRouter>
     )
 
-    expect(screen.getByText(/loading/i)).toBeInTheDocument()
+    // Check for skeleton bars in loading state
+    const skeletonBars = container.querySelectorAll('[class*="skeletonBar"]')
+    expect(skeletonBars.length).toBeGreaterThan(0)
   })
 
   it("renders loading state with aria-busy attribute", () => {
@@ -221,7 +223,8 @@ describe("OrchestrationPage", () => {
     )
 
     // Error boundary should catch the error and render fallback
-    expect(container.textContent).toContain("Unexpected error in orchestration")
+    expect(container.textContent).toContain("Unexpected error")
+    expect(container.textContent).toContain("Something went wrong in orchestration")
 
     consoleSpy.mockRestore()
   })

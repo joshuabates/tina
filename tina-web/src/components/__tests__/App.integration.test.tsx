@@ -193,7 +193,7 @@ describe("App - URL synchronization + selection flow", () => {
     )
 
     // OrchestrationPage should show the feature name in main content area
-    const main = container.querySelector('main[role="main"]') as HTMLElement
+    const main = container.querySelector('main') as HTMLElement
     expect(main).toBeInTheDocument()
     expect(within(main).getByText("my-feature")).toBeInTheDocument()
     expect(within(main).getByText("tina/my-feature")).toBeInTheDocument()
@@ -306,7 +306,7 @@ describe("App - URL synchronization + selection flow", () => {
     expect(screen.getAllByRole("main").length).toBeGreaterThan(0)
 
     // And orchestration page empty state
-    const main = container.querySelector('main[role="main"]')
+    const main = container.querySelector('main')
     expect(main).toBeInTheDocument()
     expect(main).toHaveTextContent(/select an orchestration/i)
   })
@@ -335,7 +335,7 @@ describe("App - OrchestrationPage integration (Phase 4)", () => {
     )
 
     // Verify orchestration page header renders in main content
-    const main = container.querySelector('main[role="main"]') as HTMLElement
+    const main = container.querySelector('main') as HTMLElement
     expect(within(main).getByText("my-feature")).toBeInTheDocument()
     expect(within(main).getByText("tina/my-feature")).toBeInTheDocument()
 
@@ -457,7 +457,7 @@ describe("App - OrchestrationPage integration (Phase 4)", () => {
     )
 
     // Verify all phases from detail query are rendered in main content
-    const main = container.querySelector('main[role="main"]') as HTMLElement
+    const main = container.querySelector('main') as HTMLElement
     mockPhases.forEach((phase) => {
       expect(within(main).getByText(new RegExp(`P${phase.phaseNumber} Phase ${phase.phaseNumber}`, "i"))).toBeInTheDocument()
     })
