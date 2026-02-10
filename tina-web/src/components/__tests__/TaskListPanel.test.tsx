@@ -8,7 +8,7 @@ import {
   none,
   some,
 } from "@/test/builders/domain"
-import { focusableState, selectionState } from "@/test/harness/hooks"
+import { setPanelFocus, setPanelSelection } from "@/test/harness/panel-state"
 import { expectStatusLabelVisible } from "@/test/harness/status"
 
 vi.mock("@/hooks/useFocusable")
@@ -22,26 +22,15 @@ const mockUseSelection = vi.mocked(
   await import("@/hooks/useSelection"),
 ).useSelection
 
-function setSelection(phaseId: string | null) {
-  mockUseSelection.mockReturnValue(
-    selectionState({
-      orchestrationId: "orch1",
-      phaseId,
-      selectOrchestration: vi.fn(),
-      selectPhase: vi.fn(),
-    }),
-  )
-}
-
 describe("TaskListPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockUseFocusable.mockReturnValue(focusableState())
-    mockUseSelection.mockReturnValue(selectionState())
+    setPanelFocus(mockUseFocusable)
+    setPanelSelection(mockUseSelection)
   })
 
   it("renders empty state when no phase selected", () => {
-    setSelection(null)
+    setPanelSelection(mockUseSelection, { phaseId: null })
 
     render(<TaskListPanel detail={buildTaskListDetail()} />)
 
@@ -49,7 +38,7 @@ describe("TaskListPanel", () => {
   })
 
   it("renders empty state when selected phase has no tasks", () => {
-    setSelection("phase2")
+    setPanelSelection(mockUseSelection, { phaseId: "phase2" })
 
     render(<TaskListPanel detail={buildTaskListDetail()} />)
 
@@ -57,7 +46,7 @@ describe("TaskListPanel", () => {
   })
 
   it("renders task cards for selected phase's tasks", () => {
-    setSelection("phase1")
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     render(<TaskListPanel detail={buildTaskListDetail()} />)
 
@@ -67,7 +56,7 @@ describe("TaskListPanel", () => {
   })
 
   it("shows correct task count summary in header", () => {
-    setSelection("phase1")
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     render(<TaskListPanel detail={buildTaskListDetail()} />)
 
@@ -75,7 +64,7 @@ describe("TaskListPanel", () => {
   })
 
   it("maps TaskEvent status to TaskCard status (lowercase)", () => {
-    setSelection("phase1")
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     const detail = buildTaskListDetail({
       phaseTasks: {
@@ -118,7 +107,7 @@ describe("TaskListPanel", () => {
   })
 
   it("maps TaskEvent owner to TaskCard assignee", () => {
-    setSelection("phase1")
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     render(<TaskListPanel detail={buildTaskListDetail()} />)
 
@@ -127,7 +116,7 @@ describe("TaskListPanel", () => {
   })
 
   it("maps TaskEvent blockedBy to TaskCard blockedReason", () => {
-    setSelection("phase1")
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     render(<TaskListPanel detail={buildTaskListDetail()} />)
 
@@ -135,7 +124,7 @@ describe("TaskListPanel", () => {
   })
 
   it("registers taskList focus section with correct item count", () => {
-    setSelection("phase1")
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     render(<TaskListPanel detail={buildTaskListDetail()} />)
 
@@ -144,19 +133,19 @@ describe("TaskListPanel", () => {
 
   it("updates item count when phase selection changes", () => {
     const detail = buildTaskListDetail()
-    setSelection("phase1")
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     const { rerender } = render(<TaskListPanel detail={detail} />)
     expect(mockUseFocusable).toHaveBeenCalledWith("taskList", 3)
 
-    setSelection("phase2")
+    setPanelSelection(mockUseSelection, { phaseId: "phase2" })
     rerender(<TaskListPanel detail={detail} />)
 
     expect(mockUseFocusable).toHaveBeenCalledWith("taskList", 0)
   })
 
   it("handles phase with undefined phaseNumber in phaseTasks", () => {
-    setSelection("phase1")
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     const detail = buildTaskListDetail({
       phases: [

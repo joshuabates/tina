@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { ScrollArea } from "./scroll-area";
-import { Separator } from "./separator";
 
 const meta: Meta<typeof ScrollArea> = {
   title: "Primitives/ScrollArea",
@@ -21,7 +20,7 @@ export const Vertical: Story = {
         {tags.map((tag) => (
           <div key={tag}>
             <div className="text-sm">{tag}</div>
-            <Separator className="my-2" />
+            <div className="my-2 border-b border-border" />
           </div>
         ))}
       </div>

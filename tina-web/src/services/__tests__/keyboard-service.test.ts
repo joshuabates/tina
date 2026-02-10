@@ -230,6 +230,27 @@ describe("KeyboardService", () => {
         })
       })
     })
+
+    it.each([
+      ["ArrowDown", 1],
+      ["ArrowUp", -1],
+    ])(
+      "allows %s list navigation while aria-modal dialog is open",
+      (key, delta) => {
+        withAttached(() => {
+          withTarget(document.createElement("div"), (dialog) => {
+            dialog.setAttribute("role", "dialog")
+            dialog.setAttribute("aria-modal", "true")
+
+            const event = press(key)
+
+            expect(focusService.moveItem).toHaveBeenCalledWith(delta)
+            expect(actionRegistry.resolve).not.toHaveBeenCalled()
+            expect(event.defaultPrevented).toBe(true)
+          })
+        })
+      },
+    )
   })
 
   describe("normalizeKey", () => {

@@ -1,17 +1,16 @@
 import { Schema } from "effect"
+import { orchestrationScopedDocumentFields, optionalString } from "./common"
 
 export const TaskEvent = Schema.Struct({
-  _id: Schema.String,
-  _creationTime: Schema.Number,
-  orchestrationId: Schema.String,
-  phaseNumber: Schema.optionalWith(Schema.String, { as: "Option" }),
+  ...orchestrationScopedDocumentFields,
+  phaseNumber: optionalString,
   taskId: Schema.String,
   subject: Schema.String,
-  description: Schema.optionalWith(Schema.String, { as: "Option" }),
+  description: optionalString,
   status: Schema.String,
-  owner: Schema.optionalWith(Schema.String, { as: "Option" }),
-  blockedBy: Schema.optionalWith(Schema.String, { as: "Option" }),
-  metadata: Schema.optionalWith(Schema.String, { as: "Option" }),
+  owner: optionalString,
+  blockedBy: optionalString,
+  metadata: optionalString,
   recordedAt: Schema.String,
 })
 

@@ -4,15 +4,16 @@ import { DataErrorBoundary } from "./DataErrorBoundary"
 import { SidebarNav, type SidebarProject } from "./ui/sidebar-nav"
 import type { SidebarItemProps } from "./ui/sidebar-item"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { useFocusable } from "@/hooks/useFocusable"
 import { useSelection } from "@/hooks/useSelection"
-import { useActionRegistration } from "@/hooks/useActionRegistration"
+import { useIndexedAction } from "@/hooks/useIndexedAction"
+import { useRovingSection } from "@/hooks/useRovingSection"
 import { ProjectListQuery, OrchestrationListQuery } from "@/services/data/queryDefs"
 import {
   statusLabel,
   statusTextClass,
   toStatusBadgeStatus,
 } from "@/components/ui/status-styles"
+import { firstQueryError, isAnyQueryLoading } from "@/lib/query-state"
 import styles from "./Sidebar.module.scss"
 
 function SidebarContent() {
@@ -31,18 +32,22 @@ function SidebarContent() {
   // Calculate total orchestrations for focus registration
   const orchestrationCount = orchestrations.length
 
-  const { isSectionFocused, activeIndex } = useFocusable("sidebar", orchestrationCount)
+  const { activeIndex, getItemProps, activeDescendantId } = useRovingSection({
+    sectionId: "sidebar",
+    itemCount: orchestrationCount,
+    getItemDomId: (index) => `sidebar-item-${index}`,
+  })
 
   // Register Enter action for selecting orchestration
-  useActionRegistration({
+  useIndexedAction({
     id: "sidebar.select",
     label: "Select Orchestration",
     key: "Enter",
     when: "sidebar.focused",
-    execute: () => {
-      if (activeIndex >= 0 && activeIndex < orchestrations.length) {
-        selectOrchestration(orchestrations[activeIndex]._id)
-      }
+    items: orchestrations,
+    activeIndex,
+    execute: (orchestration) => {
+      selectOrchestration(orchestration._id)
     },
   })
 
@@ -71,7 +76,7 @@ function SidebarContent() {
     let globalIndex = 0
     for (const orchestration of orchestrationsResult.data) {
       const itemIndex = globalIndex++
-      const isActive = itemIndex === activeIndex && isSectionFocused
+      const rovingProps = getItemProps(itemIndex, `sidebar-item-${itemIndex}`)
 
       const item: SidebarItemProps = {
         label: orchestration.featureName,
@@ -79,11 +84,8 @@ function SidebarContent() {
         statusText: statusLabel(toStatusBadgeStatus(orchestration.status)),
         statusColor: statusTextClass(toStatusBadgeStatus(orchestration.status)),
         onClick: () => selectOrchestration(orchestration._id),
-        // Keyboard navigation attributes
         "data-orchestration-id": orchestration._id,
-        "data-focused": isActive ? "true" : undefined,
-        id: `sidebar-item-${itemIndex}`,
-        tabIndex: isActive ? 0 : -1,
+        ...rovingProps,
         className: undefined,
       }
 
@@ -112,9 +114,9 @@ function SidebarContent() {
     }
 
     return result
-  }, [projectsResult, orchestrationsResult, orchestrationId, selectOrchestration, activeIndex, isSectionFocused])
+  }, [projectsResult, orchestrationsResult, orchestrationId, selectOrchestration, getItemProps])
 
-  if (projectsResult.status === "loading" || orchestrationsResult.status === "loading") {
+  if (isAnyQueryLoading(projectsResult, orchestrationsResult)) {
     return (
       <div className={styles.sidebar}>
         <div className={styles.loading}>
@@ -127,12 +129,9 @@ function SidebarContent() {
     )
   }
 
-  if (projectsResult.status === "error") {
-    throw projectsResult.error
-  }
-
-  if (orchestrationsResult.status === "error") {
-    throw orchestrationsResult.error
+  const queryError = firstQueryError(projectsResult, orchestrationsResult)
+  if (queryError) {
+    throw queryError
   }
 
   if (projects.length === 0 && orchestrationCount === 0) {
@@ -142,10 +141,6 @@ function SidebarContent() {
       </div>
     )
   }
-
-  const activeDescendantId = isSectionFocused && activeIndex >= 0
-    ? `sidebar-item-${activeIndex}`
-    : undefined
 
   return (
     <div className={styles.sidebar}>

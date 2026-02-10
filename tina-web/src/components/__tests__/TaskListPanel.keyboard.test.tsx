@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render } from "@testing-library/react"
+import { render, screen, within, waitFor, act } from "@testing-library/react"
 import { TaskListPanel } from "../TaskListPanel"
 import { buildTaskListDetail } from "@/test/builders/domain"
 import { assertRovingFocus } from "@/test/harness/roving"
+import type { ActionContext } from "@/services/action-registry"
 import {
-  focusableState,
-  selectionState,
   type SelectionStateMock,
 } from "@/test/harness/hooks"
+import { setPanelFocus, setPanelSelection } from "@/test/harness/panel-state"
 
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
@@ -26,19 +26,15 @@ const mockUseActionRegistration = vi.mocked(
 const taskIds = ["task1", "task2", "task3"] as const
 
 function setSelection(overrides: Partial<SelectionStateMock> = {}) {
-  mockUseSelection.mockReturnValue(
-    selectionState({
-      orchestrationId: "orch1",
-      phaseId: "phase1",
-      selectOrchestration: vi.fn(),
-      selectPhase: vi.fn(),
-      ...overrides,
-    }),
+  setPanelSelection(
+    mockUseSelection,
+    { phaseId: "phase1", ...overrides },
+    { phaseId: "phase1" },
   )
 }
 
 function setFocus(isSectionFocused = false, activeIndex = -1) {
-  mockUseFocusable.mockReturnValue(focusableState({ isSectionFocused, activeIndex }))
+  setPanelFocus(mockUseFocusable, isSectionFocused, activeIndex)
 }
 
 function renderTaskListView({
@@ -67,7 +63,7 @@ describe("TaskListPanel - Keyboard Navigation", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setFocus()
-    mockUseSelection.mockReturnValue(selectionState())
+    setPanelSelection(mockUseSelection)
     mockUseActionRegistration.mockImplementation(() => {})
   })
 
@@ -149,6 +145,14 @@ describe("TaskListPanel - Keyboard Navigation", () => {
         expect(taskById(container, "task2")).not.toHaveAttribute("data-focused", "true")
       }
     })
+
+    it("applies visual focus classes for keyboard-selected task", () => {
+      const { container } = renderTaskListView({ isSectionFocused: true, activeIndex: 1 })
+      const focusedTask = taskById(container, "task2")
+
+      expect(focusedTask).toHaveClass("data-[focused=true]:ring-2")
+      expect(focusedTask).toHaveClass("data-[focused=true]:bg-primary/5")
+    })
   })
 
   describe("Focus section registration", () => {
@@ -174,6 +178,48 @@ describe("TaskListPanel - Keyboard Navigation", () => {
       )
 
       expect(mockUseFocusable).toHaveBeenCalledWith("taskList", 1)
+    })
+  })
+
+  describe("Quicklook sync", () => {
+    it("updates modal task when keyboard selection changes while quicklook is open", async () => {
+      let openQuicklook: ((ctx: ActionContext) => void) | undefined
+      mockUseActionRegistration.mockImplementation((action) => {
+        if (action.id === "task-list-quicklook") {
+          openQuicklook = action.execute
+        }
+      })
+
+      const detail = buildTaskListDetail()
+      const { rerender } = renderTaskListView({
+        isSectionFocused: true,
+        activeIndex: 0,
+        detail,
+      })
+
+      expect(openQuicklook).toBeTypeOf("function")
+
+      act(() => {
+        openQuicklook?.({} as ActionContext)
+      })
+
+      expect(screen.getByRole("dialog")).toBeInTheDocument()
+      expect(
+        within(screen.getByRole("dialog")).getByRole("heading", {
+          name: "Implement feature A",
+        }),
+      ).toBeInTheDocument()
+
+      setFocus(true, 1)
+      rerender(<TaskListPanel detail={detail} />)
+
+      await waitFor(() => {
+        expect(
+          within(screen.getByRole("dialog")).getByRole("heading", {
+            name: "Write tests for feature A",
+          }),
+        ).toBeInTheDocument()
+      })
     })
   })
 })

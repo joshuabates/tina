@@ -56,8 +56,8 @@ export function createKeyboardService(config: KeyboardServiceConfig) {
       return
     }
 
-    // If a modal is open but not explicitly scoped yet, avoid background navigation.
-    if (hasAriaModal) {
+    // If a modal is open but not explicitly scoped yet, only allow vertical list navigation.
+    if (hasAriaModal && e.key !== "ArrowDown" && e.key !== "ArrowUp") {
       return
     }
 

@@ -4,10 +4,9 @@ import { userEvent } from "@testing-library/user-event"
 import { PhaseTimelinePanel } from "../PhaseTimelinePanel"
 import { buildPhase, buildPhaseTimelineDetail } from "@/test/builders/domain"
 import {
-  focusableState,
-  selectionState,
   type SelectionStateMock,
 } from "@/test/harness/hooks"
+import { setPanelFocus, setPanelSelection } from "@/test/harness/panel-state"
 import { expectElementStatusText } from "@/test/harness/status"
 
 vi.mock("@/hooks/useFocusable")
@@ -24,19 +23,15 @@ const mockUseSelection = vi.mocked(
 const mockSelectPhase = vi.fn()
 
 function setSelection(overrides: Partial<SelectionStateMock> = {}) {
-  mockUseSelection.mockReturnValue(
-    selectionState({
-      orchestrationId: "orch1",
-      phaseId: null,
-      selectOrchestration: vi.fn(),
-      selectPhase: mockSelectPhase,
-      ...overrides,
-    }),
-  )
+  setPanelSelection(mockUseSelection, {
+    phaseId: null,
+    selectPhase: mockSelectPhase,
+    ...overrides,
+  })
 }
 
 function setFocus(isSectionFocused = false, activeIndex = -1) {
-  mockUseFocusable.mockReturnValue(focusableState({ isSectionFocused, activeIndex }))
+  setPanelFocus(mockUseFocusable, isSectionFocused, activeIndex)
 }
 
 function renderTimelineView({

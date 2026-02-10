@@ -1,18 +1,21 @@
 import { Schema } from "effect"
+import {
+  orchestrationScopedDocumentFields,
+  optionalNumber,
+  optionalString,
+} from "./common"
 
 export const Phase = Schema.Struct({
-  _id: Schema.String,
-  _creationTime: Schema.Number,
-  orchestrationId: Schema.String,
+  ...orchestrationScopedDocumentFields,
   phaseNumber: Schema.String,
   status: Schema.String,
-  planPath: Schema.optionalWith(Schema.String, { as: "Option" }),
-  gitRange: Schema.optionalWith(Schema.String, { as: "Option" }),
-  planningMins: Schema.optionalWith(Schema.Number, { as: "Option" }),
-  executionMins: Schema.optionalWith(Schema.Number, { as: "Option" }),
-  reviewMins: Schema.optionalWith(Schema.Number, { as: "Option" }),
-  startedAt: Schema.optionalWith(Schema.String, { as: "Option" }),
-  completedAt: Schema.optionalWith(Schema.String, { as: "Option" }),
+  planPath: optionalString,
+  gitRange: optionalString,
+  planningMins: optionalNumber,
+  executionMins: optionalNumber,
+  reviewMins: optionalNumber,
+  startedAt: optionalString,
+  completedAt: optionalString,
 })
 
 export type Phase = typeof Phase.Type

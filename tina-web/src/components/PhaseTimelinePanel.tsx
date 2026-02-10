@@ -1,7 +1,7 @@
 import { useState, useRef } from "react"
-import { useFocusable } from "@/hooks/useFocusable"
 import { useSelection } from "@/hooks/useSelection"
-import { useActionRegistration } from "@/hooks/useActionRegistration"
+import { useIndexedAction } from "@/hooks/useIndexedAction"
+import { useRovingSection } from "@/hooks/useRovingSection"
 import { PhaseTimeline } from "@/components/ui/phase-timeline"
 import { PhaseQuicklook } from "@/components/PhaseQuicklook"
 import type { PhaseCardProps } from "@/components/ui/phase-card"
@@ -35,42 +35,47 @@ function mapPhaseToCard(
 }
 
 export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
-  const { isSectionFocused, activeIndex } = useFocusable("phaseTimeline", detail.phases.length)
+  const { activeIndex, activeDescendantId, getItemProps } = useRovingSection({
+    sectionId: "phaseTimeline",
+    itemCount: detail.phases.length,
+    getItemDomId: (index) => {
+      const phase = detail.phases[index]
+      return phase ? `phase-${phase._id}` : undefined
+    },
+  })
   const { phaseId, selectPhase } = useSelection()
   const [quicklookPhaseId, setQuicklookPhaseId] = useState<string | null>(null)
   const focusedElementRef = useRef<HTMLElement | null>(null)
 
   // Register actions for Enter and Space keys
-  useActionRegistration({
+  useIndexedAction({
     id: "phase-timeline-select",
     label: "Select Phase",
     key: "Enter",
     when: "phaseTimeline",
-    execute: () => {
-      const phase = detail.phases[activeIndex]
-      if (phase) {
-        selectPhase(phase._id)
-      }
+    items: detail.phases,
+    activeIndex,
+    execute: (phase) => {
+      selectPhase(phase._id)
     },
   })
 
   // Register Space key to toggle quicklook
-  useActionRegistration({
+  useIndexedAction({
     id: "phaseTimeline.quicklook",
     label: "Quick Look",
     key: " ",
     when: "phaseTimeline",
-    execute: () => {
-      const phase = detail.phases[activeIndex]
-      if (phase) {
-        if (quicklookPhaseId === phase._id) {
-          // Closing quicklook
-          setQuicklookPhaseId(null)
-        } else {
-          // Opening quicklook - save current focused element
-          focusedElementRef.current = document.activeElement as HTMLElement
-          setQuicklookPhaseId(phase._id)
-        }
+    items: detail.phases,
+    activeIndex,
+    execute: (phase) => {
+      if (quicklookPhaseId === phase._id) {
+        // Closing quicklook
+        setQuicklookPhaseId(null)
+      } else {
+        // Opening quicklook - save current focused element
+        focusedElementRef.current = document.activeElement as HTMLElement
+        setQuicklookPhaseId(phase._id)
       }
     },
   })
@@ -89,11 +94,6 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
     _id: phase._id,
   }))
 
-  // Calculate aria-activedescendant for screen readers
-  const activeDescendantId = isSectionFocused && activeIndex >= 0 && activeIndex < phaseCards.length
-    ? `phase-${phaseCards[activeIndex]._id}`
-    : undefined
-
   // Find quicklook phase data
   const quicklookPhase = quicklookPhaseId ? detail.phases.find(p => p._id === quicklookPhaseId) : null
   const quicklookTasks = quicklookPhase ? (detail.phaseTasks[quicklookPhase.phaseNumber] ?? []) as TaskEvent[] : []
@@ -109,8 +109,9 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
         aria-activedescendant={activeDescendantId}
         phases={phaseCards.map((card, index) => {
           const isSelected = phaseId === card._id
-          const isFocused = isSectionFocused && activeIndex === index
           const phaseItemId = `phase-${card._id}`
+          const rovingProps = getItemProps(index, phaseItemId)
+          const isFocused = rovingProps["data-focused"] === "true"
 
           return {
             ...card,
@@ -121,11 +122,10 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
               isSelected && "bg-primary/10"
             ),
             onClick: () => selectPhase(card._id),
-            tabIndex: isFocused ? 0 : -1,
-            id: phaseItemId,
+            ...rovingProps,
             _id: card._id,
             "aria-current": isSelected ? ("step" as const) : undefined,
-            "data-focused": isFocused ? ("true" as const) : undefined,
+            "data-focused": rovingProps["data-focused"] as "true" | undefined,
           } as PhaseCardProps & {
             id: string
             _id: string

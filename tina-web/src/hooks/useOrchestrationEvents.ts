@@ -3,6 +3,7 @@ import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { EventListQuery } from "@/services/data/queryDefs"
 import { isGitEvent, isPhaseReviewEvent } from "@/services/data/events"
 import type { OrchestrationEvent } from "@/schemas"
+import { matchQueryResult } from "@/lib/query-state"
 
 interface OrchestrationEventsSuccess {
   status: "success"
@@ -37,33 +38,26 @@ export function useOrchestrationEvents(
   const eventsResult = useTypedQuery(EventListQuery, { orchestrationId })
 
   return useMemo(() => {
-    if (eventsResult.status === "loading") {
-      return {
+    return matchQueryResult<readonly OrchestrationEvent[], OrchestrationEventsResult>(eventsResult, {
+      loading: () => ({
         status: "loading",
         isLoading: true,
         gitEvents: [],
         reviewEvents: [],
-      }
-    }
-
-    if (eventsResult.status === "error") {
-      return {
+      }),
+      error: (error) => ({
         status: "error",
         isLoading: false,
-        error: eventsResult.error,
+        error,
         gitEvents: [],
         reviewEvents: [],
-      }
-    }
-
-    const gitEvents = eventsResult.data.filter(isGitEvent)
-    const reviewEvents = eventsResult.data.filter(isPhaseReviewEvent)
-
-    return {
-      status: "success",
-      isLoading: false,
-      gitEvents,
-      reviewEvents,
-    }
+      }),
+      success: (events) => ({
+        status: "success",
+        isLoading: false,
+        gitEvents: events.filter(isGitEvent),
+        reviewEvents: events.filter(isPhaseReviewEvent),
+      }),
+    })
   }, [eventsResult])
 }

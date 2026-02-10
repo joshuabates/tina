@@ -19,6 +19,8 @@ type Story = StoryObj<typeof TeamPanelUI>;
 
 export const Default: Story = {
   args: {
+    title: "Orchestration Team",
+    emptyMessage: "No team members",
     members: [
       { name: "implementer-a", memberStatus: "idle" },
       { name: "implementer-b", memberStatus: "busy" },
@@ -29,6 +31,8 @@ export const Default: Story = {
 
 export const AllActive: Story = {
   args: {
+    title: "Selected Phase",
+    emptyMessage: "No team in this phase",
     members: [
       { name: "agent-alpha", memberStatus: "active" },
       { name: "agent-beta", memberStatus: "busy" },
@@ -38,5 +42,9 @@ export const AllActive: Story = {
 };
 
 export const Empty: Story = {
-  args: { members: [] },
+  args: {
+    title: "Orchestration Team",
+    emptyMessage: "No team members",
+    members: [],
+  },
 };

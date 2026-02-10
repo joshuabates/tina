@@ -4,7 +4,7 @@ import { userEvent } from "@testing-library/user-event"
 import { Option } from "effect"
 import { TaskQuicklook } from "../TaskQuicklook"
 import type { TaskEvent } from "@/schemas"
-import { assertDialogFocusTrap } from "@/test/harness/quicklook"
+import { defineQuicklookDialogContract } from "@/test/harness/quicklook-contract"
 
 // Mock useActionRegistration
 vi.mock("@/hooks/useActionRegistration")
@@ -87,28 +87,6 @@ describe("TaskQuicklook", () => {
     expect(screen.getByText(/task-3,task-5/)).toBeInTheDocument()
   })
 
-  it("closes modal when Escape is pressed", async () => {
-    const user = userEvent.setup()
-    const task = createMockTask()
-
-    render(<TaskQuicklook task={task} onClose={mockOnClose} />)
-
-    await user.keyboard("{Escape}")
-
-    expect(mockOnClose).toHaveBeenCalledOnce()
-  })
-
-  it("closes modal when Space is pressed", async () => {
-    const user = userEvent.setup()
-    const task = createMockTask()
-
-    render(<TaskQuicklook task={task} onClose={mockOnClose} />)
-
-    await user.keyboard(" ")
-
-    expect(mockOnClose).toHaveBeenCalledOnce()
-  })
-
   it("closes modal on backdrop click", async () => {
     const user = userEvent.setup()
     const task = createMockTask()
@@ -122,34 +100,10 @@ describe("TaskQuicklook", () => {
     expect(mockOnClose).toHaveBeenCalledOnce()
   })
 
-  it("traps focus inside modal", async () => {
-    const user = userEvent.setup()
-    const task = createMockTask()
-
-    render(<TaskQuicklook task={task} onClose={mockOnClose} />)
-
-    const modal = screen.getByRole("dialog")
-    const closeButton = screen.getByRole("button", { name: /close/i })
-    await assertDialogFocusTrap(user, modal, closeButton)
-  })
-
-  it("receives focus on mount", () => {
-    const task = createMockTask()
-
-    render(<TaskQuicklook task={task} onClose={mockOnClose} />)
-
-    const modal = screen.getByRole("dialog")
-    expect(modal).toHaveFocus()
-  })
-
-  it("has correct aria attributes", () => {
-    const task = createMockTask()
-
-    render(<TaskQuicklook task={task} onClose={mockOnClose} />)
-
-    const dialog = screen.getByRole("dialog")
-    expect(dialog).toBeInTheDocument()
-    expect(dialog).toHaveAttribute("aria-modal", "true")
-    expect(dialog).toHaveAttribute("aria-labelledby")
+  defineQuicklookDialogContract({
+    renderDialog: () => {
+      render(<TaskQuicklook task={createMockTask()} onClose={mockOnClose} />)
+    },
+    onClose: mockOnClose,
   })
 })

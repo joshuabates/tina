@@ -1,5 +1,5 @@
+import { cn } from "@/lib/utils"
 import { MonoText } from "./mono-text";
-import { StatPanel } from "./stat-panel";
 import { TeamMember, type MemberStatus } from "./team-member";
 
 interface TeamPanelMember {
@@ -8,28 +8,29 @@ interface TeamPanelMember {
 }
 
 interface TeamPanelProps extends React.HTMLAttributes<HTMLDivElement> {
+  title: string
   members: TeamPanelMember[];
+  emptyMessage: string
 }
 
-function TeamPanel({ members, className, ...props }: TeamPanelProps) {
+function TeamPanel({ title, members, emptyMessage, className, ...props }: TeamPanelProps) {
   const activeCount = members.filter(
     (m) => m.memberStatus === "active" || m.memberStatus === "busy"
   ).length;
 
   return (
-    <StatPanel
-      title="Team"
-      className={className}
-      headerAction={
+    <div className={cn("space-y-2", className)} {...props}>
+      <div className="flex items-center justify-between">
+        <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">
+          {title}
+        </span>
         <MonoText className="text-[8px] text-status-complete">
           {activeCount} ACTIVE
         </MonoText>
-      }
-      {...props}
-    >
-      <div className="space-y-2">
+      </div>
+      <div className="mt-2 space-y-2">
         {members.length === 0 ? (
-          <div className="text-xs text-muted-foreground">No team members</div>
+          <div className="text-xs text-muted-foreground">{emptyMessage}</div>
         ) : (
           members.map((member) => (
             <TeamMember
@@ -40,7 +41,7 @@ function TeamPanel({ members, className, ...props }: TeamPanelProps) {
           ))
         )}
       </div>
-    </StatPanel>
+    </div>
   );
 }
 

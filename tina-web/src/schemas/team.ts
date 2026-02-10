@@ -1,14 +1,13 @@
 import { Schema } from "effect"
+import { orchestrationScopedDocumentFields, optionalString } from "./common"
 
 export const TeamMember = Schema.Struct({
-  _id: Schema.String,
-  _creationTime: Schema.Number,
-  orchestrationId: Schema.String,
+  ...orchestrationScopedDocumentFields,
   phaseNumber: Schema.String,
   agentName: Schema.String,
-  agentType: Schema.optionalWith(Schema.String, { as: "Option" }),
-  model: Schema.optionalWith(Schema.String, { as: "Option" }),
-  joinedAt: Schema.optionalWith(Schema.String, { as: "Option" }),
+  agentType: optionalString,
+  model: optionalString,
+  joinedAt: optionalString,
   recordedAt: Schema.String,
 })
 

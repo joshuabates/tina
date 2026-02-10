@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { StatPanel } from "./stat-panel";
 import { MonoText } from "./mono-text";
-import { Button } from "./button";
 
 const meta: Meta<typeof StatPanel> = {
   title: "Domain/StatPanel",
@@ -74,12 +73,12 @@ export const PhaseReview: Story = {
       <p className="text-xs leading-tight opacity-70 mb-2">
         System awaiting acknowledgment of P3 parameters before transition to P4.
       </p>
-      <Button
-        variant="outline"
+      <button
+        type="button"
         className="w-full text-2xs font-bold uppercase bg-primary/10 border-primary/20 text-primary hover:bg-primary/20"
       >
         Review and Approve
-      </Button>
+      </button>
     </StatPanel>
   ),
 };

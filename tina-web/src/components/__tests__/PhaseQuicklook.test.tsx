@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, within } from "@testing-library/react"
-import { userEvent } from "@testing-library/user-event"
 import { PhaseQuicklook } from "../PhaseQuicklook"
 import {
   buildPhase,
@@ -10,7 +9,7 @@ import {
   some,
 } from "@/test/builders/domain"
 import type { Phase, TaskEvent, TeamMember } from "@/schemas"
-import { assertDialogFocusTrap } from "@/test/harness/quicklook"
+import { defineQuicklookDialogContract } from "@/test/harness/quicklook-contract"
 import { expectStatusLabelVisible } from "@/test/harness/status"
 
 vi.mock("@/hooks/useActionRegistration")
@@ -149,31 +148,9 @@ describe("PhaseQuicklook", () => {
     expect(screen.getByText(type)).toBeInTheDocument()
   })
 
-  it.each(["{Escape}", " "])("closes modal on key %s", async (key) => {
-    const user = userEvent.setup()
-    renderQuicklook()
-
-    await user.keyboard(key)
-
-    expect(mockOnClose).toHaveBeenCalledOnce()
-  })
-
-  it("traps focus inside modal", async () => {
-    const user = userEvent.setup()
-    renderQuicklook()
-
-    const modal = screen.getByRole("dialog")
-    const closeButton = screen.getByRole("button", { name: /close/i })
-    await assertDialogFocusTrap(user, modal, closeButton)
-  })
-
-  it("renders as a dialog with appropriate ARIA attributes", () => {
-    renderQuicklook()
-
-    const dialog = screen.getByRole("dialog")
-    expect(dialog).toBeInTheDocument()
-    expect(dialog).toHaveAttribute("aria-modal", "true")
-    expect(dialog).toHaveAttribute("aria-labelledby")
+  defineQuicklookDialogContract({
+    renderDialog: () => renderQuicklook(),
+    onClose: mockOnClose,
   })
 
   it("handles empty team members list", () => {

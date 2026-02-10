@@ -9,11 +9,11 @@ import {
   some,
 } from "@/test/builders/domain"
 import {
-  queryStateFor,
   querySuccess,
   type QueryStateMap,
 } from "@/test/builders/query"
 import { selectionState } from "@/test/harness/hooks"
+import { installQueryStates } from "@/test/harness/query-runtime"
 import { renderWithRuntime } from "@/test/harness/render"
 import { assertRovingFocus } from "@/test/harness/roving"
 
@@ -52,14 +52,13 @@ const orchestrations = [
 
 const mockSelectOrchestration = vi.fn()
 
-function setQueryStates(overrides: Partial<QueryStateMap> = {}) {
-  const states: QueryStateMap = {
-    "projects.list": querySuccess(projects),
-    "orchestrations.list": querySuccess(orchestrations),
-    ...overrides,
-  }
+const defaultQueryStates: QueryStateMap = {
+  "projects.list": querySuccess(projects),
+  "orchestrations.list": querySuccess(orchestrations),
+}
 
-  mockUseTypedQuery.mockImplementation((def) => queryStateFor(def.key, states))
+function setQueryStates(overrides: Partial<QueryStateMap> = {}) {
+  installQueryStates(mockUseTypedQuery, defaultQueryStates, overrides)
 }
 
 function renderSidebar(ui: ReactNode = <Sidebar />) {

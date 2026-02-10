@@ -5,10 +5,9 @@ import { buildPhaseTimelineDetail } from "@/test/builders/domain"
 import { assertRovingFocus } from "@/test/harness/roving"
 import {
   createActionRegistrationCapture,
-  focusableState,
-  selectionState,
   type SelectionStateMock,
 } from "@/test/harness/hooks"
+import { setPanelFocus, setPanelSelection } from "@/test/harness/panel-state"
 
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
@@ -29,19 +28,15 @@ const mockSelectPhase = vi.fn()
 const phaseIds = ["phase1", "phase2", "phase3"] as const
 
 function setSelection(overrides: Partial<SelectionStateMock> = {}) {
-  mockUseSelection.mockReturnValue(
-    selectionState({
-      orchestrationId: "orch1",
-      phaseId: null,
-      selectOrchestration: vi.fn(),
-      selectPhase: mockSelectPhase,
-      ...overrides,
-    }),
-  )
+  setPanelSelection(mockUseSelection, {
+    phaseId: null,
+    selectPhase: mockSelectPhase,
+    ...overrides,
+  })
 }
 
 function setFocus(isSectionFocused = false, activeIndex = -1) {
-  mockUseFocusable.mockReturnValue(focusableState({ isSectionFocused, activeIndex }))
+  setPanelFocus(mockUseFocusable, isSectionFocused, activeIndex)
 }
 
 function renderTimelineView({

@@ -1,7 +1,7 @@
-import { Option } from "effect"
 import { MonoText } from "@/components/ui/mono-text"
-import { StatPanel } from "@/components/ui/stat-panel"
+import { EventSection } from "@/components/EventSection"
 import type { OrchestrationEvent } from "@/schemas"
+import { optionNullableText } from "@/lib/option-display"
 import styles from "./GitOpsSection.module.scss"
 
 export interface GitOpsSectionProps {
@@ -10,42 +10,36 @@ export interface GitOpsSectionProps {
 }
 
 export function GitOpsSection({ gitEvents, isLoading }: GitOpsSectionProps) {
-  if (isLoading) {
-    return (
-      <StatPanel title="Git Operations">
-        <div className={styles.loading}>
-          Loading git activity...
-        </div>
-      </StatPanel>
-    )
-  }
-
   return (
-    <StatPanel title="Git Operations">
-      {gitEvents.length === 0 ? (
-        <div className="text-muted-foreground text-sm py-1">
-          No git activity yet
+    <EventSection
+      title="Git Operations"
+      isLoading={isLoading}
+      loadingText="Loading git activity..."
+      emptyText="No git activity yet"
+      items={gitEvents}
+      getItemKey={(event) => event._id}
+      loadingClassName={styles.loading}
+      emptyClassName="justify-start py-1 text-muted-foreground text-sm"
+      listClassName="space-y-4"
+      header={
+        <div className="text-[7px] font-bold text-muted-foreground uppercase tracking-wide">
+          Recent Events
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="text-[7px] font-bold text-muted-foreground uppercase tracking-wide">
-            Recent Events
+      }
+      renderItem={(event) => {
+        const detail = optionNullableText(event.detail, (value) => value)
+
+        return (
+          <div className="space-y-1">
+            <div className="text-sm">{event.summary}</div>
+            {detail && (
+              <MonoText className="text-xs text-muted-foreground">
+                {detail}
+              </MonoText>
+            )}
           </div>
-          {gitEvents.map((event) => (
-            <div key={event._id} className="space-y-1">
-              <div className="text-sm">{event.summary}</div>
-              {Option.match(event.detail, {
-                onNone: () => null,
-                onSome: (detail) => (
-                  <MonoText className="text-xs text-muted-foreground">
-                    {detail}
-                  </MonoText>
-                ),
-              })}
-            </div>
-          ))}
-        </div>
-      )}
-    </StatPanel>
+        )
+      }}
+    />
   )
 }

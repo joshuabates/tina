@@ -7,7 +7,7 @@ import {
   buildPhase,
   buildTeamMember,
 } from "@/test/builders/domain"
-import { focusableState, selectionState } from "@/test/harness/hooks"
+import { setPanelFocus, setPanelSelection } from "@/test/harness/panel-state"
 
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
@@ -21,14 +21,7 @@ const mockUseSelection = vi.mocked(
 ).useSelection
 
 function setSelection(phaseId: string | null = null) {
-  mockUseSelection.mockReturnValue(
-    selectionState({
-      orchestrationId: "orch1",
-      phaseId,
-      selectOrchestration: vi.fn(),
-      selectPhase: vi.fn(),
-    }),
-  )
+  setPanelSelection(mockUseSelection, { phaseId })
 }
 
 function buildDetail(overrides: Partial<OrchestrationDetail> = {}): OrchestrationDetail {
@@ -53,7 +46,7 @@ function buildDetail(overrides: Partial<OrchestrationDetail> = {}): Orchestratio
 describe("TeamSection", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockUseFocusable.mockReturnValue(focusableState())
+    setPanelFocus(mockUseFocusable)
     setSelection()
   })
 

@@ -6,6 +6,7 @@ import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { OrchestrationDetailQuery } from "@/services/data/queryDefs"
 import { NotFoundError } from "@/services/errors"
+import { matchQueryResult } from "@/lib/query-state"
 import styles from "./OrchestrationPage.module.scss"
 
 export function OrchestrationPage() {
@@ -40,9 +41,9 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
     orchestrationId,
   })
 
-  // Loading state - show skeleton matching three-column layout
-  if (result.status === "loading") {
-    return (
+  return matchQueryResult(result, {
+    // Loading state - show skeleton matching three-column layout
+    loading: () => (
       <div className={styles.orchestrationPage} aria-busy="true">
         <div className={styles.header}>
           <div className={styles.skeletonText} style={{ width: "150px", height: "14px" }} />
@@ -72,63 +73,61 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
           </div>
         </div>
       </div>
-    )
-  }
+    ),
+    // Error state - throw to error boundary
+    error: (error) => {
+      throw error
+    },
+    success: (orchestration) => {
+      // Not found state - orchestration was deleted or doesn't exist
+      if (orchestration === null) {
+        throw new NotFoundError({
+          resource: "orchestration",
+          id: orchestrationId,
+        })
+      }
 
-  // Error state - throw to error boundary
-  if (result.status === "error") {
-    throw result.error
-  }
-
-  // Not found state - orchestration was deleted or doesn't exist
-  if (result.data === null) {
-    throw new NotFoundError({
-      resource: "orchestration",
-      id: orchestrationId,
-    })
-  }
-
-  const orchestration = result.data
-
-  return (
-    <div className={styles.orchestrationPage}>
-      <div className={styles.header}>
-        <div>
-          <div className={styles.title}>{orchestration.featureName}</div>
-          <div className={styles.subtitle}>{orchestration.branch}</div>
-        </div>
-      </div>
-      {/* Accessibility: Live region for status changes */}
-      <div
-        aria-live="polite"
-        aria-atomic="true"
-        style={{
-          position: "absolute",
-          width: "1px",
-          height: "1px",
-          padding: "0",
-          margin: "-1px",
-          overflow: "hidden",
-          clip: "rect(0, 0, 0, 0)",
-          whiteSpace: "nowrap",
-          border: "0",
-        }}
-      >
-        Orchestration status: {orchestration.status}, Phase {orchestration.currentPhase} of {orchestration.totalPhases}
-      </div>
-      <div className={styles.content}>
-        <div className={styles.centerPanel}>
-          <div className={styles.timelineColumn}>
-            <PhaseTimelinePanel detail={orchestration} />
+      return (
+        <div className={styles.orchestrationPage}>
+          <div className={styles.header}>
+            <div>
+              <div className={styles.title}>{orchestration.featureName}</div>
+              <div className={styles.subtitle}>{orchestration.branch}</div>
+            </div>
           </div>
-          <div className={styles.taskColumn}>
-            <TaskListPanel detail={orchestration} />
+          {/* Accessibility: Live region for status changes */}
+          <div
+            aria-live="polite"
+            aria-atomic="true"
+            style={{
+              position: "absolute",
+              width: "1px",
+              height: "1px",
+              padding: "0",
+              margin: "-1px",
+              overflow: "hidden",
+              clip: "rect(0, 0, 0, 0)",
+              whiteSpace: "nowrap",
+              border: "0",
+            }}
+          >
+            Orchestration status: {orchestration.status}, Phase {orchestration.currentPhase} of {orchestration.totalPhases}
+          </div>
+          <div className={styles.content}>
+            <div className={styles.centerPanel}>
+              <div className={styles.timelineColumn}>
+                <PhaseTimelinePanel detail={orchestration} />
+              </div>
+              <div className={styles.taskColumn}>
+                <TaskListPanel detail={orchestration} />
+              </div>
+            </div>
+            <div className={styles.rightColumn}>
+              <RightPanel detail={orchestration} />
+            </div>
           </div>
         </div>
-        <div className={styles.rightColumn}>
-          <RightPanel detail={orchestration} />
-        </div>
-      </div>
-    </div>
-  )
+      )
+    },
+  })
 }

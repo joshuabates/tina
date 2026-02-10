@@ -11,11 +11,10 @@ import {
   some,
 } from "@/test/builders/domain"
 import {
-  queryStateFor,
   querySuccess,
   type QueryStateMap,
 } from "@/test/builders/query"
-import { renderWithRuntime } from "@/test/harness/render"
+import { renderWithAppRuntime } from "@/test/harness/app-runtime"
 
 vi.mock("@/hooks/useTypedQuery")
 
@@ -84,27 +83,29 @@ interface QuerySetup {
   overrides?: Partial<QueryStateMap>
 }
 
-function setupTypedQueries(setup: QuerySetup = {}) {
+function renderApp(route = "/", setup: QuerySetup = {}) {
   const projects = setup.projects ?? defaultProjects
   const orchestrations = setup.orchestrations ?? defaultOrchestrations
   const details = setup.details ?? defaultDetails
-  const states: QueryStateMap = {
+
+  const states = {
     "projects.list": querySuccess(projects),
     "orchestrations.list": querySuccess(orchestrations),
     ...setup.overrides,
-  }
+  } satisfies QueryStateMap
 
-  mockUseTypedQuery.mockImplementation((def, args) => {
-    if (def.key === "orchestrations.detail") {
-      const orchestrationId = (args as { orchestrationId?: string }).orchestrationId
-      return querySuccess(details[orchestrationId ?? ""] ?? null)
-    }
-    return queryStateFor(def.key, states)
+  return renderWithAppRuntime(<App />, {
+    route,
+    mockUseTypedQuery,
+    states,
+    detailResults: Object.fromEntries(
+      Object.entries(details).map(([orchestrationId, detail]) => [
+        orchestrationId,
+        querySuccess(detail),
+      ]),
+    ),
+    detailFallback: querySuccess(null),
   })
-}
-
-function renderApp(route = "/") {
-  return renderWithRuntime(<App />, route)
 }
 
 function latestMain(): HTMLElement {
@@ -135,7 +136,6 @@ function expectPhaseTimeline(main = latestMain()) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  setupTypedQueries()
 })
 
 describe("App - runtime-backed URL and selection flow", () => {

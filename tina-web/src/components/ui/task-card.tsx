@@ -27,7 +27,7 @@ function TaskCard({
   return (
     <div
       className={cn(
-        "bg-muted/40 border border-border rounded p-3 border-l-2 transition-all hover:border-muted-foreground/30",
+        "bg-muted/40 border border-border rounded p-3 border-l-2 transition-all hover:border-muted-foreground/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background data-[focused=true]:border-primary/40 data-[focused=true]:bg-primary/5 data-[focused=true]:ring-2 data-[focused=true]:ring-primary/40 data-[focused=true]:ring-offset-1 data-[focused=true]:ring-offset-background",
         borderClass,
         className
       )}

@@ -1,0 +1,15 @@
+{
+  "orchestrationCore": [
+    { "name": "nodeId", "rust": "node_id", "kind": "id", "table": "nodes" },
+    { "name": "featureName", "rust": "feature_name", "kind": "string" },
+    { "name": "designDocPath", "rust": "design_doc_path", "kind": "string" },
+    { "name": "branch", "rust": "branch", "kind": "string" },
+    { "name": "worktreePath", "rust": "worktree_path", "kind": "string", "optional": true },
+    { "name": "totalPhases", "rust": "total_phases", "kind": "number" },
+    { "name": "currentPhase", "rust": "current_phase", "kind": "number" },
+    { "name": "status", "rust": "status", "kind": "string" },
+    { "name": "startedAt", "rust": "started_at", "kind": "string" },
+    { "name": "completedAt", "rust": "completed_at", "kind": "string", "optional": true },
+    { "name": "totalElapsedMins", "rust": "total_elapsed_mins", "kind": "number", "optional": true }
+  ]
+}

@@ -1,6 +1,6 @@
-import { Option } from "effect"
 import type { Phase, TaskEvent, TeamMember } from "@/schemas"
 import { cn } from "@/lib/utils"
+import { optionNullableText, optionText } from "@/lib/option-display"
 import { QuicklookDialog } from "@/components/QuicklookDialog"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import styles from "./QuicklookDialog.module.scss"
@@ -28,28 +28,19 @@ export function PhaseQuicklook({ phase, tasks, teamMembers, onClose }: PhaseQuic
           <div className={phaseStyles.timingItem}>
             <span className={styles.label}>Planning:</span>
             <span className={styles.value}>
-              {Option.match(phase.planningMins, {
-                onNone: () => "—",
-                onSome: (mins) => `${mins} min`,
-              })}
+              {optionText(phase.planningMins, (mins) => `${mins} min`)}
             </span>
           </div>
           <div className={phaseStyles.timingItem}>
             <span className={styles.label}>Execution:</span>
             <span className={styles.value}>
-              {Option.match(phase.executionMins, {
-                onNone: () => "—",
-                onSome: (mins) => `${mins} min`,
-              })}
+              {optionText(phase.executionMins, (mins) => `${mins} min`)}
             </span>
           </div>
           <div className={phaseStyles.timingItem}>
             <span className={styles.label}>Review:</span>
             <span className={styles.value}>
-              {Option.match(phase.reviewMins, {
-                onNone: () => "—",
-                onSome: (mins) => `${mins} min`,
-              })}
+              {optionText(phase.reviewMins, (mins) => `${mins} min`)}
             </span>
           </div>
         </div>
@@ -58,20 +49,14 @@ export function PhaseQuicklook({ phase, tasks, teamMembers, onClose }: PhaseQuic
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}>Plan</h3>
         <div className={styles.value}>
-          {Option.match(phase.planPath, {
-            onNone: () => "—",
-            onSome: (path) => path.split("/").pop() || path,
-          })}
+          {optionText(phase.planPath, (path) => path.split("/").pop() || path)}
         </div>
       </section>
 
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}>Git Range</h3>
         <div className={cn(styles.value, styles.mono)}>
-          {Option.match(phase.gitRange, {
-            onNone: () => "—",
-            onSome: (range) => range,
-          })}
+          {optionText(phase.gitRange, (range) => range)}
         </div>
       </section>
 
@@ -89,19 +74,22 @@ export function PhaseQuicklook({ phase, tasks, teamMembers, onClose }: PhaseQuic
         ) : (
           <ul className={phaseStyles.teamList}>
             {teamMembers.map((member) => (
-              <li key={member._id} className={phaseStyles.teamMember}>
-                <span className={phaseStyles.agentName}>{member.agentName}</span>
-                {Option.match(member.agentType, {
-                  onNone: () => null,
-                  onSome: (type) => (
-                    <span className={phaseStyles.agentType}>{type}</span>
-                  ),
-                })}
-              </li>
+              <TeamMemberRow key={member._id} member={member} />
             ))}
           </ul>
         )}
       </section>
     </QuicklookDialog>
+  )
+}
+
+function TeamMemberRow({ member }: { member: TeamMember }) {
+  const agentType = optionNullableText(member.agentType, (value) => value)
+
+  return (
+    <li className={phaseStyles.teamMember}>
+      <span className={phaseStyles.agentName}>{member.agentName}</span>
+      {agentType && <span className={phaseStyles.agentType}>{agentType}</span>}
+    </li>
   )
 }

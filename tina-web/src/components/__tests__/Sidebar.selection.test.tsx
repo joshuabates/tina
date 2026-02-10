@@ -9,11 +9,11 @@ import {
   some,
 } from "@/test/builders/domain"
 import {
-  queryStateFor,
   querySuccess,
   type QueryStateMap,
 } from "@/test/builders/query"
 import { focusableState, selectionState } from "@/test/harness/hooks"
+import { installQueryStates } from "@/test/harness/query-runtime"
 import { renderWithRouter } from "@/test/harness/render"
 
 vi.mock("@/hooks/useTypedQuery")
@@ -51,14 +51,13 @@ const orchestrations = [
   }),
 ]
 
-function setQueryStates(overrides: Partial<QueryStateMap> = {}) {
-  const states: QueryStateMap = {
-    "projects.list": querySuccess(projects),
-    "orchestrations.list": querySuccess(orchestrations),
-    ...overrides,
-  }
+const defaultQueryStates: QueryStateMap = {
+  "projects.list": querySuccess(projects),
+  "orchestrations.list": querySuccess(orchestrations),
+}
 
-  mockUseTypedQuery.mockImplementation((def) => queryStateFor(def.key, states))
+function setQueryStates(overrides: Partial<QueryStateMap> = {}) {
+  installQueryStates(mockUseTypedQuery, defaultQueryStates, overrides)
 }
 
 function setSelection(orchestrationId: string | null) {

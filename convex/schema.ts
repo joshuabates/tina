@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { orchestrationCoreTableFields } from "./generated/orchestrationCore";
 
 export default defineSchema({
   projects: defineTable({
@@ -18,18 +19,8 @@ export default defineSchema({
   }).index("by_name_auth", ["name", "authTokenHash"]),
 
   orchestrations: defineTable({
-    nodeId: v.id("nodes"),
+    ...orchestrationCoreTableFields,
     projectId: v.optional(v.id("projects")),
-    featureName: v.string(),
-    designDocPath: v.string(),
-    branch: v.string(),
-    worktreePath: v.optional(v.string()),
-    totalPhases: v.number(),
-    currentPhase: v.number(),
-    status: v.string(),
-    startedAt: v.string(),
-    completedAt: v.optional(v.string()),
-    totalElapsedMins: v.optional(v.number()),
   })
     .index("by_feature", ["featureName"])
     .index("by_node", ["nodeId"])

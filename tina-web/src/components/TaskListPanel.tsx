@@ -1,8 +1,8 @@
-import { useState, useRef } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Option } from "effect"
-import { useFocusable } from "@/hooks/useFocusable"
 import { useSelection } from "@/hooks/useSelection"
-import { useActionRegistration } from "@/hooks/useActionRegistration"
+import { useIndexedAction } from "@/hooks/useIndexedAction"
+import { useRovingSection } from "@/hooks/useRovingSection"
 import { TaskCard } from "@/components/ui/task-card"
 import { TaskQuicklook } from "@/components/TaskQuicklook"
 import type { StatusBadgeStatus } from "@/components/ui/status-badge"
@@ -36,28 +36,45 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
     : []
 
   // Register focus section with item count
-  const { isSectionFocused, activeIndex } = useFocusable("taskList", tasks.length)
+  const { activeIndex, activeDescendantId, getItemProps } = useRovingSection({
+    sectionId: "taskList",
+    itemCount: tasks.length,
+    getItemDomId: (index) => {
+      const task = tasks[index]
+      return task ? `task-${task._id}` : undefined
+    },
+  })
 
   // Register Space key action for quicklook
-  useActionRegistration({
+  useIndexedAction({
     id: "task-list-quicklook",
     label: "View Task Details",
     key: " ",
     when: "taskList",
-    execute: () => {
-      const task = tasks[activeIndex]
-      if (task) {
-        if (quicklookTaskId === task._id) {
-          // Closing quicklook
-          setQuicklookTaskId(null)
-        } else {
-          // Opening quicklook - save current focused element
-          focusedElementRef.current = document.activeElement as HTMLElement
-          setQuicklookTaskId(task._id)
-        }
+    items: tasks,
+    activeIndex,
+    execute: (task) => {
+      if (quicklookTaskId === task._id) {
+        // Closing quicklook
+        setQuicklookTaskId(null)
+      } else {
+        // Opening quicklook - save current focused element
+        focusedElementRef.current = document.activeElement as HTMLElement
+        setQuicklookTaskId(task._id)
       }
     },
   })
+
+  useEffect(() => {
+    if (quicklookTaskId === null) return
+
+    const activeTask = tasks[activeIndex]
+    if (!activeTask) return
+
+    if (activeTask._id !== quicklookTaskId) {
+      setQuicklookTaskId(activeTask._id)
+    }
+  }, [quicklookTaskId, tasks, activeIndex])
 
   const handleQuicklookClose = () => {
     setQuicklookTaskId(null)
@@ -72,12 +89,6 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
   const quicklookTask = quicklookTaskId
     ? tasks.find((t) => t._id === quicklookTaskId)
     : null
-
-  // Calculate aria-activedescendant
-  const activeDescendantId =
-    isSectionFocused && activeIndex >= 0 && activeIndex < tasks.length
-      ? `task-${tasks[activeIndex]._id}`
-      : undefined
 
   // No phase selected
   if (!phaseId) {
@@ -115,20 +126,17 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
           aria-activedescendant={activeDescendantId}
         >
           {tasks.map((task, index) => {
-            const isFocused = isSectionFocused && activeIndex === index
-            const tabIndex = isFocused ? 0 : -1
+            const rovingProps = getItemProps(index, `task-${task._id}`)
 
             return (
               <TaskCard
                 key={task._id}
-                id={`task-${task._id}`}
                 taskId={task.taskId}
                 subject={task.subject}
                 status={mapTaskStatus(task.status)}
                 assignee={Option.getOrUndefined(task.owner)}
                 blockedReason={Option.getOrUndefined(task.blockedBy)}
-                tabIndex={tabIndex}
-                data-focused={isFocused ? "true" : undefined}
+                {...rovingProps}
               />
             )
           })}
