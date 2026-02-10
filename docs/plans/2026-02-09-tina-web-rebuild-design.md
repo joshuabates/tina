@@ -480,6 +480,8 @@ Top risks and mitigations:
 - `tina-web/.storybook/*` — Storybook config, dark theme, story sort order
 - All 18 UI primitives in `tina-web/src/components/ui/` — compose, don't modify
 
+**IMPORTANT — Primitive reuse rule:** Before building any new UI component, review the existing primitives in `tina-web/src/components/ui/` AND their `.stories.tsx` files. Stories contain realistic prop values and usage patterns that reveal the intended API contract. If an existing primitive covers the need, compose it — do not rebuild equivalent markup. Check story args carefully for prop naming conventions, expected data formats, and display labels (e.g., `PhaseCard` stories use descriptive `name` values like "Design alignment", not generic "Phase 1"). The primitives handle all visual styling via Tailwind; app components handle layout, data binding, and interaction via SCSS modules.
+
 **Anti-patterns:**
 - Don't cast Convex query results with `as Type[]` — use query defs + shared schema decode policy instead (replaces pattern in `tina-web/src/hooks/useOrchestrations.ts:6`)
 - Don't collapse loading with `?? []` — preserve explicit loading state and use ErrorBoundary for decode failures (replaces pattern in `tina-web/src/hooks/useOrchestrations.ts:6`)

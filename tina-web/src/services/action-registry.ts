@@ -1,87 +1,94 @@
-export type ActionScope = `global` | `section:${string}` | `modal:${string}`;
+export interface ActionDescriptor {
+  id: string
+  label: string
+  key?: string // keybinding (e.g., "Space", "Enter", "Alt+r")
+  when?: string // focus context (e.g., "sidebar.focused")
+  icon?: string // lucide icon name
+  execute: (ctx: ActionContext) => void
+}
 
 export interface ActionContext {
-  readonly scope: ActionScope;
-  readonly selectedId?: string;
+  selectedItem?: string
+  focusedSection?: string
+  [key: string]: unknown
 }
 
-export interface ActionDescriptor {
-  readonly id: string;
-  readonly label: string;
-  readonly keybinding: string;
-  readonly scope: ActionScope;
-  readonly priority: number;
-  readonly execute: (context: ActionContext) => void;
-}
+type KeyBindingKey = `${string}::${string}` // "scope::key" format
 
-function bindingKey(scope: ActionScope, keybinding: string): string {
-  return `${scope}::${keybinding.toLowerCase()}`;
-}
+export function createActionRegistry() {
+  const actions = new Map<string, ActionDescriptor>()
+  const keyBindings = new Map<KeyBindingKey, ActionDescriptor>()
 
-/**
- * Review draft:
- * - Duplicate keybindings in the same scope are rejected.
- * - Exactly one action per (scope, keybinding).
- * - register() returns cleanup to support React StrictMode mount/unmount cycles.
- */
-export class ActionRegistry {
-  private readonly byId = new Map<string, ActionDescriptor>();
-  private readonly byBinding = new Map<string, string>();
+  function makeKeyBindingKey(
+    key: string,
+    scope: string | undefined
+  ): KeyBindingKey {
+    return `${scope ?? ''}::${key}`
+  }
 
-  register(action: ActionDescriptor): () => void {
-    const existing = this.byId.get(action.id);
-    if (existing) {
-      const sameDefinition =
-        existing.scope === action.scope &&
-        existing.keybinding === action.keybinding &&
-        existing.priority === action.priority;
-      if (!sameDefinition) {
-        throw new Error(
-          `Action "${action.id}" already registered with a different definition`,
-        );
+  function register(action: ActionDescriptor): () => void {
+    // Idempotent registration for StrictMode
+    if (actions.has(action.id) && actions.get(action.id) === action) {
+      return () => {
+        actions.delete(action.id)
+        if (action.key) {
+          const bindingKey = makeKeyBindingKey(action.key, action.when)
+          keyBindings.delete(bindingKey)
+        }
       }
-      return () => this.unregister(action.id);
     }
 
-    const key = bindingKey(action.scope, action.keybinding);
-    const boundActionId = this.byBinding.get(key);
-    if (boundActionId) {
-      throw new Error(
-        `Action conflict for ${key}: already assigned to "${boundActionId}"`,
-      );
+    // Check for duplicate keybinding
+    if (action.key) {
+      const bindingKey = makeKeyBindingKey(action.key, action.when)
+      if (keyBindings.has(bindingKey)) {
+        throw new Error(
+          `Keybinding "${action.key}" for scope "${action.when ?? 'global'}" is already registered`
+        )
+      }
+      keyBindings.set(bindingKey, action)
     }
 
-    this.byBinding.set(key, action.id);
-    this.byId.set(action.id, action);
+    actions.set(action.id, action)
 
-    return () => this.unregister(action.id);
-  }
-
-  unregister(actionId: string): void {
-    const action = this.byId.get(actionId);
-    if (!action) return;
-
-    const key = bindingKey(action.scope, action.keybinding);
-    const boundActionId = this.byBinding.get(key);
-    if (boundActionId === actionId) {
-      this.byBinding.delete(key);
+    return () => {
+      actions.delete(action.id)
+      if (action.key) {
+        const bindingKey = makeKeyBindingKey(action.key, action.when)
+        keyBindings.delete(bindingKey)
+      }
     }
-    this.byId.delete(actionId);
   }
 
-  dispatch(scope: ActionScope, keybinding: string, context: ActionContext): boolean {
-    const key = bindingKey(scope, keybinding);
-    const actionId = this.byBinding.get(key);
-    if (!actionId) return false;
-    const candidate = this.byId.get(actionId);
-    if (!candidate) return false;
-    candidate.execute(context);
-    return true;
+  function get(id: string): ActionDescriptor | undefined {
+    return actions.get(id)
   }
 
-  list(scope?: ActionScope): ActionDescriptor[] {
-    const values = Array.from(this.byId.values());
-    if (!scope) return values;
-    return values.filter((action) => action.scope === scope);
+  function resolve(
+    key: string,
+    scope?: string
+  ): ActionDescriptor | undefined {
+    const bindingKey = makeKeyBindingKey(key, scope)
+    return keyBindings.get(bindingKey)
+  }
+
+  function listForScope(scope: string): ActionDescriptor[] {
+    return Array.from(actions.values()).filter(
+      (action) => action.when === scope
+    )
+  }
+
+  function listAll(): ActionDescriptor[] {
+    return Array.from(actions.values())
+  }
+
+  return {
+    register,
+    get,
+    resolve,
+    listForScope,
+    listAll,
   }
 }
+
+export type ActionRegistry = ReturnType<typeof createActionRegistry>

@@ -1,0 +1,55 @@
+@use '../styles/tokens' as *;
+
+.appShell {
+  display: grid;
+  grid-template-columns: $sidebar-width 1fr;
+  grid-template-rows: $header-height 1fr $footer-height;
+  grid-template-areas:
+    "header header"
+    "sidebar main"
+    "footer footer";
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+
+  &.collapsed {
+    grid-template-columns: $sidebar-collapsed-width 1fr;
+  }
+
+  @media (max-width: 899px) {
+    grid-template-columns: $sidebar-collapsed-width 1fr;
+
+    &.collapsed {
+      grid-template-columns: $sidebar-collapsed-width 1fr;
+    }
+  }
+}
+
+.header {
+  grid-area: header;
+}
+
+.sidebar {
+  grid-area: sidebar;
+  width: $sidebar-width;
+  transition: width 0.2s ease-in-out;
+  overflow: hidden;
+
+  &.collapsed {
+    width: $sidebar-collapsed-width;
+  }
+
+  @media (max-width: 899px) {
+    width: $sidebar-collapsed-width;
+  }
+}
+
+.main {
+  grid-area: main;
+  overflow: auto;
+  min-width: 0;
+}
+
+.footer {
+  grid-area: footer;
+}

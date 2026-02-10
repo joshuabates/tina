@@ -1,0 +1,138 @@
+import { DataErrorBoundary } from "./DataErrorBoundary"
+import { PhaseTimelinePanel } from "./PhaseTimelinePanel"
+import { TaskListPanel } from "./TaskListPanel"
+import { RightPanel } from "./RightPanel"
+import { useSelection } from "@/hooks/useSelection"
+import { useTypedQuery } from "@/hooks/useTypedQuery"
+import { OrchestrationDetailQuery } from "@/services/data/queryDefs"
+import { toOrchestrationId } from "@/services/data/id"
+import { NotFoundError } from "@/services/errors"
+import styles from "./OrchestrationPage.module.scss"
+
+export function OrchestrationPage() {
+  const { orchestrationId } = useSelection()
+
+  return (
+    <DataErrorBoundary key={orchestrationId ?? "none"} panelName="orchestration">
+      <OrchestrationPageContent orchestrationId={orchestrationId} />
+    </DataErrorBoundary>
+  )
+}
+
+interface OrchestrationPageContentProps {
+  orchestrationId: string | null
+}
+
+function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentProps) {
+
+  // No orchestration selected - show empty state
+  if (!orchestrationId) {
+    return (
+      <div className={styles.orchestrationPage}>
+        <div className={styles.empty}>
+          Select an orchestration from the sidebar
+        </div>
+      </div>
+    )
+  }
+
+  // Convert to Convex ID - throws NotFoundError if invalid
+  const convexId = toOrchestrationId(orchestrationId)
+
+  // Query for orchestration detail
+  const result = useTypedQuery(OrchestrationDetailQuery, {
+    orchestrationId: convexId,
+  })
+
+  // Loading state - show skeleton matching three-column layout
+  if (result.status === "loading") {
+    return (
+      <div className={styles.orchestrationPage} aria-busy="true">
+        <div className={styles.header}>
+          <div className={styles.skeletonText} style={{ width: "150px", height: "14px" }} />
+        </div>
+        <div className={styles.content}>
+          <div className={styles.centerPanel}>
+            <div className={styles.timelineColumn}>
+              <div className={styles.loading}>
+                <div className={styles.skeletonBar} />
+                <div className={styles.skeletonBar} />
+                <div className={styles.skeletonBar} />
+              </div>
+            </div>
+            <div className={styles.taskColumn}>
+              <div className={styles.loading}>
+                <div className={styles.skeletonBar} style={{ width: "80%" }} />
+                <div className={styles.skeletonBar} style={{ width: "60%" }} />
+                <div className={styles.skeletonBar} style={{ width: "70%" }} />
+              </div>
+            </div>
+          </div>
+          <div className={styles.rightColumn}>
+            <div className={styles.loading}>
+              <div className={styles.skeletonBar} style={{ width: "90%" }} />
+              <div className={styles.skeletonBar} style={{ width: "85%" }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state - throw to error boundary
+  if (result.status === "error") {
+    throw result.error
+  }
+
+  // Not found state - orchestration was deleted or doesn't exist
+  if (result.data === null) {
+    throw new NotFoundError({
+      resource: "orchestration",
+      id: orchestrationId,
+    })
+  }
+
+  const orchestration = result.data
+
+  return (
+    <div className={styles.orchestrationPage}>
+      <div className={styles.header}>
+        <div>
+          <div className={styles.title}>{orchestration.featureName}</div>
+          <div className={styles.subtitle}>{orchestration.branch}</div>
+        </div>
+      </div>
+      {/* Accessibility: Live region for status changes */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        style={{
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          padding: "0",
+          margin: "-1px",
+          overflow: "hidden",
+          clip: "rect(0, 0, 0, 0)",
+          whiteSpace: "nowrap",
+          border: "0",
+        }}
+      >
+        Orchestration status: {orchestration.status}, Phase {orchestration.currentPhase} of {orchestration.totalPhases}
+      </div>
+      <div className={styles.content}>
+        <div className={styles.centerPanel}>
+          <div className={styles.timelineColumn}>
+            <PhaseTimelinePanel detail={orchestration} />
+          </div>
+          <div className={styles.taskColumn}>
+            <TaskListPanel detail={orchestration} />
+          </div>
+        </div>
+        <div className={styles.rightColumn}>
+          <RightPanel detail={orchestration} />
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,11 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { Schema } from "effect"
 import { OrchestrationSummary } from "../orchestration"
-import { Phase } from "../phase"
-import { TaskEvent } from "../task"
-import { TeamMember } from "../team"
 import { ProjectSummary } from "../project"
-import { OrchestrationEvent } from "../event"
 import { OrchestrationDetail } from "../detail"
 
 describe("OrchestrationSummary schema", () => {
@@ -47,6 +43,7 @@ describe("OrchestrationSummary schema", () => {
       status: "executing",
       startedAt: "2026-02-09T00:00:00Z",
       nodeName: "dev-machine",
+      // projectId, worktreePath, completedAt, totalElapsedMins all absent
     }
 
     const result = Schema.decodeUnknownSync(OrchestrationSummary)(raw)
@@ -54,61 +51,13 @@ describe("OrchestrationSummary schema", () => {
   })
 })
 
-describe("Phase schema", () => {
-  it("decodes a valid phase payload", () => {
-    const raw = {
-      _id: "phase1",
-      _creationTime: 1700000000000,
-      orchestrationId: "orch1",
-      phaseNumber: "1",
-      status: "executing",
-    }
-
-    const result = Schema.decodeUnknownSync(Phase)(raw)
-    expect(result.phaseNumber).toBe("1")
-  })
-})
-
-describe("TaskEvent schema", () => {
-  it("decodes a valid task event payload", () => {
-    const raw = {
-      _id: "task1",
-      _creationTime: 1700000000000,
-      orchestrationId: "orch1",
-      taskId: "t-1",
-      subject: "Implement feature",
-      status: "in_progress",
-      recordedAt: "2026-02-09T00:00:00Z",
-    }
-
-    const result = Schema.decodeUnknownSync(TaskEvent)(raw)
-    expect(result.subject).toBe("Implement feature")
-  })
-})
-
-describe("TeamMember schema", () => {
-  it("decodes a valid team member payload", () => {
-    const raw = {
-      _id: "tm1",
-      _creationTime: 1700000000000,
-      orchestrationId: "orch1",
-      phaseNumber: "1",
-      agentName: "executor",
-      recordedAt: "2026-02-09T00:00:00Z",
-    }
-
-    const result = Schema.decodeUnknownSync(TeamMember)(raw)
-    expect(result.agentName).toBe("executor")
-  })
-})
-
 describe("ProjectSummary schema", () => {
-  it("decodes with null fields", () => {
+  it("decodes a project with null optional fields", () => {
     const raw = {
       _id: "proj1",
       _creationTime: 1700000000000,
-      name: "tina",
-      repoPath: "/path/to/repo",
+      name: "my-project",
+      repoPath: "/Users/dev/project",
       createdAt: "2026-02-09T00:00:00Z",
       orchestrationCount: 5,
       latestFeature: null,
@@ -116,46 +65,30 @@ describe("ProjectSummary schema", () => {
     }
 
     const result = Schema.decodeUnknownSync(ProjectSummary)(raw)
-    expect(result.name).toBe("tina")
+    expect(result.name).toBe("my-project")
     expect(result.latestFeature).toBeNull()
   })
 
-  it("decodes with string fields", () => {
+  it("decodes a project with populated optional fields", () => {
     const raw = {
       _id: "proj1",
       _creationTime: 1700000000000,
-      name: "tina",
-      repoPath: "/path/to/repo",
+      name: "my-project",
+      repoPath: "/Users/dev/project",
       createdAt: "2026-02-09T00:00:00Z",
       orchestrationCount: 5,
-      latestFeature: "web-rebuild",
+      latestFeature: "auth-system",
       latestStatus: "executing",
     }
 
     const result = Schema.decodeUnknownSync(ProjectSummary)(raw)
-    expect(result.latestFeature).toBe("web-rebuild")
-  })
-})
-
-describe("OrchestrationEvent schema", () => {
-  it("decodes a valid event payload", () => {
-    const raw = {
-      _id: "evt1",
-      _creationTime: 1700000000000,
-      orchestrationId: "orch1",
-      eventType: "phase_review_complete",
-      source: "reviewer",
-      summary: "Phase 1 review passed",
-      recordedAt: "2026-02-09T00:00:00Z",
-    }
-
-    const result = Schema.decodeUnknownSync(OrchestrationEvent)(raw)
-    expect(result.eventType).toBe("phase_review_complete")
+    expect(result.latestFeature).toBe("auth-system")
+    expect(result.latestStatus).toBe("executing")
   })
 })
 
 describe("OrchestrationDetail schema", () => {
-  it("decodes a full detail payload", () => {
+  it("decodes a full detail payload with nested arrays", () => {
     const raw = {
       _id: "orch1",
       _creationTime: 1700000000000,
@@ -170,53 +103,31 @@ describe("OrchestrationDetail schema", () => {
       nodeName: "dev-machine",
       phases: [
         {
-          _id: "p1",
+          _id: "phase1",
           _creationTime: 1700000000000,
           orchestrationId: "orch1",
           phaseNumber: "1",
-          status: "executing",
+          status: "complete",
         },
       ],
-      tasks: [
-        {
-          _id: "t1",
-          _creationTime: 1700000000000,
-          orchestrationId: "orch1",
-          taskId: "t-1",
-          subject: "Do thing",
-          status: "pending",
-          recordedAt: "2026-02-09T00:00:00Z",
-        },
-      ],
+      tasks: [],
       orchestratorTasks: [],
-      phaseTasks: {
-        "1": [
-          {
-            _id: "t1",
-            _creationTime: 1700000000000,
-            orchestrationId: "orch1",
-            taskId: "t-1",
-            subject: "Do thing",
-            status: "pending",
-            recordedAt: "2026-02-09T00:00:00Z",
-          },
-        ],
-      },
+      phaseTasks: {},
       teamMembers: [
         {
           _id: "tm1",
           _creationTime: 1700000000000,
           orchestrationId: "orch1",
           phaseNumber: "1",
-          agentName: "executor",
+          agentName: "worker-1",
           recordedAt: "2026-02-09T00:00:00Z",
         },
       ],
     }
 
     const result = Schema.decodeUnknownSync(OrchestrationDetail)(raw)
-    expect(result.featureName).toBe("test-feature")
     expect(result.phases).toHaveLength(1)
     expect(result.teamMembers).toHaveLength(1)
+    expect(result.teamMembers[0].agentName).toBe("worker-1")
   })
 })

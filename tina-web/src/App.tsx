@@ -1,17 +1,14 @@
 import { Route, Routes } from "react-router-dom"
-
-function PlaceholderPage() {
-  return (
-    <div className="flex items-center justify-center h-screen text-muted-foreground">
-      tina-web rebuild — phase 1 infrastructure
-    </div>
-  )
-}
+import { AppShell } from "./components/AppShell"
+import { OrchestrationPage } from "./components/OrchestrationPage"
 
 export default function App() {
   return (
     <Routes>
-      <Route path="*" element={<PlaceholderPage />} />
+      <Route element={<AppShell />}>
+        <Route index element={<OrchestrationPage />} />
+        <Route path="*" element={<OrchestrationPage />} />
+      </Route>
     </Routes>
   )
 }

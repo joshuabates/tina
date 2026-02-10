@@ -5,6 +5,7 @@ interface SidebarItemProps extends React.HTMLAttributes<HTMLDivElement> {
   active?: boolean;
   statusText?: string;
   statusColor?: string;
+  "data-orchestration-id"?: string;
 }
 
 function SidebarItem({
