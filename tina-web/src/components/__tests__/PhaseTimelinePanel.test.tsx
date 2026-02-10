@@ -137,8 +137,8 @@ describe("PhaseTimelinePanel", () => {
 
     const { container } = renderTimelineView({ detail })
 
-    expect(phaseById(container, "phase1")).toHaveTextContent("complete")
-    expect(phaseById(container, "phase2")).toHaveTextContent("executing")
+    expect(phaseById(container, "phase1")).toHaveTextContent("Complete")
+    expect(phaseById(container, "phase2")).toHaveTextContent("Executing")
   })
 
   it("handles empty phases array", () => {

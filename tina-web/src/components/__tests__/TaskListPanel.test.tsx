@@ -112,8 +112,8 @@ describe("TaskListPanel", () => {
 
     render(<TaskListPanel detail={detail} />)
 
-    expect(screen.getByText("completed")).toBeInTheDocument()
-    expect(screen.getByText("in progress")).toBeInTheDocument()
+    expect(screen.getByText("Complete")).toBeInTheDocument()
+    expect(screen.getByText("In Progress")).toBeInTheDocument()
   })
 
   it("maps TaskEvent owner to TaskCard assignee", () => {

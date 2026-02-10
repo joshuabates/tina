@@ -113,4 +113,22 @@ describe("useSelection", () => {
     // URL should be updated (this is implicitly tested by the hook working)
     expect(result.current.orchestrationId).toBe("orch-123")
   })
+
+  it("keeps service state stable when multiple hook consumers are mounted", () => {
+    const { result } = renderHook(
+      () => {
+        const first = useSelection()
+        const second = useSelection()
+        return { first, second }
+      },
+      { wrapper: createWrapper() },
+    )
+
+    act(() => {
+      result.current.first.selectOrchestration("orch-123")
+    })
+
+    expect(result.current.first.orchestrationId).toBe("orch-123")
+    expect(result.current.second.orchestrationId).toBe("orch-123")
+  })
 })

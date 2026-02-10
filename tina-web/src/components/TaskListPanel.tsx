@@ -6,6 +6,7 @@ import { useActionRegistration } from "@/hooks/useActionRegistration"
 import { TaskCard } from "@/components/ui/task-card"
 import { TaskQuicklook } from "@/components/TaskQuicklook"
 import type { StatusBadgeStatus } from "@/components/ui/status-badge"
+import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import type { OrchestrationDetail } from "@/schemas"
 
 interface TaskListPanelProps {
@@ -16,7 +17,7 @@ interface TaskListPanelProps {
 // Pass status as-is (lowercase) - StatusBadge will display the text correctly
 // and use fallback styling if status doesn't match a variant
 function mapTaskStatus(status: string): StatusBadgeStatus {
-  return status.toLowerCase() as StatusBadgeStatus
+  return toStatusBadgeStatus(status)
 }
 
 export function TaskListPanel({ detail }: TaskListPanelProps) {

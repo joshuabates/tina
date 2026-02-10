@@ -8,6 +8,7 @@ import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { OrchestrationListQuery, ProjectListQuery } from "@/services/data/queryDefs"
 import type { OrchestrationSummary, ProjectSummary } from "@/schemas"
+import { statusLabel, toStatusBadgeStatus } from "@/components/ui/status-styles"
 import styles from "./AppShell.module.scss"
 
 export function AppShell() {
@@ -43,7 +44,8 @@ export function AppShell() {
     }
 
     // Build breadcrumb: "{featureName} / P{currentPhase} {status}"
-    const phaseName = `${orchestration.featureName} / P${orchestration.currentPhase} ${orchestration.status}`
+    const phaseStatus = statusLabel(toStatusBadgeStatus(orchestration.status))
+    const phaseName = `${orchestration.featureName} / P${orchestration.currentPhase} ${phaseStatus}`
 
     return { projectName, phaseName }
   }, [orchestrationId, orchestrationsResult, projectsResult])

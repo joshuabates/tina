@@ -8,7 +8,11 @@ import { useFocusable } from "@/hooks/useFocusable"
 import { useSelection } from "@/hooks/useSelection"
 import { useActionRegistration } from "@/hooks/useActionRegistration"
 import { ProjectListQuery, OrchestrationListQuery } from "@/services/data/queryDefs"
-import { normalizeStatus, statusColor } from "@/services/data/status"
+import {
+  statusLabel,
+  statusTextClass,
+  toStatusBadgeStatus,
+} from "@/components/ui/status-styles"
 import styles from "./Sidebar.module.scss"
 
 function SidebarContent() {
@@ -72,8 +76,8 @@ function SidebarContent() {
       const item: SidebarItemProps = {
         label: orchestration.featureName,
         active: orchestration._id === orchestrationId,
-        statusText: normalizeStatus(orchestration.status),
-        statusColor: statusColor(orchestration.status),
+        statusText: statusLabel(toStatusBadgeStatus(orchestration.status)),
+        statusColor: statusTextClass(toStatusBadgeStatus(orchestration.status)),
         onClick: () => selectOrchestration(orchestration._id),
         // Keyboard navigation attributes
         "data-orchestration-id": orchestration._id,

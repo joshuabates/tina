@@ -9,14 +9,7 @@ async function openApp(page: Page) {
 
 async function resolveSidebarState(page: Page) {
   const navigation = await openApp(page)
-  const loading = navigation.getByText("Loading orchestrations...")
-
-  try {
-    await loading.waitFor({ state: "visible", timeout: 2000 })
-    await loading.waitFor({ state: "hidden", timeout: 15000 })
-  } catch {
-    // loading may complete before we can observe it
-  }
+  const skeletonBars = navigation.locator('[class*="skeletonBar"]')
 
   const emptyState = navigation.getByText("No orchestrations found")
   const items = page.locator('[data-orchestration-id]')
@@ -27,6 +20,10 @@ async function resolveSidebarState(page: Page) {
     items.first().waitFor({ state: "visible", timeout: 5000 }),
     errorAlert.waitFor({ state: "visible", timeout: 5000 }),
   ])
+
+  if (await skeletonBars.first().isVisible().catch(() => false)) {
+    await skeletonBars.first().waitFor({ state: "hidden", timeout: 15000 })
+  }
 
   if (await errorAlert.isVisible()) {
     throw new Error(`Sidebar error state: ${await errorAlert.textContent()}`)

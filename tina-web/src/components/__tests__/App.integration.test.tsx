@@ -1,95 +1,110 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, within } from "@testing-library/react"
+import { screen, within, waitFor } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
-import { MemoryRouter } from "react-router-dom"
 import App from "../../App"
 import {
   buildAppIntegrationFixture,
+  buildOrchestrationDetail,
+  buildOrchestrationSummary,
+  buildPhase,
+  buildProjectSummary,
+  some,
 } from "@/test/builders/domain"
 import {
   queryStateFor,
   querySuccess,
   type QueryStateMap,
 } from "@/test/builders/query"
-import {
-  focusableState,
-  selectionState,
-  type SelectionStateMock,
-} from "@/test/harness/hooks"
+import { renderWithRuntime } from "@/test/harness/render"
 
 vi.mock("@/hooks/useTypedQuery")
-vi.mock("@/hooks/useFocusable")
-vi.mock("@/hooks/useSelection")
-vi.mock("@/hooks/useActionRegistration")
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
-const mockUseFocusable = vi.mocked(
-  await import("@/hooks/useFocusable"),
-).useFocusable
-const mockUseSelection = vi.mocked(
-  await import("@/hooks/useSelection"),
-).useSelection
 
-const fixture = buildAppIntegrationFixture()
-const mockSelectOrchestration = vi.fn()
-const mockSelectPhase = vi.fn()
+const primaryFixture = buildAppIntegrationFixture({
+  projects: [buildProjectSummary({ _id: "p1", orchestrationCount: 2 })],
+  orchestrations: [
+    buildOrchestrationSummary({
+      _id: "abc123",
+      projectId: some("p1"),
+      featureName: "my-feature",
+      branch: "tina/my-feature",
+      currentPhase: 2,
+      status: "executing",
+    }),
+  ],
+})
 
-function setupTypedQueries(overrides: Partial<QueryStateMap> = {}) {
+const secondaryOrchestration = buildOrchestrationSummary({
+  _id: "def456",
+  _creationTime: 1234567891,
+  projectId: some("p1"),
+  featureName: "my-other-feature",
+  designDocPath: "/docs/my-other-feature.md",
+  branch: "tina/my-other-feature",
+  currentPhase: 1,
+  status: "planning",
+})
+
+const secondaryDetail = buildOrchestrationDetail({
+  _id: "def456",
+  nodeId: "n2",
+  featureName: "my-other-feature",
+  designDocPath: "/docs/my-other-feature.md",
+  branch: "tina/my-other-feature",
+  currentPhase: 1,
+  phases: [
+    buildPhase({
+      _id: "def-phase1",
+      orchestrationId: "def456",
+      phaseNumber: "1",
+      status: "planning",
+    }),
+  ],
+  phaseTasks: { "1": [] },
+  teamMembers: [],
+})
+
+const defaultProjects = primaryFixture.projects
+const defaultOrchestrations = [
+  ...primaryFixture.orchestrations,
+  secondaryOrchestration,
+]
+const defaultDetails: Record<string, typeof primaryFixture.detail | null> = {
+  abc123: primaryFixture.detail,
+  def456: secondaryDetail,
+}
+
+interface QuerySetup {
+  projects?: typeof defaultProjects
+  orchestrations?: typeof defaultOrchestrations
+  details?: Record<string, typeof primaryFixture.detail | null>
+  overrides?: Partial<QueryStateMap>
+}
+
+function setupTypedQueries(setup: QuerySetup = {}) {
+  const projects = setup.projects ?? defaultProjects
+  const orchestrations = setup.orchestrations ?? defaultOrchestrations
+  const details = setup.details ?? defaultDetails
   const states: QueryStateMap = {
-    "projects.list": querySuccess(fixture.projects),
-    "orchestrations.list": querySuccess(fixture.orchestrations),
-    "orchestrations.detail": querySuccess(fixture.detail),
-    ...overrides,
+    "projects.list": querySuccess(projects),
+    "orchestrations.list": querySuccess(orchestrations),
+    ...setup.overrides,
   }
 
-  mockUseTypedQuery.mockImplementation((def) => queryStateFor(def.key, states))
-}
-
-function setupSelection(overrides: Partial<SelectionStateMock> = {}) {
-  mockUseSelection.mockReturnValue(
-    selectionState({
-      orchestrationId: null,
-      phaseId: null,
-      selectOrchestration: mockSelectOrchestration,
-      selectPhase: mockSelectPhase,
-      ...overrides,
-    }),
-  )
-}
-
-function renderAppView({
-  route = "/",
-  selection,
-  queries,
-}: {
-  route?: string
-  selection?: Partial<SelectionStateMock>
-  queries?: Partial<QueryStateMap>
-} = {}) {
-  if (queries) setupTypedQueries(queries)
-  if (selection) setupSelection(selection)
-  return render(
-    <MemoryRouter initialEntries={[route]}>
-      <App />
-    </MemoryRouter>,
-  )
-}
-
-function renderSelected(route = "/?orch=abc123", phaseId: string | null = null) {
-  return renderAppView({
-    route,
-    selection: { orchestrationId: "abc123", phaseId },
+  mockUseTypedQuery.mockImplementation((def, args) => {
+    if (def.key === "orchestrations.detail") {
+      const orchestrationId = (args as { orchestrationId?: string }).orchestrationId
+      return querySuccess(details[orchestrationId ?? ""] ?? null)
+    }
+    return queryStateFor(def.key, states)
   })
 }
 
-function rerenderAt(rerender: ReturnType<typeof render>["rerender"], route: string) {
-  rerender(
-    <MemoryRouter initialEntries={[route]}>
-      <App />
-    </MemoryRouter>,
-  )
+function renderApp(route = "/") {
+  return renderWithRuntime(<App />, route)
 }
 
 function latestMain(): HTMLElement {
@@ -97,31 +112,37 @@ function latestMain(): HTMLElement {
   return mains[mains.length - 1] as HTMLElement
 }
 
-function expectFeaturePage(main = latestMain()) {
-  expect(within(main).getByText("my-feature")).toBeInTheDocument()
-  expect(within(main).getByText("tina/my-feature")).toBeInTheDocument()
+function firstSidebarItem(): HTMLElement {
+  const item = document.querySelector('[data-orchestration-id]') as HTMLElement | null
+  expect(item).toBeTruthy()
+  return item as HTMLElement
+}
+
+function expectFeaturePage(featureName: string, branch: string, main = latestMain()) {
+  expect(within(main).getByText(featureName)).toBeInTheDocument()
+  expect(within(main).getByText(branch)).toBeInTheDocument()
 }
 
 function expectPhaseTimeline(main = latestMain()) {
-  for (const phase of fixture.phases) {
+  for (const phase of primaryFixture.detail.phases) {
     expect(
-      within(main).getByText(new RegExp(`P${phase.phaseNumber} Phase ${phase.phaseNumber}`, "i")),
+      within(main).getByText(
+        new RegExp(`P${phase.phaseNumber} Phase ${phase.phaseNumber}`, "i"),
+      ),
     ).toBeInTheDocument()
   }
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockUseFocusable.mockReturnValue(focusableState())
   setupTypedQueries()
-  setupSelection()
 })
 
-describe("App - URL synchronization + selection flow", () => {
+describe("App - runtime-backed URL and selection flow", () => {
   it.each(["/", "/some/unknown/path"])(
-    "renders AppShell and empty main state for route %s",
+    "renders shell and empty main state for route %s",
     (route) => {
-      renderAppView({ route })
+      renderApp(route)
 
       expect(screen.getByRole("banner")).toBeInTheDocument()
       expect(screen.getByRole("navigation")).toBeInTheDocument()
@@ -130,94 +151,49 @@ describe("App - URL synchronization + selection flow", () => {
     },
   )
 
-  it("shows orchestration page with feature name when orchestration selected", () => {
-    renderSelected()
-    expectFeaturePage()
+  it("shows orchestration page when URL contains orchestration selection", () => {
+    renderApp("/?orch=abc123")
+
+    expectFeaturePage("my-feature", "tina/my-feature")
+    expectPhaseTimeline()
   })
 
-  it("shows error state for invalid orchestration ID", () => {
-    renderAppView({
-      route: "/?orch=invalid-999",
-      selection: { orchestrationId: "invalid-999" },
-      queries: { "orchestrations.detail": querySuccess(null) },
-    })
-
+  it("shows not found state for unknown orchestration ID", () => {
+    renderApp("/?orch=invalid-999")
     expect(screen.getByText(/not found/i)).toBeInTheDocument()
   })
 
-  it("clicking sidebar item updates orchestration page content", async () => {
+  it("clicking sidebar item updates selected orchestration content", async () => {
     const user = userEvent.setup()
-    const { rerender } = renderAppView()
+    renderApp("/")
 
     expect(screen.getAllByText(/select an orchestration/i).length).toBeGreaterThan(0)
 
-    await user.click(screen.getAllByText("my-feature")[0])
-    expect(mockSelectOrchestration).toHaveBeenCalledWith("abc123")
+    await user.click(firstSidebarItem())
 
-    setupSelection({ orchestrationId: "abc123" })
-    rerenderAt(rerender, "/?orch=abc123")
-
-    expectFeaturePage()
-  })
-
-})
-
-describe("App - OrchestrationPage integration (Phase 4)", () => {
-  it("renders OrchestrationPage with phase timeline when orchestration selected", () => {
-    renderSelected()
-    expectFeaturePage()
-    expectPhaseTimeline()
-  })
-
-  it("phase timeline is interactive and wired to selection", () => {
-    renderSelected()
-
-    expectPhaseTimeline()
-    expect(mockUseSelection).toHaveBeenCalled()
-  })
-
-  it("deep-link with ?orch=<id>&phase=<phaseId> restores both selections", () => {
-    renderSelected("/?orch=abc123&phase=phase2", "phase2")
-
-    expect(screen.getAllByText("my-feature").length).toBeGreaterThan(0)
-    expectPhaseTimeline()
-  })
-
-  it("selecting different orchestration clears phase selection", async () => {
-    const user = userEvent.setup()
-    const { rerender, container } = renderAppView({
-      route: "/?orch=abc123&phase=phase1",
-      selection: { orchestrationId: "abc123", phaseId: "phase1" },
+    await waitFor(() => {
+      expectFeaturePage("my-feature", "tina/my-feature")
     })
-
-    expect(screen.getAllByText(/P1 Phase 1/i).length).toBeGreaterThan(0)
-
-    const sidebar = container.querySelector('[role="navigation"]')
-    const items = sidebar
-      ? Array.from(sidebar.querySelectorAll('[id^="sidebar-item"]')).filter((el) =>
-          el.textContent?.includes("my-feature"),
-        )
-      : []
-
-    if (items.length > 0) {
-      await user.click(items[0] as HTMLElement)
-    }
-
-    expect(mockSelectOrchestration).toHaveBeenCalledWith("abc123")
-
-    setupSelection({ orchestrationId: "abc123", phaseId: null })
-    rerenderAt(rerender, "/?orch=abc123")
-
-    expectPhaseTimeline()
   })
 
-  it("phase timeline data matches Convex query response", () => {
-    const { container } = renderSelected()
+  it("deep-link with orch and phase selects phase-specific task view", () => {
+    renderApp("/?orch=abc123&phase=phase2")
 
-    const main = container.querySelector("main") as HTMLElement
-    expectPhaseTimeline(main)
-    expect(within(main).getAllByText("completed").length).toBeGreaterThan(0)
-    expect(within(main).getAllByText("executing").length).toBeGreaterThan(0)
-    expect(within(main).getAllByText("pending").length).toBeGreaterThan(0)
+    expectFeaturePage("my-feature", "tina/my-feature")
+    expect(screen.queryByText(/no phase selected/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/no tasks for this phase/i)).toBeInTheDocument()
+  })
+
+  it("switching orchestrations clears phase selection via selection service", async () => {
+    const user = userEvent.setup()
+    renderApp("/?orch=abc123&phase=phase1")
+
+    const otherItem = screen.getByText("my-other-feature")
+    await user.click(otherItem)
+
+    await waitFor(() => {
+      expectFeaturePage("my-other-feature", "tina/my-other-feature")
+      expect(screen.getAllByText(/no phase selected/i).length).toBeGreaterThan(0)
+    })
   })
 })

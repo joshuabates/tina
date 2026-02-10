@@ -4,8 +4,11 @@ import { useFocusable } from "@/hooks/useFocusable"
 import { MonoText } from "@/components/ui/mono-text"
 import { StatPanel } from "@/components/ui/stat-panel"
 import type { OrchestrationDetail } from "@/schemas"
-import type { StatusBadgeStatus } from "@/components/ui/status-badge"
-import { statusTextClass } from "@/components/ui/status-styles"
+import {
+  statusLabel,
+  statusTextClass,
+  toStatusBadgeStatus,
+} from "@/components/ui/status-styles"
 
 interface StatusSectionProps {
   detail: OrchestrationDetail
@@ -14,9 +17,9 @@ interface StatusSectionProps {
 export function StatusSection({ detail }: StatusSectionProps) {
   useFocusable("rightPanel.status", 2)
 
-  const normalizedStatus = detail.status.toLowerCase()
-  const statusLabel = normalizedStatus.toUpperCase()
-  const statusColorClass = statusTextClass(normalizedStatus as StatusBadgeStatus)
+  const normalizedStatus = toStatusBadgeStatus(detail.status)
+  const statusDisplayLabel = statusLabel(normalizedStatus).toUpperCase()
+  const statusColorClass = statusTextClass(normalizedStatus)
 
   const phaseProgress = `PHASE ${detail.currentPhase}/${detail.totalPhases}`
   const progressPct = detail.totalPhases > 0
@@ -34,7 +37,7 @@ export function StatusSection({ detail }: StatusSectionProps) {
       <div className="space-y-2.5">
         <div className="flex items-center justify-between">
           <span className={`text-[8px] font-bold uppercase tracking-wide ${statusColorClass}`}>
-            {statusLabel}
+            {statusDisplayLabel}
           </span>
           <MonoText className="text-[8px] text-muted-foreground">{phaseProgress}</MonoText>
         </div>

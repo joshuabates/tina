@@ -5,7 +5,7 @@ import { useActionRegistration } from "@/hooks/useActionRegistration"
 import { PhaseTimeline } from "@/components/ui/phase-timeline"
 import { PhaseQuicklook } from "@/components/PhaseQuicklook"
 import type { PhaseCardProps } from "@/components/ui/phase-card"
-import type { StatusBadgeStatus } from "@/components/ui/status-badge"
+import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import type { OrchestrationDetail, Phase, TaskEvent, TeamMember } from "@/schemas"
 import { cn } from "@/lib/utils"
 
@@ -22,7 +22,7 @@ function mapPhaseToCard(
   const tasks = phaseTasks[phase.phaseNumber] ?? []
   const completedCount = tasks.filter(t => t.status === "completed").length
   const teamCount = teamMembers.filter(m => m.phaseNumber === phase.phaseNumber).length
-  const status = phase.status.toLowerCase() as StatusBadgeStatus
+  const status = toStatusBadgeStatus(phase.status)
 
   return {
     phaseNumber: phaseNum,

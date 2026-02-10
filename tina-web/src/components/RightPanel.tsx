@@ -4,10 +4,7 @@ import { TeamSection } from "@/components/TeamSection"
 import { GitOpsSection } from "@/components/GitOpsSection"
 import { ReviewSection } from "@/components/ReviewSection"
 import type { OrchestrationDetail } from "@/schemas"
-import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { EventListQuery } from "@/services/data/queryDefs"
-import { toOrchestrationId } from "@/services/data/id"
-import { isGitEvent, isPhaseReviewEvent } from "@/services/data/events"
+import { useOrchestrationEvents } from "@/hooks/useOrchestrationEvents"
 import styles from "./RightPanel.module.scss"
 
 interface RightPanelProps {
@@ -15,18 +12,11 @@ interface RightPanelProps {
 }
 
 export function RightPanel({ detail }: RightPanelProps) {
-  const eventsResult = useTypedQuery(EventListQuery, {
-    orchestrationId: toOrchestrationId(detail._id),
-  })
+  const events = useOrchestrationEvents(detail._id)
 
-  if (eventsResult.status === "error") {
-    throw eventsResult.error
+  if (events.status === "error") {
+    throw events.error
   }
-
-  const events = eventsResult.status === "success" ? eventsResult.data : []
-  const gitEvents = events.filter(isGitEvent)
-  const reviewEvents = events.filter(isPhaseReviewEvent)
-  const isLoading = eventsResult.status === "loading"
 
   return (
     <ScrollArea
@@ -37,8 +27,8 @@ export function RightPanel({ detail }: RightPanelProps) {
       <div className={styles.stack}>
         <StatusSection detail={detail} />
         <TeamSection detail={detail} />
-        <GitOpsSection gitEvents={gitEvents} isLoading={isLoading} />
-        <ReviewSection reviewEvents={reviewEvents} isLoading={isLoading} />
+        <GitOpsSection gitEvents={events.gitEvents} isLoading={events.isLoading} />
+        <ReviewSection reviewEvents={events.reviewEvents} isLoading={events.isLoading} />
       </div>
     </ScrollArea>
   )

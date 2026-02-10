@@ -5,7 +5,6 @@ import { RightPanel } from "./RightPanel"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { OrchestrationDetailQuery } from "@/services/data/queryDefs"
-import { toOrchestrationId } from "@/services/data/id"
 import { NotFoundError } from "@/services/errors"
 import styles from "./OrchestrationPage.module.scss"
 
@@ -36,12 +35,9 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
     )
   }
 
-  // Convert to Convex ID - throws NotFoundError if invalid
-  const convexId = toOrchestrationId(orchestrationId)
-
   // Query for orchestration detail
   const result = useTypedQuery(OrchestrationDetailQuery, {
-    orchestrationId: convexId,
+    orchestrationId,
   })
 
   // Loading state - show skeleton matching three-column layout

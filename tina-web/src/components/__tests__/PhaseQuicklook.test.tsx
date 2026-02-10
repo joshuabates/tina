@@ -94,7 +94,7 @@ describe("PhaseQuicklook", () => {
     renderQuicklook()
 
     expect(screen.getByText(/Phase 1/)).toBeInTheDocument()
-    expect(screen.getByText("executing")).toBeInTheDocument()
+    expect(screen.getByText("Executing")).toBeInTheDocument()
   })
 
   it.each([

@@ -3,20 +3,20 @@ import { screen } from "@testing-library/react"
 import { RightPanel } from "../RightPanel"
 import type { OrchestrationDetail, OrchestrationEvent } from "@/schemas"
 import { buildOrchestrationDetail, buildOrchestrationEvent } from "@/test/builders/domain"
-import { querySuccess, queryLoading, queryError } from "@/test/builders/query"
 import { renderWithRuntime } from "@/test/harness/render"
-// Mock hooks
-vi.mock("@/hooks/useTypedQuery")
+
+vi.mock("@/hooks/useOrchestrationEvents")
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
-const mockUseTypedQuery = vi.mocked(
-  await import("@/hooks/useTypedQuery")
-).useTypedQuery
+
+const mockUseOrchestrationEvents = vi.mocked(
+  await import("@/hooks/useOrchestrationEvents"),
+).useOrchestrationEvents
 const mockUseFocusable = vi.mocked(
-  await import("@/hooks/useFocusable")
+  await import("@/hooks/useFocusable"),
 ).useFocusable
 const mockUseSelection = vi.mocked(
-  await import("@/hooks/useSelection")
+  await import("@/hooks/useSelection"),
 ).useSelection
 
 describe("RightPanel", () => {
@@ -34,8 +34,12 @@ describe("RightPanel", () => {
       selectOrchestration: vi.fn(),
       selectPhase: vi.fn(),
     })
-    // Default mock for useTypedQuery (empty events)
-    mockUseTypedQuery.mockReturnValue(querySuccess([]))
+    mockUseOrchestrationEvents.mockReturnValue({
+      status: "success",
+      isLoading: false,
+      gitEvents: [],
+      reviewEvents: [],
+    })
   })
 
   const createMockDetail = (overrides?: Partial<OrchestrationDetail>): OrchestrationDetail =>
@@ -83,9 +87,6 @@ describe("RightPanel", () => {
       teamMembers: [],
     })
 
-    // Mock empty events for GitOps
-    mockUseTypedQuery.mockReturnValue(querySuccess([]))
-
     renderWithRuntime(<RightPanel detail={detail} />)
 
     // GitOps should show empty state
@@ -110,7 +111,12 @@ describe("RightPanel", () => {
       event({ _id: "rev1", eventType: "phase_review_requested", summary: "Review requested" }),
     ]
 
-    mockUseTypedQuery.mockReturnValue(querySuccess(events))
+    mockUseOrchestrationEvents.mockReturnValue({
+      status: "success",
+      isLoading: false,
+      gitEvents: [events[0]],
+      reviewEvents: [events[1]],
+    })
 
     renderWithRuntime(<RightPanel detail={detail} />)
 
@@ -120,7 +126,12 @@ describe("RightPanel", () => {
 
   it("shows loading states while events are fetching", () => {
     const detail = createMockDetail()
-    mockUseTypedQuery.mockReturnValue(queryLoading())
+    mockUseOrchestrationEvents.mockReturnValue({
+      status: "loading",
+      isLoading: true,
+      gitEvents: [],
+      reviewEvents: [],
+    })
 
     renderWithRuntime(<RightPanel detail={detail} />)
 
@@ -131,7 +142,13 @@ describe("RightPanel", () => {
   it("throws query errors to parent error boundary", () => {
     const detail = createMockDetail()
     const error = new Error("Failed to load events")
-    mockUseTypedQuery.mockReturnValue(queryError(error))
+    mockUseOrchestrationEvents.mockReturnValue({
+      status: "error",
+      isLoading: false,
+      error,
+      gitEvents: [],
+      reviewEvents: [],
+    })
 
     expect(() => renderWithRuntime(<RightPanel detail={detail} />)).toThrow(error)
   })

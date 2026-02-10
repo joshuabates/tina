@@ -1,14 +1,21 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+const ORCHESTRATOR_PHASE_KEY = "__orchestrator__";
+
 export function deduplicateTaskEvents<
-  T extends { taskId: string; recordedAt: string },
+  T extends { taskId: string; recordedAt: string; phaseNumber?: string | null },
 >(events: T[]): T[] {
   const latest = new Map<string, T>();
   for (const event of events) {
-    const existing = latest.get(event.taskId);
+    const phaseKey =
+      event.phaseNumber && event.phaseNumber.trim().length > 0
+        ? event.phaseNumber
+        : ORCHESTRATOR_PHASE_KEY;
+    const key = `${phaseKey}:${event.taskId}`;
+    const existing = latest.get(key);
     if (!existing || event.recordedAt > existing.recordedAt) {
-      latest.set(event.taskId, event);
+      latest.set(key, event);
     }
   }
   return Array.from(latest.values());
