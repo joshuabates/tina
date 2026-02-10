@@ -38,6 +38,10 @@
   &.collapsed {
     width: $sidebar-collapsed-width;
   }
+
+  @media (max-width: 899px) {
+    width: $sidebar-collapsed-width;
+  }
 }
 
 .main {

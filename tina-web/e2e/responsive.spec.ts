@@ -72,14 +72,10 @@ test.describe("Responsive Layout", () => {
     await page.goto("/")
     await page.waitForLoadState("networkidle")
 
-    // Check that sidebar is narrow (collapsed) at this width
-    const sidebarWidth = await page.evaluate(() => {
-      const sidebar = document.querySelector(
-        '[class*="sidebar"]'
-      ) as HTMLElement
-      if (!sidebar) return 0
-      return sidebar.getBoundingClientRect().width
-    })
+    // Check that the app shell navigation column is narrow at this width.
+    const sidebarWidth = await page
+      .getByRole("navigation", { name: "Main sidebar" })
+      .evaluate((el) => (el as HTMLElement).getBoundingClientRect().width)
 
     // Sidebar should be collapsed width (48px) not full width (208px)
     expect(sidebarWidth).toBeLessThan(100)
