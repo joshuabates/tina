@@ -11,20 +11,60 @@ use tina_session::tmux;
 
 const CLAUDE_READY_TIMEOUT_SECS: u64 = 60;
 
-/// Detect which claude binary is available and functional.
-/// Uses 'claude' (release) and verifies it runs.
-fn detect_claude_binary() -> &'static str {
-    if Command::new("claude")
+/// Detect a working claude executable and return an absolute path.
+fn detect_claude_binary() -> anyhow::Result<PathBuf> {
+    let claude_path =
+        find_executable("claude").ok_or_else(|| anyhow::anyhow!("claude binary not found in PATH"))?;
+
+    let is_working = Command::new(&claude_path)
         .arg("--version")
         .output()
         .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        return "claude";
+        .unwrap_or(false);
+
+    if !is_working {
+        anyhow::bail!(
+            "claude executable is not runnable: {}",
+            claude_path.display()
+        );
     }
 
-    // Default to claude and let it fail with a clear error
-    "claude"
+    Ok(claude_path)
+}
+
+fn find_executable(name: &str) -> Option<PathBuf> {
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        for candidate in [home.join(".local/bin").join(name), home.join("bin").join(name)] {
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    for base in ["/usr/local/bin", "/opt/homebrew/bin"] {
+        let candidate = PathBuf::from(base).join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn shell_quote(arg: &str) -> String {
+    format!(
+        "\"{}\"",
+        arg.replace('\\', "\\\\").replace('"', "\\\"")
+    )
 }
 
 pub fn run(
@@ -97,9 +137,13 @@ pub fn run(
     std::thread::sleep(std::time::Duration::from_millis(500));
 
     // Detect which claude binary is available
-    let claude_bin = detect_claude_binary();
-    let claude_cmd = format!("{} --dangerously-skip-permissions", claude_bin);
-    println!("Starting Claude ({}) in session...", claude_bin);
+    let claude_bin = detect_claude_binary()?;
+    let claude_bin_str = claude_bin.to_string_lossy().to_string();
+    let claude_cmd = format!(
+        "{} --dangerously-skip-permissions",
+        shell_quote(&claude_bin_str)
+    );
+    println!("Starting Claude ({}) in session...", claude_bin.display());
     tmux::send_keys(&name, &claude_cmd)?;
 
     // Wait for Claude to be ready
@@ -239,7 +283,7 @@ fn install_dependencies(cwd: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_working_dir;
+    use super::{resolve_working_dir, shell_quote};
 
     #[test]
     fn resolve_working_dir_prefers_override() {
@@ -263,5 +307,11 @@ mod tests {
             err.to_string()
                 .contains("Orchestration has no worktree_path and --cwd was not provided")
         );
+    }
+
+    #[test]
+    fn shell_quote_wraps_and_escapes() {
+        assert_eq!(shell_quote("/usr/local/bin/claude"), "\"/usr/local/bin/claude\"");
+        assert_eq!(shell_quote("a\"b"), "\"a\\\"b\"");
     }
 }

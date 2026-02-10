@@ -313,9 +313,13 @@ fn run_full_orchestration(work_dir: &Path, scenario: &Scenario) -> Result<Orches
     std::thread::sleep(Duration::from_millis(200));
 
     // Launch Claude in interactive mode with permissions bypass
-    let claude_bin = detect_claude_binary();
-    let claude_cmd = format!("{} --dangerously-skip-permissions", claude_bin);
-    eprintln!("Starting Claude ({}) in session...", claude_bin);
+    let claude_bin = detect_claude_binary()?;
+    let claude_bin_str = claude_bin.to_string_lossy().to_string();
+    let claude_cmd = format!(
+        "{} --dangerously-skip-permissions",
+        shell_quote(&claude_bin_str)
+    );
+    eprintln!("Starting Claude ({}) in session...", claude_bin.display());
     tina_session::tmux::send_keys(&session_name, &claude_cmd)
         .map_err(|e| anyhow::anyhow!("Failed to send claude command: {}", e))?;
 
@@ -327,8 +331,14 @@ fn run_full_orchestration(work_dir: &Path, scenario: &Scenario) -> Result<Orches
     match tina_session::claude::wait_for_ready(&session_name, CLAUDE_READY_TIMEOUT_SECS) {
         Ok(_) => eprintln!("Claude is ready."),
         Err(e) => {
-            eprintln!("Warning: Claude may not be ready: {}", e);
-            eprintln!("Proceeding anyway...");
+            let pane_tail = tina_session::tmux::capture_pane_lines(&session_name, 80)
+                .unwrap_or_else(|_| "<unable to capture tmux pane>".to_string());
+            anyhow::bail!(
+                "Claude not ready after {}s: {}\nTmux pane tail:\n{}",
+                CLAUDE_READY_TIMEOUT_SECS,
+                e,
+                pane_tail
+            );
         }
     }
 
@@ -367,20 +377,60 @@ fn run_full_orchestration(work_dir: &Path, scenario: &Scenario) -> Result<Orches
     result
 }
 
-/// Detect which claude binary is available and functional.
-/// Uses 'claude' (release) and verifies it runs.
-fn detect_claude_binary() -> &'static str {
-    if Command::new("claude")
+/// Detect a working claude executable and return an absolute path.
+fn detect_claude_binary() -> Result<PathBuf> {
+    let claude_path =
+        find_executable("claude").ok_or_else(|| anyhow::anyhow!("claude binary not found in PATH"))?;
+
+    let is_working = Command::new(&claude_path)
         .arg("--version")
         .output()
         .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        return "claude";
+        .unwrap_or(false);
+
+    if !is_working {
+        anyhow::bail!(
+            "claude executable is not runnable: {}",
+            claude_path.display()
+        );
     }
 
-    // Default to claude and let it fail with a clear error
-    "claude"
+    Ok(claude_path)
+}
+
+fn find_executable(name: &str) -> Option<PathBuf> {
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        for candidate in [home.join(".local/bin").join(name), home.join("bin").join(name)] {
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    for base in ["/usr/local/bin", "/opt/homebrew/bin"] {
+        let candidate = PathBuf::from(base).join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn shell_quote(arg: &str) -> String {
+    format!(
+        "\"{}\"",
+        arg.replace('\\', "\\\\").replace('"', "\\\"")
+    )
 }
 
 /// Rebuild tina-session and tina-daemon binaries from source.
@@ -533,6 +583,14 @@ fn wait_for_orchestration_complete(
             }
             Err(e) => {
                 // State not available yet (orchestration hasn't written to Convex)
+                if let Some((reason, pane)) = detect_tmux_fatal_state(session_name) {
+                    anyhow::bail!(
+                        "Orchestration failed before Convex state was created: {}\nTmux pane tail:\n{}",
+                        reason,
+                        pane
+                    );
+                }
+
                 let elapsed = start.elapsed().as_secs();
                 if elapsed % 30 == 0 && elapsed > 0 {
                     eprintln!("[{}s] Waiting for orchestration state: {}", elapsed, e);
@@ -542,6 +600,27 @@ fn wait_for_orchestration_complete(
 
         std::thread::sleep(poll_interval);
     }
+}
+
+/// Inspect tmux output for fatal conditions that prevent orchestration startup.
+fn detect_tmux_fatal_state(session_name: &str) -> Option<(String, String)> {
+    let pane = tina_session::tmux::capture_pane_lines(session_name, 120).ok()?;
+    let lower = pane.to_lowercase();
+
+    if lower.contains("you've hit your limit") || lower.contains("hit your limit") {
+        return Some(("Claude usage limit reached".to_string(), pane));
+    }
+    if lower.contains("claude: command not found") {
+        return Some(("claude executable not found in tmux shell".to_string(), pane));
+    }
+    if lower.contains("/tina:orchestrate: no such file or directory") {
+        return Some((
+            "orchestrate command was sent to shell because Claude did not start".to_string(),
+            pane,
+        ));
+    }
+
+    None
 }
 
 /// Load orchestration state from Convex for a given feature name.
