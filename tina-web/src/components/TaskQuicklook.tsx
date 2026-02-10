@@ -3,7 +3,6 @@ import { Option } from "effect"
 import { StatusBadge } from "@/components/ui/status-badge"
 import type { StatusBadgeStatus } from "@/components/ui/status-badge"
 import type { TaskEvent } from "@/schemas"
-import { cn } from "@/lib/utils"
 import styles from "./TaskQuicklook.module.scss"
 
 export interface TaskQuicklookProps {
@@ -106,22 +105,43 @@ export function TaskQuicklook({ task, onClose }: TaskQuicklookProps) {
             </div>
           </section>
 
-          {/* Owner Section */}
-          {Option.isSome(task.owner) && (
-            <section className={styles.section}>
-              <h3 className={styles.sectionTitle}>Owner</h3>
-              <div className={cn(styles.value, styles.mono)}>
-                {Option.getOrUndefined(task.owner)}
+          {/* Details Section */}
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Details</h3>
+            <div className={styles.detailsGrid}>
+              <div className={styles.detailItem}>
+                <span className={styles.label}>Owner:</span>
+                <span className={styles.value}>
+                  {Option.match(task.owner, {
+                    onNone: () => "—",
+                    onSome: (owner) => owner,
+                  })}
+                </span>
               </div>
-            </section>
-          )}
+              <div className={styles.detailItem}>
+                <span className={styles.label}>Phase:</span>
+                <span className={styles.value}>
+                  {Option.match(task.phaseNumber, {
+                    onNone: () => "—",
+                    onSome: (phase) => phase,
+                  })}
+                </span>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.label}>Recorded:</span>
+                <span className={styles.value}>
+                  {new Date(task.recordedAt).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </section>
 
-          {/* Blocked By Section */}
+          {/* Blocked By Section - only show when present */}
           {Option.isSome(task.blockedBy) && (
             <section className={styles.section}>
               <h3 className={styles.sectionTitle}>Blocked By</h3>
-              <div className={cn(styles.value, styles.mono)}>
-                {Option.getOrUndefined(task.blockedBy)}
+              <div className={styles.value}>
+                {Option.getOrNull(task.blockedBy)}
               </div>
             </section>
           )}
