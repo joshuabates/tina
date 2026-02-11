@@ -22,7 +22,7 @@ describe("workComments", () => {
       });
 
       // Add a comment
-      const commentId = await t.mutation(internal.workComments.addComment, {
+      const commentId = await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "design",
         targetId: designId,
@@ -34,7 +34,7 @@ describe("workComments", () => {
       expect(commentId).toBeDefined();
 
       // Verify the comment was saved
-      const comments = await t.query(internal.workComments.listComments, {
+      const comments = await t.query(api.workComments.listComments, {
         targetType: "design",
         targetId: designId,
       });
@@ -62,7 +62,7 @@ describe("workComments", () => {
       });
 
       // Add a comment
-      const commentId = await t.mutation(internal.workComments.addComment, {
+      const commentId = await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "ticket",
         targetId: ticketId,
@@ -74,7 +74,7 @@ describe("workComments", () => {
       expect(commentId).toBeDefined();
 
       // Verify the comment was saved
-      const comments = await t.query(internal.workComments.listComments, {
+      const comments = await t.query(api.workComments.listComments, {
         targetType: "ticket",
         targetId: ticketId,
       });
@@ -173,7 +173,7 @@ describe("workComments", () => {
       });
 
       // List comments
-      const comments = await t.query(internal.workComments.listComments, {
+      const comments = await t.query(api.workComments.listComments, {
         targetType: "design",
         targetId: designId,
       });
@@ -200,7 +200,7 @@ describe("workComments", () => {
       });
 
       // List comments for empty design
-      const comments = await t.query(internal.workComments.listComments, {
+      const comments = await t.query(api.workComments.listComments, {
         targetType: "design",
         targetId: designId,
       });
@@ -304,7 +304,7 @@ describe("workComments", () => {
       });
 
       // List comments
-      const comments = await t.query(internal.workComments.listComments, {
+      const comments = await t.query(api.workComments.listComments, {
         targetType: "ticket",
         targetId: ticketId,
       });

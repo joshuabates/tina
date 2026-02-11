@@ -1,8 +1,8 @@
-import { internalMutation, internalQuery } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 
-export const addComment = internalMutation({
+export const addComment = mutation({
   args: {
     projectId: v.id("projects"),
     targetType: v.union(v.literal("design"), v.literal("ticket")),
@@ -41,7 +41,7 @@ export const addComment = internalMutation({
   },
 });
 
-export const listComments = internalQuery({
+export const listComments = query({
   args: {
     targetType: v.union(v.literal("design"), v.literal("ticket")),
     targetId: v.string(),
