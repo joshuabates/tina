@@ -56,12 +56,10 @@ You are validating a design document before it proceeds to planning.
 If `design_id` is present in task metadata, resolve the latest design content from Convex before validation:
 
 ```bash
-# Resolve latest design content from Convex
-DESIGN_JSON=$(tina-session work design resolve --design-id "$DESIGN_ID" --json)
-
-# Extract markdown content and write to local cache
-mkdir -p "$WORKTREE_PATH/.claude/tina"
-echo "$DESIGN_JSON" | jq -r '.markdown' > "$WORKTREE_PATH/.claude/tina/design.md"
+# Resolve latest design content from Convex and write to local cache
+tina-session work design resolve-to-file \
+  --design-id "$DESIGN_ID" \
+  --output "$WORKTREE_PATH/.claude/tina/design.md"
 
 # Use resolved content as the design document
 DESIGN_DOC_PATH="$WORKTREE_PATH/.claude/tina/design.md"
