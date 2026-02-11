@@ -9,6 +9,8 @@ pub type EventArgs = tina_data::OrchestrationEventRecord;
 pub type UpsertTeamMemberArgs = tina_data::TeamMemberRecord;
 pub type RegisterTeamArgs = tina_data::RegisterTeamRecord;
 
+pub use tina_data::{CommentRecord, DesignRecord, TicketRecord};
+
 /// Orchestration record returned from Convex feature/list queries.
 #[derive(Debug, Clone)]
 pub struct OrchestrationRecord {
@@ -191,6 +193,173 @@ impl ConvexWriter {
         self.client
             .get_supervisor_state(&self.node_id, feature_name)
             .await
+    }
+
+    // --- PM (Project Management) methods ---
+
+    /// Create a new design.
+    pub async fn create_design(
+        &mut self,
+        project_id: &str,
+        title: &str,
+        markdown: &str,
+    ) -> anyhow::Result<String> {
+        self.client.create_design(project_id, title, markdown).await
+    }
+
+    /// Get a design by ID.
+    pub async fn get_design(&mut self, design_id: &str) -> anyhow::Result<Option<DesignRecord>> {
+        self.client.get_design(design_id).await
+    }
+
+    /// Get a design by key.
+    pub async fn get_design_by_key(
+        &mut self,
+        design_key: &str,
+    ) -> anyhow::Result<Option<DesignRecord>> {
+        self.client.get_design_by_key(design_key).await
+    }
+
+    /// List designs for a project, optionally filtered by status.
+    pub async fn list_designs(
+        &mut self,
+        project_id: &str,
+        status: Option<&str>,
+    ) -> anyhow::Result<Vec<DesignRecord>> {
+        self.client.list_designs(project_id, status).await
+    }
+
+    /// Update a design.
+    pub async fn update_design(
+        &mut self,
+        design_id: &str,
+        title: Option<&str>,
+        markdown: Option<&str>,
+    ) -> anyhow::Result<String> {
+        self.client.update_design(design_id, title, markdown).await
+    }
+
+    /// Transition a design to a new status.
+    pub async fn transition_design(
+        &mut self,
+        design_id: &str,
+        new_status: &str,
+    ) -> anyhow::Result<String> {
+        self.client.transition_design(design_id, new_status).await
+    }
+
+    /// Create a new ticket.
+    pub async fn create_ticket(
+        &mut self,
+        project_id: &str,
+        design_id: Option<&str>,
+        title: &str,
+        description: &str,
+        priority: &str,
+        assignee: Option<&str>,
+        estimate: Option<&str>,
+    ) -> anyhow::Result<String> {
+        self.client
+            .create_ticket(
+                project_id,
+                design_id,
+                title,
+                description,
+                priority,
+                assignee,
+                estimate,
+            )
+            .await
+    }
+
+    /// Get a ticket by ID.
+    pub async fn get_ticket(&mut self, ticket_id: &str) -> anyhow::Result<Option<TicketRecord>> {
+        self.client.get_ticket(ticket_id).await
+    }
+
+    /// Get a ticket by key.
+    pub async fn get_ticket_by_key(
+        &mut self,
+        ticket_key: &str,
+    ) -> anyhow::Result<Option<TicketRecord>> {
+        self.client.get_ticket_by_key(ticket_key).await
+    }
+
+    /// List tickets for a project, optionally filtered by status, design, or assignee.
+    pub async fn list_tickets(
+        &mut self,
+        project_id: &str,
+        status: Option<&str>,
+        design_id: Option<&str>,
+        assignee: Option<&str>,
+    ) -> anyhow::Result<Vec<TicketRecord>> {
+        self.client
+            .list_tickets(project_id, status, design_id, assignee)
+            .await
+    }
+
+    /// Update a ticket.
+    pub async fn update_ticket(
+        &mut self,
+        ticket_id: &str,
+        title: Option<&str>,
+        description: Option<&str>,
+        priority: Option<&str>,
+        design_id: Option<&str>,
+        assignee: Option<&str>,
+        estimate: Option<&str>,
+    ) -> anyhow::Result<String> {
+        self.client
+            .update_ticket(
+                ticket_id,
+                title,
+                description,
+                priority,
+                design_id,
+                assignee,
+                estimate,
+            )
+            .await
+    }
+
+    /// Transition a ticket to a new status.
+    pub async fn transition_ticket(
+        &mut self,
+        ticket_id: &str,
+        new_status: &str,
+    ) -> anyhow::Result<String> {
+        self.client.transition_ticket(ticket_id, new_status).await
+    }
+
+    /// Add a comment to a design or ticket (internal function).
+    pub async fn add_comment(
+        &mut self,
+        project_id: &str,
+        target_type: &str,
+        target_id: &str,
+        author_type: &str,
+        author_name: &str,
+        body: &str,
+    ) -> anyhow::Result<String> {
+        self.client
+            .add_comment(
+                project_id,
+                target_type,
+                target_id,
+                author_type,
+                author_name,
+                body,
+            )
+            .await
+    }
+
+    /// List comments for a design or ticket (internal function).
+    pub async fn list_comments(
+        &mut self,
+        target_type: &str,
+        target_id: &str,
+    ) -> anyhow::Result<Vec<CommentRecord>> {
+        self.client.list_comments(target_type, target_id).await
     }
 }
 
