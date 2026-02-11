@@ -107,6 +107,27 @@ describe("tickets", () => {
         expect((e as Error).message).toContain("Design not found");
       }
     });
+
+    test("throws on missing project", async () => {
+      const t = convexTest(schema);
+      // Create a project to get a valid ID format
+      const realProjectId = (await createProject(t)) as string;
+      // Construct a non-existent projects ID by changing the numeric prefix
+      // Format is like "10000;projectsX", so replace the number with a higher one
+      const fakeProjectId = realProjectId.replace(/^\d+/, "999999999") as any;
+
+      try {
+        await t.mutation(api.tickets.createTicket, {
+          projectId: fakeProjectId,
+          title: "Test",
+          description: "Test",
+          priority: "low",
+        });
+        expect.fail("Should have thrown error");
+      } catch (e) {
+        expect((e as Error).message).toContain("Project not found");
+      }
+    });
   });
 
   describe("getTicket", () => {
