@@ -8,6 +8,14 @@ const STATUS_VALUES = [
   "reviewing",
   "pending",
   "in_progress",
+  // Design statuses
+  "draft",
+  "in_review",
+  "approved",
+  "archived",
+  // Ticket statuses (todo, canceled — others already present above)
+  "todo",
+  "canceled",
 ] as const
 
 export type StatusBadgeStatus = (typeof STATUS_VALUES)[number]
@@ -84,6 +92,50 @@ const statusStyleMap: Record<StatusBadgeStatus, StatusStyleTokens> = {
     borderClass: "border-l-status-warning",
     badgeClass: "text-status-executing border-status-executing/30 bg-status-executing/12",
   },
+  // Design statuses
+  draft: {
+    label: "Draft",
+    textClass: "text-status-planning",
+    iconBgClass: "bg-card",
+    borderClass: "border-l-muted",
+    badgeClass: "text-status-planning border-muted bg-transparent",
+  },
+  in_review: {
+    label: "In Review",
+    textClass: "text-status-executing",
+    iconBgClass: "bg-primary phase-glow",
+    borderClass: "border-l-status-executing",
+    badgeClass: "text-status-executing border-status-executing/30 bg-status-executing/12",
+  },
+  approved: {
+    label: "Approved",
+    textClass: "text-status-complete",
+    iconBgClass: "bg-status-complete",
+    borderClass: "border-l-status-complete",
+    badgeClass: "text-status-complete border-status-complete/30 bg-status-complete/8",
+  },
+  archived: {
+    label: "Archived",
+    textClass: "text-muted-foreground",
+    iconBgClass: "bg-card",
+    borderClass: "border-l-muted",
+    badgeClass: "text-muted-foreground border-muted bg-transparent",
+  },
+  // Ticket statuses
+  todo: {
+    label: "Todo",
+    textClass: "text-status-planning",
+    iconBgClass: "bg-card",
+    borderClass: "border-l-muted",
+    badgeClass: "text-status-planning border-muted bg-transparent",
+  },
+  canceled: {
+    label: "Canceled",
+    textClass: "text-muted-foreground",
+    iconBgClass: "bg-card",
+    borderClass: "border-l-muted",
+    badgeClass: "text-muted-foreground border-muted bg-transparent",
+  },
 }
 
 const fallbackStatus: StatusBadgeStatus = "planning"
@@ -122,4 +174,44 @@ export function statusBadgeClass(status: StatusBadgeStatus): string {
     statusStyleMap[status]?.badgeClass ??
     statusStyleMap[fallbackStatus].badgeClass
   )
+}
+
+// Priority system for tickets
+
+const PRIORITY_VALUES = ["low", "medium", "high", "urgent"] as const
+
+export type Priority = (typeof PRIORITY_VALUES)[number]
+
+interface PriorityStyleTokens {
+  label: string
+  textClass: string
+}
+
+const priorityStyleMap: Record<Priority, PriorityStyleTokens> = {
+  low: {
+    label: "Low",
+    textClass: "text-muted-foreground",
+  },
+  medium: {
+    label: "Medium",
+    textClass: "text-foreground",
+  },
+  high: {
+    label: "High",
+    textClass: "text-status-warning",
+  },
+  urgent: {
+    label: "Urgent",
+    textClass: "text-status-blocked",
+  },
+}
+
+export function priorityLabel(priority: string): string {
+  return (priorityStyleMap as Record<string, PriorityStyleTokens>)[priority]
+    ?.label ?? priority
+}
+
+export function priorityTextClass(priority: string): string {
+  return (priorityStyleMap as Record<string, PriorityStyleTokens>)[priority]
+    ?.textClass ?? "text-muted-foreground"
 }
