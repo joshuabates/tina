@@ -8,6 +8,22 @@
 }
 
 
+.pmLink {
+  display: block;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(var(--muted-foreground));
+  text-decoration: none;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+
+  &:hover {
+    color: hsl(var(--foreground));
+  }
+}
+
 .loading {
   padding: 1rem;
   display: flex;

@@ -259,4 +259,12 @@ describe("Sidebar", () => {
     expect(screen.getByText("review-fixes")).toBeInTheDocument()
     expect(screen.queryByText("Ungrouped")).not.toBeInTheDocument()
   })
+
+  it("renders a Work Graph link that navigates to /pm", () => {
+    renderSidebar()
+
+    const link = screen.getByRole("link", { name: /work graph/i })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute("href", "/pm")
+  })
 })

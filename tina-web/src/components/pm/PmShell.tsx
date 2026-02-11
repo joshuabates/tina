@@ -88,6 +88,7 @@ export function PmShell() {
         role="navigation"
         aria-label="Project navigation"
       >
+        <Link to="/" className={styles.orchLink}>Orchestrations</Link>
         <div className={styles.sidebarHeader}>
           <span className={styles.sidebarTitle}>Projects</span>
         </div>

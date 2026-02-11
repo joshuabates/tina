@@ -149,4 +149,13 @@ describe("PmShell", () => {
 
     expect(screen.getByText(/no projects/i)).toBeInTheDocument()
   })
+
+  it("renders an Orchestrations link that navigates to /", () => {
+    renderApp("/pm")
+
+    const sidebar = screen.getByRole("navigation", { name: /project/i })
+    const link = within(sidebar).getByRole("link", { name: /orchestrations/i })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute("href", "/")
+  })
 })
