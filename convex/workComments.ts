@@ -2,7 +2,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 
-export const addCommentMutation = internalMutation({
+export const addComment = internalMutation({
   args: {
     projectId: v.id("projects"),
     targetType: v.union(v.literal("design"), v.literal("ticket")),
@@ -12,20 +12,14 @@ export const addCommentMutation = internalMutation({
     body: v.string(),
   },
   handler: async (ctx, args) => {
-    // Validate target exists
+    // Validate target exists using O(1) lookup
     if (args.targetType === "design") {
-      const design = await ctx.db
-        .query("designs")
-        .filter((q) => q.eq(q.field("_id"), args.targetId as Id<"designs">))
-        .first();
+      const design = await ctx.db.get(args.targetId as Id<"designs">);
       if (!design) {
         throw new Error(`Design not found: ${args.targetId}`);
       }
     } else if (args.targetType === "ticket") {
-      const ticket = await ctx.db
-        .query("tickets")
-        .filter((q) => q.eq(q.field("_id"), args.targetId as Id<"tickets">))
-        .first();
+      const ticket = await ctx.db.get(args.targetId as Id<"tickets">);
       if (!ticket) {
         throw new Error(`Ticket not found: ${args.targetId}`);
       }
@@ -47,7 +41,7 @@ export const addCommentMutation = internalMutation({
   },
 });
 
-export const listCommentsMutation = internalQuery({
+export const listComments = internalQuery({
   args: {
     targetType: v.union(v.literal("design"), v.literal("ticket")),
     targetId: v.string(),
@@ -63,7 +57,7 @@ export const listCommentsMutation = internalQuery({
   },
 });
 
-// Test helpers
+// Internal test helper - for tests only
 export const createDesignForTest = internalMutation({
   args: {
     projectId: v.id("projects"),
@@ -86,6 +80,7 @@ export const createDesignForTest = internalMutation({
   },
 });
 
+// Internal test helper - for tests only
 export const createTicketForTest = internalMutation({
   args: {
     projectId: v.id("projects"),
