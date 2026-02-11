@@ -58,6 +58,9 @@ pub enum SessionError {
 
     #[error("Convex error: {0}")]
     ConvexError(String),
+
+    #[error("I/O error: {0}")]
+    IoError(String),
 }
 
 #[allow(dead_code)]

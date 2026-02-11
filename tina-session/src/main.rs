@@ -44,6 +44,34 @@ enum Commands {
         /// Total number of phases
         #[arg(long)]
         total_phases: u32,
+
+        /// Review gate enforcement scope.
+        #[arg(long, value_parser = ["task_and_phase", "task_only", "phase_only"])]
+        review_enforcement: Option<String>,
+
+        /// Detector comparison scope.
+        #[arg(long, value_parser = ["whole_repo_pattern_index", "touched_area_only", "architectural_allowlist_only"])]
+        detector_scope: Option<String>,
+
+        /// Architect consultation mode.
+        #[arg(long, value_parser = ["manual_only", "manual_plus_auto", "disabled"])]
+        architect_mode: Option<String>,
+
+        /// Test integrity strictness profile.
+        #[arg(long, value_parser = ["strict_baseline", "max_strict", "minimal"])]
+        test_integrity_profile: Option<String>,
+
+        /// Whether detector findings are hard-blocking.
+        #[arg(long)]
+        hard_block_detectors: Option<bool>,
+
+        /// Whether rare post-fix detector overrides are allowed.
+        #[arg(long)]
+        allow_rare_override: Option<bool>,
+
+        /// Whether implementers must attempt fixes before requesting override.
+        #[arg(long)]
+        require_fix_first: Option<bool>,
     },
 
     /// Start phase execution (creates tmux, starts Claude, sends skill)
@@ -514,7 +542,27 @@ fn run() -> anyhow::Result<u8> {
             design_doc,
             branch,
             total_phases,
-        } => commands::init::run(&feature, &cwd, &design_doc, &branch, total_phases),
+            review_enforcement,
+            detector_scope,
+            architect_mode,
+            test_integrity_profile,
+            hard_block_detectors,
+            allow_rare_override,
+            require_fix_first,
+        } => commands::init::run(
+            &feature,
+            &cwd,
+            &design_doc,
+            &branch,
+            total_phases,
+            review_enforcement.as_deref(),
+            detector_scope.as_deref(),
+            architect_mode.as_deref(),
+            test_integrity_profile.as_deref(),
+            hard_block_detectors,
+            allow_rare_override,
+            require_fix_first,
+        ),
 
         Commands::Start {
             feature,

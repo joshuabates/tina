@@ -31,11 +31,13 @@ TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 
 **MUST DO:**
 - Read Architectural Context section first
+- Load `review_policy` from `<repo>/.claude/tina/supervisor-state.json`
 - Trace actual data flow (verify connections)
 - Execute code, not just read it
 - Give file:line references for all issues
 - Collect metrics and calculate drift percentages
 - Include metrics table in report
+- Run detector checks (`test_integrity`, `reuse_drift`, `architecture_drift`)
 - Output clear severity tier (Pass/Warning/Stop)
 - Write review to specified output path
 
@@ -139,15 +141,29 @@ python -m <module> --help  # if CLI
 
 If you cannot run the code successfully, the review FAILS.
 
-### 4. Reuse + Consistency
+### 4. Detector + Reuse + Consistency
 
-Check for proper reuse and consistent style:
+Run these detector checks before final verdict:
+
+- `test_integrity`: confirm no test-cheating signals in phase changes (strict-baseline unless policy says otherwise).
+- `reuse_drift`: confirm new logic reuses existing utilities/interfaces instead of duplicating behavior.
+- `architecture_drift`: confirm no one-off architecture path was created where established patterns exist.
+
+If `detector_scope = whole_repo_pattern_index`, build and use repo index first:
+
+```bash
+scripts/build-pattern-index.sh "$(pwd)"
+```
+
+Then check reuse and consistency:
 
 - Did they use existing helpers from Architectural Context?
 - Any code duplicating existing functionality?
 - Unnecessary abstractions or over-engineering?
 - Consistent style with codebase?
 - Readable tests following existing patterns?
+
+When `hard_block_detectors = true`, any detector failure is a Stop-level issue until fixed or explicitly overridden with reason.
 
 ### 5. Metrics Collection and Estimate Comparison
 
@@ -280,7 +296,8 @@ If No, status is automatically **Stop**.
 
 ### Summary
 **Status:** Pass / Warning / Stop
-**Severity tier:** Based on worst issue across all sections
+**Severity tier:** Based on worst issue across detectors, code issues, and metrics
+**Detector status:** test_integrity: pass/fail, reuse_drift: pass/fail, architecture_drift: pass/fail
 **Issues:** Critical: N, Important: N, Minor: N, Metric drift: [worst %]
 
 **Recommendation:**

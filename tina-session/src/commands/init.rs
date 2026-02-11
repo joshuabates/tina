@@ -6,7 +6,9 @@ use std::process::Command;
 use chrono::Utc;
 
 use tina_session::error::SessionError;
-use tina_session::state::schema::SupervisorState;
+use tina_session::state::schema::{
+    ArchitectMode, DetectorScope, ReviewEnforcement, SupervisorState, TestIntegrityProfile,
+};
 
 use tina_session::convex;
 
@@ -30,6 +32,13 @@ pub fn run(
     design_doc: &Path,
     branch: &str,
     total_phases: u32,
+    review_enforcement: Option<&str>,
+    detector_scope: Option<&str>,
+    architect_mode: Option<&str>,
+    test_integrity_profile: Option<&str>,
+    hard_block_detectors: Option<bool>,
+    allow_rare_override: Option<bool>,
+    require_fix_first: Option<bool>,
 ) -> anyhow::Result<u8> {
     // Validate cwd (project root) exists
     if !cwd.exists() {
@@ -82,13 +91,23 @@ pub fn run(
     }
 
     // Create supervisor state file in worktree
-    let state = SupervisorState::new(
+    let mut state = SupervisorState::new(
         feature,
         design_doc_abs.clone(),
         worktree_path.clone(),
         &actual_branch,
         total_phases,
     );
+    apply_review_policy_overrides(
+        &mut state,
+        review_enforcement,
+        detector_scope,
+        architect_mode,
+        test_integrity_profile,
+        hard_block_detectors,
+        allow_rare_override,
+        require_fix_first,
+    )?;
     state.save()?;
 
     // Write orchestration record to Convex
@@ -128,6 +147,95 @@ pub fn run(
     println!("{}", serde_json::to_string(&output)?);
 
     Ok(0)
+}
+
+fn parse_review_enforcement(value: &str) -> anyhow::Result<ReviewEnforcement> {
+    match value {
+        "task_and_phase" => Ok(ReviewEnforcement::TaskAndPhase),
+        "task_only" => Ok(ReviewEnforcement::TaskOnly),
+        "phase_only" => Ok(ReviewEnforcement::PhaseOnly),
+        _ => anyhow::bail!(
+            "invalid review_enforcement '{}', expected task_and_phase|task_only|phase_only",
+            value
+        ),
+    }
+}
+
+fn parse_detector_scope(value: &str) -> anyhow::Result<DetectorScope> {
+    match value {
+        "whole_repo_pattern_index" => Ok(DetectorScope::WholeRepoPatternIndex),
+        "touched_area_only" => Ok(DetectorScope::TouchedAreaOnly),
+        "architectural_allowlist_only" => Ok(DetectorScope::ArchitecturalAllowlistOnly),
+        _ => anyhow::bail!(
+            "invalid detector_scope '{}', expected whole_repo_pattern_index|touched_area_only|architectural_allowlist_only",
+            value
+        ),
+    }
+}
+
+fn parse_architect_mode(value: &str) -> anyhow::Result<ArchitectMode> {
+    match value {
+        "manual_only" => Ok(ArchitectMode::ManualOnly),
+        "manual_plus_auto" => Ok(ArchitectMode::ManualPlusAuto),
+        "disabled" => Ok(ArchitectMode::Disabled),
+        _ => anyhow::bail!(
+            "invalid architect_mode '{}', expected manual_only|manual_plus_auto|disabled",
+            value
+        ),
+    }
+}
+
+fn parse_test_integrity_profile(value: &str) -> anyhow::Result<TestIntegrityProfile> {
+    match value {
+        "strict_baseline" => Ok(TestIntegrityProfile::StrictBaseline),
+        "max_strict" => Ok(TestIntegrityProfile::MaxStrict),
+        "minimal" => Ok(TestIntegrityProfile::Minimal),
+        _ => anyhow::bail!(
+            "invalid test_integrity_profile '{}', expected strict_baseline|max_strict|minimal",
+            value
+        ),
+    }
+}
+
+fn apply_review_policy_overrides(
+    state: &mut SupervisorState,
+    review_enforcement: Option<&str>,
+    detector_scope: Option<&str>,
+    architect_mode: Option<&str>,
+    test_integrity_profile: Option<&str>,
+    hard_block_detectors: Option<bool>,
+    allow_rare_override: Option<bool>,
+    require_fix_first: Option<bool>,
+) -> anyhow::Result<()> {
+    if let Some(value) = review_enforcement {
+        state.review_policy.enforcement = parse_review_enforcement(value)?;
+    }
+
+    if let Some(value) = detector_scope {
+        state.review_policy.detector_scope = parse_detector_scope(value)?;
+    }
+
+    if let Some(value) = architect_mode {
+        state.review_policy.architect_mode = parse_architect_mode(value)?;
+    }
+
+    if let Some(value) = test_integrity_profile {
+        state.review_policy.test_integrity_profile = parse_test_integrity_profile(value)?;
+    }
+
+    if let Some(value) = hard_block_detectors {
+        state.review_policy.hard_block_detectors = value;
+    }
+
+    if let Some(value) = allow_rare_override {
+        state.review_policy.allow_rare_override = value;
+    }
+
+    if let Some(value) = require_fix_first {
+        state.review_policy.require_fix_first = value;
+    }
+
+    Ok(())
 }
 
 /// Ensure a path is listed in .gitignore. Adds it if not already present.
@@ -437,7 +545,20 @@ mod tests {
 
         let feature = format!("test-init-{}", std::process::id());
 
-        let result = run(&feature, cwd, &design_doc, "tina/test", 3);
+        let result = run(
+            &feature,
+            cwd,
+            &design_doc,
+            "tina/test",
+            3,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
 
         assert!(result.is_ok());
 
@@ -474,7 +595,20 @@ mod tests {
         fs::write(&design_doc, "# Design").unwrap();
 
         let feature = format!("test-gitignore-{}", std::process::id());
-        let result = run(&feature, cwd, &design_doc, "tina/test", 2);
+        let result = run(
+            &feature,
+            cwd,
+            &design_doc,
+            "tina/test",
+            2,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
 
         // worktree cleanup below
         assert!(result.is_ok());
@@ -511,7 +645,20 @@ mod tests {
             .unwrap();
 
         let feature = format!("collision-{}", std::process::id());
-        let result = run(&feature, cwd, &design_doc, "tina/collision-test", 1);
+        let result = run(
+            &feature,
+            cwd,
+            &design_doc,
+            "tina/collision-test",
+            1,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
 
         // worktree cleanup below
         assert!(result.is_ok());
@@ -534,6 +681,13 @@ mod tests {
             Path::new("/tmp/design.md"),
             "tina/test",
             3,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         );
         assert!(result.is_err());
     }
@@ -547,6 +701,13 @@ mod tests {
             Path::new("/nonexistent/design.md"),
             "tina/test",
             3,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         );
         assert!(result.is_err());
     }
@@ -719,5 +880,42 @@ Supervisor state tracks progress.
         let settings_content = fs::read_to_string(&settings).unwrap();
         assert!(settings_content.contains("statusLine"));
         assert!(settings_content.contains("tina-write-context.sh"));
+    }
+
+    #[test]
+    fn test_apply_review_policy_overrides() {
+        let mut state = SupervisorState::new(
+            "feature",
+            Path::new("/tmp/design.md").to_path_buf(),
+            Path::new("/tmp/worktree").to_path_buf(),
+            "tina/feature",
+            2,
+        );
+
+        apply_review_policy_overrides(
+            &mut state,
+            Some("task_only"),
+            Some("touched_area_only"),
+            Some("manual_only"),
+            Some("minimal"),
+            Some(false),
+            Some(false),
+            Some(false),
+        )
+        .unwrap();
+
+        assert_eq!(state.review_policy.enforcement, ReviewEnforcement::TaskOnly);
+        assert_eq!(
+            state.review_policy.detector_scope,
+            DetectorScope::TouchedAreaOnly
+        );
+        assert_eq!(state.review_policy.architect_mode, ArchitectMode::ManualOnly);
+        assert_eq!(
+            state.review_policy.test_integrity_profile,
+            TestIntegrityProfile::Minimal
+        );
+        assert!(!state.review_policy.hard_block_detectors);
+        assert!(!state.review_policy.allow_rare_override);
+        assert!(!state.review_policy.require_fix_first);
     }
 }

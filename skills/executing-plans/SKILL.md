@@ -151,7 +151,8 @@ Teammate.spawnTeam({
 for task in plan.tasks:
   TaskCreate({
     subject: task.subject,
-    description: task.full_text + context
+    description: task.full_text + context,
+    metadata: { review_policy: <load from .claude/tina/supervisor-state.json> }
   })
 ```
 
@@ -188,6 +189,7 @@ Task tool:
     Task: [full task text]
     Context: [scene-setting context]
     Files likely involved: [file list]
+    Review policy: [review_policy from supervisor-state.json]
 ```
 
 If `CLI == "codex"`:
@@ -233,6 +235,7 @@ Task tool:
     Task: [full task text]
     Git range: abc123..def456
     Files changed: [list]
+    Review policy: [review_policy from supervisor-state.json]
 
 # If task.review includes "quality" or default:
 Task tool:
@@ -242,6 +245,7 @@ Task tool:
   prompt: |
     Git range: abc123..def456
     Files changed: [list]
+    Review policy: [review_policy from supervisor-state.json]
 ```
 
 If `CLI == "codex"`:

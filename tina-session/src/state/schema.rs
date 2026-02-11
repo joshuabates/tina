@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
@@ -300,6 +301,116 @@ impl Default for ModelPolicy {
     }
 }
 
+/// Review gate scope for orchestration runs.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewEnforcement {
+    TaskAndPhase,
+    TaskOnly,
+    PhaseOnly,
+}
+
+impl Default for ReviewEnforcement {
+    fn default() -> Self {
+        Self::TaskAndPhase
+    }
+}
+
+/// Source scope used to evaluate reuse and architecture drift detectors.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DetectorScope {
+    WholeRepoPatternIndex,
+    TouchedAreaOnly,
+    ArchitecturalAllowlistOnly,
+}
+
+impl Default for DetectorScope {
+    fn default() -> Self {
+        Self::WholeRepoPatternIndex
+    }
+}
+
+/// Architect consultation policy used during implementation and review.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ArchitectMode {
+    ManualOnly,
+    ManualPlusAuto,
+    Disabled,
+}
+
+impl Default for ArchitectMode {
+    fn default() -> Self {
+        Self::ManualPlusAuto
+    }
+}
+
+/// Strictness profile for test-integrity checks.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TestIntegrityProfile {
+    StrictBaseline,
+    MaxStrict,
+    Minimal,
+}
+
+impl Default for TestIntegrityProfile {
+    fn default() -> Self {
+        Self::StrictBaseline
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Per-run review policy saved with supervisor state.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReviewPolicy {
+    /// Detector findings are blocking when true.
+    #[serde(default = "default_true")]
+    pub hard_block_detectors: bool,
+
+    /// Where detector gates are enforced.
+    #[serde(default)]
+    pub enforcement: ReviewEnforcement,
+
+    /// Comparison scope for drift/reuse checks.
+    #[serde(default)]
+    pub detector_scope: DetectorScope,
+
+    /// When and how architect consultation is required.
+    #[serde(default)]
+    pub architect_mode: ArchitectMode,
+
+    /// Test integrity strictness profile.
+    #[serde(default)]
+    pub test_integrity_profile: TestIntegrityProfile,
+
+    /// Whether rare post-fix overrides are permitted.
+    #[serde(default = "default_true")]
+    pub allow_rare_override: bool,
+
+    /// Implementer must attempt fixes before override.
+    #[serde(default = "default_true")]
+    pub require_fix_first: bool,
+}
+
+impl Default for ReviewPolicy {
+    fn default() -> Self {
+        Self {
+            hard_block_detectors: true,
+            enforcement: ReviewEnforcement::default(),
+            detector_scope: DetectorScope::default(),
+            architect_mode: ArchitectMode::default(),
+            test_integrity_profile: TestIntegrityProfile::default(),
+            allow_rare_override: true,
+            require_fix_first: true,
+        }
+    }
+}
+
 /// A single review verdict for consensus tracking.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewVerdict {
@@ -329,6 +440,9 @@ pub struct SupervisorState {
 
     #[serde(default)]
     pub model_policy: ModelPolicy,
+
+    #[serde(default)]
+    pub review_policy: ReviewPolicy,
 }
 
 impl SupervisorState {
@@ -353,6 +467,7 @@ impl SupervisorState {
             phases: HashMap::new(),
             timing: TimingStats::default(),
             model_policy: ModelPolicy::default(),
+            review_policy: ReviewPolicy::default(),
         }
     }
 
@@ -379,15 +494,23 @@ impl SupervisorState {
         let feature_name = self.feature.clone();
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| SessionError::ConvexError(e.to_string()))?;
+        let json_for_convex = json.clone();
         let updated_at = chrono::Utc::now().timestamp_millis() as f64;
 
         crate::convex::run_convex(|mut writer| async move {
             writer
-                .upsert_supervisor_state(&feature_name, &json, updated_at)
+                .upsert_supervisor_state(&feature_name, &json_for_convex, updated_at)
                 .await?;
             Ok(())
         })
         .map_err(|e| SessionError::ConvexError(e.to_string()))?;
+
+        // Keep a local copy for teammates/tools that read supervisor-state.json directly.
+        let local_dir = self.worktree_path.join(".claude").join("tina");
+        fs::create_dir_all(&local_dir)
+            .map_err(|e| SessionError::IoError(e.to_string()))?;
+        fs::write(local_dir.join("supervisor-state.json"), &json)
+            .map_err(|e| SessionError::IoError(e.to_string()))?;
 
         Ok(())
     }
@@ -587,6 +710,52 @@ mod tests {
     }
 
     #[test]
+    fn test_review_policy_default() {
+        let policy = ReviewPolicy::default();
+        assert!(policy.hard_block_detectors);
+        assert_eq!(policy.enforcement, ReviewEnforcement::TaskAndPhase);
+        assert_eq!(policy.detector_scope, DetectorScope::WholeRepoPatternIndex);
+        assert_eq!(policy.architect_mode, ArchitectMode::ManualPlusAuto);
+        assert_eq!(
+            policy.test_integrity_profile,
+            TestIntegrityProfile::StrictBaseline
+        );
+        assert!(policy.allow_rare_override);
+        assert!(policy.require_fix_first);
+    }
+
+    #[test]
+    fn test_review_policy_deserializes_with_defaults() {
+        let json = r#"{}"#;
+        let policy: ReviewPolicy = serde_json::from_str(json).unwrap();
+        assert!(policy.hard_block_detectors);
+        assert_eq!(policy.enforcement, ReviewEnforcement::TaskAndPhase);
+        assert_eq!(policy.detector_scope, DetectorScope::WholeRepoPatternIndex);
+        assert_eq!(policy.architect_mode, ArchitectMode::ManualPlusAuto);
+    }
+
+    #[test]
+    fn test_review_policy_custom_values() {
+        let json = r#"{
+            "hard_block_detectors": false,
+            "enforcement": "task_only",
+            "detector_scope": "touched_area_only",
+            "architect_mode": "manual_only",
+            "test_integrity_profile": "minimal",
+            "allow_rare_override": false,
+            "require_fix_first": false
+        }"#;
+        let policy: ReviewPolicy = serde_json::from_str(json).unwrap();
+        assert!(!policy.hard_block_detectors);
+        assert_eq!(policy.enforcement, ReviewEnforcement::TaskOnly);
+        assert_eq!(policy.detector_scope, DetectorScope::TouchedAreaOnly);
+        assert_eq!(policy.architect_mode, ArchitectMode::ManualOnly);
+        assert_eq!(policy.test_integrity_profile, TestIntegrityProfile::Minimal);
+        assert!(!policy.allow_rare_override);
+        assert!(!policy.require_fix_first);
+    }
+
+    #[test]
     fn test_model_policy_deserializes_with_defaults() {
         let json = r#"{}"#;
         let policy: ModelPolicy = serde_json::from_str(json).unwrap();
@@ -624,6 +793,7 @@ mod tests {
         );
         assert_eq!(state.model_policy.validator, "opus");
         assert_eq!(state.model_policy.executor, "haiku");
+        assert_eq!(state.review_policy.enforcement, ReviewEnforcement::TaskAndPhase);
     }
 
     #[test]

@@ -96,12 +96,12 @@ Team name file is no longer needed. The executor already knows the team name sin
 
 Read the plan file and create tasks via TaskCreate for each task in the plan.
 
-**Parse model and dependencies from each task:** Look for `**Model:** <model>` and `**Depends on:**` lines in each task section. Store model in task metadata:
+**Parse model and dependencies from each task:** Look for `**Model:** <model>` and `**Depends on:**` lines in each task section. Also load `review_policy` from `.claude/tina/supervisor-state.json` once and store it in task metadata:
 ```json
 TaskCreate {
   "subject": "Task N: <description>",
   "description": "<full task content>",
-  "metadata": { "model": "<model-string>", "task_number": N }
+  "metadata": { "model": "<model-string>", "task_number": N, "review_policy": { ... } }
 }
 ```
 
@@ -191,7 +191,7 @@ If `CLI == "claude"` (or no model specified):
   "subagent_type": "tina:spec-reviewer",
   "team_name": "<team-name>",
   "name": "spec-reviewer-N",
-  "prompt": "Review implementation for task: <task subject>. Check spec compliance."
+  "prompt": "Review implementation for task: <task subject>. Check spec compliance and enforce review_policy detector gates."
 }
 ```
 
@@ -200,7 +200,7 @@ If `CLI == "claude"` (or no model specified):
   "subagent_type": "tina:code-quality-reviewer",
   "team_name": "<team-name>",
   "name": "code-quality-reviewer-N",
-  "prompt": "Review code quality for task: <task subject>. Check architecture and patterns."
+  "prompt": "Review code quality for task: <task subject>. Check architecture, reuse, and review_policy detector gates."
 }
 ```
 
@@ -517,7 +517,7 @@ Then spawn with task-specific name:
   "team_name": "<team-name>",
   "name": "worker-N",
   "model": "<metadata.model>",
-  "prompt": "Implement task: <task subject and description>. Use TDD."
+  "prompt": "Implement task: <task subject and description>. Use TDD and follow review_policy."
 }
 ```
 
@@ -529,7 +529,7 @@ The model field accepts any model string supported by `tina-session config cli-f
   "subagent_type": "tina:spec-reviewer",
   "team_name": "<team-name>",
   "name": "spec-reviewer-N",
-  "prompt": "Review implementation for task: <task subject>. Check spec compliance."
+  "prompt": "Review implementation for task: <task subject>. Check spec compliance and enforce review_policy detector gates."
 }
 ```
 
@@ -538,7 +538,7 @@ The model field accepts any model string supported by `tina-session config cli-f
   "subagent_type": "tina:code-quality-reviewer",
   "team_name": "<team-name>",
   "name": "code-quality-reviewer-N",
-  "prompt": "Review code quality for task: <task subject>. Check architecture and patterns."
+  "prompt": "Review code quality for task: <task subject>. Check architecture, reuse, and review_policy detector gates."
 }
 ```
 
