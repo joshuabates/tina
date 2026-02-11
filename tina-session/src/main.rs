@@ -81,9 +81,13 @@ enum Commands {
         #[arg(long)]
         cwd: PathBuf,
 
-        /// Path to design document
+        /// Path to design document (mutually exclusive with --design-id)
         #[arg(long)]
-        design_doc: PathBuf,
+        design_doc: Option<PathBuf>,
+
+        /// Convex design document ID (mutually exclusive with --design-doc)
+        #[arg(long)]
+        design_id: Option<String>,
 
         /// Git branch name
         #[arg(long)]
@@ -910,6 +914,7 @@ fn run() -> anyhow::Result<u8> {
             feature,
             cwd,
             design_doc,
+            design_id,
             branch,
             total_phases,
             review_enforcement,
@@ -922,7 +927,8 @@ fn run() -> anyhow::Result<u8> {
         } => commands::init::run(
             &feature,
             &cwd,
-            &design_doc,
+            design_doc.as_deref(),
+            design_id.as_deref(),
             &branch,
             total_phases,
             review_enforcement.as_deref(),

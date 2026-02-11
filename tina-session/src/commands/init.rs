@@ -29,7 +29,8 @@ echo "ctx:$(echo "$INPUT" | jq -r '.context_window.used_percentage // 0 | floor'
 pub fn run(
     feature: &str,
     cwd: &Path,
-    design_doc: &Path,
+    design_doc: Option<&Path>,
+    design_id: Option<&str>,
     branch: &str,
     total_phases: u32,
     review_enforcement: Option<&str>,
@@ -40,6 +41,13 @@ pub fn run(
     allow_rare_override: Option<bool>,
     require_fix_first: Option<bool>,
 ) -> anyhow::Result<u8> {
+    // Validate exactly one design source
+    match (design_doc, design_id) {
+        (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --design-doc and --design-id"),
+        (None, None) => anyhow::bail!("Must specify either --design-doc or --design-id"),
+        _ => {}
+    }
+
     // Validate cwd (project root) exists
     if !cwd.exists() {
         anyhow::bail!(SessionError::DirectoryNotFound(cwd.display().to_string()));
@@ -51,13 +59,11 @@ pub fn run(
         )));
     }
 
-    // Validate design doc exists
-    if !design_doc.exists() {
-        anyhow::bail!(SessionError::FileNotFound(design_doc.display().to_string()));
-    }
-
     let cwd_abs = fs::canonicalize(cwd)?;
-    let design_doc_abs = fs::canonicalize(design_doc)?;
+
+    // Resolve design source: either a local file or a Convex design ID
+    let (design_doc_path, resolved_design_id) =
+        resolve_design_source(design_doc, design_id, &cwd_abs)?;
 
     // Check if already initialized via Convex (only block on active orchestrations)
     if let Some(existing) = check_existing_orchestration(feature)? {
@@ -90,14 +96,29 @@ pub fn run(
         eprintln!("Warning: Failed to generate AGENTS.md: {}", e);
     }
 
+    // When using --design-id, write design markdown to worktree for local access
+    if let Some(did) = resolved_design_id.as_deref() {
+        write_design_to_worktree(&worktree_path, did)?;
+    }
+
     // Create supervisor state file in worktree
-    let mut state = SupervisorState::new(
-        feature,
-        design_doc_abs.clone(),
-        worktree_path.clone(),
-        &actual_branch,
-        total_phases,
-    );
+    let mut state = if let Some(did) = resolved_design_id.as_deref() {
+        SupervisorState::new_with_design_id(
+            feature,
+            worktree_path.clone(),
+            &actual_branch,
+            total_phases,
+            did,
+        )
+    } else {
+        SupervisorState::new(
+            feature,
+            design_doc_path.clone(),
+            worktree_path.clone(),
+            &actual_branch,
+            total_phases,
+        )
+    };
     apply_review_policy_overrides(
         &mut state,
         review_enforcement,
@@ -114,10 +135,11 @@ pub fn run(
     let orch_id = write_to_convex(
         feature,
         &worktree_path,
-        &design_doc_abs,
+        &design_doc_path,
         &actual_branch,
         total_phases,
         &cwd_abs,
+        resolved_design_id.as_deref(),
     )?;
 
     // Pre-register the orchestration team in Convex so the daemon can link
@@ -135,18 +157,69 @@ pub fn run(
     }
 
     // Output JSON for orchestrator to capture
-    let output = serde_json::json!({
+    let mut output = serde_json::json!({
         "orchestration_id": orch_id,
         "team_id": team_id,
         "worktree_path": worktree_path.display().to_string(),
         "feature": feature,
         "branch": actual_branch,
-        "design_doc": design_doc_abs.display().to_string(),
+        "design_doc": design_doc_path.display().to_string(),
         "total_phases": total_phases,
     });
+    if let Some(did) = resolved_design_id.as_deref() {
+        output["design_id"] = serde_json::Value::String(did.to_string());
+    }
     println!("{}", serde_json::to_string(&output)?);
 
     Ok(0)
+}
+
+/// Resolve the design source to an absolute path and optional design ID.
+///
+/// When `--design-doc` is provided, validates and canonicalizes the path.
+/// When `--design-id` is provided, validates the design exists in Convex and
+/// returns a `convex://{id}` placeholder path.
+fn resolve_design_source(
+    design_doc: Option<&Path>,
+    design_id: Option<&str>,
+    _cwd_abs: &Path,
+) -> anyhow::Result<(std::path::PathBuf, Option<String>)> {
+    if let Some(doc) = design_doc {
+        if !doc.exists() {
+            anyhow::bail!(SessionError::FileNotFound(doc.display().to_string()));
+        }
+        let abs = fs::canonicalize(doc)?;
+        Ok((abs, None))
+    } else {
+        let did = design_id.expect("validated: exactly one source must be set");
+        // Validate design exists in Convex
+        let design = convex::run_convex(|mut writer| async move {
+            writer.get_design(did).await
+        })?;
+        match design {
+            Some(_) => Ok((
+                std::path::PathBuf::from(format!("convex://{}", did)),
+                Some(did.to_string()),
+            )),
+            None => anyhow::bail!("Design not found in Convex: {}", did),
+        }
+    }
+}
+
+/// Write the design document markdown from Convex to the worktree.
+fn write_design_to_worktree(worktree_path: &Path, design_id: &str) -> anyhow::Result<()> {
+    let design = convex::run_convex(|mut writer| async move {
+        writer.get_design(design_id).await
+    })?;
+    match design {
+        Some(d) => {
+            let tina_dir = worktree_path.join(".claude").join("tina");
+            fs::create_dir_all(&tina_dir)?;
+            fs::write(tina_dir.join("design.md"), &d.markdown)?;
+            Ok(())
+        }
+        None => anyhow::bail!("Design not found in Convex: {}", design_id),
+    }
 }
 
 fn parse_review_enforcement(value: &str) -> anyhow::Result<ReviewEnforcement> {
@@ -459,6 +532,7 @@ fn write_to_convex(
     branch: &str,
     total_phases: u32,
     cwd: &Path,
+    design_id: Option<&str>,
 ) -> anyhow::Result<String> {
     let now = chrono::Utc::now().to_rfc3339();
     let repo_name = cwd
@@ -467,6 +541,7 @@ fn write_to_convex(
         .unwrap_or("unknown")
         .to_string();
     let repo_path = cwd.to_string_lossy().to_string();
+    let design_id_owned = design_id.map(|s| s.to_string());
 
     convex::run_convex(|mut writer| async move {
         let project_id = match writer.find_or_create_project(&repo_name, &repo_path).await {
@@ -480,7 +555,7 @@ fn write_to_convex(
         let orch = convex::OrchestrationArgs {
             node_id: writer.node_id().to_string(),
             project_id,
-            design_id: None,
+            design_id: design_id_owned,
             feature_name: feature.to_string(),
             design_doc_path: design_doc.to_string_lossy().to_string(),
             branch: branch.to_string(),
@@ -549,7 +624,8 @@ mod tests {
         let result = run(
             &feature,
             cwd,
-            &design_doc,
+            Some(&design_doc),
+            None,
             "tina/test",
             3,
             None,
@@ -599,7 +675,8 @@ mod tests {
         let result = run(
             &feature,
             cwd,
-            &design_doc,
+            Some(&design_doc),
+            None,
             "tina/test",
             2,
             None,
@@ -649,7 +726,8 @@ mod tests {
         let result = run(
             &feature,
             cwd,
-            &design_doc,
+            Some(&design_doc),
+            None,
             "tina/collision-test",
             1,
             None,
@@ -679,7 +757,8 @@ mod tests {
         let result = run(
             "test-bad-cwd",
             Path::new("/nonexistent/path"),
-            Path::new("/tmp/design.md"),
+            Some(Path::new("/tmp/design.md")),
+            None,
             "tina/test",
             3,
             None,
@@ -699,7 +778,8 @@ mod tests {
         let result = run(
             "test-bad-doc",
             temp_dir.path(),
-            Path::new("/nonexistent/design.md"),
+            Some(Path::new("/nonexistent/design.md")),
+            None,
             "tina/test",
             3,
             None,
@@ -918,5 +998,63 @@ Supervisor state tracks progress.
         assert!(!state.review_policy.hard_block_detectors);
         assert!(!state.review_policy.allow_rare_override);
         assert!(!state.review_policy.require_fix_first);
+    }
+
+    #[test]
+    fn test_init_rejects_both_design_doc_and_design_id() {
+        let temp_dir = TempDir::new().unwrap();
+        let design_doc = temp_dir.path().join("design.md");
+        fs::write(&design_doc, "# Design").unwrap();
+
+        let result = run(
+            "test-both",
+            temp_dir.path(),
+            Some(&design_doc),
+            Some("some-design-id"),
+            "tina/test",
+            1,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Cannot specify both"),
+            "Expected 'Cannot specify both' error, got: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_init_rejects_neither_design_doc_nor_design_id() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let result = run(
+            "test-neither",
+            temp_dir.path(),
+            None,
+            None,
+            "tina/test",
+            1,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Must specify either"),
+            "Expected 'Must specify either' error, got: {}",
+            err
+        );
     }
 }
