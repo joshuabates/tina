@@ -480,6 +480,7 @@ fn write_to_convex(
         let orch = convex::OrchestrationArgs {
             node_id: writer.node_id().to_string(),
             project_id,
+            design_id: None,
             feature_name: feature.to_string(),
             design_doc_path: design_doc.to_string_lossy().to_string(),
             branch: branch.to_string(),

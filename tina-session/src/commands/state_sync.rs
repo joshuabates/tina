@@ -20,6 +20,7 @@ pub fn orchestration_args_from_state(
     convex::OrchestrationArgs {
         node_id: String::new(), // filled by writer
         project_id: None,
+        design_id: None,
         feature_name: feature.to_string(),
         design_doc_path: state.design_doc.to_string_lossy().to_string(),
         branch: state.branch.clone(),
