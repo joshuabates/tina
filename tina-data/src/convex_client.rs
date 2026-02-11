@@ -221,6 +221,7 @@ fn plan_to_args(plan: &PlanRecord) -> BTreeMap<String, Value> {
     args
 }
 
+#[cfg(test)]
 fn design_to_args(design: &DesignRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("projectId".into(), Value::from(design.project_id.as_str()));
@@ -236,6 +237,7 @@ fn design_to_args(design: &DesignRecord) -> BTreeMap<String, Value> {
     args
 }
 
+#[cfg(test)]
 fn ticket_to_args(ticket: &TicketRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("projectId".into(), Value::from(ticket.project_id.as_str()));
@@ -261,6 +263,7 @@ fn ticket_to_args(ticket: &TicketRecord) -> BTreeMap<String, Value> {
     args
 }
 
+#[cfg(test)]
 fn comment_to_args(comment: &CommentRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("projectId".into(), Value::from(comment.project_id.as_str()));
