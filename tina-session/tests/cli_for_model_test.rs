@@ -1,14 +1,9 @@
+mod common;
+
 use assert_cmd::prelude::*;
+use common::tina_session_bin;
 use predicates::prelude::*;
 use std::process::Command;
-
-fn tina_session_bin() -> std::path::PathBuf {
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("target");
-    path.push("debug");
-    path.push("tina-session");
-    path
-}
 
 #[test]
 fn cli_for_model_opus_returns_claude() {

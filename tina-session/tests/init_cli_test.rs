@@ -1,15 +1,10 @@
+mod common;
+
 use assert_cmd::prelude::*;
+use common::tina_session_bin;
 use predicates::prelude::*;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn tina_session_bin() -> std::path::PathBuf {
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("target");
-    path.push("debug");
-    path.push("tina-session");
-    path
-}
 
 #[test]
 fn init_rejects_both_design_doc_and_design_id() {

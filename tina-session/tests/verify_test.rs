@@ -1,17 +1,11 @@
+mod common;
+
 use assert_cmd::prelude::*;
+use common::tina_session_bin;
 use predicates::prelude::*;
 use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn tina_session_bin() -> std::path::PathBuf {
-    // Build target directory relative to the project
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("target");
-    path.push("debug");
-    path.push("tina-session");
-    path
-}
 
 fn create_passing_rust_project(dir: &TempDir) {
     // Create Cargo.toml
