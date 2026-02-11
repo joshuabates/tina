@@ -41,7 +41,6 @@ export const getDesign = query({
 
 export const getDesignByKey = query({
   args: {
-    projectId: v.id("projects"),
     designKey: v.string(),
   },
   handler: async (ctx, args) => {
@@ -58,33 +57,50 @@ export const listDesigns = query({
     status: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let query_obj = ctx.db
-      .query("designs")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId));
+    let queryObj;
 
     if (args.status) {
-      query_obj = query_obj.filter((q) => q.eq(q.field("status"), args.status));
+      queryObj = ctx.db
+        .query("designs")
+        .withIndex("by_project_status", (q) =>
+          q.eq("projectId", args.projectId).eq("status", args.status),
+        );
+    } else {
+      queryObj = ctx.db
+        .query("designs")
+        .withIndex("by_project", (q) => q.eq("projectId", args.projectId));
     }
 
-    return await query_obj.collect();
+    return await queryObj.order("desc").collect();
   },
 });
 
 export const updateDesign = mutation({
   args: {
     designId: v.id("designs"),
-    updates: v.object({
-      title: v.optional(v.string()),
-      markdown: v.optional(v.string()),
-    }),
+    title: v.optional(v.string()),
+    markdown: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const design = await ctx.db.get(args.designId);
+    if (!design) {
+      throw new Error(`Design not found: ${args.designId}`);
+    }
+
     const now = new Date().toISOString();
-    await ctx.db.patch(args.designId, {
-      ...args.updates,
+    const updates: Record<string, string | undefined> = {
       updatedAt: now,
-    });
-    return await ctx.db.get(args.designId);
+    };
+
+    if (args.title !== undefined) {
+      updates.title = args.title;
+    }
+    if (args.markdown !== undefined) {
+      updates.markdown = args.markdown;
+    }
+
+    await ctx.db.patch(args.designId, updates);
+    return args.designId;
   },
 });
 
@@ -122,12 +138,12 @@ export const transitionDesign = mutation({
     // Set archivedAt when moving to archived status
     if (args.newStatus === "archived") {
       update.archivedAt = now;
-    } else if (design.status === "archived" && args.newStatus !== "archived") {
+    } else {
       // Clear archivedAt when unarchiving
       update.archivedAt = undefined;
     }
 
     await ctx.db.patch(args.designId, update);
-    return await ctx.db.get(args.designId);
+    return args.designId;
   },
 });

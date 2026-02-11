@@ -54,10 +54,6 @@ describe("designs", () => {
       expect(design2?.designKey).toBe("PROJ-D2");
     });
 
-    test("rejects creation with non-existent project", async () => {
-      const t = convexTest(schema);
-      // Validator will catch ID format errors, so skip this test
-    });
   });
 
   describe("getDesign", () => {
@@ -86,7 +82,6 @@ describe("designs", () => {
 
       const design = await t.query(api.designs.getDesignByKey, {
         designKey: "KEY-D1",
-        projectId,
       });
 
       expect(design?._id).toBe(designId);
@@ -102,7 +97,6 @@ describe("designs", () => {
 
       const design = await t.query(api.designs.getDesignByKey, {
         designKey: "NONE-D999",
-        projectId,
       });
 
       expect(design).toBeNull();
@@ -203,10 +197,8 @@ describe("designs", () => {
 
       await t.mutation(api.designs.updateDesign, {
         designId,
-        updates: {
-          title: "Updated title",
-          markdown: "# Updated",
-        },
+        title: "Updated title",
+        markdown: "# Updated",
       });
 
       const afterUpdate = await t.query(api.designs.getDesign, { designId });
@@ -227,9 +219,7 @@ describe("designs", () => {
 
       await t.mutation(api.designs.updateDesign, {
         designId,
-        updates: {
-          title: "New title",
-        },
+        title: "New title",
       });
 
       const design = await t.query(api.designs.getDesign, { designId });
