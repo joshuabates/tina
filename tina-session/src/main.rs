@@ -12,6 +12,19 @@ fn check_phase(phase: &str) -> anyhow::Result<()> {
     validate_phase(phase).map_err(|e| anyhow::anyhow!("{}", e))
 }
 
+/// Resolve markdown content from either inline or file source.
+fn resolve_markdown(
+    inline: Option<String>,
+    file: Option<PathBuf>,
+) -> anyhow::Result<String> {
+    match (inline, file) {
+        (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --markdown and --markdown-file"),
+        (Some(md), None) => Ok(md),
+        (None, Some(path)) => Ok(std::fs::read_to_string(&path)?),
+        (None, None) => anyhow::bail!("Must specify either --markdown or --markdown-file"),
+    }
+}
+
 #[derive(Parser)]
 #[command(name = "tina-session")]
 #[command(about = "Phase lifecycle management for Tina orchestrations")]
@@ -574,7 +587,7 @@ enum DesignCommands {
         #[arg(long)]
         id: Option<String>,
 
-        /// Design key (e.g., DESIGN-001)
+        /// Design key
         #[arg(long)]
         key: Option<String>,
 
@@ -583,7 +596,7 @@ enum DesignCommands {
         json: bool,
     },
 
-    /// List designs
+    /// List designs in a project
     List {
         /// Project ID
         #[arg(long)]
@@ -598,17 +611,17 @@ enum DesignCommands {
         json: bool,
     },
 
-    /// Update a design
+    /// Update an existing design
     Update {
         /// Design ID
         #[arg(long)]
         id: String,
 
-        /// New title
+        /// New title (optional)
         #[arg(long)]
         title: Option<String>,
 
-        /// New markdown content
+        /// New content (markdown)
         #[arg(long)]
         markdown: Option<String>,
 
@@ -636,7 +649,7 @@ enum DesignCommands {
         json: bool,
     },
 
-    /// Resolve (fetch) a design by ID for orchestration
+    /// Fetch and display a design by ID (resolve)
     Resolve {
         /// Design ID
         #[arg(long)]
@@ -664,19 +677,19 @@ enum TicketCommands {
         #[arg(long)]
         description: String,
 
-        /// Priority level
+        /// Priority (default: medium)
         #[arg(long, default_value = "medium")]
         priority: String,
 
-        /// Related design ID
+        /// Associated design ID (optional)
         #[arg(long)]
         design_id: Option<String>,
 
-        /// Assignee
+        /// Assignee (optional)
         #[arg(long)]
         assignee: Option<String>,
 
-        /// Time estimate
+        /// Time estimate (optional)
         #[arg(long)]
         estimate: Option<String>,
 
@@ -691,7 +704,7 @@ enum TicketCommands {
         #[arg(long)]
         id: Option<String>,
 
-        /// Ticket key (e.g., TICKET-001)
+        /// Ticket key
         #[arg(long)]
         key: Option<String>,
 
@@ -700,21 +713,21 @@ enum TicketCommands {
         json: bool,
     },
 
-    /// List tickets
+    /// List tickets in a project
     List {
         /// Project ID
         #[arg(long)]
         project_id: String,
 
-        /// Filter by status
+        /// Filter by status (optional)
         #[arg(long)]
         status: Option<String>,
 
-        /// Filter by design ID
+        /// Filter by design ID (optional)
         #[arg(long)]
         design_id: Option<String>,
 
-        /// Filter by assignee
+        /// Filter by assignee (optional)
         #[arg(long)]
         assignee: Option<String>,
 
@@ -723,33 +736,33 @@ enum TicketCommands {
         json: bool,
     },
 
-    /// Update a ticket
+    /// Update an existing ticket
     Update {
         /// Ticket ID
         #[arg(long)]
         id: String,
 
-        /// New title
+        /// New title (optional)
         #[arg(long)]
         title: Option<String>,
 
-        /// New description
+        /// New description (optional)
         #[arg(long)]
         description: Option<String>,
 
-        /// New priority
+        /// New priority (optional)
         #[arg(long)]
         priority: Option<String>,
 
-        /// New related design ID
+        /// New design ID (optional)
         #[arg(long)]
         design_id: Option<String>,
 
-        /// New assignee
+        /// New assignee (optional)
         #[arg(long)]
         assignee: Option<String>,
 
-        /// New time estimate
+        /// New time estimate (optional)
         #[arg(long)]
         estimate: Option<String>,
 
@@ -776,21 +789,21 @@ enum TicketCommands {
 
 #[derive(Subcommand)]
 enum CommentCommands {
-    /// Add a comment
+    /// Add a new comment
     Add {
         /// Project ID
         #[arg(long)]
         project_id: String,
 
-        /// Target type ("design" or "ticket")
+        /// Target type (design or ticket)
         #[arg(long)]
         target_type: String,
 
-        /// Target ID (design or ticket)
+        /// Target ID (design or ticket ID)
         #[arg(long)]
         target_id: String,
 
-        /// Author type ("human" or "agent")
+        /// Author type (human or agent)
         #[arg(long)]
         author_type: String,
 
@@ -809,11 +822,11 @@ enum CommentCommands {
 
     /// List comments for a target
     List {
-        /// Target type ("design" or "ticket")
+        /// Target type (design or ticket)
         #[arg(long)]
         target_type: String,
 
-        /// Target ID (design or ticket)
+        /// Target ID (design or ticket ID)
         #[arg(long)]
         target_id: String,
 
@@ -827,22 +840,6 @@ enum CommentCommands {
 enum OutputFormat {
     Text,
     Json,
-}
-
-fn resolve_markdown(
-    inline: Option<String>,
-    file: Option<PathBuf>,
-) -> anyhow::Result<String> {
-    use anyhow::Context;
-    match (inline, file) {
-        (Some(_), Some(_)) => {
-            anyhow::bail!("Cannot specify both --markdown and --markdown-file")
-        }
-        (Some(md), None) => Ok(md),
-        (None, Some(path)) => std::fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read markdown file: {}", path.display())),
-        (None, None) => anyhow::bail!("Must specify either --markdown or --markdown-file"),
-    }
 }
 
 fn main() -> ExitCode {
@@ -1135,12 +1132,15 @@ fn run() -> anyhow::Result<u8> {
                     markdown_file,
                     json,
                 } => {
-                    let md = if markdown.is_some() || markdown_file.is_some() {
-                        Some(resolve_markdown(markdown, markdown_file)?)
-                    } else {
-                        None
+                    let final_md = match (markdown, markdown_file) {
+                        (Some(_), Some(_)) => {
+                            anyhow::bail!("Cannot specify both --markdown and --markdown-file")
+                        }
+                        (Some(md), None) => Some(md),
+                        (None, Some(path)) => Some(std::fs::read_to_string(&path)?),
+                        (None, None) => None,
                     };
-                    commands::work::design::update(&id, title.as_deref(), md.as_deref(), json)
+                    commands::work::design::update(&id, title.as_deref(), final_md.as_deref(), json)
                 }
 
                 DesignCommands::Transition { id, status, json } => {
