@@ -175,7 +175,7 @@ export const aggregateSpansIntoRollups = internalMutation({
         await ctx.db.patch(existing._id, {
           windowEnd: args.windowEnd,
           granularityMin: args.granularityMin,
-          orchestrationId,
+          orchestrationId: orchestrationId as any,
           phaseNumber,
           spanCount,
           errorCount,
@@ -190,7 +190,7 @@ export const aggregateSpansIntoRollups = internalMutation({
           granularityMin: args.granularityMin,
           source,
           operation,
-          orchestrationId,
+          orchestrationId: orchestrationId as any,
           phaseNumber,
           spanCount,
           errorCount,
