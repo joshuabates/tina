@@ -168,4 +168,71 @@ describe("DesignListPage", () => {
 
     expect(screen.getByRole("heading", { name: "Designs" })).toBeInTheDocument()
   })
+
+  describe("create form", () => {
+    it("toggles create form when clicking Create Design button", async () => {
+      const user = userEvent.setup()
+      renderApp("/pm/designs?project=p1")
+
+      expect(screen.queryByTestId("design-create-form")).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole("button", { name: /create design/i }))
+
+      expect(screen.getByTestId("design-create-form")).toBeInTheDocument()
+    })
+
+    it("shows title input and markdown textarea", async () => {
+      const user = userEvent.setup()
+      renderApp("/pm/designs?project=p1")
+
+      await user.click(screen.getByRole("button", { name: /create design/i }))
+
+      const form = screen.getByTestId("design-create-form")
+      const titleInput = within(form).getByLabelText(/title/i)
+      expect(titleInput).toBeInTheDocument()
+      expect(titleInput).toHaveAttribute("type", "text")
+
+      const markdownTextarea = within(form).getByLabelText(/content/i)
+      expect(markdownTextarea).toBeInTheDocument()
+      expect(markdownTextarea.tagName).toBe("TEXTAREA")
+    })
+
+    it("disables submit when title is empty", async () => {
+      const user = userEvent.setup()
+      renderApp("/pm/designs?project=p1")
+
+      await user.click(screen.getByRole("button", { name: /create design/i }))
+
+      const form = screen.getByTestId("design-create-form")
+      const submitButton = within(form).getByRole("button", { name: /create/i })
+      expect(submitButton).toBeDisabled()
+    })
+
+    it("enables submit when title is provided", async () => {
+      const user = userEvent.setup()
+      renderApp("/pm/designs?project=p1")
+
+      await user.click(screen.getByRole("button", { name: /create design/i }))
+
+      const form = screen.getByTestId("design-create-form")
+      const titleInput = within(form).getByLabelText(/title/i)
+      await user.type(titleInput, "New Design")
+
+      const submitButton = within(form).getByRole("button", { name: /create/i })
+      expect(submitButton).toBeEnabled()
+    })
+
+    it("hides form when clicking Cancel", async () => {
+      const user = userEvent.setup()
+      renderApp("/pm/designs?project=p1")
+
+      await user.click(screen.getByRole("button", { name: /create design/i }))
+      expect(screen.getByTestId("design-create-form")).toBeInTheDocument()
+
+      const form = screen.getByTestId("design-create-form")
+      await user.click(within(form).getByRole("button", { name: /cancel/i }))
+
+      expect(screen.queryByTestId("design-create-form")).not.toBeInTheDocument()
+    })
+  })
 })
