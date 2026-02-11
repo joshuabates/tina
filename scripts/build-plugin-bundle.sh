@@ -96,6 +96,8 @@ cp "$DAEMON_BIN" "$PLUGIN_DIR/bin/tina-daemon"
 cp "$MONITOR_BIN" "$PLUGIN_DIR/bin/tina-monitor"
 chmod +x "$PLUGIN_DIR/bin/tina-session" "$PLUGIN_DIR/bin/tina-daemon" "$PLUGIN_DIR/bin/tina-monitor"
 chmod +x "$PLUGIN_DIR/hooks/session-start.sh"
+chmod +x "$PLUGIN_DIR/hooks/idle-prompt.sh"
+chmod +x "$PLUGIN_DIR/hooks/enforce-worktree-boundary.sh"
 
 MARKETPLACE_TEMPLATE="$PROJECT_DIR/.claude-plugin/marketplace.json"
 DIST_MARKETPLACE="$DIST_DIR/marketplace.json"

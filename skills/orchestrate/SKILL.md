@@ -29,7 +29,7 @@ You are a TEAM LEAD coordinating TEAMMATES. Do not do the work yourself - spawn 
 # Examples:
 #   /tina:orchestrate docs/plans/feature-design.md
 #   /tina:orchestrate --feature verbose-flag design.md
-#   /tina:orchestrate --model haiku --feature auth docs/plans/auth-design.md
+#   /tina:orchestrate --model opus --feature auth docs/plans/auth-design.md
 
 MODEL_OVERRIDE=""  # empty means planner decides per-task
 FEATURE_OVERRIDE=""  # empty means derive from design doc
@@ -1154,7 +1154,7 @@ Model assignments come from `model_policy` in `supervisor-state.json`. Defaults:
 | Orchestrator | opus | Coordinates team, handles complex decisions |
 | Design Validator | opus | Analyzes feasibility, runs baseline commands |
 | Phase Planner | opus | Creates detailed plans, needs codebase understanding |
-| Phase Executor | haiku | Tmux management and file monitoring |
+| Phase Executor | opus | Coordinates long-running execution and recovery decisions |
 | Phase Reviewer | opus | Analyzes implementation quality |
 
 To override, set `model_policy` in `supervisor-state.json` before starting orchestration, or pass `--model <model>` to override all agents.
@@ -1239,7 +1239,7 @@ Check by looking at recent messages and task metadata.
 
 **Teammate crashes:**
 1. Orchestrator doesn't receive completion message
-2. After timeout (handled by orchestrator turning idle), orchestrator checks task status
+2. After prolonged inactivity (or a manual continue), orchestrator checks task status
 3. Task still in_progress but no teammate messages -> respawn
 4. Retry count tracked in metadata (max 1 retry)
 
@@ -1415,7 +1415,7 @@ Use these scenarios to verify recovery and remediation work correctly.
 
 1. Start orchestration until `execute-phase-1` is in_progress
 2. Kill the executor teammate (not the tmux session)
-3. Orchestrator should timeout waiting for message
+3. Orchestrator becomes idle waiting for message
 4. Orchestrator respawns executor-1
 5. Expected: New executor finds existing tmux session, skips creation, resumes monitoring
 6. Verify: Phase completes normally

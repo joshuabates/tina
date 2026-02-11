@@ -158,9 +158,9 @@ Each task in the plan MUST include a `**Model:**` field that specifies which mod
 
 **Selection logic:**
 - If `model_override` is provided: use that model for ALL tasks
-- If no override: choose based on task complexity:
-  - `haiku` - Straightforward implementation (new functions, tests, integrations, mechanical changes)
-  - `opus` - Complex reasoning (architecture decisions, refactoring, debugging, judgment calls)
+- If no override: default to `opus` and only use `haiku` for truly trivial/mechanical changes.
+  - `haiku` - Small, low-risk, localized edits with no architectural impact (e.g., renames, import fixes, obvious constant/config updates, comment/docs-only touchups).
+  - `opus` - Any task that introduces new logic, touches multiple files, changes behavior/contracts, adds or updates tests, requires debugging, or needs design judgment.
 
 ### Commit the Plan
 

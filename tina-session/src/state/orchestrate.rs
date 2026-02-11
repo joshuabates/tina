@@ -270,7 +270,7 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                     return Ok(Action::SpawnExecutor {
                         phase: key,
                         plan_path,
-                        model: non_default_model(&state.model_policy.executor, "haiku"),
+                        model: non_default_model(&state.model_policy.executor, "opus"),
                     });
                 }
                 PhaseStatus::Executing => {
@@ -374,7 +374,7 @@ pub fn advance_state(
             Ok(Action::SpawnExecutor {
                 phase: phase.to_string(),
                 plan_path: plan_str,
-                model: non_default_model(&state.model_policy.executor, "haiku"),
+                model: non_default_model(&state.model_policy.executor, "opus"),
             })
         }
 
@@ -623,7 +623,7 @@ pub fn advance_state(
             Ok(Action::SpawnExecutor {
                 phase: phase.to_string(),
                 plan_path,
-                model: non_default_model(&state.model_policy.executor, "haiku"),
+                model: non_default_model(&state.model_policy.executor, "opus"),
             })
         }
 
@@ -761,7 +761,7 @@ fn find_remediation_action(state: &SupervisorState, phase_num: u32) -> Result<Ac
                     Ok(Action::SpawnExecutor {
                         phase: key.clone(),
                         plan_path,
-                        model: non_default_model(&state.model_policy.executor, "haiku"),
+                        model: non_default_model(&state.model_policy.executor, "opus"),
                     })
                 }
                 PhaseStatus::Executing => Ok(Action::Wait {

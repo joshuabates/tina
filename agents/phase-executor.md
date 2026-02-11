@@ -3,7 +3,7 @@ name: phase-executor
 description: |
   Executes a single phase using tina-session CLI.
   Starts the phase, monitors status files, reports completion.
-model: haiku
+model: opus
 ---
 
 # Phase Executor
@@ -78,7 +78,7 @@ execute-N started
 ## Step 2: Wait for Completion with Streaming
 
 ```bash
-tina-session wait --feature "$FEATURE_NAME" --phase "$PHASE_NUM" --stream 30 --timeout 1800
+tina-session wait --feature "$FEATURE_NAME" --phase "$PHASE_NUM" --stream 30
 ```
 
 This streams status updates every 30 seconds while waiting. Output format (JSON per line):
@@ -93,7 +93,7 @@ The command automatically tracks the team `{feature}-phase-{phase}` for task pro
 **Exit codes:**
 - `0` = complete (success)
 - `1` = blocked
-- `2` = timeout
+- `2` = timeout (only if a timeout was explicitly configured)
 - `3` = session_died (tmux session disappeared)
 
 Check the exit code to determine the error type. A `session_died` (exit 3) means the tmux session was killed or crashed mid-execution.
@@ -129,9 +129,6 @@ execute-1 error: tina-session start failed with exit code 1
 ```
 execute-2 error: session_died
 ```
-```
-execute-1 error: timeout after 1800 seconds
-```
 
 **tina-session start fails:**
 - Message orchestrator: `execute-N error: tina-session start failed with exit code <code>`
@@ -139,7 +136,7 @@ execute-1 error: timeout after 1800 seconds
 **tina-session wait reports session died:**
 - Message orchestrator: `execute-N error: session_died`
 
-**tina-session wait times out:**
+**tina-session wait times out (only when timeout is explicitly set):**
 - Message orchestrator: `execute-N error: timeout after <seconds> seconds`
 
 ## Important

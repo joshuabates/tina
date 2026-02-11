@@ -96,12 +96,12 @@ Team name file is no longer needed. The executor already knows the team name sin
 
 Read the plan file and create tasks via TaskCreate for each task in the plan.
 
-**Parse model and dependencies from each task:** Look for `**Model:** <model>` and `**Depends on:**` lines in each task section. Also load `review_policy` from `.claude/tina/supervisor-state.json` once and store it in task metadata:
+**Parse model and dependencies from each task:** Look for `**Model:** <model>` and `**Depends on:**` lines in each task section. If `**Model:**` is missing or empty, set model to `opus` (never default to haiku on missing metadata). Also load `review_policy` from `.claude/tina/supervisor-state.json` once and store it in task metadata:
 ```json
 TaskCreate {
   "subject": "Task N: <description>",
   "description": "<full task content>",
-  "metadata": { "model": "<model-string>", "task_number": N, "review_policy": { ... } }
+  "metadata": { "model": "<model-string-or-opus-fallback>", "task_number": N, "review_policy": { ... } }
 }
 ```
 
@@ -521,7 +521,7 @@ Then spawn with task-specific name:
 }
 ```
 
-The model field accepts any model string supported by `tina-session config cli-for-model` (e.g., `opus`, `haiku`, `codex`, `gpt-5.3-codex`, etc.). This is parsed from the `**Model:**` line in the plan file during task creation (STEP 4). The routing decision happens at spawn time, not at plan parse time.
+The model field accepts any model string supported by `tina-session config cli-for-model` (e.g., `opus`, `haiku`, `codex`, `gpt-5.3-codex`, etc.). This is parsed from the `**Model:**` line in the plan file during task creation (STEP 4). If the line is missing/empty, use `opus` as the fallback. The routing decision happens at spawn time, not at plan parse time.
 
 **Reviewer spawns (per task N):**
 ```json

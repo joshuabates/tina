@@ -255,8 +255,8 @@ pub struct ModelPolicy {
     #[serde(default = "default_opus")]
     pub planner: String,
 
-    /// Model for phase executor agents. Default: "haiku".
-    #[serde(default = "default_haiku")]
+    /// Model for phase executor agents. Default: "opus".
+    #[serde(default = "default_opus")]
     pub executor: String,
 
     /// Model for phase reviewer agents. Default: "opus".
@@ -292,7 +292,7 @@ impl Default for ModelPolicy {
         Self {
             validator: default_opus(),
             planner: default_opus(),
-            executor: default_haiku(),
+            executor: default_opus(),
             reviewer: default_opus(),
             reviewer_secondary: default_haiku(),
             dual_validation: false,
@@ -702,7 +702,7 @@ mod tests {
         let policy = ModelPolicy::default();
         assert_eq!(policy.validator, "opus");
         assert_eq!(policy.planner, "opus");
-        assert_eq!(policy.executor, "haiku");
+        assert_eq!(policy.executor, "opus");
         assert_eq!(policy.reviewer, "opus");
         assert_eq!(policy.reviewer_secondary, "haiku");
         assert!(!policy.dual_validation);
@@ -760,7 +760,7 @@ mod tests {
         let json = r#"{}"#;
         let policy: ModelPolicy = serde_json::from_str(json).unwrap();
         assert_eq!(policy.validator, "opus");
-        assert_eq!(policy.executor, "haiku");
+        assert_eq!(policy.executor, "opus");
         assert_eq!(policy.reviewer_secondary, "haiku");
         assert!(!policy.dual_validation);
     }
@@ -792,7 +792,7 @@ mod tests {
             2,
         );
         assert_eq!(state.model_policy.validator, "opus");
-        assert_eq!(state.model_policy.executor, "haiku");
+        assert_eq!(state.model_policy.executor, "opus");
         assert_eq!(state.review_policy.enforcement, ReviewEnforcement::TaskAndPhase);
     }
 
