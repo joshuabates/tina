@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 import { createProject } from "./test_helpers";
 
@@ -15,12 +15,10 @@ describe("workComments", () => {
       });
 
       // Create a design
-      const designId = await t.mutation(internal.workComments.createDesignForTest, {
+      const designId = await t.mutation(api.designs.createDesign, {
         projectId,
-        designKey: "DES-1",
         title: "Test Design",
         markdown: "# Test",
-        status: "draft",
       });
 
       // Add a comment
@@ -56,12 +54,10 @@ describe("workComments", () => {
       });
 
       // Create a ticket
-      const ticketId = await t.mutation(internal.workComments.createTicketForTest, {
+      const ticketId = await t.mutation(api.tickets.createTicket, {
         projectId,
-        ticketKey: "TIC-1",
         title: "Test Ticket",
         description: "Test description",
-        status: "todo",
         priority: "high",
       });
 
@@ -142,12 +138,10 @@ describe("workComments", () => {
       });
 
       // Create a design
-      const designId = await t.mutation(internal.workComments.createDesignForTest, {
+      const designId = await t.mutation(api.designs.createDesign, {
         projectId,
-        designKey: "DES-2",
         title: "Test Design 2",
         markdown: "# Test",
-        status: "draft",
       });
 
       // Add multiple comments
@@ -199,12 +193,10 @@ describe("workComments", () => {
       });
 
       // Create a design
-      const designId = await t.mutation(internal.workComments.createDesignForTest, {
+      const designId = await t.mutation(api.designs.createDesign, {
         projectId,
-        designKey: "DES-3",
         title: "Test Design 3",
         markdown: "# Test",
-        status: "draft",
       });
 
       // List comments for empty design
@@ -225,20 +217,16 @@ describe("workComments", () => {
       });
 
       // Create two designs
-      const design1Id = await t.mutation(internal.workComments.createDesignForTest, {
+      const design1Id = await t.mutation(api.designs.createDesign, {
         projectId,
-        designKey: "DES-4",
         title: "Design 1",
         markdown: "# Design 1",
-        status: "draft",
       });
 
-      const design2Id = await t.mutation(internal.workComments.createDesignForTest, {
+      const design2Id = await t.mutation(api.designs.createDesign, {
         projectId,
-        designKey: "DES-5",
         title: "Design 2",
         markdown: "# Design 2",
-        status: "draft",
       });
 
       // Add comments to both
@@ -269,6 +257,62 @@ describe("workComments", () => {
       expect(design1Comments).toHaveLength(1);
       expect(design1Comments[0].body).toBe("Comment for design 1");
       expect(design1Comments[0].authorName).toBe("alice");
+    });
+
+    test("lists comments for a ticket in chronological order", async () => {
+      const t = convexTest(schema);
+
+      const projectId = await createProject(t, {
+        name: "comments-test-project-8",
+        repoPath: "/Users/joshua/Projects/comments-test-8",
+      });
+
+      // Create a ticket
+      const ticketId = await t.mutation(api.tickets.createTicket, {
+        projectId,
+        title: "Test Ticket",
+        description: "For comments",
+        priority: "medium",
+      });
+
+      // Add multiple comments
+      await t.mutation(internal.workComments.addComment, {
+        projectId,
+        targetType: "ticket",
+        targetId: ticketId,
+        authorType: "human",
+        authorName: "alice",
+        body: "First comment",
+      });
+
+      await t.mutation(internal.workComments.addComment, {
+        projectId,
+        targetType: "ticket",
+        targetId: ticketId,
+        authorType: "human",
+        authorName: "bob",
+        body: "Second comment",
+      });
+
+      await t.mutation(internal.workComments.addComment, {
+        projectId,
+        targetType: "ticket",
+        targetId: ticketId,
+        authorType: "agent",
+        authorName: "claude",
+        body: "Third comment",
+      });
+
+      // List comments
+      const comments = await t.query(internal.workComments.listComments, {
+        targetType: "ticket",
+        targetId: ticketId,
+      });
+
+      expect(comments).toHaveLength(3);
+      expect(comments[0].body).toBe("First comment");
+      expect(comments[1].body).toBe("Second comment");
+      expect(comments[2].body).toBe("Third comment");
     });
   });
 });
