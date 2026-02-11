@@ -378,3 +378,46 @@ fn ticket_get_rejects_both_id_and_key() {
         .failure()
         .stderr(predicate::str::contains("Cannot specify both --id and --key"));
 }
+
+#[test]
+fn design_create_rejects_nonexistent_markdown_file() {
+    Command::new(tina_session_bin())
+        .args([
+            "work", "design", "create",
+            "--project-id", "proj-123",
+            "--title", "Test Design",
+            "--markdown-file", "/nonexistent/path/to/file.md",
+        ])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn design_group_help_shows_subcommands() {
+    Command::new(tina_session_bin())
+        .args(["work", "design", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Create a new design"))
+        .stdout(predicate::str::contains("Get a design"));
+}
+
+#[test]
+fn ticket_group_help_shows_subcommands() {
+    Command::new(tina_session_bin())
+        .args(["work", "ticket", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Create a new ticket"))
+        .stdout(predicate::str::contains("Get a ticket"));
+}
+
+#[test]
+fn comment_group_help_shows_subcommands() {
+    Command::new(tina_session_bin())
+        .args(["work", "comment", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Add a new comment"))
+        .stdout(predicate::str::contains("List comments"));
+}
