@@ -7,34 +7,11 @@ import { TicketListQuery, DesignListQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { toStatusBadgeStatus } from "@/components/ui/status-styles"
+import { toStatusBadgeStatus, priorityLabel } from "@/components/ui/status-styles"
 import type { TicketSummary, DesignSummary } from "@/schemas"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "./TicketListPage.module.scss"
 
-const TICKET_STATUS_LABELS: Record<string, string> = {
-  todo: "Todo",
-  in_progress: "In Progress",
-  in_review: "In Review",
-  blocked: "Blocked",
-  done: "Done",
-  canceled: "Canceled",
-}
-
-const PRIORITY_LABELS: Record<string, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  urgent: "Urgent",
-}
-
-function ticketStatusLabel(status: string): string {
-  return TICKET_STATUS_LABELS[status] ?? status
-}
-
-function priorityLabel(priority: string): string {
-  return PRIORITY_LABELS[priority] ?? priority
-}
 
 function TicketCreateForm({
   projectId,
@@ -282,7 +259,6 @@ export function TicketListPage() {
                   <td>
                     <StatusBadge
                       status={toStatusBadgeStatus(ticket.status)}
-                      label={ticketStatusLabel(ticket.status)}
                     />
                   </td>
                   <td>
