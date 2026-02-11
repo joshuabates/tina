@@ -137,7 +137,7 @@ describe("TeamSection", () => {
   })
 
   describe("shutdown tracking", () => {
-    it("marks agents as shutdown when shutdown event exists", () => {
+    it("hides agents when shutdown event exists", () => {
       const shutdownEvents = [
         {
           _id: "event1",
@@ -164,14 +164,16 @@ describe("TeamSection", () => {
 
       render(<TeamSection detail={buildDetail()} />)
 
-      // Verify worker1 shows shutdown status
-      expect(screen.getByText("SHUTDOWN")).toBeInTheDocument()
+      // Verify worker1 is removed from the list
+      expect(screen.queryByText("worker1")).not.toBeInTheDocument()
 
-      // Verify worker2 shows active status
+      // Verify worker2 remains visible and active
+      expect(screen.getByText("worker2")).toBeInTheDocument()
       expect(screen.getByText("ACTIVE")).toBeInTheDocument()
+      expect(screen.queryByText("SHUTDOWN")).not.toBeInTheDocument()
     })
 
-    it("does not mark active agents as shutdown", () => {
+    it("keeps active agents visible when no shutdown events exist", () => {
       installAppRuntimeQueryMock(mockUseTypedQuery, {
         states: {
           "events.list": querySuccess([]),
@@ -183,7 +185,7 @@ describe("TeamSection", () => {
       // Verify no shutdown status displayed
       expect(screen.queryByText("SHUTDOWN")).not.toBeInTheDocument()
 
-      // Verify both members are visible (by name, not by status count which includes duplicates)
+      // Verify both members are visible
       expect(screen.getByText("worker1")).toBeInTheDocument()
       expect(screen.getByText("worker2")).toBeInTheDocument()
     })
@@ -212,13 +214,13 @@ describe("TeamSection", () => {
       // Should not throw error
       expect(() => render(<TeamSection detail={buildDetail()} />)).not.toThrow()
 
-      // Verify members shown as active (not crashed, not marked as shutdown)
+      // Verify members shown as active (not crashed, not filtered out)
       expect(screen.getByText("worker1")).toBeInTheDocument()
       expect(screen.getByText("worker2")).toBeInTheDocument()
       expect(screen.queryByText("SHUTDOWN")).not.toBeInTheDocument()
     })
 
-    it("handles multiple shutdown events correctly", () => {
+    it("removes multiple shut down agents from the roster", () => {
       const shutdownEvents = [
         {
           _id: "event1",
@@ -258,9 +260,11 @@ describe("TeamSection", () => {
 
       render(<TeamSection detail={buildDetail()} />)
 
-      // Verify both members show shutdown status
-      const shutdownLabels = screen.getAllByText("SHUTDOWN")
-      expect(shutdownLabels.length).toBe(2)
+      // Verify both members are removed
+      expect(screen.queryByText("worker1")).not.toBeInTheDocument()
+      expect(screen.queryByText("worker2")).not.toBeInTheDocument()
+      expect(screen.queryByText("SHUTDOWN")).not.toBeInTheDocument()
+      expect(screen.getByText(/no team members/i)).toBeInTheDocument()
     })
   })
 })

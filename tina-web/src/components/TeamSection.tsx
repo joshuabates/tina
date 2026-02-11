@@ -16,14 +16,8 @@ interface TeamSectionProps {
 function mapTeamMember(
   member: OrchestrationTeamMember,
   activePhase: number,
-  shutdownMap: Map<string, string>,
 ): { name: string; memberStatus: MemberStatus } {
   const memberPhaseNum = parseInt(member.phaseNumber, 10)
-
-  // Check if agent has been shut down
-  if (shutdownMap.has(member.agentName)) {
-    return { name: member.agentName, memberStatus: "shutdown" }
-  }
 
   const memberStatus: MemberStatus = memberPhaseNum === activePhase ? "active" : "idle"
 
@@ -67,13 +61,17 @@ export function TeamSection({ detail }: TeamSectionProps) {
     return map
   }, [shutdownEventsResult])
 
-  const orchestrationMembers = detail.teamMembers.map((member) =>
-    mapTeamMember(member, detail.currentPhase, shutdownMap)
+  const activeMembers = detail.teamMembers.filter(
+    (member) => !shutdownMap.has(member.agentName),
+  )
+
+  const orchestrationMembers = activeMembers.map((member) =>
+    mapTeamMember(member, detail.currentPhase)
   )
   const selectedPhaseMembers = selectedPhaseNumber
-    ? detail.teamMembers
+    ? activeMembers
       .filter((member) => member.phaseNumber === selectedPhaseNumber)
-      .map((member) => mapTeamMember(member, detail.currentPhase, shutdownMap))
+      .map((member) => mapTeamMember(member, detail.currentPhase))
     : []
 
   useFocusable("rightPanel.team", orchestrationMembers.length + selectedPhaseMembers.length)
