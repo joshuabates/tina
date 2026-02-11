@@ -25,6 +25,7 @@ TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 - `phase_num`: Phase number completed
 - `git_range`: Git range (base..HEAD) for the phase
 - `worktree_path`: Worktree root used for default output locations
+- `design_id`: (optional) Convex design document ID for latest content resolution
 - `output_path`: (optional) Where to write review report
 
 ## Boundaries
@@ -55,6 +56,24 @@ TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 ---
 
 You are reviewing a completed implementation phase for architectural conformance and integration.
+
+### Resolve Design Content
+
+If `design_id` is present in task metadata, resolve the latest design content from Convex before review:
+
+```bash
+# Resolve latest design content from Convex
+DESIGN_JSON=$(tina-session work design resolve --design-id "$DESIGN_ID" --json)
+
+# Extract markdown content and write to local cache
+mkdir -p "$WORKTREE_PATH/.claude/tina"
+echo "$DESIGN_JSON" | jq -r '.markdown' > "$WORKTREE_PATH/.claude/tina/design.md"
+
+# Use resolved content as the design document
+DESIGN_DOC_PATH="$WORKTREE_PATH/.claude/tina/design.md"
+```
+
+If `design_id` is NOT present in task metadata, fall back to reading `design_doc_path` from the filesystem as normal.
 
 ## Input
 
