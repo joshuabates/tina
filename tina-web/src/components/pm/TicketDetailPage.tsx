@@ -13,18 +13,6 @@ import type { TicketSummary, DesignSummary } from "@/schemas"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "./TicketDetailPage.module.scss"
 
-const TICKET_STATUS_LABELS: Record<string, string> = {
-  todo: "Todo",
-  in_progress: "In Progress",
-  in_review: "In Review",
-  blocked: "Blocked",
-  done: "Done",
-  canceled: "Canceled",
-}
-
-function ticketStatusLabel(status: string): string {
-  return TICKET_STATUS_LABELS[status] ?? status
-}
 
 interface TransitionAction {
   label: string
@@ -274,7 +262,6 @@ export function TicketDetailPage() {
         <div className={styles.badges}>
           <StatusBadge
             status={toStatusBadgeStatus(ticket.status)}
-            label={ticketStatusLabel(ticket.status)}
           />
           <span className={styles.priorityBadge} data-priority={ticket.priority}>
             {priorityLabel(ticket.priority)}
