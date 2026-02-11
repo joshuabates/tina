@@ -1,6 +1,5 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
 import { allocateKey } from "./projectCounters";
 
 export const createTicket = mutation({
@@ -57,7 +56,6 @@ export const getTicket = query({
 
 export const getTicketByKey = query({
   args: {
-    projectId: v.id("projects"),
     ticketKey: v.string(),
   },
   handler: async (ctx, args) => {
@@ -78,44 +76,88 @@ export const listTickets = query({
     assignee: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let query_obj = ctx.db
-      .query("tickets")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId));
+    let query_obj;
 
-    if (args.status) {
-      query_obj = query_obj.filter((q) => q.eq(q.field("status"), args.status));
-    }
-
+    // Use proper indexes based on filters
     if (args.designId) {
-      query_obj = query_obj.filter((q) => q.eq(q.field("designId"), args.designId));
+      query_obj = ctx.db
+        .query("tickets")
+        .withIndex("by_design", (q) => q.eq("designId", args.designId));
+    } else if (args.status !== undefined) {
+      query_obj = ctx.db
+        .query("tickets")
+        .withIndex("by_project_status", (q) =>
+          q.eq("projectId", args.projectId).eq("status", args.status!),
+        );
+    } else {
+      query_obj = ctx.db
+        .query("tickets")
+        .withIndex("by_project", (q) => q.eq("projectId", args.projectId));
     }
 
-    if (args.assignee) {
+    if (args.designId && args.assignee) {
       query_obj = query_obj.filter((q) => q.eq(q.field("assignee"), args.assignee));
     }
 
-    return await query_obj.collect();
+    if (args.designId && args.status !== undefined) {
+      query_obj = query_obj.filter((q) => q.eq(q.field("status"), args.status));
+    }
+
+    if (args.assignee && !args.designId) {
+      query_obj = query_obj.filter((q) => q.eq(q.field("assignee"), args.assignee));
+    }
+
+    return await query_obj.order("desc").collect();
   },
 });
 
 export const updateTicket = mutation({
   args: {
     ticketId: v.id("tickets"),
-    updates: v.object({
-      title: v.optional(v.string()),
-      description: v.optional(v.string()),
-      priority: v.optional(v.string()),
-      assignee: v.optional(v.string()),
-      estimate: v.optional(v.string()),
-    }),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    designId: v.optional(v.id("designs")),
+    assignee: v.optional(v.string()),
+    estimate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) {
+      throw new Error(`Ticket not found: ${args.ticketId}`);
+    }
+
+    if (args.designId) {
+      const design = await ctx.db.get(args.designId);
+      if (!design) {
+        throw new Error(`Design not found: ${args.designId}`);
+      }
+    }
+
     const now = new Date().toISOString();
-    await ctx.db.patch(args.ticketId, {
-      ...args.updates,
-      updatedAt: now,
-    });
-    return await ctx.db.get(args.ticketId);
+    const updates: any = { updatedAt: now };
+
+    if (args.title !== undefined) {
+      updates.title = args.title;
+    }
+    if (args.description !== undefined) {
+      updates.description = args.description;
+    }
+    if (args.priority !== undefined) {
+      updates.priority = args.priority;
+    }
+    if (args.designId !== undefined) {
+      updates.designId = args.designId;
+    }
+    if (args.assignee !== undefined) {
+      updates.assignee = args.assignee;
+    }
+    if (args.estimate !== undefined) {
+      updates.estimate = args.estimate;
+    }
+
+    await ctx.db.patch(args.ticketId, updates);
+    return args.ticketId;
   },
 });
 
@@ -161,6 +203,6 @@ export const transitionTicket = mutation({
     }
 
     await ctx.db.patch(args.ticketId, update);
-    return await ctx.db.get(args.ticketId);
+    return args.ticketId;
   },
 });

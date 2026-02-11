@@ -85,6 +85,28 @@ describe("tickets", () => {
       const ticket = await t.query(api.tickets.getTicket, { ticketId });
       expect(ticket?.designId).toBe(designId);
     });
+
+    test("throws on non-existent designId", async () => {
+      const t = convexTest(schema);
+      const projectId = await createProject(t);
+      const fakeDesignId = (projectId as string).replace(
+        "projects",
+        "designs",
+      ) as any;
+
+      try {
+        await t.mutation(api.tickets.createTicket, {
+          projectId,
+          designId: fakeDesignId,
+          title: "Test",
+          description: "Test",
+          priority: "low",
+        });
+        expect.fail("Should have thrown error");
+      } catch (e) {
+        expect((e as Error).message).toContain("Design not found");
+      }
+    });
   });
 
   describe("getTicket", () => {
@@ -113,7 +135,6 @@ describe("tickets", () => {
       });
 
       const ticket = await t.query(api.tickets.getTicketByKey, {
-        projectId,
         ticketKey: "KEY-1",
       });
 
@@ -126,7 +147,6 @@ describe("tickets", () => {
       const projectId = await createProject(t);
 
       const ticket = await t.query(api.tickets.getTicketByKey, {
-        projectId,
         ticketKey: "NONE-999",
       });
 
@@ -295,6 +315,58 @@ describe("tickets", () => {
       expect(aliceTickets).toHaveLength(1);
       expect(aliceTickets[0]?.title).toBe("Alice's task");
     });
+
+    test("returns empty array when no tickets exist", async () => {
+      const t = convexTest(schema);
+      const projectId = await createProject(t, {
+        name: "EMPTY",
+        repoPath: "/Users/joshua/Projects/empty",
+      });
+
+      const tickets = await t.query(api.tickets.listTickets, { projectId });
+      expect(tickets).toHaveLength(0);
+    });
+
+    test("isolates tickets by project", async () => {
+      const t = convexTest(schema);
+      const project1Id = await createProject(t, {
+        name: "PROJ1",
+        repoPath: "/Users/joshua/Projects/proj1",
+      });
+
+      const project2Id = await createProject(t, {
+        name: "PROJ2",
+        repoPath: "/Users/joshua/Projects/proj2",
+      });
+
+      await t.mutation(api.tickets.createTicket, {
+        projectId: project1Id,
+        title: "Proj1 ticket",
+        description: "For project 1",
+        priority: "high",
+      });
+
+      await t.mutation(api.tickets.createTicket, {
+        projectId: project2Id,
+        title: "Proj2 ticket",
+        description: "For project 2",
+        priority: "low",
+      });
+
+      const proj1Tickets = await t.query(api.tickets.listTickets, {
+        projectId: project1Id,
+      });
+
+      const proj2Tickets = await t.query(api.tickets.listTickets, {
+        projectId: project2Id,
+      });
+
+      expect(proj1Tickets).toHaveLength(1);
+      expect(proj1Tickets[0]?.title).toBe("Proj1 ticket");
+
+      expect(proj2Tickets).toHaveLength(1);
+      expect(proj2Tickets[0]?.title).toBe("Proj2 ticket");
+    });
   });
 
   describe("updateTicket", () => {
@@ -317,10 +389,8 @@ describe("tickets", () => {
 
       await t.mutation(api.tickets.updateTicket, {
         ticketId,
-        updates: {
-          title: "Updated title",
-          description: "Updated description",
-        },
+        title: "Updated title",
+        description: "Updated description",
       });
 
       const afterUpdate = await t.query(api.tickets.getTicket, { ticketId });
@@ -342,11 +412,9 @@ describe("tickets", () => {
 
       await t.mutation(api.tickets.updateTicket, {
         ticketId,
-        updates: {
-          priority: "urgent",
-          assignee: "dev-team",
-          estimate: "5d",
-        },
+        priority: "urgent",
+        assignee: "dev-team",
+        estimate: "5d",
       });
 
       const ticket = await t.query(api.tickets.getTicket, { ticketId });
@@ -369,15 +437,32 @@ describe("tickets", () => {
 
       await t.mutation(api.tickets.updateTicket, {
         ticketId,
-        updates: {
-          priority: "low",
-        },
+        priority: "low",
       });
 
       const ticket = await t.query(api.tickets.getTicket, { ticketId });
       expect(ticket?.title).toBe("Original");
       expect(ticket?.assignee).toBe("alice");
       expect(ticket?.priority).toBe("low");
+    });
+
+    test("throws on missing ticket", async () => {
+      const t = convexTest(schema);
+      const projectId = await createProject(t);
+      const fakeTicketId = (projectId as string).replace(
+        "projects",
+        "tickets",
+      ) as any;
+
+      try {
+        await t.mutation(api.tickets.updateTicket, {
+          ticketId: fakeTicketId,
+          title: "Updated",
+        });
+        expect.fail("Should have thrown error");
+      } catch (e) {
+        expect((e as Error).message).toContain("Ticket not found");
+      }
     });
   });
 
@@ -595,6 +680,75 @@ describe("tickets", () => {
       const ticket = await t.query(api.tickets.getTicket, { ticketId });
       expect(ticket?.status).toBe("todo");
       expect(ticket?.closedAt).toBeUndefined();
+    });
+
+    test("transitions in_progress -> blocked", async () => {
+      const t = convexTest(schema);
+      const projectId = await createProject(t);
+
+      const ticketId = await t.mutation(api.tickets.createTicket, {
+        projectId,
+        title: "Task",
+        description: "Work",
+        priority: "medium",
+      });
+
+      await t.mutation(api.tickets.transitionTicket, {
+        ticketId,
+        newStatus: "in_progress",
+      });
+
+      await t.mutation(api.tickets.transitionTicket, {
+        ticketId,
+        newStatus: "blocked",
+      });
+
+      const ticket = await t.query(api.tickets.getTicket, { ticketId });
+      expect(ticket?.status).toBe("blocked");
+    });
+
+    test("transitions blocked -> in_progress", async () => {
+      const t = convexTest(schema);
+      const projectId = await createProject(t);
+
+      const ticketId = await t.mutation(api.tickets.createTicket, {
+        projectId,
+        title: "Task",
+        description: "Work",
+        priority: "medium",
+      });
+
+      await t.mutation(api.tickets.transitionTicket, {
+        ticketId,
+        newStatus: "blocked",
+      });
+
+      await t.mutation(api.tickets.transitionTicket, {
+        ticketId,
+        newStatus: "in_progress",
+      });
+
+      const ticket = await t.query(api.tickets.getTicket, { ticketId });
+      expect(ticket?.status).toBe("in_progress");
+    });
+
+    test("throws on missing ticket", async () => {
+      const t = convexTest(schema);
+      const projectId = await createProject(t);
+      const fakeTicketId = (projectId as string).replace(
+        "projects",
+        "tickets",
+      ) as any;
+
+      try {
+        await t.mutation(api.tickets.transitionTicket, {
+          ticketId: fakeTicketId,
+          newStatus: "in_progress",
+        });
+        expect.fail("Should have thrown error");
+      } catch (e) {
+        expect((e as Error).message).toContain("Ticket not found");
+      }
     });
 
     test("rejects invalid transitions", async () => {
