@@ -1,0 +1,112 @@
+@use '../../styles/tokens' as *;
+
+.pmShell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pmSidebar {
+  border-right: 1px solid $border-color;
+  background: $bg-sidebar;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarHeader {
+  padding: 8px 12px;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+
+.sidebarTitle {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: $text-muted;
+}
+
+.projectList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.projectGroup {
+  margin-bottom: 4px;
+}
+
+.projectName {
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-muted;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: default;
+  transition: color 0.15s;
+
+  &[data-active="true"] {
+    color: $text-primary;
+  }
+}
+
+.entityRow {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px 5px 20px;
+  font-size: 12px;
+  color: $text-muted;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+    color: $text-primary;
+  }
+
+  &[aria-current="page"] {
+    color: $text-primary;
+    background: hsl(var(--accent) / 0.12);
+    font-weight: 500;
+  }
+}
+
+.pmContent {
+  overflow: auto;
+  min-width: 0;
+}
+
+.loading {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeletonBar {
+  height: 28px;
+  width: 100%;
+  background: hsl(var(--border));
+  border-radius: 4px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: $text-muted;
+  font-size: 12px;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
