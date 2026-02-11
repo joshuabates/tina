@@ -17,10 +17,18 @@ import { renderWithAppRuntime } from "@/test/harness/app-runtime"
 import { expectStatusLabelVisible } from "@/test/harness/status"
 
 vi.mock("@/hooks/useTypedQuery")
+vi.mock("@/convex", () => ({
+  convex: {
+    mutation: vi.fn(),
+  },
+}))
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
+const mockConvexMutation = vi.mocked(
+  (await import("@/convex")).convex.mutation as any,
+)
 
 const defaultProjects = [
   buildProjectSummary({ _id: "p1", name: "Project Alpha", orchestrationCount: 2 }),
@@ -76,6 +84,7 @@ function itemContainer(label: string): HTMLElement {
 describe("Sidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockConvexMutation.mockResolvedValue(undefined as any)
   })
 
   it("renders loading state while queries are pending", () => {
@@ -101,6 +110,18 @@ describe("Sidebar", () => {
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
+  })
+
+  it("renders a right-aligned project delete control that is hidden until hover", () => {
+    renderSidebar()
+
+    const deleteButton = screen.getByRole("button", {
+      name: /delete project project alpha/i,
+    })
+
+    expect(deleteButton).toHaveClass("ml-auto")
+    expect(deleteButton).toHaveClass("opacity-0")
+    expect(deleteButton).toHaveClass("group-hover/project:opacity-100")
   })
 
   it("highlights selected orchestration and shows normalized status text", () => {
@@ -141,6 +162,21 @@ describe("Sidebar", () => {
     await user.click(itemContainer("Project Beta"))
 
     expect(itemContainer("feature-three")).toHaveClass("bg-muted/50")
+  })
+
+  it("clicking project delete does not trigger project header selection", async () => {
+    const user = userEvent.setup()
+    renderSidebar()
+
+    await user.click(
+      screen.getByRole("button", { name: /delete project project beta/i }),
+    )
+
+    expect(mockConvexMutation).toHaveBeenCalledTimes(1)
+    expect(mockConvexMutation).toHaveBeenCalledWith(expect.anything(), {
+      projectId: "p2",
+    })
+    expect(itemContainer("feature-three")).not.toHaveClass("bg-muted/50")
   })
 
   it("renders empty state when no orchestrations exist", () => {

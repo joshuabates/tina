@@ -1,5 +1,7 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Option } from "effect"
+import { api } from "@convex/_generated/api"
+import type { Id } from "@convex/_generated/dataModel"
 import { DataErrorBoundary } from "./DataErrorBoundary"
 import { SidebarNav, type SidebarProject } from "./ui/sidebar-nav"
 import type { SidebarItemProps } from "./ui/sidebar-item"
@@ -35,6 +37,7 @@ function SidebarContent() {
   const projectsResult = useTypedQuery(ProjectListQuery, {})
   const orchestrationsResult = useTypedQuery(OrchestrationListQuery, {})
   const { orchestrationId, selectOrchestration } = useSelection()
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
 
   // Flat array of orchestrations for keyboard navigation
   const orchestrations = useMemo(() => {
@@ -113,8 +116,30 @@ function SidebarContent() {
     // Initialize projects
     for (const project of projectsResult.data) {
       const sidebarProject: SidebarProject = {
+        id: project._id,
         name: project.name,
         active: false,
+        deleting: deletingProjectId === project._id,
+        onDelete: () => {
+          if (deletingProjectId !== null) return
+          const shouldClearSelection = sidebarProject.items.some((item) => item.active === true)
+          setDeletingProjectId(project._id)
+          void (async () => {
+            try {
+              const { convex } = await import("@/convex")
+              await convex.mutation(api.projects.deleteProject, {
+                projectId: project._id as Id<"projects">,
+              })
+              if (shouldClearSelection) {
+                selectOrchestration(null)
+              }
+            } catch (error) {
+              console.error("Failed to delete project", error)
+            } finally {
+              setDeletingProjectId((current) => (current === project._id ? null : current))
+            }
+          })()
+        },
         items: [],
       }
       projectMap.set(project._id, sidebarProject)
@@ -168,6 +193,7 @@ function SidebarContent() {
     // Add ungrouped section if there are ungrouped orchestrations
     if (ungroupedItems.length > 0) {
       result.push({
+        id: "ungrouped",
         name: "Ungrouped",
         active: ungroupedItems.some((item) => item.active === true),
         onClick: ungroupedItems[0]?.onClick,
@@ -176,7 +202,14 @@ function SidebarContent() {
     }
 
     return result
-  }, [projectsResult, orchestrationsResult, orchestrationId, selectOrchestration, getItemProps])
+  }, [
+    deletingProjectId,
+    projectsResult,
+    orchestrationsResult,
+    orchestrationId,
+    selectOrchestration,
+    getItemProps,
+  ])
 
   if (isAnyQueryLoading(projectsResult, orchestrationsResult)) {
     return (

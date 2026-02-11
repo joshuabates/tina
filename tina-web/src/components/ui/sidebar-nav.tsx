@@ -1,10 +1,14 @@
 import { cn } from "@/lib/utils";
+import { Trash2 } from "lucide-react";
 import { SidebarItem, type SidebarItemProps } from "./sidebar-item";
 
 interface SidebarProject {
+  id: string;
   name: string;
   active?: boolean;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
+  onDelete?: React.MouseEventHandler<HTMLButtonElement>;
+  deleting?: boolean;
   items: SidebarItemProps[];
 }
 
@@ -27,10 +31,10 @@ function SidebarNav({ projects, activeDescendantId, className, ...props }: Sideb
         aria-activedescendant={activeDescendantId}
       >
         {projects.map((project) => (
-          <div key={project.name}>
+          <div key={project.id}>
             <div
               className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors",
+                "group/project flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors",
                 project.active
                   ? "bg-muted/45 text-foreground"
                   : "text-muted-foreground/95",
@@ -41,6 +45,28 @@ function SidebarNav({ projects, activeDescendantId, className, ...props }: Sideb
               <span className="text-[13px] font-medium leading-tight flex-1 truncate">
                 {project.name}
               </span>
+              {project.onDelete && (
+                <button
+                  type="button"
+                  aria-label={`Delete project ${project.name}`}
+                  title={`Delete ${project.name}`}
+                  disabled={project.deleting === true}
+                  className={cn(
+                    "ml-auto inline-flex h-6 w-6 items-center justify-center rounded border border-border/60 transition",
+                    "opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto",
+                    "focus-visible:opacity-100 focus-visible:pointer-events-auto focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    project.deleting
+                      ? "cursor-not-allowed text-muted-foreground/50"
+                      : "text-muted-foreground/80 hover:text-destructive hover:bg-destructive/10"
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    project.onDelete?.(event);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
             </div>
             {project.items.length > 0 && (
               <div className="ml-3.5 pl-1.5 space-y-0.5 border-l border-border/45">

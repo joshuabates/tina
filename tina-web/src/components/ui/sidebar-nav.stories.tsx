@@ -21,6 +21,7 @@ export const Default: Story = {
   args: {
     projects: [
       {
+        id: "p1",
         name: "tina-core",
         active: true,
         items: [
@@ -30,18 +31,21 @@ export const Default: Story = {
         ],
       },
       {
+        id: "p2",
         name: "tina-plugin",
         items: [
           { label: "Build pipeline", statusText: "DONE", statusColor: "text-status-complete" },
         ],
       },
       {
+        id: "p3",
         name: "tina-cli",
         items: [
           { label: "Parser logic", statusText: "BLOCK", statusColor: "text-status-blocked" },
         ],
       },
       {
+        id: "p4",
         name: "shared-utils",
         items: [],
       },

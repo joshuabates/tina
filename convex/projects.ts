@@ -1,5 +1,48 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
+
+async function deleteRowsByOrchestrationId(
+  ctx: MutationCtx,
+  table:
+    | "phases"
+    | "taskEvents"
+    | "orchestrationEvents"
+    | "teamMembers"
+    | "teams"
+    | "inboundActions"
+    | "commits"
+    | "plans",
+  orchestrationId: Id<"orchestrations">,
+) {
+  const rows = await ctx.db
+    .query(table)
+    .withIndex("by_orchestration", (q) => q.eq("orchestrationId", orchestrationId))
+    .collect();
+
+  for (const row of rows) {
+    await ctx.db.delete(row._id);
+  }
+
+  return rows.length;
+}
+
+async function deleteSupervisorStateByFeatureName(
+  ctx: MutationCtx,
+  featureName: string,
+) {
+  const states = await ctx.db
+    .query("supervisorStates")
+    .withIndex("by_feature", (q) => q.eq("featureName", featureName))
+    .collect();
+
+  for (const state of states) {
+    await ctx.db.delete(state._id);
+  }
+
+  return states.length;
+}
 
 export const listProjects = query({
   args: {},
@@ -66,5 +109,51 @@ export const findOrCreateByRepoPath = mutation({
       repoPath: args.repoPath,
       createdAt: now,
     });
+  },
+});
+
+export const deleteProject = mutation({
+  args: {
+    projectId: v.id("projects"),
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project) {
+      return {
+        deleted: false,
+        deletedProjectId: args.projectId,
+        deletedOrchestrations: 0,
+      };
+    }
+
+    const orchestrations = await ctx.db
+      .query("orchestrations")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    for (const orchestration of orchestrations) {
+      await deleteRowsByOrchestrationId(ctx, "inboundActions", orchestration._id);
+      await deleteRowsByOrchestrationId(
+        ctx,
+        "orchestrationEvents",
+        orchestration._id,
+      );
+      await deleteRowsByOrchestrationId(ctx, "taskEvents", orchestration._id);
+      await deleteRowsByOrchestrationId(ctx, "teamMembers", orchestration._id);
+      await deleteRowsByOrchestrationId(ctx, "teams", orchestration._id);
+      await deleteRowsByOrchestrationId(ctx, "phases", orchestration._id);
+      await deleteSupervisorStateByFeatureName(ctx, orchestration.featureName);
+      await deleteRowsByOrchestrationId(ctx, "commits", orchestration._id);
+      await deleteRowsByOrchestrationId(ctx, "plans", orchestration._id);
+      await ctx.db.delete(orchestration._id);
+    }
+
+    await ctx.db.delete(args.projectId);
+
+    return {
+      deleted: true,
+      deletedProjectId: args.projectId,
+      deletedOrchestrations: orchestrations.length,
+    };
   },
 });
