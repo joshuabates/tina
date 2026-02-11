@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -29,8 +29,8 @@ export async function allocateKey(
   return 1;
 }
 
-// Exposed for testing
-export const allocateKeyMutation = mutation({
+// Internal API for testing
+export const allocateKeyMutation = internalMutation({
   args: {
     projectId: v.id("projects"),
     counterType: v.union(v.literal("design"), v.literal("ticket")),
@@ -40,7 +40,7 @@ export const allocateKeyMutation = mutation({
   },
 });
 
-export const getCounter = query({
+export const getCounter = internalQuery({
   args: {
     projectId: v.id("projects"),
     counterType: v.union(v.literal("design"), v.literal("ticket")),

@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 describe("projectCounters:allocateKey", () => {
@@ -12,7 +12,7 @@ describe("projectCounters:allocateKey", () => {
       repoPath: "/Users/joshua/Projects/counter-test",
     });
 
-    const key = await t.mutation(api.projectCounters.allocateKeyMutation, {
+    const key = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
       counterType: "design",
     });
@@ -20,7 +20,7 @@ describe("projectCounters:allocateKey", () => {
     expect(key).toBe(1);
 
     // Verify the counter was seeded
-    const counter = await t.query(api.projectCounters.getCounter, {
+    const counter = await t.query(internal.projectCounters.getCounter, {
       projectId,
       counterType: "design",
     });
@@ -35,11 +35,11 @@ describe("projectCounters:allocateKey", () => {
       repoPath: "/Users/joshua/Projects/counter-test-2",
     });
 
-    const key1 = await t.mutation(api.projectCounters.allocateKeyMutation, {
+    const key1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
       counterType: "design",
     });
-    const key2 = await t.mutation(api.projectCounters.allocateKeyMutation, {
+    const key2 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
       counterType: "design",
     });
@@ -47,7 +47,7 @@ describe("projectCounters:allocateKey", () => {
     expect(key1).toBe(1);
     expect(key2).toBe(2);
 
-    const counter = await t.query(api.projectCounters.getCounter, {
+    const counter = await t.query(internal.projectCounters.getCounter, {
       projectId,
       counterType: "design",
     });
@@ -62,15 +62,15 @@ describe("projectCounters:allocateKey", () => {
       repoPath: "/Users/joshua/Projects/counter-test-3",
     });
 
-    const designKey1 = await t.mutation(api.projectCounters.allocateKeyMutation, {
+    const designKey1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
       counterType: "design",
     });
-    const ticketKey1 = await t.mutation(api.projectCounters.allocateKeyMutation, {
+    const ticketKey1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
       counterType: "ticket",
     });
-    const designKey2 = await t.mutation(api.projectCounters.allocateKeyMutation, {
+    const designKey2 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
       counterType: "design",
     });
@@ -79,13 +79,13 @@ describe("projectCounters:allocateKey", () => {
     expect(ticketKey1).toBe(1);
     expect(designKey2).toBe(2);
 
-    const designCounter = await t.query(api.projectCounters.getCounter, {
+    const designCounter = await t.query(internal.projectCounters.getCounter, {
       projectId,
       counterType: "design",
     });
     expect(designCounter?.nextValue).toBe(3);
 
-    const ticketCounter = await t.query(api.projectCounters.getCounter, {
+    const ticketCounter = await t.query(internal.projectCounters.getCounter, {
       projectId,
       counterType: "ticket",
     });
@@ -104,11 +104,11 @@ describe("projectCounters:allocateKey", () => {
       repoPath: "/Users/joshua/Projects/counter-test-4b",
     });
 
-    const key1Project1 = await t.mutation(api.projectCounters.allocateKeyMutation, {
+    const key1Project1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId: project1Id,
       counterType: "design",
     });
-    const key1Project2 = await t.mutation(api.projectCounters.allocateKeyMutation, {
+    const key1Project2 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId: project2Id,
       counterType: "design",
     });
