@@ -62,8 +62,8 @@ pub fn run(
     let cwd_abs = fs::canonicalize(cwd)?;
 
     // Resolve design source: either a local file or a Convex design ID
-    let (design_doc_path, resolved_design_id) =
-        resolve_design_source(design_doc, design_id, &cwd_abs)?;
+    let (design_doc_path, resolved_design_id, design_markdown) =
+        resolve_design_source(design_doc, design_id)?;
 
     // Check if already initialized via Convex (only block on active orchestrations)
     if let Some(existing) = check_existing_orchestration(feature)? {
@@ -97,8 +97,8 @@ pub fn run(
     }
 
     // When using --design-id, write design markdown to worktree for local access
-    if let Some(did) = resolved_design_id.as_deref() {
-        write_design_to_worktree(&worktree_path, did)?;
+    if let Some(markdown) = design_markdown.as_deref() {
+        write_design_to_worktree(&worktree_path, markdown)?;
     }
 
     // Create supervisor state file in worktree
@@ -174,52 +174,45 @@ pub fn run(
     Ok(0)
 }
 
-/// Resolve the design source to an absolute path and optional design ID.
+/// Resolve the design source to an absolute path, optional design ID, and optional markdown.
 ///
 /// When `--design-doc` is provided, validates and canonicalizes the path.
-/// When `--design-id` is provided, validates the design exists in Convex and
-/// returns a `convex://{id}` placeholder path.
+/// When `--design-id` is provided, fetches the design from Convex and returns
+/// a `convex://{id}` placeholder path along with the design markdown (to avoid
+/// re-fetching later).
 fn resolve_design_source(
     design_doc: Option<&Path>,
     design_id: Option<&str>,
-    _cwd_abs: &Path,
-) -> anyhow::Result<(std::path::PathBuf, Option<String>)> {
+) -> anyhow::Result<(std::path::PathBuf, Option<String>, Option<String>)> {
     if let Some(doc) = design_doc {
         if !doc.exists() {
             anyhow::bail!(SessionError::FileNotFound(doc.display().to_string()));
         }
         let abs = fs::canonicalize(doc)?;
-        Ok((abs, None))
+        Ok((abs, None, None))
     } else {
         let did = design_id.expect("validated: exactly one source must be set");
-        // Validate design exists in Convex
+        // Fetch design from Convex (used for both validation and writing to worktree)
         let design = convex::run_convex(|mut writer| async move {
             writer.get_design(did).await
         })?;
         match design {
-            Some(_) => Ok((
+            Some(d) => Ok((
                 std::path::PathBuf::from(format!("convex://{}", did)),
                 Some(did.to_string()),
+                Some(d.markdown),
             )),
             None => anyhow::bail!("Design not found in Convex: {}", did),
         }
     }
 }
 
-/// Write the design document markdown from Convex to the worktree.
-fn write_design_to_worktree(worktree_path: &Path, design_id: &str) -> anyhow::Result<()> {
-    let design = convex::run_convex(|mut writer| async move {
-        writer.get_design(design_id).await
-    })?;
-    match design {
-        Some(d) => {
-            let tina_dir = worktree_path.join(".claude").join("tina");
-            fs::create_dir_all(&tina_dir)?;
-            fs::write(tina_dir.join("design.md"), &d.markdown)?;
-            Ok(())
-        }
-        None => anyhow::bail!("Design not found in Convex: {}", design_id),
-    }
+/// Write the design document markdown to the worktree.
+fn write_design_to_worktree(worktree_path: &Path, markdown: &str) -> anyhow::Result<()> {
+    let tina_dir = worktree_path.join(".claude").join("tina");
+    fs::create_dir_all(&tina_dir)?;
+    fs::write(tina_dir.join("design.md"), markdown)?;
+    Ok(())
 }
 
 fn parse_review_enforcement(value: &str) -> anyhow::Result<ReviewEnforcement> {
