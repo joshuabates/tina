@@ -7,6 +7,9 @@ import {
   OrchestrationEvent,
   Commit,
   Plan,
+  TelemetrySpan,
+  TelemetryEvent,
+  TelemetryRollup,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -71,4 +74,44 @@ export const PlanQuery = queryDef({
     phaseNumber: Schema.String,
   }),
   schema: Schema.NullOr(Plan),
+})
+
+export const TelemetrySpanListQuery = queryDef({
+  key: "telemetry.spans",
+  query: api.telemetry.listSpans,
+  args: Schema.Struct({
+    traceId: Schema.optional(Schema.String),
+    orchestrationId: Schema.optional(Schema.String),
+    source: Schema.optional(Schema.String),
+    operation: Schema.optional(Schema.String),
+    since: Schema.optional(Schema.String),
+    limit: Schema.optional(Schema.Number),
+  }),
+  schema: Schema.Array(TelemetrySpan),
+})
+
+export const TelemetryEventListQuery = queryDef({
+  key: "telemetry.events",
+  query: api.telemetry.listEvents,
+  args: Schema.Struct({
+    traceId: Schema.optional(Schema.String),
+    orchestrationId: Schema.optional(Schema.String),
+    eventType: Schema.optional(Schema.String),
+    source: Schema.optional(Schema.String),
+    since: Schema.optional(Schema.String),
+    limit: Schema.optional(Schema.Number),
+  }),
+  schema: Schema.Array(TelemetryEvent),
+})
+
+export const TelemetryRollupQuery = queryDef({
+  key: "telemetry.rollups",
+  query: api.telemetry.getRollups,
+  args: Schema.Struct({
+    windowStart: Schema.String,
+    windowEnd: Schema.String,
+    source: Schema.optional(Schema.String),
+    operation: Schema.optional(Schema.String),
+  }),
+  schema: Schema.Array(TelemetryRollup),
 })

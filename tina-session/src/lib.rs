@@ -11,5 +11,6 @@ pub mod error;
 pub mod routing;
 pub mod session;
 pub mod state;
+pub mod telemetry;
 pub mod tmux;
 pub mod watch;

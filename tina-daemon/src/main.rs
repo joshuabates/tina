@@ -12,6 +12,7 @@ use tina_daemon::actions;
 use tina_daemon::config::DaemonConfig;
 use tina_daemon::heartbeat;
 use tina_daemon::sync::{self, SyncCache};
+use tina_daemon::telemetry::DaemonTelemetry;
 use tina_daemon::watcher::{DaemonWatcher, WatchEvent};
 
 use convex::{FunctionResult, Value};
@@ -65,6 +66,9 @@ async fn main() -> Result<()> {
     let client = Arc::new(Mutex::new(client));
     let cancel = CancellationToken::new();
 
+    // Initialize telemetry (best-effort, no orchestration context at daemon level)
+    let telemetry = DaemonTelemetry::new(Arc::clone(&client));
+
     // Start heartbeat
     let heartbeat_handle =
         heartbeat::spawn_heartbeat(Arc::clone(&client), node_id.clone(), cancel.clone());
@@ -78,7 +82,7 @@ async fn main() -> Result<()> {
 
     // Initial full sync
     let mut cache = SyncCache::new();
-    if let Err(e) = sync::sync_all(&client, &mut cache, &teams_dir, &tasks_dir).await {
+    if let Err(e) = sync::sync_all(&client, &mut cache, &teams_dir, &tasks_dir, Some(&telemetry)).await {
         error!(error = %e, "initial sync failed");
     }
 
@@ -183,7 +187,7 @@ async fn main() -> Result<()> {
                 match event {
                     Some(WatchEvent::Teams) | Some(WatchEvent::Tasks) => {
                         if let Err(e) = sync::sync_all(
-                            &client, &mut cache, &teams_dir, &tasks_dir,
+                            &client, &mut cache, &teams_dir, &tasks_dir, Some(&telemetry),
                         ).await {
                             error!(error = %e, "sync failed");
                         }
@@ -203,6 +207,7 @@ async fn main() -> Result<()> {
                                 &worktree.current_phase,
                                 &worktree.worktree_path,
                                 &worktree.branch,
+                                Some(&telemetry),
                             ).await {
                                 error!(
                                     feature = %worktree.feature,
@@ -229,6 +234,7 @@ async fn main() -> Result<()> {
                                 &client,
                                 &worktree.orchestration_id,
                                 &plan_path,
+                                Some(&telemetry),
                             ).await {
                                 error!(
                                     feature = %worktree.feature,

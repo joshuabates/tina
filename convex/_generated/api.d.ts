@@ -11,6 +11,7 @@
 import type * as actions from "../actions.js";
 import type * as admin from "../admin.js";
 import type * as commits from "../commits.js";
+import type * as cron from "../cron.js";
 import type * as events from "../events.js";
 import type * as generated_orchestrationCore from "../generated/orchestrationCore.js";
 import type * as nodes from "../nodes.js";
@@ -22,6 +23,7 @@ import type * as supervisorStates from "../supervisorStates.js";
 import type * as tasks from "../tasks.js";
 import type * as teamMembers from "../teamMembers.js";
 import type * as teams from "../teams.js";
+import type * as telemetry from "../telemetry.js";
 import type * as test_helpers from "../test_helpers.js";
 
 import type {
@@ -34,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   actions: typeof actions;
   admin: typeof admin;
   commits: typeof commits;
+  cron: typeof cron;
   events: typeof events;
   "generated/orchestrationCore": typeof generated_orchestrationCore;
   nodes: typeof nodes;
@@ -45,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   tasks: typeof tasks;
   teamMembers: typeof teamMembers;
   teams: typeof teams;
+  telemetry: typeof telemetry;
   test_helpers: typeof test_helpers;
 }>;
 

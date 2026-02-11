@@ -128,6 +128,22 @@ impl ConvexWriter {
         self.client.register_team(team).await
     }
 
+    /// Record a telemetry span.
+    pub async fn record_telemetry_span(
+        &mut self,
+        span: &tina_data::SpanRecord,
+    ) -> anyhow::Result<String> {
+        self.client.record_telemetry_span(span).await
+    }
+
+    /// Record a telemetry event.
+    pub async fn record_telemetry_event(
+        &mut self,
+        event: &tina_data::EventRecord,
+    ) -> anyhow::Result<String> {
+        self.client.record_telemetry_event(event).await
+    }
+
     /// Get the latest orchestration for a feature name.
     pub async fn get_by_feature(
         &mut self,

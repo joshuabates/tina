@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use tina_session::state::orchestrate::{advance_state, next_action, Action, AdvanceEvent};
+use tina_session::telemetry::TelemetryContext;
 
 use crate::commands::state_sync::{all_phase_args_from_state, orchestration_args_from_state};
 use tina_session::convex;
@@ -9,7 +10,21 @@ use tina_session::convex;
 pub fn next(feature: &str) -> anyhow::Result<u8> {
     let state = tina_session::state::schema::SupervisorState::load(feature)?;
 
+    // Create telemetry context for this operation
+    let ctx = TelemetryContext::new(
+        "orchestrate.next",
+        None, // orchestration_id will be set during sync
+        Some(feature.to_string()),
+        None,
+    );
+
     let action = next_action(&state)?;
+
+    // Record telemetry (best-effort)
+    if let Err(e) = record_next_telemetry(&ctx, &state, &action) {
+        eprintln!("Warning: Failed to record telemetry: {}", e);
+    }
+
     println!("{}", serde_json::to_string(&action)?);
     Ok(0)
 }
@@ -25,13 +40,26 @@ pub fn advance(
 ) -> anyhow::Result<u8> {
     let mut state = tina_session::state::schema::SupervisorState::load(feature)?;
 
+    // Create telemetry context for this operation
+    let phase_number = if phase == "validation" {
+        None
+    } else {
+        Some(phase.to_string())
+    };
+    let ctx = TelemetryContext::new(
+        "orchestrate.advance",
+        None, // orchestration_id will be set during sync
+        Some(feature.to_string()),
+        phase_number.clone(),
+    );
+
     let event = parse_event(event, plan_path, git_range, issues)?;
     let action = advance_state(&mut state, phase, event.clone())?;
 
     state.save()?;
 
-    // Sync to Convex (non-fatal)
-    if let Err(e) = sync_to_convex(feature, &state, phase, &action, Some(&event)) {
+    // Sync to Convex and record telemetry (non-fatal)
+    if let Err(e) = sync_to_convex_with_telemetry(&ctx, feature, &state, phase, &action, Some(&event)) {
         eprintln!("Warning: Failed to sync to Convex: {}", e);
     }
 
@@ -100,46 +128,6 @@ fn parse_event(
     }
 }
 
-fn sync_to_convex(
-    feature: &str,
-    state: &tina_session::state::schema::SupervisorState,
-    phase: &str,
-    action: &Action,
-    event: Option<&AdvanceEvent>,
-) -> anyhow::Result<()> {
-    let mut orch = orchestration_args_from_state(feature, state);
-    let phase_args_list = all_phase_args_from_state(state);
-
-    let (event_type, summary, detail) = event_from_action(phase, action, event);
-    let phase_number = if phase == "validation" {
-        None
-    } else {
-        Some(phase.to_string())
-    };
-
-    convex::run_convex_write(|mut writer| async move {
-        orch.node_id = writer.node_id().to_string();
-        let orch_id = writer.upsert_orchestration(&orch).await?;
-
-        for mut pa in phase_args_list {
-            pa.orchestration_id = orch_id.clone();
-            writer.upsert_phase(&pa).await?;
-        }
-
-        let event = convex::EventArgs {
-            orchestration_id: orch_id,
-            phase_number,
-            event_type,
-            source: "tina-session orchestrate".to_string(),
-            summary,
-            detail,
-            recorded_at: chrono::Utc::now().to_rfc3339(),
-        };
-        writer.record_event(&event).await?;
-
-        Ok(())
-    })
-}
 
 fn event_from_action(
     phase: &str,
@@ -226,4 +214,122 @@ fn event_from_action(
             None,
         ),
     }
+}
+
+/// Record telemetry for next_action operation (best-effort).
+fn record_next_telemetry(
+    ctx: &TelemetryContext,
+    state: &tina_session::state::schema::SupervisorState,
+    action: &Action,
+) -> anyhow::Result<()> {
+    convex::run_convex_write(|mut writer| async move {
+        // Get orchestration ID from Convex (or None if not yet created)
+        let orchestration_id = writer
+            .get_by_feature(&state.feature)
+            .await?
+            .map(|o| o.id);
+
+        // Create a context with the resolved orchestration ID
+        let ctx_with_id = if orchestration_id.is_some() {
+            TelemetryContext::new(
+                "orchestrate.next",
+                orchestration_id.clone(),
+                Some(state.feature.clone()),
+                None,
+            )
+        } else {
+            ctx.clone()
+        };
+
+        // Record span
+        let status = match action {
+            Action::Error { .. } | Action::Stopped { .. } | Action::ConsensusDisagreement { .. } => "error",
+            _ => "ok",
+        };
+        ctx_with_id.record_span(&mut writer, status, None, None).await?;
+
+        Ok(())
+    })
+}
+
+/// Sync to Convex and record telemetry (best-effort).
+fn sync_to_convex_with_telemetry(
+    _ctx: &TelemetryContext,
+    feature: &str,
+    state: &tina_session::state::schema::SupervisorState,
+    phase: &str,
+    action: &Action,
+    event: Option<&AdvanceEvent>,
+) -> anyhow::Result<()> {
+    let mut orch = orchestration_args_from_state(feature, state);
+    let phase_args_list = all_phase_args_from_state(state);
+
+    let (event_type, summary, detail) = event_from_action(phase, action, event);
+    let phase_number = if phase == "validation" {
+        None
+    } else {
+        Some(phase.to_string())
+    };
+
+    convex::run_convex_write(|mut writer| async move {
+        orch.node_id = writer.node_id().to_string();
+        let orch_id = writer.upsert_orchestration(&orch).await?;
+
+        for mut pa in phase_args_list {
+            pa.orchestration_id = orch_id.clone();
+            writer.upsert_phase(&pa).await?;
+        }
+
+        let event = convex::EventArgs {
+            orchestration_id: orch_id.clone(),
+            phase_number: phase_number.clone(),
+            event_type: event_type.clone(),
+            source: "tina-session orchestrate".to_string(),
+            summary: summary.clone(),
+            detail,
+            recorded_at: chrono::Utc::now().to_rfc3339(),
+        };
+        writer.record_event(&event).await?;
+
+        // Record telemetry (best-effort - don't fail if telemetry fails)
+        let ctx_with_id = TelemetryContext::new(
+            "orchestrate.advance",
+            Some(orch_id.clone()),
+            Some(state.feature.clone()),
+            phase_number,
+        );
+
+        // Record span
+        let span_status = match action {
+            Action::Error { .. } | Action::Stopped { .. } | Action::ConsensusDisagreement { .. } => "error",
+            _ => "ok",
+        };
+        if let Err(e) = ctx_with_id.record_span(&mut writer, span_status, None, None).await {
+            eprintln!("Warning: Failed to record telemetry span: {}", e);
+        }
+
+        // Record state.transition event
+        let severity = match action {
+            Action::Error { .. } | Action::Stopped { .. } | Action::ConsensusDisagreement { .. } => "error",
+            Action::Wait { .. } => "info",
+            _ => "info",
+        };
+        let transition_attrs = serde_json::json!({
+            "from_status": state.status,
+            "action": serde_json::to_value(action).unwrap_or(serde_json::Value::Null),
+        }).to_string();
+
+        if let Err(e) = ctx_with_id.record_event(
+            &mut writer,
+            "state.transition",
+            severity,
+            summary,
+            Some(span_status.to_string()),
+            Some(transition_attrs),
+        ).await {
+            eprintln!("Warning: Failed to record telemetry event: {}", e);
+        }
+
+        Ok(())
+    })
 }

@@ -28,6 +28,9 @@ anyhow = "1"
 # Regex
 regex = "1"
 
+# UUID generation for telemetry
+uuid = { version = "1", features = ["v4"] }
+
 # CLI
 clap = { version = "4", features = ["derive"] }
 

@@ -1608,6 +1608,7 @@ dependencies = [
  "dirs",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -1625,6 +1626,7 @@ dependencies = [
  "tina-data",
  "tina-session",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -1648,6 +1650,7 @@ dependencies = [
  "tina-data",
  "tokio",
  "toml",
+ "uuid",
 ]
 
 [[package]]

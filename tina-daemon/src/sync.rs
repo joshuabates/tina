@@ -16,6 +16,7 @@ use tina_data::{
 use tina_session::state::schema::{Agent, Task, Team};
 
 use crate::git;
+use crate::telemetry::DaemonTelemetry;
 use crate::watcher::WorktreeInfo;
 
 /// Cached state for detecting changes and avoiding redundant Convex writes.
@@ -106,7 +107,11 @@ pub async fn sync_team_members(
     cache: &mut SyncCache,
     teams_dir: &Path,
     team: &ActiveTeamRecord,
+    telemetry: Option<&DaemonTelemetry>,
 ) -> Result<()> {
+    let started_at = chrono::Utc::now();
+    let span_id = telemetry.map(|t| t.start_span("daemon.sync_team_members"));
+
     let team_config = load_team_config(teams_dir, &team.team_name)?;
 
     let orchestration_id = &team.orchestration_id;
@@ -165,6 +170,17 @@ pub async fn sync_team_members(
             Ok(_) => {
                 cache.team_member_state.insert(cache_key, now.clone());
                 debug!(agent = %member.name, orchestration = %orchestration_id, "synced team member");
+
+                // Emit projection.write event
+                if let Some(t) = telemetry {
+                    let attrs = serde_json::json!({
+                        "team_name": team.team_name,
+                        "agent_name": member.name,
+                        "orchestration_id": orchestration_id,
+                        "phase_number": &phase_number,
+                    }).to_string();
+                    t.emit_event("projection.write", "info", "team member synced", Some(attrs)).await;
+                }
             }
             Err(e) => {
                 error!(agent = %member.name, error = %e, "failed to sync team member");
@@ -176,6 +192,11 @@ pub async fn sync_team_members(
     cache
         .team_members
         .insert(team.team_name.clone(), current_members);
+
+    // Complete span
+    if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+        t.end_span(sid, "daemon.sync_team_members", started_at, "ok", None, None).await;
+    }
 
     Ok(())
 }
@@ -224,12 +245,24 @@ pub async fn sync_tasks(
     cache: &mut SyncCache,
     active_teams: &[ActiveTeamRecord],
     tasks_dir: &Path,
+    telemetry: Option<&DaemonTelemetry>,
 ) -> Result<()> {
+    let started_at = chrono::Utc::now();
+    let span_id = telemetry.map(|t| t.start_span("daemon.sync_tasks"));
+
     for team in active_teams {
         // Claude CLI stores tasks under ~/.claude/tasks/{team_name}/
         let task_team_dir = tasks_dir.join(&team.team_name);
 
         if !task_team_dir.exists() {
+            // Emit skip event for missing task dir
+            if let Some(t) = telemetry {
+                let attrs = serde_json::json!({
+                    "team_name": &team.team_name,
+                    "reason": "task_dir_missing",
+                }).to_string();
+                t.emit_event("projection.skip", "info", "task directory not found", Some(attrs)).await;
+            }
             continue;
         }
 
@@ -239,8 +272,14 @@ pub async fn sync_tasks(
             &team.orchestration_id,
             team.phase_number.as_deref(),
             &task_team_dir,
+            telemetry,
         )
         .await?;
+    }
+
+    // Complete span
+    if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+        t.end_span(sid, "daemon.sync_tasks", started_at, "ok", None, None).await;
     }
 
     Ok(())
@@ -253,6 +292,7 @@ async fn sync_task_dir(
     orchestration_id: &str,
     phase_number: Option<&str>,
     task_dir: &Path,
+    telemetry: Option<&DaemonTelemetry>,
 ) -> Result<()> {
     let tasks = load_task_files(task_dir)?;
     let now = Utc::now().to_rfc3339();
@@ -280,6 +320,15 @@ async fn sync_task_dir(
 
         // Skip if unchanged
         if cache.task_state.get(&cache_key) == Some(&current) {
+            // Emit skip event for unchanged task
+            if let Some(t) = telemetry {
+                let attrs = serde_json::json!({
+                    "task_id": &task.id,
+                    "orchestration_id": orchestration_id,
+                    "reason": "unchanged_cache",
+                }).to_string();
+                t.emit_event("projection.skip", "info", "task unchanged in cache", Some(attrs)).await;
+            }
             continue;
         }
 
@@ -305,6 +354,16 @@ async fn sync_task_dir(
                     status = %task.status,
                     "synced task event"
                 );
+
+                // Emit projection.write event
+                if let Some(t) = telemetry {
+                    let attrs = serde_json::json!({
+                        "task_id": &task.id,
+                        "orchestration_id": orchestration_id,
+                        "status": &task.status,
+                    }).to_string();
+                    t.emit_event("projection.write", "info", "task event written", Some(attrs)).await;
+                }
             }
             Err(e) => {
                 error!(task_id = %task.id, error = %e, "failed to sync task event");
@@ -332,7 +391,11 @@ pub async fn sync_all(
     cache: &mut SyncCache,
     teams_dir: &Path,
     tasks_dir: &Path,
+    telemetry: Option<&DaemonTelemetry>,
 ) -> Result<()> {
+    let started_at = chrono::Utc::now();
+    let span_id = telemetry.map(|t| t.start_span("daemon.sync_all"));
+
     let active_teams = fetch_active_teams(client).await?;
     info!(
         count = active_teams.len(),
@@ -340,13 +403,18 @@ pub async fn sync_all(
     );
 
     for team in &active_teams {
-        if let Err(e) = sync_team_members(client, cache, teams_dir, team).await {
+        if let Err(e) = sync_team_members(client, cache, teams_dir, team, telemetry).await {
             warn!(team = %team.team_name, error = %e, "failed to sync team");
         }
     }
 
-    if let Err(e) = sync_tasks(client, cache, &active_teams, tasks_dir).await {
+    if let Err(e) = sync_tasks(client, cache, &active_teams, tasks_dir, telemetry).await {
         warn!(error = %e, "failed to sync tasks");
+    }
+
+    // Complete span
+    if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+        t.end_span(sid, "daemon.sync_all", started_at, "ok", None, None).await;
     }
 
     Ok(())
@@ -417,7 +485,10 @@ pub async fn sync_commits(
     phase_number: &str,
     worktree_path: &Path,
     branch: &str,
+    telemetry: Option<&DaemonTelemetry>,
 ) -> Result<()> {
+    let started_at = chrono::Utc::now();
+    let span_id = telemetry.map(|t| t.start_span("daemon.sync_commits"));
     // Get last known SHA from cache
     let last_sha = cache
         .last_commit_sha
@@ -428,6 +499,18 @@ pub async fn sync_commits(
     let new_commits = git::get_new_commits(worktree_path, branch, last_sha)?;
 
     if new_commits.is_empty() {
+        // Emit skip event for no new commits
+        if let Some(t) = telemetry {
+            let attrs = serde_json::json!({
+                "orchestration_id": orchestration_id,
+                "reason": "no_new_commits",
+            }).to_string();
+            t.emit_event("projection.skip", "info", "no new commits to sync", Some(attrs)).await;
+        }
+
+        if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+            t.end_span(sid, "daemon.sync_commits", started_at, "ok", None, None).await;
+        }
         return Ok(());
     }
 
@@ -455,6 +538,15 @@ pub async fn sync_commits(
         match client_guard.record_commit(&record).await {
             Ok(_) => {
                 debug!(sha = %commit.short_sha, orchestration = %orchestration_id, "recorded commit");
+
+                // Emit projection.write event
+                if let Some(t) = telemetry {
+                    let attrs = serde_json::json!({
+                        "orchestration_id": orchestration_id,
+                        "sha": &commit.short_sha,
+                    }).to_string();
+                    t.emit_event("projection.write", "info", "commit written", Some(attrs)).await;
+                }
             }
             Err(e) => {
                 error!(sha = %commit.short_sha, error = %e, "failed to record commit");
@@ -469,6 +561,11 @@ pub async fn sync_commits(
             .insert(orchestration_id.to_string(), latest.sha.clone());
     }
 
+    // Complete span
+    if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+        t.end_span(sid, "daemon.sync_commits", started_at, "ok", None, None).await;
+    }
+
     Ok(())
 }
 
@@ -479,7 +576,10 @@ pub async fn sync_plan(
     client: &Arc<Mutex<TinaConvexClient>>,
     orchestration_id: &str,
     plan_path: &Path,
+    telemetry: Option<&DaemonTelemetry>,
 ) -> Result<()> {
+    let started_at = chrono::Utc::now();
+    let span_id = telemetry.map(|t| t.start_span("daemon.sync_plan"));
     // Read plan file content
     let content = tokio::fs::read_to_string(plan_path)
         .await
@@ -509,10 +609,24 @@ pub async fn sync_plan(
                 orchestration = %orchestration_id,
                 "synced plan"
             );
+
+            // Emit projection.write event
+            if let Some(t) = telemetry {
+                let attrs = serde_json::json!({
+                    "orchestration_id": orchestration_id,
+                    "filename": filename,
+                }).to_string();
+                t.emit_event("projection.write", "info", "plan written", Some(attrs)).await;
+            }
         }
         Err(e) => {
             error!(plan = %filename, error = %e, "failed to sync plan");
         }
+    }
+
+    // Complete span
+    if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+        t.end_span(sid, "daemon.sync_plan", started_at, "ok", None, None).await;
     }
 
     Ok(())
