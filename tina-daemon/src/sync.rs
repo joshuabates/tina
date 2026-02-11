@@ -9,7 +9,10 @@ use regex::Regex;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
-use tina_data::{ActiveTeamRecord, CommitRecord, OrchestrationEventRecord, PlanRecord, TaskEventRecord, TeamMemberRecord, TinaConvexClient};
+use tina_data::{
+    ActiveTeamRecord, CommitRecord, OrchestrationEventRecord, PlanRecord, TaskEventRecord,
+    TeamMemberRecord, TinaConvexClient,
+};
 use tina_session::state::schema::{Agent, Task, Team};
 
 use crate::git;
@@ -17,8 +20,8 @@ use crate::watcher::WorktreeInfo;
 
 /// Cached state for detecting changes and avoiding redundant Convex writes.
 pub struct SyncCache {
-    /// Maps `(orchestration_id, task_id)` -> `(status, subject, owner)`
-    pub task_state: HashMap<(String, String), TaskCacheEntry>,
+    /// Maps `(orchestration_id, phase_key, task_id)` -> `(status, subject, owner)`
+    pub task_state: HashMap<(String, String, String), TaskCacheEntry>,
     /// Maps `(orchestration_id, phase_number, agent_name)` -> last recorded_at
     pub team_member_state: HashMap<(String, String, String), String>,
     /// Maps `team_name` -> set of agent names (for detecting removals)
@@ -37,6 +40,8 @@ pub struct TaskCacheEntry {
     pub owner: Option<String>,
 }
 
+const ORCHESTRATOR_PHASE_KEY: &str = "__orchestrator__";
+
 impl SyncCache {
     pub fn new() -> Self {
         Self {
@@ -54,7 +59,8 @@ impl SyncCache {
 
     pub fn find_worktree_by_ref_path(&self, ref_path: &Path) -> Option<&WorktreeInfo> {
         self.worktrees.iter().find(|wt| {
-            let expected = wt.worktree_path
+            let expected = wt
+                .worktree_path
                 .join(".git")
                 .join("refs")
                 .join("heads")
@@ -69,6 +75,25 @@ impl SyncCache {
             plan_path.starts_with(&plans_dir)
         })
     }
+}
+
+fn phase_cache_key(phase_number: Option<&str>) -> String {
+    phase_number
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(ORCHESTRATOR_PHASE_KEY)
+        .to_string()
+}
+
+fn task_cache_key(
+    orchestration_id: &str,
+    phase_number: Option<&str>,
+    task_id: &str,
+) -> (String, String, String) {
+    (
+        orchestration_id.to_string(),
+        phase_cache_key(phase_number),
+        task_id.to_string(),
+    )
 }
 
 /// Sync team members from a team config file to Convex.
@@ -100,7 +125,9 @@ pub async fn sync_team_members(
         for (name, agent) in previous_members {
             if !current_members.contains_key(name) {
                 // Member was removed - record shutdown event
-                if let Err(e) = record_shutdown_event(client, orchestration_id, &phase_number, agent).await {
+                if let Err(e) =
+                    record_shutdown_event(client, orchestration_id, &phase_number, agent).await
+                {
                     error!(agent = %name, error = %e, "failed to record shutdown event");
                 }
             }
@@ -231,18 +258,6 @@ async fn sync_task_dir(
     let now = Utc::now().to_rfc3339();
 
     for task in &tasks {
-        let cache_key = (orchestration_id.to_string(), task.id.clone());
-        let current = TaskCacheEntry {
-            status: task.status.to_string(),
-            subject: task.subject.clone(),
-            owner: task.owner.clone(),
-        };
-
-        // Skip if unchanged
-        if cache.task_state.get(&cache_key) == Some(&current) {
-            continue;
-        }
-
         let blocked_by_json = if task.blocked_by.is_empty() {
             None
         } else {
@@ -255,9 +270,22 @@ async fn sync_task_dir(
             Some(serde_json::to_string(&task.metadata)?)
         };
 
+        let task_phase_number = phase_number.map(|s| s.to_string());
+        let cache_key = task_cache_key(orchestration_id, task_phase_number.as_deref(), &task.id);
+        let current = TaskCacheEntry {
+            status: task.status.to_string(),
+            subject: task.subject.clone(),
+            owner: task.owner.clone(),
+        };
+
+        // Skip if unchanged
+        if cache.task_state.get(&cache_key) == Some(&current) {
+            continue;
+        }
+
         let event = TaskEventRecord {
             orchestration_id: orchestration_id.to_string(),
-            phase_number: phase_number.map(|s| s.to_string()),
+            phase_number: task_phase_number.clone(),
             task_id: task.id.clone(),
             subject: task.subject.clone(),
             description: Some(task.description.clone()),
@@ -391,7 +419,10 @@ pub async fn sync_commits(
     branch: &str,
 ) -> Result<()> {
     // Get last known SHA from cache
-    let last_sha = cache.last_commit_sha.get(orchestration_id).map(|s| s.as_str());
+    let last_sha = cache
+        .last_commit_sha
+        .get(orchestration_id)
+        .map(|s| s.as_str());
 
     // Parse new commits
     let new_commits = git::get_new_commits(worktree_path, branch, last_sha)?;
@@ -688,7 +719,7 @@ mod tests {
     #[test]
     fn test_cache_prevents_duplicate_task_sync() {
         let mut cache = SyncCache::new();
-        let key = ("orch-1".to_string(), "task-1".to_string());
+        let key = ("orch-1".to_string(), "1".to_string(), "task-1".to_string());
         let entry = TaskCacheEntry {
             status: "pending".to_string(),
             subject: "Test".to_string(),
@@ -704,7 +735,7 @@ mod tests {
     #[test]
     fn test_cache_detects_task_change() {
         let mut cache = SyncCache::new();
-        let key = ("orch-1".to_string(), "task-1".to_string());
+        let key = ("orch-1".to_string(), "1".to_string(), "task-1".to_string());
 
         let old = TaskCacheEntry {
             status: "pending".to_string(),
@@ -751,6 +782,32 @@ mod tests {
     }
 
     #[test]
+    fn test_task_cache_key_uses_phase() {
+        let key = task_cache_key("orch-1", Some("1.5"), "task-3");
+        assert_eq!(
+            key,
+            (
+                "orch-1".to_string(),
+                "1.5".to_string(),
+                "task-3".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn test_task_cache_key_uses_orchestrator_default() {
+        let key = task_cache_key("orch-1", None, "task-3");
+        assert_eq!(
+            key,
+            (
+                "orch-1".to_string(),
+                ORCHESTRATOR_PHASE_KEY.to_string(),
+                "task-3".to_string()
+            )
+        );
+    }
+
+    #[test]
     fn test_find_worktree_by_ref_path() {
         let mut cache = SyncCache::new();
         cache.set_worktrees(vec![WorktreeInfo {
@@ -778,7 +835,8 @@ mod tests {
             current_phase: "1".to_string(),
         }]);
 
-        let plan_path = PathBuf::from("/project/.worktrees/test/docs/plans/2026-02-10-test-phase-1.md");
+        let plan_path =
+            PathBuf::from("/project/.worktrees/test/docs/plans/2026-02-10-test-phase-1.md");
         let found = cache.find_worktree_by_plan_path(&plan_path);
         assert!(found.is_some());
         assert_eq!(found.unwrap().feature, "test-feature");

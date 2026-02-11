@@ -7,7 +7,12 @@ const ORCHESTRATOR_PHASE_KEY = "__orchestrator__";
 const TASK_EVENT_SCAN_LIMIT = 1000;
 
 export function deduplicateTaskEvents<
-  T extends { taskId: string; recordedAt: string; phaseNumber?: string | null },
+  T extends {
+    taskId: string;
+    subject?: string;
+    recordedAt: string;
+    phaseNumber?: string | null;
+  },
 >(events: T[]): T[] {
   const latest = new Map<string, T>();
   for (const event of events) {
@@ -15,7 +20,11 @@ export function deduplicateTaskEvents<
       event.phaseNumber && event.phaseNumber.trim().length > 0
         ? event.phaseNumber
         : ORCHESTRATOR_PHASE_KEY;
-    const key = `${phaseKey}:${event.taskId}`;
+    const subjectKey =
+      event.subject && event.subject.trim().length > 0
+        ? event.subject.trim().toLowerCase()
+        : "__unknown_subject__";
+    const key = `${phaseKey}:${event.taskId}:${subjectKey}`;
     const existing = latest.get(key);
     if (!existing || event.recordedAt > existing.recordedAt) {
       latest.set(key, event);

@@ -2,6 +2,17 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { deduplicateTaskEvents, loadTaskEventsForOrchestration } from "./tasks";
 
+function isOrchestratorControlTask(subject: string) {
+  const normalized = subject.trim().toLowerCase();
+  return (
+    normalized === "validate-design" ||
+    normalized === "finalize" ||
+    normalized.startsWith("plan-phase-") ||
+    normalized.startsWith("execute-phase-") ||
+    normalized.startsWith("review-phase-")
+  );
+}
+
 export const upsertOrchestration = mutation({
   args: {
     nodeId: v.id("nodes"),
@@ -147,10 +158,12 @@ export const getOrchestrationDetail = query({
 
     const deduplicated = deduplicateTaskEvents(allTaskEvents);
 
-    const orchestratorTasks = deduplicated.filter((t) => !t.phaseNumber);
+    const orchestratorTasks = deduplicated.filter(
+      (t) => !t.phaseNumber || isOrchestratorControlTask(t.subject),
+    );
     const phaseTasks: Record<string, typeof deduplicated> = {};
     for (const task of deduplicated) {
-      if (task.phaseNumber) {
+      if (task.phaseNumber && !isOrchestratorControlTask(task.subject)) {
         if (!phaseTasks[task.phaseNumber]) phaseTasks[task.phaseNumber] = [];
         phaseTasks[task.phaseNumber].push(task);
       }

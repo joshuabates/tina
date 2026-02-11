@@ -24,6 +24,31 @@ describe("deduplicateTaskEvents", () => {
       deduped.find((event) => event.phaseNumber === undefined)?.recordedAt,
     ).toBe("2026-02-10T12:30:00Z");
   });
+
+  it("keeps distinct subjects even when task id and phase match", () => {
+    const events = [
+      {
+        taskId: "2",
+        subject: "plan-phase-1",
+        phaseNumber: "1",
+        recordedAt: "2026-02-10T10:00:00Z",
+      },
+      {
+        taskId: "2",
+        subject: "Task 2: Implement verbose flag in CLI",
+        phaseNumber: "1",
+        recordedAt: "2026-02-10T10:05:00Z",
+      },
+    ];
+
+    const deduped = deduplicateTaskEvents(events);
+
+    expect(deduped).toHaveLength(2);
+    expect(deduped.map((event) => event.subject).sort()).toEqual([
+      "Task 2: Implement verbose flag in CLI",
+      "plan-phase-1",
+    ]);
+  });
 });
 
 describe("loadTaskEventsForOrchestration", () => {
