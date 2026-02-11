@@ -76,7 +76,6 @@ export const updateDesign = mutation({
     updates: v.object({
       title: v.optional(v.string()),
       markdown: v.optional(v.string()),
-      status: v.optional(v.string()),
     }),
   },
   handler: async (ctx, args) => {
@@ -115,14 +114,17 @@ export const transitionDesign = mutation({
     }
 
     const now = new Date().toISOString();
-    const update: Record<string, string> = { status: args.newStatus, updatedAt: now };
+    const update: Record<string, string | undefined> = {
+      status: args.newStatus,
+      updatedAt: now,
+    };
 
+    // Set archivedAt when moving to archived status
     if (args.newStatus === "archived") {
       update.archivedAt = now;
-    }
-
-    if (args.newStatus === "draft") {
-      update.archivedAt = "";
+    } else if (design.status === "archived" && args.newStatus !== "archived") {
+      // Clear archivedAt when unarchiving
+      update.archivedAt = undefined;
     }
 
     await ctx.db.patch(args.designId, update);
