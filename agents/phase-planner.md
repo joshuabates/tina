@@ -12,10 +12,11 @@ Your spawn prompt contains a task ID. Extract it and get your task details:
 
 ```
 # Parse task_id from spawn prompt (format: "task_id: <id>")
-TASK_ID=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
+TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 
-# Get task details
-TaskGet with task_id: $TASK_ID
+# Resolve task reference to a real task id
+# 1) Try direct TaskGet by id
+# 2) If not found, TaskList and match subject == TASK_REF, then use that id
 ```
 
 **Required parameters from task.metadata:**
@@ -181,6 +182,11 @@ Report to orchestrator via Teammate tool:
 ```
 
 The orchestrator parses the PLAN_PATH from this message.
+
+After sending this Teammate message:
+- Do not send a natural-language completion summary.
+- Do not change wording/capitalization of the canonical message.
+- Return control immediately.
 
 ## Quality Standards
 

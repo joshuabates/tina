@@ -62,8 +62,8 @@ impl DaemonWatcher {
         let tp = teams_prefix.clone();
         let tkp = tasks_prefix.clone();
 
-        let mut watcher = notify::recommended_watcher(
-            move |res: std::result::Result<Event, notify::Error>| {
+        let mut watcher =
+            notify::recommended_watcher(move |res: std::result::Result<Event, notify::Error>| {
                 let event = match res {
                     Ok(e) => e,
                     Err(_) => return,
@@ -75,7 +75,8 @@ impl DaemonWatcher {
                     } else if path.starts_with(&tkp) {
                         Some(WatchEvent::Tasks)
                     } else if path.file_name() == Some(std::ffi::OsStr::new("HEAD"))
-                        || path.parent().and_then(|p| p.file_name()) == Some(std::ffi::OsStr::new("heads"))
+                        || path.parent().and_then(|p| p.file_name())
+                            == Some(std::ffi::OsStr::new("heads"))
                     {
                         // Git ref file changed
                         Some(WatchEvent::GitRef(path.clone()))
@@ -90,8 +91,7 @@ impl DaemonWatcher {
                         let _ = std_tx.send(evt);
                     }
                 }
-            },
-        )?;
+            })?;
 
         watcher.watch(teams_dir, RecursiveMode::Recursive)?;
         watcher.watch(tasks_dir, RecursiveMode::Recursive)?;
@@ -164,7 +164,6 @@ impl DaemonWatcher {
     pub fn tasks_dir(&self) -> &Path {
         &self.tasks_dir
     }
-
 }
 
 #[cfg(test)]

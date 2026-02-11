@@ -69,12 +69,9 @@ async fn execute_action(action_type: &str, payload: &ActionPayload) -> Result<St
 
     info!(action_type = %action_type, args = ?args, "executing tina-session command");
 
-    let output = tokio::task::spawn_blocking(move || {
-        Command::new("tina-session")
-            .args(&args)
-            .output()
-    })
-    .await??;
+    let output =
+        tokio::task::spawn_blocking(move || Command::new("tina-session").args(&args).output())
+            .await??;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -252,10 +249,7 @@ mod tests {
     fn test_build_cli_args_retry() {
         let p = payload("auth", Some("2"));
         let args = build_cli_args("retry", &p).unwrap();
-        assert_eq!(
-            args,
-            vec!["orchestrate", "advance", "auth", "2", "retry"]
-        );
+        assert_eq!(args, vec!["orchestrate", "advance", "auth", "2", "retry"]);
     }
 
     #[test]
@@ -263,7 +257,10 @@ mod tests {
         let p = payload("auth", Some("1"));
         let result = build_cli_args("unknown_action", &p);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("unknown action type"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("unknown action type"));
     }
 
     #[test]

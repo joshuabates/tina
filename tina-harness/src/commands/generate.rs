@@ -21,13 +21,16 @@ pub struct GenerateConfig {
 /// Generate a scenario from configuration
 pub fn generate(config: &GenerateConfig) -> Result<()> {
     // Create output directory
-    fs::create_dir_all(&config.output_dir)
-        .with_context(|| format!("Failed to create output directory: {}", config.output_dir.display()))?;
+    fs::create_dir_all(&config.output_dir).with_context(|| {
+        format!(
+            "Failed to create output directory: {}",
+            config.output_dir.display()
+        )
+    })?;
 
     // Generate design document
     let design = generate_design_doc(config);
-    fs::write(config.output_dir.join("design.md"), design)
-        .context("Failed to write design.md")?;
+    fs::write(config.output_dir.join("design.md"), design).context("Failed to write design.md")?;
 
     // Generate expected.json
     let expected = generate_expected_json(config);

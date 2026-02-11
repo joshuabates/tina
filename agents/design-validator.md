@@ -13,15 +13,17 @@ Your spawn prompt contains a task ID. Extract it and get your task details:
 
 ```
 # Parse task_id from spawn prompt (format: "task_id: <id>")
-TASK_ID=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
+TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 
-# Get task details
-TaskGet with task_id: $TASK_ID
+# Resolve task reference to a real task id
+# 1) Try direct TaskGet by id
+# 2) If not found, TaskList and match subject == TASK_REF, then use that id
 ```
 
 **Required parameters from task.metadata:**
 - `design_doc_path`: Path to design document to validate
-- `output_path`: Where to write validation report
+- `worktree_path`: Worktree root used for default output locations
+- `output_path`: (optional) Where to write validation report
 
 ## Boundaries
 
@@ -52,7 +54,10 @@ You are validating a design document before it proceeds to planning.
 
 You receive:
 - Design document path (has Architectural Context section from architect)
-- Output file path (where to write the validation report)
+- Output file path (optional; where to write the validation report)
+
+If `output_path` is missing, default to:
+`<worktree_path>/.claude/tina/reports/design-validation.md`
 
 ## Output
 
@@ -62,6 +67,8 @@ Write your validation report to the specified output file. The report MUST inclu
 3. A **Severity tier:** line explaining the basis for the status
 4. Baseline metrics captured (if applicable)
 5. A **Recommendation:** explaining what should happen next
+
+Before writing the report, ensure the output directory exists.
 
 ## Your Job
 

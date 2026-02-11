@@ -90,10 +90,7 @@ fn create_scenario(dir: &std::path::Path, phases: u32, file_check: Option<(&str,
     .unwrap();
 
     let file_changes = if let Some((path, contains)) = file_check {
-        format!(
-            r#"[{{ "path": "{}", "contains": "{}" }}]"#,
-            path, contains
-        )
+        format!(r#"[{{ "path": "{}", "contains": "{}" }}]"#, path, contains)
     } else {
         "[]".to_string()
     };
@@ -174,7 +171,11 @@ fn test_run_scenario_fails_on_missing_content() {
     let scenarios = temp.path().join("scenarios");
     let scenario_dir = scenarios.join("01-fail");
     fs::create_dir_all(&scenario_dir).unwrap();
-    create_scenario(&scenario_dir, 1, Some(("src/main.rs", "nonexistent_content")));
+    create_scenario(
+        &scenario_dir,
+        1,
+        Some(("src/main.rs", "nonexistent_content")),
+    );
 
     // Create work directory
     let work_dir = temp.path().join("work");
@@ -191,7 +192,10 @@ fn test_run_scenario_fails_on_missing_content() {
     let result = run("01-fail", &config).unwrap();
     assert!(!result.passed, "Expected failure but got pass");
     assert!(
-        result.failures.iter().any(|f| f.message.contains("missing expected content")),
+        result
+            .failures
+            .iter()
+            .any(|f| f.message.contains("missing expected content")),
         "Expected content failure but got: {:?}",
         result.failures
     );

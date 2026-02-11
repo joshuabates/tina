@@ -23,6 +23,10 @@ pub struct VerifyResult {
     pub phases_found: u32,
     pub tasks_found: u32,
     pub members_found: u32,
+    pub phase_tasks_found: u32,
+    pub commits_found: u32,
+    pub plans_found: u32,
+    pub shutdown_events_found: u32,
 }
 
 /// Parse expected and actual values from a failure message.
@@ -42,10 +46,7 @@ fn parse_expected_actual_from_message(message: &str) -> (String, String) {
 
     // Fallback for orchestration not found
     if message.contains("not found") {
-        return (
-            "orchestration exists".to_string(),
-            "not found".to_string(),
-        );
+        return ("orchestration exists".to_string(), "not found".to_string());
     }
 
     // Default fallback
@@ -134,7 +135,8 @@ async fn verify_async(feature_name: &str, assertions: &ConvexAssertions) -> Resu
             Err(failure) => {
                 if assertions.has_orchestration {
                     // Emit telemetry event for orchestration not found
-                    let event = create_consistency_violation_event(&trace_id, feature_name, &failure);
+                    let event =
+                        create_consistency_violation_event(&trace_id, feature_name, &failure);
                     if let Err(e) = client.record_telemetry_event(&event).await {
                         eprintln!("Warning: Failed to record telemetry event: {}", e);
                     }
@@ -145,21 +147,97 @@ async fn verify_async(feature_name: &str, assertions: &ConvexAssertions) -> Resu
         };
 
     // Step 2: If orchestration found, get detail and verify
-    let (phases_found, tasks_found, members_found) = if let Some(ref orch_id) = orchestration_id {
+    let (
+        phases_found,
+        tasks_found,
+        members_found,
+        phase_tasks_found,
+        commits_found,
+        plans_found,
+        shutdown_events_found,
+    ) = if let Some(ref orch_id) = orchestration_id {
         eprintln!("Fetching orchestration detail for {}...", orch_id);
         match client.get_orchestration_detail(orch_id).await {
             Ok(Some(detail)) => {
                 let phases = detail.phases.len() as u32;
                 let tasks = detail.tasks.len() as u32;
                 let members = detail.team_members.len() as u32;
+                let phase_tasks = verify_logic::count_phase_tasks(&detail);
 
                 eprintln!(
-                    "  Phases: {}, Tasks: {}, Team members: {}",
-                    phases, tasks, members
+                    "  Phases: {}, Tasks: {} (phase-scoped: {}), Team members: {}",
+                    phases, tasks, phase_tasks, members
                 );
 
                 // Verify against assertions
                 let detail_failures = verify_logic::verify_detail(&detail, assertions);
+
+                // Query artifacts that are not included in orchestration detail.
+                let commits = match client.list_commits(orch_id, None).await {
+                    Ok(commits) => commits,
+                    Err(e) => {
+                        let failure = CategorizedFailure::new(
+                            FailureCategory::Orchestration,
+                            format!("Failed to list commits: {}", e),
+                        );
+                        let event = create_consistency_violation_event_with_orch_id(
+                            &trace_id,
+                            feature_name,
+                            Some(orch_id),
+                            &failure,
+                        );
+                        if let Err(e) = client.record_telemetry_event(&event).await {
+                            eprintln!("Warning: Failed to record telemetry event: {}", e);
+                        }
+                        failures.push(failure);
+                        Vec::new()
+                    }
+                };
+
+                let plans = match client.list_plans(orch_id).await {
+                    Ok(plans) => plans,
+                    Err(e) => {
+                        let failure = CategorizedFailure::new(
+                            FailureCategory::Orchestration,
+                            format!("Failed to list plans: {}", e),
+                        );
+                        let event = create_consistency_violation_event_with_orch_id(
+                            &trace_id,
+                            feature_name,
+                            Some(orch_id),
+                            &failure,
+                        );
+                        if let Err(e) = client.record_telemetry_event(&event).await {
+                            eprintln!("Warning: Failed to record telemetry event: {}", e);
+                        }
+                        failures.push(failure);
+                        Vec::new()
+                    }
+                };
+
+                let events = match client.list_events(orch_id, None, None, Some(200)).await {
+                    Ok(events) => events,
+                    Err(e) => {
+                        let failure = CategorizedFailure::new(
+                            FailureCategory::Orchestration,
+                            format!("Failed to list orchestration events: {}", e),
+                        );
+                        let event = create_consistency_violation_event_with_orch_id(
+                            &trace_id,
+                            feature_name,
+                            Some(orch_id),
+                            &failure,
+                        );
+                        if let Err(e) = client.record_telemetry_event(&event).await {
+                            eprintln!("Warning: Failed to record telemetry event: {}", e);
+                        }
+                        failures.push(failure);
+                        Vec::new()
+                    }
+                };
+
+                let artifact_failures =
+                    verify_logic::verify_artifacts(&detail, &commits, &plans, &events, assertions);
 
                 // Emit telemetry events for each detail failure
                 for failure in &detail_failures {
@@ -175,8 +253,35 @@ async fn verify_async(feature_name: &str, assertions: &ConvexAssertions) -> Resu
                 }
 
                 failures.extend(detail_failures);
+                failures.extend(artifact_failures.iter().cloned());
 
-                (phases, tasks, members)
+                // Emit telemetry events for each artifact failure.
+                for failure in &artifact_failures {
+                    let event = create_consistency_violation_event_with_orch_id(
+                        &trace_id,
+                        feature_name,
+                        Some(orch_id),
+                        failure,
+                    );
+                    if let Err(e) = client.record_telemetry_event(&event).await {
+                        eprintln!("Warning: Failed to record telemetry event: {}", e);
+                    }
+                }
+
+                let shutdown_events = events
+                    .iter()
+                    .filter(|event| event.event_type == "agent_shutdown")
+                    .count() as u32;
+
+                (
+                    phases,
+                    tasks,
+                    members,
+                    phase_tasks,
+                    commits.len() as u32,
+                    plans.len() as u32,
+                    shutdown_events,
+                )
             }
             Ok(None) => {
                 let failure = CategorizedFailure::new(
@@ -196,7 +301,7 @@ async fn verify_async(feature_name: &str, assertions: &ConvexAssertions) -> Resu
                 }
 
                 failures.push(failure);
-                (0, 0, 0)
+                (0, 0, 0, 0, 0, 0, 0)
             }
             Err(e) => {
                 let failure = CategorizedFailure::new(
@@ -216,11 +321,11 @@ async fn verify_async(feature_name: &str, assertions: &ConvexAssertions) -> Resu
                 }
 
                 failures.push(failure);
-                (0, 0, 0)
+                (0, 0, 0, 0, 0, 0, 0)
             }
         }
     } else {
-        (0, 0, 0)
+        (0, 0, 0, 0, 0, 0, 0)
     };
 
     let passed = failures.is_empty();
@@ -233,6 +338,10 @@ async fn verify_async(feature_name: &str, assertions: &ConvexAssertions) -> Resu
         phases_found,
         tasks_found,
         members_found,
+        phase_tasks_found,
+        commits_found,
+        plans_found,
+        shutdown_events_found,
     })
 }
 
@@ -351,8 +460,8 @@ mod tests {
         // Verify attrs is valid JSON
         assert!(event.attrs.is_some());
         let attrs_str = event.attrs.unwrap();
-        let attrs: serde_json::Value = serde_json::from_str(&attrs_str)
-            .expect("attrs should be valid JSON");
+        let attrs: serde_json::Value =
+            serde_json::from_str(&attrs_str).expect("attrs should be valid JSON");
 
         // Verify required fields
         assert_eq!(attrs["category"], "orchestration");
@@ -365,10 +474,8 @@ mod tests {
     fn test_event_recorded_at_is_valid_timestamp() {
         let trace_id = "test-trace";
         let feature = "test-feature";
-        let failure = CategorizedFailure::new(
-            FailureCategory::Orchestration,
-            "Test failure".to_string(),
-        );
+        let failure =
+            CategorizedFailure::new(FailureCategory::Orchestration, "Test failure".to_string());
 
         let event = create_consistency_violation_event(trace_id, feature, &failure);
 

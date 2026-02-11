@@ -12,10 +12,11 @@ Your spawn prompt contains a task ID. Extract it and get your task details:
 
 ```
 # Parse task_id from spawn prompt (format: "task_id: <id>")
-TASK_ID=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
+TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 
-# Get task details
-TaskGet with task_id: $TASK_ID
+# Resolve task reference to a real task id
+# 1) Try direct TaskGet by id
+# 2) If not found, TaskList and match subject == TASK_REF, then use that id
 ```
 
 **Required parameters from task.metadata:**
@@ -23,7 +24,8 @@ TaskGet with task_id: $TASK_ID
 - `plan_path`: Path to plan file with Phase Estimates
 - `phase_num`: Phase number completed
 - `git_range`: Git range (base..HEAD) for the phase
-- `output_path`: Where to write review report
+- `worktree_path`: Worktree root used for default output locations
+- `output_path`: (optional) Where to write review report
 
 ## Boundaries
 
@@ -59,7 +61,10 @@ You receive:
 - Plan file path (has Phase Estimates section with expected metrics)
 - Phase number completed
 - Git range (base..HEAD) for the phase
-- Output file path (where to write the review)
+- Output file path (optional; where to write the review)
+
+If `output_path` is missing, default to:
+`<worktree_path>/.claude/tina/reports/phase-<phase_num>-review.md`
 
 ## Output
 

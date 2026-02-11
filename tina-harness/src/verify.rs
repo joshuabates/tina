@@ -3,7 +3,10 @@
 //! After a full orchestration run, verifies that all expected entities
 //! (orchestration, phases, tasks, team members) exist in Convex.
 
-use tina_data::{OrchestrationDetailResponse, OrchestrationListEntry};
+use tina_data::{
+    CommitRecord, OrchestrationDetailResponse, OrchestrationEventRecord, OrchestrationListEntry,
+    PlanRecord,
+};
 
 use crate::failure::{CategorizedFailure, FailureCategory};
 use crate::scenario::ConvexAssertions;
@@ -49,20 +52,120 @@ pub fn verify_detail(
         }
     }
 
-    if let Some(min) = assertions.min_team_members {
-        let actual = detail.team_members.len() as u32;
+    if let Some(min) = assertions.min_phase_tasks {
+        let actual = count_phase_tasks(detail);
         if actual < min {
             failures.push(CategorizedFailure::new(
                 FailureCategory::Orchestration,
                 format!(
-                    "Expected at least {} team members, found {}",
+                    "Expected at least {} phase-scoped tasks, found {}",
                     min, actual
                 ),
             ));
         }
     }
 
+    if let Some(min) = assertions.min_team_members {
+        let actual = detail.team_members.len() as u32;
+        if actual < min {
+            failures.push(CategorizedFailure::new(
+                FailureCategory::Orchestration,
+                format!("Expected at least {} team members, found {}", min, actual),
+            ));
+        }
+    }
+
     failures
+}
+
+/// Verify orchestration artifacts not included in orchestration detail response.
+///
+/// These checks query commits, plans, and orchestration events separately.
+pub fn verify_artifacts(
+    detail: &OrchestrationDetailResponse,
+    commits: &[CommitRecord],
+    plans: &[PlanRecord],
+    events: &[OrchestrationEventRecord],
+    assertions: &ConvexAssertions,
+) -> Vec<CategorizedFailure> {
+    let mut failures = Vec::new();
+
+    if let Some(min) = assertions.min_commits {
+        let actual = commits.len() as u32;
+        if actual < min {
+            failures.push(CategorizedFailure::new(
+                FailureCategory::Orchestration,
+                format!("Expected at least {} commits, found {}", min, actual),
+            ));
+        }
+    }
+
+    if let Some(min) = assertions.min_plans {
+        let actual = plans.len() as u32;
+        if actual < min {
+            failures.push(CategorizedFailure::new(
+                FailureCategory::Orchestration,
+                format!("Expected at least {} plans, found {}", min, actual),
+            ));
+        }
+    }
+
+    if let Some(min) = assertions.min_shutdown_events {
+        let actual = events
+            .iter()
+            .filter(|event| event.event_type == "agent_shutdown")
+            .count() as u32;
+        if actual < min {
+            failures.push(CategorizedFailure::new(
+                FailureCategory::Orchestration,
+                format!(
+                    "Expected at least {} shutdown events, found {}",
+                    min, actual
+                ),
+            ));
+        }
+    }
+
+    if assertions.has_markdown_task && !has_markdown_task(detail) {
+        failures.push(CategorizedFailure::new(
+            FailureCategory::Orchestration,
+            "Expected at least 1 markdown task description, found 0",
+        ));
+    }
+
+    failures
+}
+
+/// Count tasks that are phase-scoped (`phase_number` present).
+pub fn count_phase_tasks(detail: &OrchestrationDetailResponse) -> u32 {
+    detail
+        .tasks
+        .iter()
+        .filter(|task| task.phase_number.is_some())
+        .count() as u32
+}
+
+/// Detect markdown-like content in task descriptions.
+pub fn has_markdown_task(detail: &OrchestrationDetailResponse) -> bool {
+    detail.tasks.iter().any(|task| {
+        let Some(description) = task.description.as_deref() else {
+            return false;
+        };
+
+        let text = description.trim();
+        if text.is_empty() {
+            return false;
+        }
+
+        // Heuristic markers for markdown presence.
+        text.contains("```")
+            || text.contains("# ")
+            || text.contains("## ")
+            || text.contains("- [ ]")
+            || text.contains("- [x]")
+            || text.contains("* ")
+            || text.contains("1. ")
+    })
 }
 
 /// Find the most recent orchestration by feature name in a list of orchestrations.
@@ -77,7 +180,9 @@ pub fn find_orchestration_by_feature<'a>(
         .iter()
         .filter(|o| {
             o.record.feature_name == feature_name
-                || o.record.feature_name.starts_with(&format!("{}-", feature_name))
+                || o.record
+                    .feature_name
+                    .starts_with(&format!("{}-", feature_name))
         })
         .max_by(|a, b| a.record.started_at.cmp(&b.record.started_at))
 }
@@ -111,8 +216,8 @@ pub fn verify_orchestration_exists(
 mod tests {
     use super::*;
     use tina_data::{
-        OrchestrationDetailResponse, OrchestrationListEntry, OrchestrationRecord,
-        PhaseRecord, TaskEventRecord, TeamMemberRecord,
+        OrchestrationDetailResponse, OrchestrationListEntry, OrchestrationRecord, PhaseRecord,
+        TaskEventRecord, TeamMemberRecord,
     };
 
     fn make_orchestration_record(feature: &str) -> OrchestrationRecord {
@@ -210,10 +315,19 @@ mod tests {
             min_phases: Some(1),
             min_tasks: Some(2),
             min_team_members: Some(2),
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
         };
 
         let failures = verify_detail(&detail, &assertions);
-        assert!(failures.is_empty(), "Expected no failures, got: {:?}", failures);
+        assert!(
+            failures.is_empty(),
+            "Expected no failures, got: {:?}",
+            failures
+        );
     }
 
     #[test]
@@ -226,10 +340,19 @@ mod tests {
             min_phases: None,
             min_tasks: None,
             min_team_members: None,
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
         };
 
         let failures = verify_detail(&detail, &assertions);
-        assert!(failures.is_empty(), "Expected no failures, got: {:?}", failures);
+        assert!(
+            failures.is_empty(),
+            "Expected no failures, got: {:?}",
+            failures
+        );
     }
 
     #[test]
@@ -242,6 +365,11 @@ mod tests {
             min_phases: None,
             min_tasks: None,
             min_team_members: None,
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -260,6 +388,11 @@ mod tests {
             min_phases: Some(1),
             min_tasks: None,
             min_team_members: None,
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -282,6 +415,11 @@ mod tests {
             min_phases: None,
             min_tasks: Some(3),
             min_team_members: None,
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -299,6 +437,11 @@ mod tests {
             min_phases: None,
             min_tasks: None,
             min_team_members: Some(2),
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -316,6 +459,11 @@ mod tests {
             min_phases: Some(1),
             min_tasks: Some(3),
             min_team_members: Some(2),
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -332,6 +480,11 @@ mod tests {
             min_phases: None,
             min_tasks: None,
             min_team_members: None,
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -405,6 +558,11 @@ mod tests {
         assert_eq!(assertions.min_phases, Some(1));
         assert_eq!(assertions.min_tasks, Some(3));
         assert_eq!(assertions.min_team_members, Some(2));
+        assert!(assertions.min_phase_tasks.is_none());
+        assert!(assertions.min_commits.is_none());
+        assert!(assertions.min_plans.is_none());
+        assert!(assertions.min_shutdown_events.is_none());
+        assert!(!assertions.has_markdown_task);
     }
 
     #[test]
@@ -417,5 +575,133 @@ mod tests {
         assert!(assertions.min_phases.is_none());
         assert!(assertions.min_tasks.is_none());
         assert!(assertions.min_team_members.is_none());
+        assert!(assertions.min_phase_tasks.is_none());
+        assert!(assertions.min_commits.is_none());
+        assert!(assertions.min_plans.is_none());
+        assert!(assertions.min_shutdown_events.is_none());
+        assert!(!assertions.has_markdown_task);
+    }
+
+    #[test]
+    fn test_verify_detail_insufficient_phase_scoped_tasks() {
+        let detail = make_detail(
+            vec![make_phase("orch-1", "1")],
+            vec![TaskEventRecord {
+                orchestration_id: "orch-1".to_string(),
+                phase_number: None,
+                task_id: "control-1".to_string(),
+                subject: "plan-phase-1".to_string(),
+                description: None,
+                status: "completed".to_string(),
+                owner: None,
+                blocked_by: None,
+                metadata: None,
+                recorded_at: "2026-02-08T10:00:00Z".to_string(),
+            }],
+            vec![],
+        );
+
+        let assertions = ConvexAssertions {
+            has_orchestration: true,
+            expected_status: None,
+            min_phases: None,
+            min_tasks: None,
+            min_team_members: None,
+            min_phase_tasks: Some(1),
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
+        };
+
+        let failures = verify_detail(&detail, &assertions);
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].message.contains("phase-scoped tasks"));
+    }
+
+    #[test]
+    fn test_verify_artifacts_commit_plan_shutdown_and_markdown_checks() {
+        let detail = make_detail(
+            vec![make_phase("orch-1", "1")],
+            vec![TaskEventRecord {
+                orchestration_id: "orch-1".to_string(),
+                phase_number: Some("1".to_string()),
+                task_id: "1".to_string(),
+                subject: "Implement".to_string(),
+                description: Some("## Task\n- [ ] done".to_string()),
+                status: "completed".to_string(),
+                owner: None,
+                blocked_by: None,
+                metadata: None,
+                recorded_at: "2026-02-08T10:00:00Z".to_string(),
+            }],
+            vec![],
+        );
+
+        let commits = vec![CommitRecord {
+            orchestration_id: "orch-1".to_string(),
+            phase_number: "1".to_string(),
+            sha: "abc123".to_string(),
+            short_sha: "abc123".to_string(),
+            subject: "feat: add".to_string(),
+            author: "dev".to_string(),
+            timestamp: "2026-02-08T10:00:00Z".to_string(),
+            insertions: 10,
+            deletions: 2,
+        }];
+        let plans = vec![PlanRecord {
+            orchestration_id: "orch-1".to_string(),
+            phase_number: "1".to_string(),
+            plan_path: "docs/plans/phase-1.md".to_string(),
+            content: "# plan".to_string(),
+        }];
+        let events = vec![OrchestrationEventRecord {
+            orchestration_id: "orch-1".to_string(),
+            phase_number: Some("1".to_string()),
+            event_type: "agent_shutdown".to_string(),
+            source: "tina-daemon".to_string(),
+            summary: "worker shutdown".to_string(),
+            detail: None,
+            recorded_at: "2026-02-08T10:00:00Z".to_string(),
+        }];
+
+        let assertions = ConvexAssertions {
+            has_orchestration: true,
+            expected_status: None,
+            min_phases: None,
+            min_tasks: None,
+            min_team_members: None,
+            min_phase_tasks: None,
+            min_commits: Some(1),
+            min_plans: Some(1),
+            min_shutdown_events: Some(1),
+            has_markdown_task: true,
+        };
+
+        let failures = verify_artifacts(&detail, &commits, &plans, &events, &assertions);
+        assert!(
+            failures.is_empty(),
+            "Expected no failures, got: {:?}",
+            failures
+        );
+    }
+
+    #[test]
+    fn test_convex_assertions_deserialize_extended_fields() {
+        let json = r#"{
+            "has_orchestration": true,
+            "min_phase_tasks": 2,
+            "min_commits": 3,
+            "min_plans": 2,
+            "min_shutdown_events": 1,
+            "has_markdown_task": true
+        }"#;
+
+        let assertions: ConvexAssertions = serde_json::from_str(json).unwrap();
+        assert_eq!(assertions.min_phase_tasks, Some(2));
+        assert_eq!(assertions.min_commits, Some(3));
+        assert_eq!(assertions.min_plans, Some(2));
+        assert_eq!(assertions.min_shutdown_events, Some(1));
+        assert!(assertions.has_markdown_task);
     }
 }

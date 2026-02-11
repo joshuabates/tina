@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { screen } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
 import { OrchestrationPage } from "../OrchestrationPage"
 import type { OrchestrationDetail } from "@/schemas"
-import { buildOrchestrationDetail } from "@/test/builders/domain"
+import { buildOrchestrationDetail, buildPhase } from "@/test/builders/domain"
 import { queryError, queryLoading, querySuccess, type QueryStateMap } from "@/test/builders/query"
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
 import { useServices } from "@/providers/RuntimeProvider"
+import { useSelection } from "@/hooks/useSelection"
 
 vi.mock("@/hooks/useTypedQuery")
 
@@ -102,6 +103,11 @@ function SelectionHarness() {
   )
 }
 
+function SelectionProbe() {
+  const { phaseId } = useSelection()
+  return <div data-testid="phase-probe">{phaseId ?? "none"}</div>
+}
+
 describe("OrchestrationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -190,6 +196,38 @@ describe("OrchestrationPage", () => {
 
       await user.click(screen.getByRole("button", { name: "select o2" }))
       expectPanels("next-feature")
+    })
+  })
+
+  it("auto-selects current phase when URL has no phase", async () => {
+    const detail = buildOrchestrationDetail({
+      _id: "o1",
+      featureName: "phase-autoselect",
+      currentPhase: 2,
+      phases: [
+        buildPhase({ _id: "phase1", phaseNumber: "1" }),
+        buildPhase({ _id: "phase2", phaseNumber: "2" }),
+      ],
+      phaseTasks: { "1": [], "2": [] },
+      teamMembers: [],
+    })
+
+    renderWithAppRuntime(
+      <>
+        <OrchestrationPage />
+        <SelectionProbe />
+      </>,
+      {
+        route: "/?orch=o1",
+        detailResults: {
+          o1: querySuccess<OrchestrationDetail | null>(detail),
+        },
+        mockUseTypedQuery,
+      },
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId("phase-probe")).toHaveTextContent("phase2")
     })
   })
 })

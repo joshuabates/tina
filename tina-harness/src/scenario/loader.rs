@@ -30,20 +30,29 @@ pub fn load_scenario(scenario_dir: &Path) -> Result<Scenario> {
 
     // Load expected.json (required)
     let expected_path = scenario_dir.join("expected.json");
-    let expected_content = fs::read_to_string(&expected_path)
-        .with_context(|| format!("Failed to read expected.json at {}", expected_path.display()))?;
-    let expected: ExpectedState = serde_json::from_str(&expected_content)
-        .with_context(|| format!("Failed to parse expected.json at {}", expected_path.display()))?;
+    let expected_content = fs::read_to_string(&expected_path).with_context(|| {
+        format!(
+            "Failed to read expected.json at {}",
+            expected_path.display()
+        )
+    })?;
+    let expected: ExpectedState = serde_json::from_str(&expected_content).with_context(|| {
+        format!(
+            "Failed to parse expected.json at {}",
+            expected_path.display()
+        )
+    })?;
 
     // Load setup.patch (optional)
     let patch_path = scenario_dir.join("setup.patch");
-    let setup_patch = if patch_path.exists() {
-        Some(fs::read_to_string(&patch_path).with_context(|| {
-            format!("Failed to read setup.patch at {}", patch_path.display())
-        })?)
-    } else {
-        None
-    };
+    let setup_patch =
+        if patch_path.exists() {
+            Some(fs::read_to_string(&patch_path).with_context(|| {
+                format!("Failed to read setup.patch at {}", patch_path.display())
+            })?)
+        } else {
+            None
+        };
 
     Ok(Scenario {
         name,
@@ -78,12 +87,8 @@ pub fn save_last_passed(scenario_dir: &Path, commit_hash: &str) -> Result<()> {
 
     let path = scenario_dir.join("last-passed.json");
     let content = serde_json::to_string_pretty(&last_passed)?;
-    fs::write(&path, content).with_context(|| {
-        format!(
-            "Failed to write last-passed.json at {}",
-            path.display()
-        )
-    })?;
+    fs::write(&path, content)
+        .with_context(|| format!("Failed to write last-passed.json at {}", path.display()))?;
 
     Ok(())
 }

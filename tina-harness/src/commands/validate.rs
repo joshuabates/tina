@@ -4,8 +4,8 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use tina_session::state::validation::{
-    validate_supervisor_state, validate_task, validate_team,
-    validate_tina_directory, ValidationResult,
+    validate_supervisor_state, validate_task, validate_team, validate_tina_directory,
+    ValidationResult,
 };
 
 /// Run the validate command.

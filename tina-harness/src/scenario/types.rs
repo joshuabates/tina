@@ -76,6 +76,21 @@ pub struct ConvexAssertions {
     /// Minimum number of team members expected
     #[serde(default)]
     pub min_team_members: Option<u32>,
+    /// Minimum number of phase-scoped tasks expected (`phase_number` is set)
+    #[serde(default)]
+    pub min_phase_tasks: Option<u32>,
+    /// Minimum number of commits expected for orchestration
+    #[serde(default)]
+    pub min_commits: Option<u32>,
+    /// Minimum number of plans expected for orchestration
+    #[serde(default)]
+    pub min_plans: Option<u32>,
+    /// Minimum number of shutdown events expected (`event_type = agent_shutdown`)
+    #[serde(default)]
+    pub min_shutdown_events: Option<u32>,
+    /// Require at least one task description containing markdown-style content
+    #[serde(default)]
+    pub has_markdown_task: bool,
 }
 
 fn default_true() -> bool {

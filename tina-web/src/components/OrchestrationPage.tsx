@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { DataErrorBoundary } from "./DataErrorBoundary"
 import { PhaseTimelinePanel } from "./PhaseTimelinePanel"
 import { TaskListPanel } from "./TaskListPanel"
@@ -27,6 +27,7 @@ interface OrchestrationPageContentProps {
 
 function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentProps) {
   const [showTelemetry, setShowTelemetry] = useState(false)
+  const { phaseId, selectPhase } = useSelection()
 
   // No orchestration selected - show empty state
   if (!orchestrationId) {
@@ -43,6 +44,22 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
   const result = useTypedQuery(OrchestrationDetailQuery, {
     orchestrationId,
   })
+  const loadedDetail = result.status === "success" ? result.data : null
+
+  useEffect(() => {
+    if (phaseId) return
+    if (!loadedDetail) return
+
+    const preferredPhaseId = loadedDetail.phases.find(
+      (phase) => phase.phaseNumber === String(loadedDetail.currentPhase),
+    )?._id
+    const fallbackPhaseId = loadedDetail.phases[0]?._id
+    const phaseToSelect = preferredPhaseId ?? fallbackPhaseId
+
+    if (phaseToSelect) {
+      selectPhase(phaseToSelect)
+    }
+  }, [loadedDetail, phaseId, selectPhase])
 
   return matchQueryResult(result, {
     // Loading state - show skeleton matching three-column layout

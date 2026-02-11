@@ -15,7 +15,9 @@ Execute one phase of implementation using `tina-session` CLI.
 Your spawn prompt contains: `task_id: <id>`
 
 1. Parse task_id from spawn prompt
-2. Call TaskGet with that task_id
+2. Resolve the task reference:
+   - Try TaskGet directly with the parsed value
+   - If not found, call TaskList and match `subject == <task_id value>`, then TaskGet by numeric id
 3. Extract from task.metadata:
    - `feature_name`: Feature name (e.g., "tina-monitor-rebuild")
    - `phase_num`: Phase number (e.g., "4" or "2.5")
@@ -62,6 +64,8 @@ tina-session start --feature "$FEATURE_NAME" --phase "$PHASE_NUM" --plan "$PLAN_
 If `parent_team_id` is present in task metadata, pass it via `--parent-team-id`. This links the phase execution team to the orchestration team in Convex, enabling the daemon to sync tasks and members correctly.
 
 This command handles everything - session creation, Claude startup, and initialization.
+
+If `plan_path` is relative, resolve it against `worktree_path` before invoking `tina-session start`.
 
 If the command fails, message the orchestrator and exit.
 

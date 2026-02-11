@@ -75,6 +75,26 @@ enum Commands {
         /// Minimum number of team members expected
         #[arg(long)]
         min_team_members: Option<u32>,
+
+        /// Minimum number of phase-scoped tasks expected
+        #[arg(long)]
+        min_phase_tasks: Option<u32>,
+
+        /// Minimum number of commits expected
+        #[arg(long)]
+        min_commits: Option<u32>,
+
+        /// Minimum number of plans expected
+        #[arg(long)]
+        min_plans: Option<u32>,
+
+        /// Minimum number of shutdown events expected
+        #[arg(long)]
+        min_shutdown_events: Option<u32>,
+
+        /// Require at least one markdown task description
+        #[arg(long)]
+        has_markdown_task: bool,
     },
     /// Generate a test scenario from parameters
     GenerateScenario {
@@ -187,6 +207,11 @@ fn main() -> anyhow::Result<()> {
                             min_phases: Some(1),
                             min_tasks: Some(1),
                             min_team_members: Some(1),
+                            min_phase_tasks: Some(1),
+                            min_commits: None,
+                            min_plans: None,
+                            min_shutdown_events: None,
+                            has_markdown_task: false,
                         });
 
                 let verify_result = commands::verify::verify(&result.feature_name, &assertions)?;
@@ -194,10 +219,17 @@ fn main() -> anyhow::Result<()> {
                 if verify_result.passed {
                     println!("VERIFY PASS: {}", verify_result.feature_name);
                     println!(
-                        "  Phases: {}, Tasks: {}, Team Members: {}",
+                        "  Phases: {}, Tasks: {} (phase-scoped: {}), Team Members: {}",
                         verify_result.phases_found,
                         verify_result.tasks_found,
+                        verify_result.phase_tasks_found,
                         verify_result.members_found
+                    );
+                    println!(
+                        "  Commits: {}, Plans: {}, Shutdown events: {}",
+                        verify_result.commits_found,
+                        verify_result.plans_found,
+                        verify_result.shutdown_events_found
                     );
                 } else {
                     println!("VERIFY FAIL: {}", verify_result.feature_name);
@@ -216,6 +248,11 @@ fn main() -> anyhow::Result<()> {
             min_phases,
             min_tasks,
             min_team_members,
+            min_phase_tasks,
+            min_commits,
+            min_plans,
+            min_shutdown_events,
+            has_markdown_task,
         } => {
             // Check daemon is running
             if !commands::verify::check_daemon_running() {
@@ -229,6 +266,11 @@ fn main() -> anyhow::Result<()> {
                 min_phases,
                 min_tasks,
                 min_team_members,
+                min_phase_tasks,
+                min_commits,
+                min_plans,
+                min_shutdown_events,
+                has_markdown_task,
             };
 
             let result = commands::verify::verify(&feature, &assertions)?;
@@ -239,8 +281,15 @@ fn main() -> anyhow::Result<()> {
                     println!("  Orchestration ID: {}", id);
                 }
                 println!(
-                    "  Phases: {}, Tasks: {}, Team Members: {}",
-                    result.phases_found, result.tasks_found, result.members_found
+                    "  Phases: {}, Tasks: {} (phase-scoped: {}), Team Members: {}",
+                    result.phases_found,
+                    result.tasks_found,
+                    result.phase_tasks_found,
+                    result.members_found
+                );
+                println!(
+                    "  Commits: {}, Plans: {}, Shutdown events: {}",
+                    result.commits_found, result.plans_found, result.shutdown_events_found
                 );
             } else {
                 println!("VERIFY FAIL: {}", result.feature_name);

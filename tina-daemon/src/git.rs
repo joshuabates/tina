@@ -22,22 +22,38 @@ pub fn get_new_commits(
     _branch: &str,
     since_sha: Option<&str>,
 ) -> Result<Vec<GitCommit>> {
-    let range = match since_sha {
-        Some(sha) => format!("{}..HEAD", sha),
-        None => "HEAD~10..HEAD".to_string(), // First sync: last 10 commits
+    // Run:
+    // - Incremental: git log <since_sha>..HEAD --numstat --format=...
+    // - First sync: git log -n 10 HEAD --numstat --format=...
+    //
+    // Using HEAD~10..HEAD fails on short histories; "-n 10 HEAD" works even
+    // when fewer than 10 commits exist.
+    let output = if let Some(sha) = since_sha {
+        let range = format!("{}..HEAD", sha);
+        Command::new("git")
+            .current_dir(repo_path)
+            .args([
+                "log",
+                &range,
+                "--numstat",
+                "--format=%H|%h|%s|%an <%ae>|%aI",
+            ])
+            .output()
+            .context("Failed to run git log")?
+    } else {
+        Command::new("git")
+            .current_dir(repo_path)
+            .args([
+                "log",
+                "-n",
+                "10",
+                "HEAD",
+                "--numstat",
+                "--format=%H|%h|%s|%an <%ae>|%aI",
+            ])
+            .output()
+            .context("Failed to run git log")?
     };
-
-    // Run: git log <range> --numstat --format=%H|%h|%s|%an <%ae>|%aI
-    let output = Command::new("git")
-        .current_dir(repo_path)
-        .args([
-            "log",
-            &range,
-            "--numstat",
-            "--format=%H|%h|%s|%an <%ae>|%aI",
-        ])
-        .output()
-        .context("Failed to run git log")?;
 
     if !output.status.success() {
         anyhow::bail!(

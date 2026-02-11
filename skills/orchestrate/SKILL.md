@@ -268,6 +268,7 @@ ACTION=$(echo "$NEXT_ACTION" | jq -r '.action')
 | `VALIDATION_STATUS: Warning` | `validation_warning` | |
 | `VALIDATION_STATUS: Stop` | `validation_stop` | |
 | `plan-phase-N complete. PLAN_PATH: X` | `plan_complete` | `--plan-path X` |
+| `Phase N plan created and committed... Plan path: X` | `plan_complete` | `--plan-path X` |
 | `execute-N started` | `execute_started` | |
 | `execute-N complete. Git range: X..Y` | `execute_complete` | `--git-range X..Y` |
 | `review-N complete (pass)` | `review_pass` | |
@@ -503,12 +504,13 @@ TaskCreate {
   "metadata": {
     "design_doc_path": "<DESIGN_DOC>",
     "worktree_path": "<WORKTREE_PATH>",
-    "team_id": "<TEAM_ID>"
+    "team_id": "<TEAM_ID>",
+    "output_path": "<WORKTREE_PATH>/.claude/tina/reports/design-validation.md"
   }
 }
 ```
 
-Note: `worktree_path`, `orchestration_id`, and `team_id` are captured from `tina-session init` JSON output in STEP 1c. They're stored in validate-design metadata so all downstream tasks can access them. The `team_id` is the Convex document ID of the orchestration team, used as `parent_team_id` when registering phase execution teams.
+Note: `worktree_path`, `orchestration_id`, and `team_id` are captured from `tina-session init` JSON output in STEP 1c. They're stored in validate-design metadata so all downstream tasks can access them. The `team_id` is the Convex document ID of the orchestration team, used as `parent_team_id` when registering phase execution teams. Set `output_path` so validator/reviewer agents don't need to infer report locations.
 
 4. **Create phase tasks (for each phase 1 to N):**
 ```json
@@ -539,7 +541,8 @@ TaskCreate {
   "activeForm": "Reviewing phase <N>",
   "metadata": {
     "phase_num": <N>,
-    "design_doc_path": "<DESIGN_DOC>"
+    "design_doc_path": "<DESIGN_DOC>",
+    "output_path": "<WORKTREE_PATH>/.claude/tina/reports/phase-<N>-review.md"
   }
 }
 ```
@@ -852,11 +855,11 @@ Orchestration tasks store metadata for monitoring and recovery:
 
 | Task | Required Metadata |
 |------|-------------------|
-| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path`, `team_id` |
+| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path`, `team_id`, `output_path` |
 | `plan-phase-N` | `plan_path` |
 | `execute-phase-N` | `phase_team_name`, `parent_team_id`, `started_at` |
 | `execute-phase-N` (on complete) | `git_range`, `completed_at` |
-| `review-phase-N` | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
+| `review-phase-N` | `status: "pass"\|"gaps"`, `issues[]` (if gaps), `output_path` |
 
 The `phase_team_name` field links the orchestrator's task to the phase execution team. This enables:
 - TUI to show nested task progress
@@ -900,7 +903,7 @@ if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
     # Advance state via CLI
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase validation --event $EVENT
     TaskUpdate: validate-design, status: completed
-    TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID" }
+    TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID", output_path: "$WORKTREE_PATH/.claude/tina/reports/design-validation.md" }
     # Dispatch NEXT_ACTION (see Action Dispatch table above)
 
 if message contains "VALIDATION_STATUS: Stop":
@@ -914,6 +917,15 @@ if message contains "VALIDATION_STATUS: Stop":
 ```
 if message contains "plan-phase-N complete":
     Parse: PLAN_PATH from "PLAN_PATH: X"
+    if PLAN_PATH is relative: PLAN_PATH="$WORKTREE_PATH/$PLAN_PATH"
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event plan_complete --plan-path $PLAN_PATH
+    TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: $PLAN_PATH }
+    # Dispatch NEXT_ACTION (spawn executor)
+
+# Fallback for planner outputs that summarize completion in natural language.
+if message contains "Phase N plan created and committed" and message contains "Plan path:":
+    Parse: PLAN_PATH from "Plan path: X"
+    if PLAN_PATH is relative: PLAN_PATH="$WORKTREE_PATH/$PLAN_PATH"
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event plan_complete --plan-path $PLAN_PATH
     TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: $PLAN_PATH }
     # Dispatch NEXT_ACTION (spawn executor)
@@ -950,7 +962,7 @@ if message contains "review-N complete (pass)":
     # If NEXT_ACTION is "wait": do nothing, wait for second reviewer
     # Otherwise: mark review-phase-N complete and dispatch NEXT_ACTION
     if NEXT_ACTION.action != "wait":
-        TaskUpdate: review-phase-N, status: completed, metadata: { status: "pass" }
+        TaskUpdate: review-phase-N, status: completed, metadata: { status: "pass", output_path: "$WORKTREE_PATH/.claude/tina/reports/phase-$N-review.md" }
         # Dispatch NEXT_ACTION (spawn next planner, finalize, or complete)
 
 if message contains "review-N complete (gaps)":
@@ -958,7 +970,7 @@ if message contains "review-N complete (gaps)":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event review_gaps --issues "issue1,issue2"
     # If NEXT_ACTION is "wait": do nothing, wait for second reviewer
     if NEXT_ACTION.action != "wait":
-        TaskUpdate: review-phase-N, status: completed, metadata: { status: "gaps", issues: [...] }
+        TaskUpdate: review-phase-N, status: completed, metadata: { status: "gaps", issues: [...], output_path: "$WORKTREE_PATH/.claude/tina/reports/phase-$N-review.md" }
 
         # If NEXT_ACTION is "remediate":
         #   Create remediation tasks (plan/execute/review for .remediation_phase)

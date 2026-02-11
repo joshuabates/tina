@@ -81,8 +81,11 @@ impl CategorizedFailure {
 
     /// Orchestration state has invalid format
     pub fn invalid_state_format(details: impl Into<String>) -> Self {
-        Self::new(FailureCategory::Orchestration, "Invalid orchestration state format")
-            .with_details(details)
+        Self::new(
+            FailureCategory::Orchestration,
+            "Invalid orchestration state format",
+        )
+        .with_details(details)
     }
 
     /// State is valid but monitor shows wrong data
@@ -115,10 +118,7 @@ impl CategorizedFailure {
     pub fn phase_count_mismatch(expected: u32, actual: u32) -> Self {
         Self::new(
             FailureCategory::Outcome,
-            format!(
-                "Wrong phase count: expected {}, got {}",
-                expected, actual
-            ),
+            format!("Wrong phase count: expected {}, got {}", expected, actual),
         )
     }
 
@@ -177,7 +177,10 @@ mod tests {
     #[test]
     fn test_category_display() {
         assert_eq!(format!("{}", FailureCategory::Setup), "Setup");
-        assert_eq!(format!("{}", FailureCategory::Orchestration), "Orchestration");
+        assert_eq!(
+            format!("{}", FailureCategory::Orchestration),
+            "Orchestration"
+        );
         assert_eq!(format!("{}", FailureCategory::Monitor), "Monitor");
         assert_eq!(format!("{}", FailureCategory::Outcome), "Outcome");
     }

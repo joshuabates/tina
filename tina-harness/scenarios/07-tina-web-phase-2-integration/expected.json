@@ -16,6 +16,7 @@
       "expected_status": "complete",
       "min_phases": 2,
       "min_tasks": 2,
+      "min_phase_tasks": 2,
       "min_team_members": 2,
       "min_commits": 2,
       "min_plans": 2,

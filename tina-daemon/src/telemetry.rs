@@ -115,7 +115,13 @@ impl DaemonTelemetry {
             recorded_at: chrono::Utc::now().to_rfc3339(),
         };
 
-        if let Err(e) = self.client.lock().await.record_telemetry_event(&event).await {
+        if let Err(e) = self
+            .client
+            .lock()
+            .await
+            .record_telemetry_event(&event)
+            .await
+        {
             error!(error = %e, event_type = %event_type, "telemetry event write failed");
         }
     }
