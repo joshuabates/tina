@@ -1,0 +1,149 @@
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+.emptyState,
+.errorState {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+}
+
+.errorState {
+  color: var(--color-error);
+}
+
+.phaseGroup {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.phaseHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-bg-secondary);
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-align: left;
+  transition: background-color 0.15s;
+
+  &:hover {
+    background: var(--color-bg-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: -2px;
+  }
+}
+
+.phaseLabel {
+  flex: 1;
+}
+
+.eventCount {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.chevron {
+  font-size: 0.625rem;
+  color: var(--color-text-secondary);
+}
+
+.eventList {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-primary);
+}
+
+.event {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+
+  &:first-child {
+    border-top: none;
+  }
+}
+
+.eventHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.eventType {
+  padding: 0.125rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.eventTypeState {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.eventTypeWrite {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.eventTypeSkip {
+  background: #fef3c7;
+  color: #a16207;
+}
+
+.eventTypeQuery {
+  background: #e9d5ff;
+  color: #7e22ce;
+}
+
+.eventTypeConsistency {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.eventTypeOperator {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.eventTypeDefault {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+
+.eventSource {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+}
+
+.eventTimestamp {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+}
+
+.eventSummary {
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}

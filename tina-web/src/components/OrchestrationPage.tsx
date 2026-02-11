@@ -1,7 +1,9 @@
+import { useState } from "react"
 import { DataErrorBoundary } from "./DataErrorBoundary"
 import { PhaseTimelinePanel } from "./PhaseTimelinePanel"
 import { TaskListPanel } from "./TaskListPanel"
 import { RightPanel } from "./RightPanel"
+import { TelemetryTimeline } from "./TelemetryTimeline"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { OrchestrationDetailQuery } from "@/services/data/queryDefs"
@@ -24,6 +26,7 @@ interface OrchestrationPageContentProps {
 }
 
 function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentProps) {
+  const [showTelemetry, setShowTelemetry] = useState(false)
 
   // No orchestration selected - show empty state
   if (!orchestrationId) {
@@ -125,6 +128,21 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
             <div className={styles.rightColumn}>
               <RightPanel detail={orchestration} />
             </div>
+          </div>
+          <div className={styles.telemetryPanel}>
+            <button
+              className={styles.telemetryToggle}
+              onClick={() => setShowTelemetry(!showTelemetry)}
+              aria-expanded={showTelemetry}
+            >
+              <span>Telemetry Timeline</span>
+              <span className={styles.toggleIcon}>{showTelemetry ? "▼" : "▶"}</span>
+            </button>
+            {showTelemetry && (
+              <div className={styles.telemetryContent}>
+                <TelemetryTimeline orchestrationId={orchestration._id} />
+              </div>
+            )}
           </div>
         </div>
       )

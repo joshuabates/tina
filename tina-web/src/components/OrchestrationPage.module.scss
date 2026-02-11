@@ -120,3 +120,45 @@
     opacity: 0.5;
   }
 }
+
+.telemetryPanel {
+  border-top: 1px solid $border-color;
+  background: color-mix(in srgb, $bg-sidebar 36%, $bg-primary 64%);
+}
+
+.telemetryToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: $text-primary;
+  text-align: left;
+  transition: background-color 0.15s;
+
+  &:hover {
+    background: color-mix(in srgb, $bg-sidebar 44%, $bg-primary 56%);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $color-focus;
+    outline-offset: -2px;
+  }
+}
+
+.toggleIcon {
+  font-size: 10px;
+  color: $text-muted;
+}
+
+.telemetryContent {
+  max-height: 400px;
+  overflow-y: auto;
+  border-top: 1px solid $border-color;
+  background: $bg-primary;
+}
