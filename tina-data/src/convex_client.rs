@@ -31,6 +31,9 @@ pub fn orchestration_to_args(orch: &OrchestrationRecord) -> BTreeMap<String, Val
     if let Some(ref pid) = orch.project_id {
         args.insert("projectId".into(), Value::from(pid.clone()));
     }
+    if let Some(ref did) = orch.design_id {
+        args.insert("designId".into(), Value::from(did.clone()));
+    }
     args.insert(
         "featureName".into(),
         Value::from(orch.feature_name.as_str()),
@@ -496,6 +499,7 @@ fn extract_orchestration_record(obj: &BTreeMap<String, Value>) -> OrchestrationR
     OrchestrationRecord {
         node_id: value_as_id(obj, "nodeId"),
         project_id: value_as_opt_str(obj, "projectId"),
+        design_id: value_as_opt_str(obj, "designId"),
         feature_name: value_as_str(obj, "featureName"),
         design_doc_path: value_as_str(obj, "designDocPath"),
         branch: value_as_str(obj, "branch"),
@@ -1556,6 +1560,7 @@ mod tests {
         let orch = OrchestrationRecord {
             node_id: "node-123".to_string(),
             project_id: None,
+            design_id: None,
             feature_name: "auth-system".to_string(),
             design_doc_path: "docs/auth.md".to_string(),
             branch: "tina/auth-system".to_string(),
@@ -1601,6 +1606,7 @@ mod tests {
         let orch = OrchestrationRecord {
             node_id: "node-123".to_string(),
             project_id: None,
+            design_id: None,
             feature_name: "auth".to_string(),
             design_doc_path: "docs/auth.md".to_string(),
             branch: "tina/auth".to_string(),
@@ -1618,7 +1624,33 @@ mod tests {
         assert!(args.get("worktreePath").is_none());
         assert!(args.get("completedAt").is_none());
         assert!(args.get("totalElapsedMins").is_none());
+        assert!(args.get("designId").is_none());
         assert_eq!(args.len(), 8);
+    }
+
+    #[test]
+    fn test_orchestration_to_args_with_design_id() {
+        let orch = OrchestrationRecord {
+            node_id: "node-123".to_string(),
+            project_id: Some("proj-456".to_string()),
+            design_id: Some("design-789".to_string()),
+            feature_name: "linked-feature".to_string(),
+            design_doc_path: "docs/design.md".to_string(),
+            branch: "tina/linked-feature".to_string(),
+            worktree_path: None,
+            total_phases: 2.0,
+            current_phase: 1.0,
+            status: "planning".to_string(),
+            started_at: "2026-02-11T10:00:00Z".to_string(),
+            completed_at: None,
+            total_elapsed_mins: None,
+        };
+
+        let args = orchestration_to_args(&orch);
+
+        assert_eq!(args.get("designId"), Some(&Value::from("design-789")));
+        assert_eq!(args.get("projectId"), Some(&Value::from("proj-456")));
+        assert_eq!(args.len(), 10); // 8 required + projectId + designId
     }
 
     #[test]
