@@ -844,6 +844,7 @@ fn extract_plan_list(result: FunctionResult) -> Result<Vec<PlanRecord>> {
 
 fn extract_design_record(obj: &BTreeMap<String, Value>) -> DesignRecord {
     DesignRecord {
+        id: value_as_id(obj, "_id"),
         project_id: value_as_id(obj, "projectId"),
         design_key: value_as_str(obj, "designKey"),
         title: value_as_str(obj, "title"),
@@ -887,6 +888,7 @@ fn extract_design_list(result: FunctionResult) -> Result<Vec<DesignRecord>> {
 
 fn extract_ticket_record(obj: &BTreeMap<String, Value>) -> TicketRecord {
     TicketRecord {
+        id: value_as_id(obj, "_id"),
         project_id: value_as_id(obj, "projectId"),
         design_id: value_as_opt_str(obj, "designId"),
         ticket_key: value_as_str(obj, "ticketKey"),
@@ -934,6 +936,7 @@ fn extract_ticket_list(result: FunctionResult) -> Result<Vec<TicketRecord>> {
 
 fn extract_comment_record(obj: &BTreeMap<String, Value>) -> CommentRecord {
     CommentRecord {
+        id: value_as_id(obj, "_id"),
         project_id: value_as_id(obj, "projectId"),
         target_type: value_as_str(obj, "targetType"),
         target_id: value_as_str(obj, "targetId"),
@@ -941,6 +944,7 @@ fn extract_comment_record(obj: &BTreeMap<String, Value>) -> CommentRecord {
         author_name: value_as_str(obj, "authorName"),
         body: value_as_str(obj, "body"),
         created_at: value_as_str(obj, "createdAt"),
+        edited_at: value_as_opt_str(obj, "editedAt"),
     }
 }
 
@@ -1982,6 +1986,7 @@ mod tests {
     #[test]
     fn test_design_to_args_all_fields() {
         let design = DesignRecord {
+            id: "design-123".to_string(),
             project_id: "proj-123".to_string(),
             design_key: "MYAPP-D1".to_string(),
             title: "User Auth Flow".to_string(),
@@ -2019,6 +2024,7 @@ mod tests {
     #[test]
     fn test_design_to_args_no_archived_at() {
         let design = DesignRecord {
+            id: "design-123".to_string(),
             project_id: "proj-123".to_string(),
             design_key: "MYAPP-D1".to_string(),
             title: "Design".to_string(),
@@ -2038,6 +2044,7 @@ mod tests {
     #[test]
     fn test_ticket_to_args_all_fields() {
         let ticket = TicketRecord {
+            id: "ticket-123".to_string(),
             project_id: "proj-123".to_string(),
             design_id: Some("design-456".to_string()),
             ticket_key: "MYAPP-123".to_string(),
@@ -2075,6 +2082,7 @@ mod tests {
     #[test]
     fn test_ticket_to_args_minimal() {
         let ticket = TicketRecord {
+            id: "ticket-123".to_string(),
             project_id: "proj-123".to_string(),
             design_id: None,
             ticket_key: "MYAPP-1".to_string(),
@@ -2101,6 +2109,7 @@ mod tests {
     #[test]
     fn test_comment_to_args() {
         let comment = CommentRecord {
+            id: "comment-123".to_string(),
             project_id: "proj-123".to_string(),
             target_type: "design".to_string(),
             target_id: "design-456".to_string(),
@@ -2108,6 +2117,7 @@ mod tests {
             author_name: "alice@example.com".to_string(),
             body: "Great design!".to_string(),
             created_at: "2026-02-11T10:00:00Z".to_string(),
+            edited_at: None,
         };
 
         let args = comment_to_args(&comment);
@@ -2128,6 +2138,7 @@ mod tests {
     #[test]
     fn test_comment_to_args_agent_author() {
         let comment = CommentRecord {
+            id: "comment-123".to_string(),
             project_id: "proj-123".to_string(),
             target_type: "ticket".to_string(),
             target_id: "ticket-789".to_string(),
@@ -2135,6 +2146,7 @@ mod tests {
             author_name: "claude-executor-1".to_string(),
             body: "This looks good".to_string(),
             created_at: "2026-02-11T10:00:00Z".to_string(),
+            edited_at: None,
         };
 
         let args = comment_to_args(&comment);
@@ -2142,5 +2154,155 @@ mod tests {
         assert_eq!(args.get("authorType"), Some(&Value::from("agent")));
         assert_eq!(args.get("authorName"), Some(&Value::from("claude-executor-1")));
         assert_eq!(args.get("targetType"), Some(&Value::from("ticket")));
+    }
+
+    #[test]
+    fn test_design_update_args_partial() {
+        let design = DesignRecord {
+            id: "design-123".to_string(),
+            project_id: "proj-123".to_string(),
+            design_key: "MYAPP-D1".to_string(),
+            title: "Original Title".to_string(),
+            markdown: "# Original".to_string(),
+            status: "draft".to_string(),
+            created_at: "2026-02-11T10:00:00Z".to_string(),
+            updated_at: "2026-02-11T10:00:00Z".to_string(),
+            archived_at: None,
+        };
+
+        let args = design_to_args(&design);
+
+        assert_eq!(args.get("projectId"), Some(&Value::from("proj-123")));
+        assert_eq!(args.get("designKey"), Some(&Value::from("MYAPP-D1")));
+        assert_eq!(args.len(), 7);
+    }
+
+    #[test]
+    fn test_extract_design_record_from_obj() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("design-456"));
+        obj.insert("projectId".to_string(), Value::from("proj-123"));
+        obj.insert("designKey".to_string(), Value::from("MYAPP-D1"));
+        obj.insert("title".to_string(), Value::from("Test Design"));
+        obj.insert("markdown".to_string(), Value::from("# Test"));
+        obj.insert("status".to_string(), Value::from("draft"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-11T11:00:00Z"));
+
+        let design = extract_design_record(&obj);
+
+        assert_eq!(design.id, "design-456");
+        assert_eq!(design.project_id, "proj-123");
+        assert_eq!(design.design_key, "MYAPP-D1");
+        assert_eq!(design.title, "Test Design");
+        assert_eq!(design.status, "draft");
+        assert!(design.archived_at.is_none());
+    }
+
+    #[test]
+    fn test_extract_design_record_with_archived_at() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("design-456"));
+        obj.insert("projectId".to_string(), Value::from("proj-123"));
+        obj.insert("designKey".to_string(), Value::from("MYAPP-D1"));
+        obj.insert("title".to_string(), Value::from("Test Design"));
+        obj.insert("markdown".to_string(), Value::from("# Test"));
+        obj.insert("status".to_string(), Value::from("archived"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-11T11:00:00Z"));
+        obj.insert("archivedAt".to_string(), Value::from("2026-02-11T12:00:00Z"));
+
+        let design = extract_design_record(&obj);
+
+        assert_eq!(design.id, "design-456");
+        assert_eq!(design.archived_at, Some("2026-02-11T12:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_extract_ticket_record_from_obj() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("ticket-789"));
+        obj.insert("projectId".to_string(), Value::from("proj-123"));
+        obj.insert("ticketKey".to_string(), Value::from("MYAPP-123"));
+        obj.insert("title".to_string(), Value::from("Test Ticket"));
+        obj.insert("description".to_string(), Value::from("Do something"));
+        obj.insert("status".to_string(), Value::from("todo"));
+        obj.insert("priority".to_string(), Value::from("medium"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-11T11:00:00Z"));
+
+        let ticket = extract_ticket_record(&obj);
+
+        assert_eq!(ticket.id, "ticket-789");
+        assert_eq!(ticket.project_id, "proj-123");
+        assert_eq!(ticket.ticket_key, "MYAPP-123");
+        assert_eq!(ticket.title, "Test Ticket");
+        assert_eq!(ticket.status, "todo");
+        assert!(ticket.design_id.is_none());
+        assert!(ticket.closed_at.is_none());
+    }
+
+    #[test]
+    fn test_extract_ticket_record_with_optional_fields() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("ticket-789"));
+        obj.insert("projectId".to_string(), Value::from("proj-123"));
+        obj.insert("designId".to_string(), Value::from("design-456"));
+        obj.insert("ticketKey".to_string(), Value::from("MYAPP-123"));
+        obj.insert("title".to_string(), Value::from("Test Ticket"));
+        obj.insert("description".to_string(), Value::from("Do something"));
+        obj.insert("status".to_string(), Value::from("done"));
+        obj.insert("priority".to_string(), Value::from("high"));
+        obj.insert("assignee".to_string(), Value::from("alice@example.com"));
+        obj.insert("estimate".to_string(), Value::from("3d"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-11T11:00:00Z"));
+        obj.insert("closedAt".to_string(), Value::from("2026-02-11T12:00:00Z"));
+
+        let ticket = extract_ticket_record(&obj);
+
+        assert_eq!(ticket.design_id, Some("design-456".to_string()));
+        assert_eq!(ticket.assignee, Some("alice@example.com".to_string()));
+        assert_eq!(ticket.closed_at, Some("2026-02-11T12:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_extract_comment_record_from_obj() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("comment-999"));
+        obj.insert("projectId".to_string(), Value::from("proj-123"));
+        obj.insert("targetType".to_string(), Value::from("design"));
+        obj.insert("targetId".to_string(), Value::from("design-456"));
+        obj.insert("authorType".to_string(), Value::from("human"));
+        obj.insert("authorName".to_string(), Value::from("alice@example.com"));
+        obj.insert("body".to_string(), Value::from("Great design!"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
+
+        let comment = extract_comment_record(&obj);
+
+        assert_eq!(comment.id, "comment-999");
+        assert_eq!(comment.project_id, "proj-123");
+        assert_eq!(comment.target_type, "design");
+        assert_eq!(comment.author_type, "human");
+        assert_eq!(comment.body, "Great design!");
+        assert!(comment.edited_at.is_none());
+    }
+
+    #[test]
+    fn test_extract_comment_record_with_edited_at() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("comment-999"));
+        obj.insert("projectId".to_string(), Value::from("proj-123"));
+        obj.insert("targetType".to_string(), Value::from("ticket"));
+        obj.insert("targetId".to_string(), Value::from("ticket-789"));
+        obj.insert("authorType".to_string(), Value::from("agent"));
+        obj.insert("authorName".to_string(), Value::from("claude-executor-1"));
+        obj.insert("body".to_string(), Value::from("Updated comment"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
+        obj.insert("editedAt".to_string(), Value::from("2026-02-11T11:00:00Z"));
+
+        let comment = extract_comment_record(&obj);
+
+        assert_eq!(comment.edited_at, Some("2026-02-11T11:00:00Z".to_string()));
     }
 }

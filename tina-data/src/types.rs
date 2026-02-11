@@ -250,6 +250,7 @@ pub struct RollupRecord {
 /// Design record for Convex `designs` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DesignRecord {
+    pub id: String,
     pub project_id: String,
     pub design_key: String,
     pub title: String,
@@ -263,6 +264,7 @@ pub struct DesignRecord {
 /// Ticket record for Convex `tickets` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TicketRecord {
+    pub id: String,
     pub project_id: String,
     pub design_id: Option<String>,
     pub ticket_key: String,
@@ -280,6 +282,7 @@ pub struct TicketRecord {
 /// Work comment record for Convex `workComments` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommentRecord {
+    pub id: String,
     pub project_id: String,
     pub target_type: String,
     pub target_id: String,
@@ -287,4 +290,5 @@ pub struct CommentRecord {
     pub author_name: String,
     pub body: String,
     pub created_at: String,
+    pub edited_at: Option<String>,
 }
