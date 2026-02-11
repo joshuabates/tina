@@ -7,21 +7,10 @@ import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { formatRelativeTimeShort } from "@/lib/time"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { toStatusBadgeStatus } from "@/components/ui/status-styles"
+import { toStatusBadgeStatus, statusLabel } from "@/components/ui/status-styles"
 import type { DesignSummary } from "@/schemas"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "./DesignListPage.module.scss"
-
-const DESIGN_STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  in_review: "In Review",
-  approved: "Approved",
-  archived: "Archived",
-}
-
-function designStatusLabel(status: string): string {
-  return DESIGN_STATUS_LABELS[status] ?? status
-}
 
 function DesignCreateForm({
   projectId,
@@ -202,7 +191,7 @@ export function DesignListPage() {
                 <td>
                   <StatusBadge
                     status={toStatusBadgeStatus(design.status)}
-                    label={designStatusLabel(design.status)}
+                    label={statusLabel(toStatusBadgeStatus(design.status))}
                   />
                 </td>
                 <td>{formatRelativeTimeShort(design.updatedAt)}</td>
