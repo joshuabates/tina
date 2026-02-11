@@ -1,27 +1,209 @@
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Option } from "effect"
+import { LoaderCircle, Square, SquareCheck } from "lucide-react"
 import { useSelection } from "@/hooks/useSelection"
 import { useIndexedAction } from "@/hooks/useIndexedAction"
 import { useRovingSection } from "@/hooks/useRovingSection"
-import { TaskCard } from "@/components/ui/task-card"
 import { TaskQuicklook } from "@/components/TaskQuicklook"
 import type { StatusBadgeStatus } from "@/components/ui/status-badge"
-import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import {
-  orderTasksByDependency,
-  resolveTaskBlockedReason,
-} from "@/lib/task-dependencies"
+  statusTextClass,
+  toStatusBadgeStatus,
+} from "@/components/ui/status-styles"
+import { orderTasksByDependency } from "@/lib/task-dependencies"
+import { cn } from "@/lib/utils"
+import { formatLocalTimestamp, formatRelativeTimeShort } from "@/lib/time"
 import type { OrchestrationDetail } from "@/schemas"
+import styles from "./TaskListPanel.module.scss"
 
 interface TaskListPanelProps {
   detail: OrchestrationDetail
 }
 
+interface TeamModelIndex {
+  exact: Map<string, string>
+  normalized: Map<string, string>
+}
+
+type TaskStateIndicatorVariant = "complete" | "in_progress" | "pending"
+
+const MODEL_KEYS = ["model", "agentModel", "agent_model", "llmModel", "llm_model"] as const
+
 // Map TaskEvent status to StatusBadgeStatus
-// Pass status as-is (lowercase) - StatusBadge will display the text correctly
-// and use fallback styling if status doesn't match a variant
 function mapTaskStatus(status: string): StatusBadgeStatus {
   return toStatusBadgeStatus(status)
+}
+
+function taskStateIndicator(status: StatusBadgeStatus): TaskStateIndicatorVariant {
+  switch (status) {
+    case "complete":
+    case "done":
+      return "complete"
+    case "executing":
+    case "active":
+    case "reviewing":
+    case "in_progress":
+      return "in_progress"
+    default:
+      return "pending"
+  }
+}
+
+function taskStateLabel(indicator: TaskStateIndicatorVariant): string {
+  switch (indicator) {
+    case "complete":
+      return "Task complete"
+    case "in_progress":
+      return "Task in progress"
+    default:
+      return "Task not complete"
+  }
+}
+
+function normalizeAgentName(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "")
+}
+
+function findModelValue(value: unknown, depth = 0): string | undefined {
+  if (depth > 3 || value === null || value === undefined) {
+    return undefined
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : undefined
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const model = findModelValue(item, depth + 1)
+      if (model) {
+        return model
+      }
+    }
+    return undefined
+  }
+
+  if (typeof value !== "object") {
+    return undefined
+  }
+
+  const record = value as Record<string, unknown>
+
+  for (const key of MODEL_KEYS) {
+    const candidate = record[key]
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim()
+      if (trimmed.length > 0) {
+        return trimmed
+      }
+    }
+  }
+
+  for (const [key, candidate] of Object.entries(record)) {
+    if (/model/i.test(key) && typeof candidate === "string") {
+      const trimmed = candidate.trim()
+      if (trimmed.length > 0) {
+        return trimmed
+      }
+    }
+  }
+
+  for (const nested of Object.values(record)) {
+    const model = findModelValue(nested, depth + 1)
+    if (model) {
+      return model
+    }
+  }
+
+  return undefined
+}
+
+function modelFromTaskMetadata(metadata: Option.Option<string>): string | undefined {
+  const rawMetadata = Option.getOrUndefined(metadata)
+  if (!rawMetadata) {
+    return undefined
+  }
+
+  try {
+    const parsed = JSON.parse(rawMetadata) as unknown
+    return findModelValue(parsed)
+  } catch {
+    return undefined
+  }
+}
+
+function buildTeamModelIndex(detail: OrchestrationDetail): TeamModelIndex {
+  const exact = new Map<string, string>()
+  const normalized = new Map<string, string>()
+
+  for (const member of detail.teamMembers) {
+    const model = Option.getOrUndefined(member.model)
+    if (!model) {
+      continue
+    }
+
+    const agentName = member.agentName.trim()
+    if (agentName.length === 0) {
+      continue
+    }
+
+    exact.set(agentName, model)
+    normalized.set(normalizeAgentName(agentName), model)
+  }
+
+  return { exact, normalized }
+}
+
+function resolveTaskModel(
+  owner: string | undefined,
+  metadata: Option.Option<string>,
+  teamModelIndex: TeamModelIndex,
+): string | undefined {
+  if (owner) {
+    const exactMatch = teamModelIndex.exact.get(owner)
+    if (exactMatch) {
+      return exactMatch
+    }
+
+    const normalizedMatch = teamModelIndex.normalized.get(normalizeAgentName(owner))
+    if (normalizedMatch) {
+      return normalizedMatch
+    }
+  }
+
+  return modelFromTaskMetadata(metadata)
+}
+
+function TaskStatusIndicator({ status }: { status: StatusBadgeStatus }) {
+  const indicator = taskStateIndicator(status)
+  const iconClassName = cn(
+    "h-4 w-4",
+    statusTextClass(status),
+    indicator === "pending" && "opacity-70",
+  )
+
+  if (indicator === "complete") {
+    return (
+      <span className={styles.statusIcon} role="img" aria-label={taskStateLabel(indicator)}>
+        <SquareCheck className={iconClassName} aria-hidden="true" />
+      </span>
+    )
+  }
+
+  if (indicator === "in_progress") {
+    return (
+      <span className={styles.statusIcon} role="img" aria-label={taskStateLabel(indicator)}>
+        <LoaderCircle className={cn(iconClassName, "animate-spin")} aria-hidden="true" />
+      </span>
+    )
+  }
+
+  return (
+    <span className={styles.statusIcon} role="img" aria-label={taskStateLabel(indicator)}>
+      <Square className={iconClassName} aria-hidden="true" />
+    </span>
+  )
 }
 
 export function TaskListPanel({ detail }: TaskListPanelProps) {
@@ -39,7 +221,7 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
     ? detail.phaseTasks[selectedPhase.phaseNumber] ?? []
     : []
   const tasks = orderTasksByDependency(rawTasks)
-  const tasksById = new Map(tasks.map((task) => [task.taskId, task]))
+  const teamModelIndex = buildTeamModelIndex(detail)
 
   // Register focus section with item count
   const { activeIndex, activeDescendantId, getItemProps } = useRovingSection({
@@ -116,39 +298,69 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
 
   return (
     <>
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="px-3 py-2 border-b border-border">
-          <h3 className="text-xs font-semibold tracking-tight">
+      <div className={styles.panel}>
+        <div className={styles.header}>
+          <h3 className={styles.summary}>
             Phase {selectedPhase?.phaseNumber} - {tasks.length} tasks
           </h3>
         </div>
 
-        {/* Task list */}
-        <div
-          className="flex-1 overflow-y-auto p-3 space-y-1.5"
-          role="list"
-          aria-label="Tasks"
-          aria-activedescendant={activeDescendantId}
-        >
-          {tasks.map((task, index) => {
-            const rovingProps = getItemProps(index, `task-${task._id}`)
+        <div className={styles.tableViewport}>
+          <div
+            className={styles.table}
+            role="grid"
+            aria-label="Tasks"
+            aria-activedescendant={activeDescendantId}
+          >
+            <div className={styles.tableBody}>
+              {tasks.map((task, index) => {
+                const rovingProps = getItemProps(index, `task-${task._id}`)
+                const status = mapTaskStatus(task.status)
+                const assignee = Option.getOrUndefined(task.owner)
+                const model = resolveTaskModel(assignee, task.metadata, teamModelIndex)
 
-            return (
-              <TaskCard
-                key={task._id}
-                taskId={task.taskId}
-                subject={task.subject}
-                status={mapTaskStatus(task.status)}
-                assignee={Option.getOrUndefined(task.owner)}
-                blockedReason={resolveTaskBlockedReason(
-                  Option.getOrUndefined(task.blockedBy),
-                  tasksById,
-                )}
-                {...rovingProps}
-              />
-            )
-          })}
+                return (
+                  <div
+                    key={task._id}
+                    role="row"
+                    data-task-id={task.taskId}
+                    className={cn(
+                      styles.row,
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background data-[focused=true]:ring-2 data-[focused=true]:bg-primary/5",
+                    )}
+                    {...rovingProps}
+                  >
+                    <div className={cn(styles.cell, styles.statusCell)} role="gridcell">
+                      <TaskStatusIndicator status={status} />
+                    </div>
+
+                    <div className={cn(styles.cell, styles.taskCell)} role="gridcell">
+                      <h4 className={styles.subject}>{task.subject}</h4>
+                    </div>
+
+                    <div className={cn(styles.cell, styles.ownerCell)} role="gridcell">
+                      {assignee ?? <span className={styles.mutedValue}>unassigned</span>}
+                    </div>
+
+                    <div className={cn(styles.cell, styles.modelCell)} role="gridcell">
+                      {model
+                        ? <span className={styles.modelPill}>{model}</span>
+                        : <span className={styles.mutedValue}>unknown</span>}
+                    </div>
+
+                    <div className={cn(styles.cell, styles.updatedCell)} role="gridcell">
+                      <span
+                        className={styles.updatedText}
+                        title={`Updated ${formatLocalTimestamp(task.recordedAt)}`}
+                      >
+                        updated {formatRelativeTimeShort(task.recordedAt)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </div>
       {quicklookTask && (

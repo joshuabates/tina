@@ -85,7 +85,7 @@ describe("TaskListPanel - Keyboard Navigation", () => {
 
       assertRovingFocus({
         container,
-        listRole: "list",
+        listRole: "grid",
         itemIds: taskIds.map((id) => `task-${id}`),
         activeId: "task-task3",
         focusedAttr: "data-focused",
@@ -103,7 +103,7 @@ describe("TaskListPanel - Keyboard Navigation", () => {
 
         assertRovingFocus({
           container,
-          listRole: "list",
+          listRole: "grid",
           itemIds: taskIds.map((id) => `task-${id}`),
           activeId: null,
           focusedAttr: "data-focused",

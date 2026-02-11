@@ -5,6 +5,7 @@ import {
   buildPhase,
   buildTaskEvent,
   buildTaskListDetail,
+  buildTeamMember,
   none,
   some,
 } from "@/test/builders/domain"
@@ -60,6 +61,21 @@ describe("TaskListPanel", () => {
     render(<TaskListPanel detail={buildTaskListDetail()} />)
 
     expect(screen.getByText(/3 tasks/i)).toBeInTheDocument()
+  })
+
+  it("shows compact relative update times for tasks", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2024-01-01T10:15:00Z"))
+    try {
+      setPanelSelection(mockUseSelection, { phaseId: "phase1" })
+      render(<TaskListPanel detail={buildTaskListDetail()} />)
+
+      expect(screen.getByText("updated 15m")).toBeInTheDocument()
+      expect(screen.getByText("updated 10m")).toBeInTheDocument()
+      expect(screen.getByText("updated 5m")).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("maps TaskEvent status to task indicators", () => {
@@ -172,12 +188,71 @@ describe("TaskListPanel", () => {
     expect(screen.getByText("worker2")).toBeInTheDocument()
   })
 
-  it("maps TaskEvent blockedBy to TaskCard blockedReason", () => {
+  it("keeps Task N prefix when present in subject", () => {
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
+
+    const detail = buildTaskListDetail({
+      phaseTasks: {
+        "1": [
+          buildTaskEvent({
+            _id: "task-prefixed",
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "5",
+            subject: "Task 5: Run full test suite and commit",
+            description: none<string>(),
+            status: "in_progress",
+            owner: some("worker-5"),
+            blockedBy: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:15:00Z",
+          }),
+        ],
+      },
+    })
+
+    render(<TaskListPanel detail={detail} />)
+
+    expect(screen.getByText("Task 5: Run full test suite and commit")).toBeInTheDocument()
+  })
+
+  it("shows task model from matching team members", () => {
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
+
+    const detail = buildTaskListDetail({
+      teamMembers: [
+        buildTeamMember({
+          _id: "member1",
+          orchestrationId: "orch1",
+          phaseNumber: "1",
+          agentName: "worker-1",
+          model: some("gpt-5.3-codex"),
+          recordedAt: "2024-01-01T10:00:00Z",
+        }),
+        buildTeamMember({
+          _id: "member2",
+          _creationTime: 1234567891,
+          orchestrationId: "orch1",
+          phaseNumber: "1",
+          agentName: "worker-2",
+          model: some("claude-sonnet-4-5"),
+          recordedAt: "2024-01-01T10:05:00Z",
+        }),
+      ],
+    })
+
+    render(<TaskListPanel detail={detail} />)
+
+    expect(screen.getByText("gpt-5.3-codex")).toBeInTheDocument()
+    expect(screen.getByText("claude-sonnet-4-5")).toBeInTheDocument()
+  })
+
+  it("does not render blocked-by helper text in the table view", () => {
     setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     render(<TaskListPanel detail={buildTaskListDetail()} />)
 
-    expect(screen.getByText("Task 2 must complete first")).toBeInTheDocument()
+    expect(screen.queryByText("Task 2 must complete first")).not.toBeInTheDocument()
   })
 
   it("orders tasks by dependency and moves completed tasks below active work", () => {
@@ -259,7 +334,7 @@ describe("TaskListPanel", () => {
     ])
   })
 
-  it("shows blocker details only for unresolved dependencies", () => {
+  it("does not render inline blocker details for unresolved dependencies", () => {
     setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     const detail = buildTaskListDetail({
@@ -313,7 +388,7 @@ describe("TaskListPanel", () => {
     render(<TaskListPanel detail={detail} />)
 
     expect(screen.queryByText(/Blocked by Create migration/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/Blocked by Apply migration/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Blocked by Apply migration/i)).not.toBeInTheDocument()
   })
 
   it("registers taskList focus section with correct item count", () => {

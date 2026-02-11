@@ -1,3 +1,200 @@
-// TaskListPanel styles
-// Currently using Tailwind utility classes in the component
-// This file reserved for future custom styling needs
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.header {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.summary {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.tableViewport {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.75rem;
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.34rem;
+}
+
+.tableBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.row {
+  padding: 0.56rem 0.56rem 0.56rem 0.28rem;
+  border: 1px solid hsl(var(--border) / 0.78);
+  border-radius: 0.65rem;
+  background: linear-gradient(
+    92deg,
+    hsl(var(--muted) / 0.34) 0%,
+    hsl(var(--background) / 0.96) 100%
+  );
+  transition:
+    border-color 130ms ease,
+    background 130ms ease,
+    box-shadow 130ms ease,
+    transform 130ms ease;
+}
+
+.row:hover {
+  border-color: hsl(var(--primary) / 0.44);
+  background: linear-gradient(
+    92deg,
+    hsl(var(--muted) / 0.46) 0%,
+    hsl(var(--background) / 0.99) 100%
+  );
+}
+
+.row[data-focused="true"] {
+  border-color: hsl(var(--primary) / 0.62);
+}
+
+.cell {
+  min-width: 0;
+  font-size: 0.75rem;
+  color: hsl(var(--foreground));
+}
+
+.statusCell {
+  flex: 0 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.statusIcon {
+  display: inline-flex;
+  height: 1rem;
+  width: 1rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.taskCell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.subject {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.83rem;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.ownerCell,
+.modelCell,
+.updatedText {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+}
+
+.ownerCell,
+.modelCell {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.72rem;
+}
+
+.ownerCell {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelCell {
+  flex: 0 0 auto;
+  margin-left: 0.28rem;
+}
+
+.modelPill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.14rem 0.46rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--primary) / 0.36);
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  font-size: 0.67rem;
+  line-height: 1.2;
+}
+
+.updatedCell {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 90px;
+  margin-left: 0.32rem;
+}
+
+.updatedText {
+  display: block;
+  text-align: right;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.69rem;
+  white-space: nowrap;
+}
+
+.mutedValue {
+  color: hsl(var(--muted-foreground));
+}
+
+@media (max-width: 1120px) {
+  .row {
+    gap: 0.24rem;
+    padding: 0.5rem 0.48rem 0.5rem 0.24rem;
+  }
+
+  .subject {
+    font-size: 0.78rem;
+  }
+
+  .ownerCell {
+    max-width: 116px;
+  }
+
+  .updatedCell {
+    min-width: 80px;
+  }
+}
+
+@media (max-width: 860px) {
+  .ownerCell {
+    display: none;
+  }
+}
