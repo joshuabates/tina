@@ -189,6 +189,24 @@ ls -lt "$SESSION_DIR"/*.jsonl | head -5
 2. Check the TINA plugin is installed (see main README)
 3. Verify skill exists in `skills/` directory
 
+### Teammates Running Generic Prompts
+
+**Problem**: Orchestration appears to run, but executors/reviewers act like generic agents (for example, executor does inline coding instead of calling `tina-session start`).
+
+**Detection**:
+1. Open the lead session debug log in `~/.claude/debug/<leadSessionId>.txt` (from `~/.claude/teams/<feature>-orchestration/config.json`).
+2. Look for lines like:
+   - `[handleSpawnInProcess] agent_type=tina:phase-executor, found=false`
+   - `[SystemPrompt] path=simple`
+
+**Fix**:
+1. Force teammate backend to tmux:
+   - Set `"teammateMode": "tmux"` in project `.claude/settings.local.json`, or
+   - Use `--settings '{"teammateMode":"tmux"}'` when launching Claude in automation.
+2. Re-run the scenario with `--force-baseline`.
+
+`tina-harness run --full` now checks for this fallback and fails the run when detected.
+
 ### Permission Errors
 
 **Problem**: Claude blocked from writing files or accessing directories

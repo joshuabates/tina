@@ -58,6 +58,8 @@ All phases complete:
 **Automated mode:** `/tina:orchestrate` runs the full pipeline
 
 > **Note:** Automated mode requires the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` environment variable for team-based execution.
+>
+> **Important:** Set `teammateMode` to `tmux` for Tina orchestration runs. In-process teammate mode can silently fall back to generic prompts (look for `handleSpawnInProcess ... found=false` in `~/.claude/debug/*.txt`), which breaks `tina:*` phase agent behavior.
 
 ## Skills
 
@@ -106,6 +108,15 @@ All phases complete:
 ```bash
 mise install        # install tool versions (node, etc.)
 mise run check      # verify everything compiles
+```
+
+Project-local Claude setting:
+
+```json
+// .claude/settings.local.json
+{
+  "teammateMode": "tmux"
+}
 ```
 
 ### Common Tasks

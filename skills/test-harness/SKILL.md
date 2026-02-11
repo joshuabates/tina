@@ -101,6 +101,8 @@ Relevant files checked:
 - Debugging state issues that only appear with real orchestration
 - Eval runs where accuracy matters
 
+Full mode now fails if Claude falls back to unresolved in-process Tina agents (`handleSpawnInProcess ... found=false`), because that invalidates orchestration behavior.
+
 ## Team Mode
 
 **Team mode (`/run-harness`):** Delegates the full orchestration run to subagents. The main session stays free while:

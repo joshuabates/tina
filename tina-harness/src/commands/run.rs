@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use chrono::Utc;
 
 use anyhow::{Context, Result};
+use serde::Deserialize;
 
 use crate::failure::{CategorizedFailure, FailureCategory};
 use crate::scenario::{
@@ -328,9 +329,11 @@ fn run_full_orchestration(
     // Launch Claude in interactive mode with permissions bypass
     let claude_bin = detect_claude_binary()?;
     let claude_bin_str = claude_bin.to_string_lossy().to_string();
+    let teammate_settings = r#"{"teammateMode":"tmux"}"#;
     let claude_cmd = format!(
-        "{} --dangerously-skip-permissions",
-        shell_quote(&claude_bin_str)
+        "{} --dangerously-skip-permissions --settings {}",
+        shell_quote(&claude_bin_str),
+        shell_quote(teammate_settings)
     );
     eprintln!("Starting Claude ({}) in session...", claude_bin.display());
     tina_session::tmux::send_keys(&session_name, &claude_cmd)
@@ -383,9 +386,19 @@ fn run_full_orchestration(
         &started_after,
     );
 
+    let fallback_check = if result.is_ok() {
+        assert_no_inprocess_agent_fallback(feature_name).err()
+    } else {
+        None
+    };
+
     // Always clean up the tmux session
     eprintln!("Cleaning up tmux session '{}'", session_name);
     let _ = tina_session::tmux::kill_session(&session_name);
+
+    if let Some(err) = fallback_check {
+        return Err(err);
+    }
 
     result
 }
@@ -450,6 +463,81 @@ fn find_executable(name: &str) -> Option<PathBuf> {
 
 fn shell_quote(arg: &str) -> String {
     format!("\"{}\"", arg.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+#[derive(Debug, Deserialize)]
+struct TeamConfig {
+    #[serde(rename = "leadSessionId")]
+    lead_session_id: String,
+}
+
+fn collect_inprocess_agent_fallbacks(log_contents: &str) -> Vec<String> {
+    log_contents
+        .lines()
+        .filter(|line| {
+            line.contains("[handleSpawnInProcess]")
+                && line.contains("agent_type=tina:")
+                && line.contains("found=false")
+        })
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn assert_no_inprocess_agent_fallback(feature_name: &str) -> Result<()> {
+    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("could not determine home dir"))?;
+    let team_config_path = home
+        .join(".claude")
+        .join("teams")
+        .join(format!("{}-orchestration", feature_name))
+        .join("config.json");
+
+    if !team_config_path.exists() {
+        eprintln!(
+            "Warning: cannot verify agent fallback (missing team config at {})",
+            team_config_path.display()
+        );
+        return Ok(());
+    }
+
+    let cfg_raw = fs::read_to_string(&team_config_path)
+        .with_context(|| format!("Failed to read team config {}", team_config_path.display()))?;
+    let cfg: TeamConfig = serde_json::from_str(&cfg_raw)
+        .with_context(|| format!("Failed to parse team config {}", team_config_path.display()))?;
+
+    let debug_log_path = home
+        .join(".claude")
+        .join("debug")
+        .join(format!("{}.txt", cfg.lead_session_id));
+    if !debug_log_path.exists() {
+        eprintln!(
+            "Warning: cannot verify agent fallback (missing debug log at {})",
+            debug_log_path.display()
+        );
+        return Ok(());
+    }
+
+    let log_contents = fs::read_to_string(&debug_log_path)
+        .with_context(|| format!("Failed to read debug log {}", debug_log_path.display()))?;
+    let fallback_lines = collect_inprocess_agent_fallbacks(&log_contents);
+    if fallback_lines.is_empty() {
+        return Ok(());
+    }
+
+    let sample = fallback_lines
+        .iter()
+        .take(3)
+        .map(|line| format!("  - {}", line))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    anyhow::bail!(
+        "Detected {} in-process Tina agent fallback(s) (found=false) in {}.\n{}\n\
+This means custom teammate agents were not resolved and orchestration likely ran with generic prompts.\n\
+Set teammate mode to tmux (or verify Claude settings) and rerun the harness.",
+        fallback_lines.len(),
+        debug_log_path.display(),
+        sample
+    );
 }
 
 /// Rebuild tina-session and tina-daemon binaries from source.
@@ -1179,5 +1267,19 @@ mod tests {
         let rewritten = design_doc_for_run(original, "calculator", "calculator-h20260211");
         assert!(rewritten.starts_with("# calculator-h20260211\n\n"));
         assert!(rewritten.contains("## Phase 1"));
+    }
+
+    #[test]
+    fn test_collect_inprocess_agent_fallbacks_finds_tina_spawn_failures() {
+        let log = r#"
+2026-02-11T08:36:42.750Z [DEBUG] [handleSpawnInProcess] agent_type=tina:phase-executor, found=false
+2026-02-11T08:36:42.751Z [DEBUG] [handleSpawnInProcess] agent_type=general-purpose, found=true
+2026-02-11T08:44:37.772Z [DEBUG] [handleSpawnInProcess] agent_type=tina:phase-reviewer, found=false
+"#;
+
+        let lines = collect_inprocess_agent_fallbacks(log);
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].contains("tina:phase-executor"));
+        assert!(lines[1].contains("tina:phase-reviewer"));
     }
 }
