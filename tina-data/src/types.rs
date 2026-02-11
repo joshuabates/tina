@@ -186,3 +186,63 @@ pub struct PlanRecord {
     pub plan_path: String,
     pub content: String,
 }
+
+/// Telemetry span record matching the Convex `telemetrySpans` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpanRecord {
+    pub trace_id: String,
+    pub span_id: String,
+    pub parent_span_id: Option<String>,
+    pub orchestration_id: Option<String>,
+    pub feature_name: Option<String>,
+    pub phase_number: Option<String>,
+    pub team_name: Option<String>,
+    pub task_id: Option<String>,
+    pub source: String,
+    pub operation: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub duration_ms: Option<f64>,
+    pub status: String,
+    pub error_code: Option<String>,
+    pub error_detail: Option<String>,
+    pub attrs: Option<String>,
+    pub recorded_at: String,
+}
+
+/// Telemetry event record matching the Convex `telemetryEvents` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventRecord {
+    pub trace_id: String,
+    pub span_id: String,
+    pub parent_span_id: Option<String>,
+    pub orchestration_id: Option<String>,
+    pub feature_name: Option<String>,
+    pub phase_number: Option<String>,
+    pub team_name: Option<String>,
+    pub task_id: Option<String>,
+    pub source: String,
+    pub event_type: String,
+    pub severity: String,
+    pub message: String,
+    pub status: Option<String>,
+    pub attrs: Option<String>,
+    pub recorded_at: String,
+}
+
+/// Telemetry rollup record matching the Convex `telemetryRollups` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RollupRecord {
+    pub window_start: String,
+    pub window_end: String,
+    pub granularity_min: i32,
+    pub source: String,
+    pub operation: String,
+    pub orchestration_id: Option<String>,
+    pub phase_number: Option<String>,
+    pub span_count: i32,
+    pub error_count: i32,
+    pub event_count: i32,
+    pub p95_duration_ms: Option<f64>,
+    pub max_duration_ms: Option<f64>,
+}

@@ -215,6 +215,115 @@ fn plan_to_args(plan: &PlanRecord) -> BTreeMap<String, Value> {
     args
 }
 
+pub fn span_to_args(span: &SpanRecord) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert("traceId".into(), Value::from(span.trace_id.as_str()));
+    args.insert("spanId".into(), Value::from(span.span_id.as_str()));
+    if let Some(ref psid) = span.parent_span_id {
+        args.insert("parentSpanId".into(), Value::from(psid.as_str()));
+    }
+    if let Some(ref oid) = span.orchestration_id {
+        args.insert("orchestrationId".into(), Value::from(oid.as_str()));
+    }
+    if let Some(ref fn_) = span.feature_name {
+        args.insert("featureName".into(), Value::from(fn_.as_str()));
+    }
+    if let Some(ref pn) = span.phase_number {
+        args.insert("phaseNumber".into(), Value::from(pn.as_str()));
+    }
+    if let Some(ref tn) = span.team_name {
+        args.insert("teamName".into(), Value::from(tn.as_str()));
+    }
+    if let Some(ref tid) = span.task_id {
+        args.insert("taskId".into(), Value::from(tid.as_str()));
+    }
+    args.insert("source".into(), Value::from(span.source.as_str()));
+    args.insert("operation".into(), Value::from(span.operation.as_str()));
+    args.insert("startedAt".into(), Value::from(span.started_at.as_str()));
+    if let Some(ref ea) = span.ended_at {
+        args.insert("endedAt".into(), Value::from(ea.as_str()));
+    }
+    if let Some(dur) = span.duration_ms {
+        args.insert("durationMs".into(), Value::from(dur));
+    }
+    args.insert("status".into(), Value::from(span.status.as_str()));
+    if let Some(ref ec) = span.error_code {
+        args.insert("errorCode".into(), Value::from(ec.as_str()));
+    }
+    if let Some(ref ed) = span.error_detail {
+        args.insert("errorDetail".into(), Value::from(ed.as_str()));
+    }
+    if let Some(ref attrs) = span.attrs {
+        args.insert("attrs".into(), Value::from(attrs.as_str()));
+    }
+    args.insert("recordedAt".into(), Value::from(span.recorded_at.as_str()));
+    args
+}
+
+pub fn event_to_args(event: &EventRecord) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert("traceId".into(), Value::from(event.trace_id.as_str()));
+    args.insert("spanId".into(), Value::from(event.span_id.as_str()));
+    if let Some(ref psid) = event.parent_span_id {
+        args.insert("parentSpanId".into(), Value::from(psid.as_str()));
+    }
+    if let Some(ref oid) = event.orchestration_id {
+        args.insert("orchestrationId".into(), Value::from(oid.as_str()));
+    }
+    if let Some(ref fn_) = event.feature_name {
+        args.insert("featureName".into(), Value::from(fn_.as_str()));
+    }
+    if let Some(ref pn) = event.phase_number {
+        args.insert("phaseNumber".into(), Value::from(pn.as_str()));
+    }
+    if let Some(ref tn) = event.team_name {
+        args.insert("teamName".into(), Value::from(tn.as_str()));
+    }
+    if let Some(ref tid) = event.task_id {
+        args.insert("taskId".into(), Value::from(tid.as_str()));
+    }
+    args.insert("source".into(), Value::from(event.source.as_str()));
+    args.insert("eventType".into(), Value::from(event.event_type.as_str()));
+    args.insert("severity".into(), Value::from(event.severity.as_str()));
+    args.insert("message".into(), Value::from(event.message.as_str()));
+    if let Some(ref st) = event.status {
+        args.insert("status".into(), Value::from(st.as_str()));
+    }
+    if let Some(ref attrs) = event.attrs {
+        args.insert("attrs".into(), Value::from(attrs.as_str()));
+    }
+    args.insert("recordedAt".into(), Value::from(event.recorded_at.as_str()));
+    args
+}
+
+pub fn rollup_to_args(rollup: &RollupRecord) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert(
+        "windowStart".into(),
+        Value::from(rollup.window_start.as_str()),
+    );
+    args.insert("windowEnd".into(), Value::from(rollup.window_end.as_str()));
+    args.insert("granularityMin".into(), Value::from(rollup.granularity_min as i64));
+    args.insert("source".into(), Value::from(rollup.source.as_str()));
+    args.insert("operation".into(), Value::from(rollup.operation.as_str()));
+    if let Some(ref oid) = rollup.orchestration_id {
+        args.insert("orchestrationId".into(), Value::from(oid.as_str()));
+    }
+    if let Some(ref pn) = rollup.phase_number {
+        args.insert("phaseNumber".into(), Value::from(pn.as_str()));
+    }
+    args.insert("spanCount".into(), Value::from(rollup.span_count as i64));
+    args.insert("errorCount".into(), Value::from(rollup.error_count as i64));
+    args.insert("eventCount".into(), Value::from(rollup.event_count as i64));
+    if let Some(p95) = rollup.p95_duration_ms {
+        args.insert("p95DurationMs".into(), Value::from(p95));
+    }
+    if let Some(max) = rollup.max_duration_ms {
+        args.insert("maxDurationMs".into(), Value::from(max));
+    }
+    args
+}
+
 /// Extract a string ID from a Convex FunctionResult.
 fn extract_id(result: FunctionResult) -> Result<String> {
     match result {
@@ -822,6 +931,27 @@ impl TinaConvexClient {
     pub async fn upsert_plan(&mut self, plan: &PlanRecord) -> Result<String> {
         let args = plan_to_args(plan);
         let result = self.client.mutation("plans:upsertPlan", args).await?;
+        extract_id(result)
+    }
+
+    /// Record a telemetry span (dedups by spanId).
+    pub async fn record_telemetry_span(&mut self, span: &SpanRecord) -> Result<String> {
+        let args = span_to_args(span);
+        let result = self.client.mutation("telemetry:recordSpan", args).await?;
+        extract_id(result)
+    }
+
+    /// Record a telemetry event (append-only).
+    pub async fn record_telemetry_event(&mut self, event: &EventRecord) -> Result<String> {
+        let args = event_to_args(event);
+        let result = self.client.mutation("telemetry:recordEvent", args).await?;
+        extract_id(result)
+    }
+
+    /// Record a telemetry rollup (upserts by window+source+operation).
+    pub async fn record_telemetry_rollup(&mut self, rollup: &RollupRecord) -> Result<String> {
+        let args = rollup_to_args(rollup);
+        let result = self.client.mutation("telemetry:recordRollup", args).await?;
         extract_id(result)
     }
 }
