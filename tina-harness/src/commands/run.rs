@@ -192,9 +192,17 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
         ));
     }
 
+    // Use a unique feature name for full runs so stale active orchestrations
+    // in Convex from previous harness attempts cannot block init.
+    let run_feature_name = if config.full {
+        unique_feature_name(&scenario.feature_name)
+    } else {
+        scenario.feature_name.clone()
+    };
+
     // Run orchestration (mock or real)
     let state = if config.full {
-        run_full_orchestration(&scenario_work_dir, &scenario)?
+        run_full_orchestration(&scenario_work_dir, &scenario, &run_feature_name)?
     } else {
         run_mock_orchestration(&scenario_work_dir, &scenario)?
     };
@@ -209,13 +217,13 @@ pub fn run(scenario_name: &str, config: &RunConfig) -> Result<RunResult> {
         }
         Ok(RunResult::success(
             scenario.name,
-            scenario.feature_name,
+            run_feature_name,
             scenario_work_dir,
         ))
     } else {
         Ok(RunResult::failure(
             scenario.name,
-            scenario.feature_name,
+            run_feature_name,
             scenario_work_dir,
             failures,
         ))
@@ -253,17 +261,22 @@ const POLL_INTERVAL_SECS: u64 = 10;
 /// Creates a detached tmux session, launches Claude in interactive mode,
 /// sends the orchestrate skill command, and waits for completion by polling
 /// the supervisor state in Convex.
-fn run_full_orchestration(work_dir: &Path, scenario: &Scenario) -> Result<OrchestrationState> {
-    let feature_name = &scenario.feature_name;
+fn run_full_orchestration(
+    work_dir: &Path,
+    scenario: &Scenario,
+    feature_name: &str,
+) -> Result<OrchestrationState> {
     eprintln!("Feature name: {}", feature_name);
 
     // Clean up stale state from previous runs
     cleanup_stale_state(feature_name);
 
     // Write the design doc to the work directory
+    // Force H1 to match this run's feature so orchestrate flows that derive
+    // feature names from the document cannot collapse back to a stale base name.
+    let design_doc = design_doc_for_run(&scenario.design_doc, &scenario.feature_name, feature_name);
     let design_path = work_dir.join("design.md");
-    fs::write(&design_path, &scenario.design_doc)
-        .context("Failed to write design doc to work directory")?;
+    fs::write(&design_path, design_doc).context("Failed to write design doc to work directory")?;
 
     // Initialize git repo in work directory (required for orchestration)
     let git_init = Command::new("git")
@@ -377,10 +390,16 @@ fn run_full_orchestration(work_dir: &Path, scenario: &Scenario) -> Result<Orches
     result
 }
 
+/// Build a per-run feature name to isolate full harness orchestrations.
+fn unique_feature_name(base: &str) -> String {
+    let ts = Utc::now().format("%Y%m%d%H%M%S");
+    format!("{}-h{}", base, ts)
+}
+
 /// Detect a working claude executable and return an absolute path.
 fn detect_claude_binary() -> Result<PathBuf> {
-    let claude_path =
-        find_executable("claude").ok_or_else(|| anyhow::anyhow!("claude binary not found in PATH"))?;
+    let claude_path = find_executable("claude")
+        .ok_or_else(|| anyhow::anyhow!("claude binary not found in PATH"))?;
 
     let is_working = Command::new(&claude_path)
         .arg("--version")
@@ -409,7 +428,10 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     }
 
     if let Some(home) = dirs::home_dir() {
-        for candidate in [home.join(".local/bin").join(name), home.join("bin").join(name)] {
+        for candidate in [
+            home.join(".local/bin").join(name),
+            home.join("bin").join(name),
+        ] {
             if candidate.is_file() {
                 return Some(candidate);
             }
@@ -427,10 +449,7 @@ fn find_executable(name: &str) -> Option<PathBuf> {
 }
 
 fn shell_quote(arg: &str) -> String {
-    format!(
-        "\"{}\"",
-        arg.replace('\\', "\\\\").replace('"', "\\\"")
-    )
+    format!("\"{}\"", arg.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// Rebuild tina-session and tina-daemon binaries from source.
@@ -438,8 +457,8 @@ fn shell_quote(arg: &str) -> String {
 /// Each crate is built individually since there is no workspace Cargo.toml.
 /// A debug build is sufficient for harness runs.
 ///
-/// If tina-daemon is running, it is restarted after the rebuild so it
-/// picks up the new binary.
+/// After rebuild, tina-daemon is restarted unconditionally so harness runs
+/// always have live team/task synchronization.
 fn rebuild_binaries(project_root: &Path) -> Result<()> {
     eprintln!("Rebuilding tina binaries...");
 
@@ -475,18 +494,42 @@ fn rebuild_binaries(project_root: &Path) -> Result<()> {
         );
     }
 
-    // Restart daemon if running so it picks up the new binary
-    if super::verify::check_daemon_running() {
-        let daemon_bin = daemon_dir.join("target").join("debug").join("tina-daemon");
-        eprintln!("  Restarting tina-daemon with new binary...");
-        let _ = Command::new("tina-session")
-            .args(["daemon", "stop"])
-            .output();
-        std::thread::sleep(Duration::from_millis(500));
-        let _ = Command::new("tina-session")
-            .args(["daemon", "start", "--env", "dev", "--daemon-bin"])
-            .arg(&daemon_bin)
-            .output();
+    let session_bin = session_dir
+        .join("target")
+        .join("debug")
+        .join("tina-session");
+    let daemon_bin = daemon_dir.join("target").join("debug").join("tina-daemon");
+    if !session_bin.exists() {
+        anyhow::bail!(
+            "tina-session binary not found after build: {}",
+            session_bin.display()
+        );
+    }
+    if !daemon_bin.exists() {
+        anyhow::bail!(
+            "tina-daemon binary not found after build: {}",
+            daemon_bin.display()
+        );
+    }
+
+    // Restart daemon unconditionally.
+    eprintln!("  Restarting tina-daemon with new binary...");
+    let _ = Command::new(&session_bin).args(["daemon", "stop"]).output();
+    let _ = Command::new("pkill").args(["-f", "tina-daemon"]).output();
+    std::thread::sleep(Duration::from_millis(500));
+
+    let child = Command::new(&daemon_bin)
+        .args(["--env", "dev"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .with_context(|| format!("Failed to launch daemon binary {}", daemon_bin.display()))?;
+    eprintln!("  Started tina-daemon pid={}", child.id());
+
+    std::thread::sleep(Duration::from_millis(500));
+    if !super::verify::check_daemon_running() {
+        anyhow::bail!("tina-daemon did not start successfully");
     }
 
     eprintln!("Binary rebuild complete.");
@@ -530,6 +573,51 @@ fn cleanup_stale_state(feature_name: &str) {
     // Kill any stale tmux sessions
     let session_name = format!("tina-harness-{}", feature_name);
     let _ = tina_session::tmux::kill_session(&session_name);
+
+    // Also kill stale phase sessions for this feature so tina-session start
+    // cannot accidentally resume an unrelated run.
+    let phase_prefix = format!("tina-{}-phase-", feature_name);
+    if let Ok(sessions) = tina_session::tmux::list_sessions() {
+        for session in sessions
+            .into_iter()
+            .filter(|s| s.starts_with(&phase_prefix))
+        {
+            eprintln!("Killing stale phase session: {}", session);
+            let _ = tina_session::tmux::kill_session(&session);
+        }
+    }
+}
+
+/// Build the run-specific design doc content.
+///
+/// For full runs with a unique feature name, rewrite the first H1 (or prepend
+/// one if missing) so orchestrate flows that derive feature from doc title stay
+/// aligned with the requested run feature.
+fn design_doc_for_run(design_doc: &str, scenario_feature: &str, run_feature: &str) -> String {
+    if run_feature == scenario_feature {
+        return design_doc.to_string();
+    }
+
+    let mut replaced = false;
+    let mut lines = Vec::new();
+    for line in design_doc.lines() {
+        if !replaced && line.starts_with("# ") {
+            lines.push(format!("# {}", run_feature));
+            replaced = true;
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+
+    if !replaced {
+        let mut out = Vec::with_capacity(lines.len() + 2);
+        out.push(format!("# {}", run_feature));
+        out.push(String::new());
+        out.extend(lines);
+        return out.join("\n");
+    }
+
+    lines.join("\n")
 }
 
 /// Wait for orchestration to complete by polling Convex.
@@ -611,7 +699,10 @@ fn detect_tmux_fatal_state(session_name: &str) -> Option<(String, String)> {
         return Some(("Claude usage limit reached".to_string(), pane));
     }
     if lower.contains("claude: command not found") {
-        return Some(("claude executable not found in tmux shell".to_string(), pane));
+        return Some((
+            "claude executable not found in tmux shell".to_string(),
+            pane,
+        ));
     }
     if lower.contains("/tina:orchestrate: no such file or directory") {
         return Some((
@@ -1065,5 +1156,28 @@ mod tests {
             "Error should mention tina-session or cargo: {}",
             err
         );
+    }
+
+    #[test]
+    fn test_unique_feature_name_prefixes_base() {
+        let name = unique_feature_name("calculator");
+        assert!(name.starts_with("calculator-h"));
+        assert!(name.len() > "calculator-h".len());
+    }
+
+    #[test]
+    fn test_design_doc_for_run_rewrites_existing_h1_for_unique_feature() {
+        let original = "# Calculator\n\n## Phase 1\nDo work";
+        let rewritten = design_doc_for_run(original, "calculator", "calculator-h20260211");
+        assert!(rewritten.starts_with("# calculator-h20260211\n"));
+        assert!(rewritten.contains("## Phase 1"));
+    }
+
+    #[test]
+    fn test_design_doc_for_run_prepends_h1_when_missing() {
+        let original = "## Phase 1\nDo work";
+        let rewritten = design_doc_for_run(original, "calculator", "calculator-h20260211");
+        assert!(rewritten.starts_with("# calculator-h20260211\n\n"));
+        assert!(rewritten.contains("## Phase 1"));
     }
 }

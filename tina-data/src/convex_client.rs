@@ -192,14 +192,17 @@ fn commit_to_args(commit: &CommitRecord) -> BTreeMap<String, Value> {
         "orchestrationId".into(),
         Value::from(commit.orchestration_id.as_str()),
     );
-    args.insert("phaseNumber".into(), Value::from(commit.phase_number.as_str()));
+    args.insert(
+        "phaseNumber".into(),
+        Value::from(commit.phase_number.as_str()),
+    );
     args.insert("sha".into(), Value::from(commit.sha.as_str()));
     args.insert("shortSha".into(), Value::from(commit.short_sha.as_str()));
     args.insert("subject".into(), Value::from(commit.subject.as_str()));
     args.insert("author".into(), Value::from(commit.author.as_str()));
     args.insert("timestamp".into(), Value::from(commit.timestamp.as_str()));
-    args.insert("insertions".into(), Value::from(commit.insertions as i64));
-    args.insert("deletions".into(), Value::from(commit.deletions as i64));
+    args.insert("insertions".into(), Value::from(commit.insertions as f64));
+    args.insert("deletions".into(), Value::from(commit.deletions as f64));
     args
 }
 
@@ -209,7 +212,10 @@ fn plan_to_args(plan: &PlanRecord) -> BTreeMap<String, Value> {
         "orchestrationId".into(),
         Value::from(plan.orchestration_id.as_str()),
     );
-    args.insert("phaseNumber".into(), Value::from(plan.phase_number.as_str()));
+    args.insert(
+        "phaseNumber".into(),
+        Value::from(plan.phase_number.as_str()),
+    );
     args.insert("planPath".into(), Value::from(plan.plan_path.as_str()));
     args.insert("content".into(), Value::from(plan.content.as_str()));
     args
@@ -303,7 +309,10 @@ pub fn rollup_to_args(rollup: &RollupRecord) -> BTreeMap<String, Value> {
         Value::from(rollup.window_start.as_str()),
     );
     args.insert("windowEnd".into(), Value::from(rollup.window_end.as_str()));
-    args.insert("granularityMin".into(), Value::from(rollup.granularity_min as i64));
+    args.insert(
+        "granularityMin".into(),
+        Value::from(rollup.granularity_min as i64),
+    );
     args.insert("source".into(), Value::from(rollup.source.as_str()));
     args.insert("operation".into(), Value::from(rollup.operation.as_str()));
     if let Some(ref oid) = rollup.orchestration_id {
@@ -413,6 +422,14 @@ fn value_as_opt_f64(map: &BTreeMap<String, Value>, key: &str) -> Option<f64> {
     }
 }
 
+fn value_as_u32(map: &BTreeMap<String, Value>, key: &str) -> u32 {
+    match map.get(key) {
+        Some(Value::Int64(n)) => (*n).max(0) as u32,
+        Some(Value::Float64(f)) if *f >= 0.0 => *f as u32,
+        _ => 0,
+    }
+}
+
 fn value_as_id(map: &BTreeMap<String, Value>, key: &str) -> String {
     match map.get(key) {
         Some(Value::String(s)) => s.clone(),
@@ -493,6 +510,41 @@ fn extract_team_member_from_obj(obj: &BTreeMap<String, Value>) -> TeamMemberReco
         model: value_as_opt_str(obj, "model"),
         joined_at: value_as_opt_str(obj, "joinedAt"),
         recorded_at: value_as_str(obj, "recordedAt"),
+    }
+}
+
+fn extract_orchestration_event_from_obj(obj: &BTreeMap<String, Value>) -> OrchestrationEventRecord {
+    OrchestrationEventRecord {
+        orchestration_id: value_as_id(obj, "orchestrationId"),
+        phase_number: value_as_opt_str(obj, "phaseNumber"),
+        event_type: value_as_str(obj, "eventType"),
+        source: value_as_str(obj, "source"),
+        summary: value_as_str(obj, "summary"),
+        detail: value_as_opt_str(obj, "detail"),
+        recorded_at: value_as_str(obj, "recordedAt"),
+    }
+}
+
+fn extract_commit_from_obj(obj: &BTreeMap<String, Value>) -> CommitRecord {
+    CommitRecord {
+        orchestration_id: value_as_id(obj, "orchestrationId"),
+        phase_number: value_as_str(obj, "phaseNumber"),
+        sha: value_as_str(obj, "sha"),
+        short_sha: value_as_str(obj, "shortSha"),
+        subject: value_as_str(obj, "subject"),
+        author: value_as_str(obj, "author"),
+        timestamp: value_as_str(obj, "timestamp"),
+        insertions: value_as_u32(obj, "insertions"),
+        deletions: value_as_u32(obj, "deletions"),
+    }
+}
+
+fn extract_plan_from_obj(obj: &BTreeMap<String, Value>) -> PlanRecord {
+    PlanRecord {
+        orchestration_id: value_as_id(obj, "orchestrationId"),
+        phase_number: value_as_str(obj, "phaseNumber"),
+        plan_path: value_as_str(obj, "planPath"),
+        content: value_as_str(obj, "content"),
     }
 }
 
@@ -677,6 +729,67 @@ fn extract_active_team_list(result: FunctionResult) -> Result<Vec<ActiveTeamReco
     }
 }
 
+fn extract_orchestration_event_list(
+    result: FunctionResult,
+) -> Result<Vec<OrchestrationEventRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut events = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    events.push(extract_orchestration_event_from_obj(&obj));
+                }
+            }
+            Ok(events)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => {
+            bail!(
+                "expected array for orchestration event list, got: {:?}",
+                other
+            )
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_commit_list(result: FunctionResult) -> Result<Vec<CommitRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut commits = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    commits.push(extract_commit_from_obj(&obj));
+                }
+            }
+            Ok(commits)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => bail!("expected array for commit list, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_plan_list(result: FunctionResult) -> Result<Vec<PlanRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut plans = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    plans.push(extract_plan_from_obj(&obj));
+                }
+            }
+            Ok(plans)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => bail!("expected array for plan list, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
 impl TinaConvexClient {
     /// Connect to a Convex deployment.
     pub async fn new(deployment_url: &str) -> Result<Self> {
@@ -856,6 +969,30 @@ impl TinaConvexClient {
         extract_orchestration_detail(result)
     }
 
+    /// List orchestration events for an orchestration, optionally filtered.
+    pub async fn list_events(
+        &mut self,
+        orchestration_id: &str,
+        event_type: Option<&str>,
+        since: Option<&str>,
+        limit: Option<i64>,
+    ) -> Result<Vec<OrchestrationEventRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        if let Some(event_type) = event_type {
+            args.insert("eventType".into(), Value::from(event_type));
+        }
+        if let Some(since) = since {
+            args.insert("since".into(), Value::from(since));
+        }
+        if let Some(limit) = limit {
+            // Convex v.number() validates as float64; send an f64 literal.
+            args.insert("limit".into(), Value::from(limit as f64));
+        }
+        let result = self.client.query("events:listEvents", args).await?;
+        extract_orchestration_event_list(result)
+    }
+
     /// List all registered nodes.
     pub async fn list_nodes(&mut self) -> Result<Vec<NodeRecord>> {
         let args = BTreeMap::new();
@@ -927,11 +1064,34 @@ impl TinaConvexClient {
         extract_id(result)
     }
 
+    /// List commits for an orchestration, optionally filtered by phase.
+    pub async fn list_commits(
+        &mut self,
+        orchestration_id: &str,
+        phase_number: Option<&str>,
+    ) -> Result<Vec<CommitRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        if let Some(phase_number) = phase_number {
+            args.insert("phaseNumber".into(), Value::from(phase_number));
+        }
+        let result = self.client.query("commits:listCommits", args).await?;
+        extract_commit_list(result)
+    }
+
     /// Upsert a plan file (creates or updates by orchestrationId + phaseNumber).
     pub async fn upsert_plan(&mut self, plan: &PlanRecord) -> Result<String> {
         let args = plan_to_args(plan);
         let result = self.client.mutation("plans:upsertPlan", args).await?;
         extract_id(result)
+    }
+
+    /// List plans for an orchestration.
+    pub async fn list_plans(&mut self, orchestration_id: &str) -> Result<Vec<PlanRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        let result = self.client.query("plans:listPlans", args).await?;
+        extract_plan_list(result)
     }
 
     /// Record a telemetry span (dedups by spanId).
@@ -1096,6 +1256,25 @@ mod tests {
         assert_eq!(args.len(), 3);
         assert!(args.get("planPath").is_none());
         assert!(args.get("gitRange").is_none());
+    }
+
+    #[test]
+    fn test_commit_to_args_uses_f64_for_diff_counts() {
+        let commit = CommitRecord {
+            orchestration_id: "orch-123".to_string(),
+            phase_number: "1".to_string(),
+            sha: "abc123".to_string(),
+            short_sha: "abc123".to_string(),
+            subject: "feat: test".to_string(),
+            author: "Test <test@example.com>".to_string(),
+            timestamp: "2026-02-11T07:00:00Z".to_string(),
+            insertions: 12,
+            deletions: 0,
+        };
+
+        let args = commit_to_args(&commit);
+        assert_eq!(args.get("insertions"), Some(&Value::from(12.0f64)));
+        assert_eq!(args.get("deletions"), Some(&Value::from(0.0f64)));
     }
 
     #[test]

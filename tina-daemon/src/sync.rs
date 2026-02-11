@@ -29,6 +29,8 @@ pub struct SyncCache {
     pub team_members: HashMap<String, HashMap<String, Agent>>,
     /// Maps `orchestration_id` -> last known commit SHA
     pub last_commit_sha: HashMap<String, String>,
+    /// Maps skip-event cache keys -> last emitted unix timestamp.
+    pub skip_event_last_emitted: HashMap<String, i64>,
     /// Active worktrees discovered from Convex
     pub worktrees: Vec<WorktreeInfo>,
 }
@@ -50,6 +52,7 @@ impl SyncCache {
             team_member_state: HashMap::new(),
             team_members: HashMap::new(),
             last_commit_sha: HashMap::new(),
+            skip_event_last_emitted: HashMap::new(),
             worktrees: Vec::new(),
         }
     }
@@ -72,8 +75,19 @@ impl SyncCache {
 
     pub fn find_worktree_by_plan_path(&self, plan_path: &Path) -> Option<&WorktreeInfo> {
         self.worktrees.iter().find(|wt| {
-            let plans_dir = wt.worktree_path.join("docs").join("plans");
-            plan_path.starts_with(&plans_dir)
+            // Primary location: worktree-local docs/plans.
+            let worktree_plans_dir = wt.worktree_path.join("docs").join("plans");
+            if plan_path.starts_with(&worktree_plans_dir) {
+                return true;
+            }
+
+            // Fallback location: repository-root docs/plans (common when planner
+            // is invoked from repo root while implementation runs in a worktree).
+            wt.worktree_path
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|repo_root| plan_path.starts_with(repo_root.join("docs").join("plans")))
+                .unwrap_or(false)
         })
     }
 }
@@ -95,6 +109,18 @@ fn task_cache_key(
         phase_cache_key(phase_number),
         task_id.to_string(),
     )
+}
+
+const SKIP_EVENT_THROTTLE_SECS: i64 = 60;
+
+fn should_emit_skip_event(cache: &mut SyncCache, key: String, now_unix: i64) -> bool {
+    match cache.skip_event_last_emitted.get(&key) {
+        Some(last) if now_unix.saturating_sub(*last) < SKIP_EVENT_THROTTLE_SECS => false,
+        _ => {
+            cache.skip_event_last_emitted.insert(key, now_unix);
+            true
+        }
+    }
 }
 
 /// Sync team members from a team config file to Convex.
@@ -165,8 +191,11 @@ pub async fn sync_team_members(
             recorded_at: now.clone(),
         };
 
-        let mut client = client.lock().await;
-        match client.upsert_team_member(&record).await {
+        let upsert_result = {
+            let mut client_guard = client.lock().await;
+            client_guard.upsert_team_member(&record).await
+        };
+        match upsert_result {
             Ok(_) => {
                 cache.team_member_state.insert(cache_key, now.clone());
                 debug!(agent = %member.name, orchestration = %orchestration_id, "synced team member");
@@ -178,8 +207,15 @@ pub async fn sync_team_members(
                         "agent_name": member.name,
                         "orchestration_id": orchestration_id,
                         "phase_number": &phase_number,
-                    }).to_string();
-                    t.emit_event("projection.write", "info", "team member synced", Some(attrs)).await;
+                    })
+                    .to_string();
+                    t.emit_event(
+                        "projection.write",
+                        "info",
+                        "team member synced",
+                        Some(attrs),
+                    )
+                    .await;
                 }
             }
             Err(e) => {
@@ -195,7 +231,15 @@ pub async fn sync_team_members(
 
     // Complete span
     if let (Some(t), Some(sid)) = (telemetry, &span_id) {
-        t.end_span(sid, "daemon.sync_team_members", started_at, "ok", None, None).await;
+        t.end_span(
+            sid,
+            "daemon.sync_team_members",
+            started_at,
+            "ok",
+            None,
+            None,
+        )
+        .await;
     }
 
     Ok(())
@@ -249,6 +293,7 @@ pub async fn sync_tasks(
 ) -> Result<()> {
     let started_at = chrono::Utc::now();
     let span_id = telemetry.map(|t| t.start_span("daemon.sync_tasks"));
+    let now_unix = Utc::now().timestamp();
 
     for team in active_teams {
         // Claude CLI stores tasks under ~/.claude/tasks/{team_name}/
@@ -256,12 +301,26 @@ pub async fn sync_tasks(
 
         if !task_team_dir.exists() {
             // Emit skip event for missing task dir
-            if let Some(t) = telemetry {
-                let attrs = serde_json::json!({
-                    "team_name": &team.team_name,
-                    "reason": "task_dir_missing",
-                }).to_string();
-                t.emit_event("projection.skip", "info", "task directory not found", Some(attrs)).await;
+            let emit = should_emit_skip_event(
+                cache,
+                format!("task_dir_missing:{}", team.team_name),
+                now_unix,
+            );
+            if emit {
+                if let Some(t) = telemetry {
+                    let attrs = serde_json::json!({
+                        "team_name": &team.team_name,
+                        "reason": "task_dir_missing",
+                    })
+                    .to_string();
+                    t.emit_event(
+                        "projection.skip",
+                        "info",
+                        "task directory not found",
+                        Some(attrs),
+                    )
+                    .await;
+                }
             }
             continue;
         }
@@ -279,7 +338,8 @@ pub async fn sync_tasks(
 
     // Complete span
     if let (Some(t), Some(sid)) = (telemetry, &span_id) {
-        t.end_span(sid, "daemon.sync_tasks", started_at, "ok", None, None).await;
+        t.end_span(sid, "daemon.sync_tasks", started_at, "ok", None, None)
+            .await;
     }
 
     Ok(())
@@ -296,6 +356,7 @@ async fn sync_task_dir(
 ) -> Result<()> {
     let tasks = load_task_files(task_dir)?;
     let now = Utc::now().to_rfc3339();
+    let mut unchanged_count = 0usize;
 
     for task in &tasks {
         let blocked_by_json = if task.blocked_by.is_empty() {
@@ -320,15 +381,7 @@ async fn sync_task_dir(
 
         // Skip if unchanged
         if cache.task_state.get(&cache_key) == Some(&current) {
-            // Emit skip event for unchanged task
-            if let Some(t) = telemetry {
-                let attrs = serde_json::json!({
-                    "task_id": &task.id,
-                    "orchestration_id": orchestration_id,
-                    "reason": "unchanged_cache",
-                }).to_string();
-                t.emit_event("projection.skip", "info", "task unchanged in cache", Some(attrs)).await;
-            }
+            unchanged_count += 1;
             continue;
         }
 
@@ -345,8 +398,11 @@ async fn sync_task_dir(
             recorded_at: now.clone(),
         };
 
-        let mut client = client.lock().await;
-        match client.record_task_event(&event).await {
+        let record_result = {
+            let mut client_guard = client.lock().await;
+            client_guard.record_task_event(&event).await
+        };
+        match record_result {
             Ok(_) => {
                 cache.task_state.insert(cache_key, current);
                 debug!(
@@ -361,12 +417,49 @@ async fn sync_task_dir(
                         "task_id": &task.id,
                         "orchestration_id": orchestration_id,
                         "status": &task.status,
-                    }).to_string();
-                    t.emit_event("projection.write", "info", "task event written", Some(attrs)).await;
+                    })
+                    .to_string();
+                    t.emit_event(
+                        "projection.write",
+                        "info",
+                        "task event written",
+                        Some(attrs),
+                    )
+                    .await;
                 }
             }
             Err(e) => {
                 error!(task_id = %task.id, error = %e, "failed to sync task event");
+            }
+        }
+    }
+
+    // Emit a throttled summary skip event for unchanged tasks instead of one
+    // event per unchanged task (prevents telemetry row explosions).
+    if unchanged_count > 0 {
+        let phase_key = phase_cache_key(phase_number);
+        let emit = should_emit_skip_event(
+            cache,
+            format!("unchanged_cache:{}:{}", orchestration_id, phase_key),
+            Utc::now().timestamp(),
+        );
+        if emit {
+            if let Some(t) = telemetry {
+                let attrs = serde_json::json!({
+                    "orchestration_id": orchestration_id,
+                    "phase_number": phase_number,
+                    "reason": "unchanged_cache_batch",
+                    "unchanged_tasks": unchanged_count,
+                    "total_tasks": tasks.len(),
+                })
+                .to_string();
+                t.emit_event(
+                    "projection.skip",
+                    "info",
+                    "unchanged task batch skipped",
+                    Some(attrs),
+                )
+                .await;
             }
         }
     }
@@ -414,7 +507,8 @@ pub async fn sync_all(
 
     // Complete span
     if let (Some(t), Some(sid)) = (telemetry, &span_id) {
-        t.end_span(sid, "daemon.sync_all", started_at, "ok", None, None).await;
+        t.end_span(sid, "daemon.sync_all", started_at, "ok", None, None)
+            .await;
     }
 
     Ok(())
@@ -504,12 +598,20 @@ pub async fn sync_commits(
             let attrs = serde_json::json!({
                 "orchestration_id": orchestration_id,
                 "reason": "no_new_commits",
-            }).to_string();
-            t.emit_event("projection.skip", "info", "no new commits to sync", Some(attrs)).await;
+            })
+            .to_string();
+            t.emit_event(
+                "projection.skip",
+                "info",
+                "no new commits to sync",
+                Some(attrs),
+            )
+            .await;
         }
 
         if let (Some(t), Some(sid)) = (telemetry, &span_id) {
-            t.end_span(sid, "daemon.sync_commits", started_at, "ok", None, None).await;
+            t.end_span(sid, "daemon.sync_commits", started_at, "ok", None, None)
+                .await;
         }
         return Ok(());
     }
@@ -534,8 +636,11 @@ pub async fn sync_commits(
             deletions: commit.deletions,
         };
 
-        let mut client_guard = client.lock().await;
-        match client_guard.record_commit(&record).await {
+        let record_result = {
+            let mut client_guard = client.lock().await;
+            client_guard.record_commit(&record).await
+        };
+        match record_result {
             Ok(_) => {
                 debug!(sha = %commit.short_sha, orchestration = %orchestration_id, "recorded commit");
 
@@ -544,8 +649,10 @@ pub async fn sync_commits(
                     let attrs = serde_json::json!({
                         "orchestration_id": orchestration_id,
                         "sha": &commit.short_sha,
-                    }).to_string();
-                    t.emit_event("projection.write", "info", "commit written", Some(attrs)).await;
+                    })
+                    .to_string();
+                    t.emit_event("projection.write", "info", "commit written", Some(attrs))
+                        .await;
                 }
             }
             Err(e) => {
@@ -563,7 +670,8 @@ pub async fn sync_commits(
 
     // Complete span
     if let (Some(t), Some(sid)) = (telemetry, &span_id) {
-        t.end_span(sid, "daemon.sync_commits", started_at, "ok", None, None).await;
+        t.end_span(sid, "daemon.sync_commits", started_at, "ok", None, None)
+            .await;
     }
 
     Ok(())
@@ -601,8 +709,11 @@ pub async fn sync_plan(
         content,
     };
 
-    let mut client_guard = client.lock().await;
-    match client_guard.upsert_plan(&record).await {
+    let upsert_result = {
+        let mut client_guard = client.lock().await;
+        client_guard.upsert_plan(&record).await
+    };
+    match upsert_result {
         Ok(_) => {
             info!(
                 plan = %filename,
@@ -615,8 +726,10 @@ pub async fn sync_plan(
                 let attrs = serde_json::json!({
                     "orchestration_id": orchestration_id,
                     "filename": filename,
-                }).to_string();
-                t.emit_event("projection.write", "info", "plan written", Some(attrs)).await;
+                })
+                .to_string();
+                t.emit_event("projection.write", "info", "plan written", Some(attrs))
+                    .await;
             }
         }
         Err(e) => {
@@ -626,7 +739,8 @@ pub async fn sync_plan(
 
     // Complete span
     if let (Some(t), Some(sid)) = (telemetry, &span_id) {
-        t.end_span(sid, "daemon.sync_plan", started_at, "ok", None, None).await;
+        t.end_span(sid, "daemon.sync_plan", started_at, "ok", None, None)
+            .await;
     }
 
     Ok(())
@@ -961,5 +1075,20 @@ mod tests {
         let cache = SyncCache::new();
         let ref_path = PathBuf::from("/nonexistent/path");
         assert!(cache.find_worktree_by_ref_path(&ref_path).is_none());
+    }
+
+    #[test]
+    fn test_should_emit_skip_event_throttles_within_window() {
+        let mut cache = SyncCache::new();
+        let now = 1_000_000i64;
+        let key = "unchanged_cache:orch:1".to_string();
+
+        assert!(should_emit_skip_event(&mut cache, key.clone(), now));
+        assert!(!should_emit_skip_event(&mut cache, key.clone(), now + 10));
+        assert!(should_emit_skip_event(
+            &mut cache,
+            key,
+            now + SKIP_EVENT_THROTTLE_SECS + 1
+        ));
     }
 }
