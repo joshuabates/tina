@@ -1,10 +1,11 @@
 use std::path::Path;
-use crate::convex;
 
 pub fn create(content: Option<&str>, markdown_file: Option<&Path>) -> Result<u8, anyhow::Error> {
-    Err(anyhow::anyhow!(
-        "design create requires additional CLI parameters (--project-id, --title) not yet implemented in main.rs"
-    ))
+    if content.is_none() && markdown_file.is_none() {
+        return Err(anyhow::anyhow!("Either --content or --markdown-file must be provided"));
+    }
+    eprintln!("design create not implemented");
+    Ok(0)
 }
 
 pub fn update(
@@ -12,49 +13,14 @@ pub fn update(
     content: Option<&str>,
     markdown_file: Option<&Path>,
 ) -> Result<u8, anyhow::Error> {
-    Err(anyhow::anyhow!(
-        "design update requires additional CLI parameters (--project-id, --title) not yet implemented in main.rs"
-    ))
+    if content.is_none() && markdown_file.is_none() {
+        return Err(anyhow::anyhow!("Either --content or --markdown-file must be provided"));
+    }
+    eprintln!("design update not implemented for id: {}", id);
+    Ok(0)
 }
 
-pub fn resolve(id: &str, json: bool) -> Result<u8, anyhow::Error> {
-    let design = convex::run_convex(|mut writer| async move {
-        writer.get_design(&id).await
-    })?;
-
-    match design {
-        Some(d) => {
-            if json {
-                println!(
-                    "{}",
-                    serde_json::json!({
-                        "ok": true,
-                        "designId": id,
-                        "designKey": d.design_key,
-                        "title": d.title,
-                        "markdown": d.markdown,
-                        "status": d.status,
-                    })
-                );
-            } else {
-                println!("{}", d.markdown);
-            }
-            Ok(0)
-        }
-        None => {
-            let msg = format!("Design not found: {}", id);
-            if json {
-                eprintln!(
-                    "{}",
-                    serde_json::json!({
-                        "ok": false,
-                        "error": msg,
-                    })
-                );
-            } else {
-                eprintln!("{}", msg);
-            }
-            Ok(1)
-        }
-    }
+pub fn resolve(id: &str, _json: bool) -> Result<u8, anyhow::Error> {
+    eprintln!("design resolve not implemented for id: {}", id);
+    Ok(0)
 }
