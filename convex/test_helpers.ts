@@ -32,6 +32,11 @@ interface RegisterTeamOptions {
   createdAt?: number;
 }
 
+interface CreateProjectOptions {
+  name?: string;
+  repoPath?: string;
+}
+
 export async function createNode(
   t: ConvexHarness,
   options: CreateNodeOptions = {},
@@ -104,4 +109,14 @@ export async function registerTeam(
   }
 
   return await t.mutation(api.teams.registerTeam, args as any);
+}
+
+export async function createProject(
+  t: ConvexHarness,
+  options: CreateProjectOptions = {},
+) {
+  return await t.mutation(api.projects.createProject, {
+    name: options.name ?? "TINA",
+    repoPath: options.repoPath ?? "/Users/joshua/Projects/tina",
+  });
 }
