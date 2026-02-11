@@ -12,16 +12,50 @@ fn check_phase(phase: &str) -> anyhow::Result<()> {
     validate_phase(phase).map_err(|e| anyhow::anyhow!("{}", e))
 }
 
-/// Resolve markdown content from either inline or file source.
+/// Resolve markdown content from either inline or file source (optional).
+fn resolve_optional_markdown(
+    inline: Option<String>,
+    file: Option<PathBuf>,
+) -> anyhow::Result<Option<String>> {
+    match (inline, file) {
+        (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --markdown and --markdown-file"),
+        (Some(md), None) => Ok(Some(md)),
+        (None, Some(path)) => Ok(Some(std::fs::read_to_string(&path)?)),
+        (None, None) => Ok(None),
+    }
+}
+
+/// Resolve markdown content from either inline or file source (required).
 fn resolve_markdown(
     inline: Option<String>,
     file: Option<PathBuf>,
 ) -> anyhow::Result<String> {
-    match (inline, file) {
-        (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --markdown and --markdown-file"),
-        (Some(md), None) => Ok(md),
-        (None, Some(path)) => Ok(std::fs::read_to_string(&path)?),
-        (None, None) => anyhow::bail!("Must specify either --markdown or --markdown-file"),
+    resolve_optional_markdown(inline, file)?
+        .ok_or_else(|| anyhow::anyhow!("Must specify either --markdown or --markdown-file"))
+}
+
+/// Extract the json flag from a WorkCommands enum variant.
+fn extract_json_flag_from_work_command(cmd: &WorkCommands) -> bool {
+    match cmd {
+        WorkCommands::Design { command } => match command {
+            DesignCommands::Create { json, .. } => *json,
+            DesignCommands::Get { json, .. } => *json,
+            DesignCommands::List { json, .. } => *json,
+            DesignCommands::Update { json, .. } => *json,
+            DesignCommands::Transition { json, .. } => *json,
+            DesignCommands::Resolve { json, .. } => *json,
+        },
+        WorkCommands::Ticket { command } => match command {
+            TicketCommands::Create { json, .. } => *json,
+            TicketCommands::Get { json, .. } => *json,
+            TicketCommands::List { json, .. } => *json,
+            TicketCommands::Update { json, .. } => *json,
+            TicketCommands::Transition { json, .. } => *json,
+        },
+        WorkCommands::Comment { command } => match command {
+            CommentCommands::Add { json, .. } => *json,
+            CommentCommands::List { json, .. } => *json,
+        },
     }
 }
 
@@ -1102,145 +1136,153 @@ fn run() -> anyhow::Result<u8> {
             ),
         },
 
-        Commands::Work { command } => match command {
-            WorkCommands::Design { command } => match command {
-                DesignCommands::Create {
-                    project_id,
-                    title,
-                    markdown,
-                    markdown_file,
-                    json,
-                } => {
-                    let md = resolve_markdown(markdown, markdown_file)?;
-                    commands::work::design::create(&project_id, &title, &md, json)
+        Commands::Work { command } => {
+            let json_mode = extract_json_flag_from_work_command(&command);
+            let result = match command {
+                WorkCommands::Design { command } => match command {
+                    DesignCommands::Create {
+                        project_id,
+                        title,
+                        markdown,
+                        markdown_file,
+                        json,
+                    } => {
+                        let md = resolve_markdown(markdown, markdown_file)?;
+                        commands::work::design::create(&project_id, &title, &md, json)
+                    }
+
+                    DesignCommands::Get { id, key, json } => {
+                        commands::work::design::get(id.as_deref(), key.as_deref(), json)
+                    }
+
+                    DesignCommands::List {
+                        project_id,
+                        status,
+                        json,
+                    } => commands::work::design::list(&project_id, status.as_deref(), json),
+
+                    DesignCommands::Update {
+                        id,
+                        title,
+                        markdown,
+                        markdown_file,
+                        json,
+                    } => {
+                        let final_md = resolve_optional_markdown(markdown, markdown_file)?;
+                        commands::work::design::update(&id, title.as_deref(), final_md.as_deref(), json)
+                    }
+
+                    DesignCommands::Transition { id, status, json } => {
+                        commands::work::design::transition(&id, &status, json)
+                    }
+
+                    DesignCommands::Resolve { design_id, json } => {
+                        commands::work::design::resolve(&design_id, json)
+                    }
+                },
+
+                WorkCommands::Ticket { command } => match command {
+                    TicketCommands::Create {
+                        project_id,
+                        title,
+                        description,
+                        priority,
+                        design_id,
+                        assignee,
+                        estimate,
+                        json,
+                    } => commands::work::ticket::create(
+                        &project_id,
+                        &title,
+                        &description,
+                        &priority,
+                        design_id.as_deref(),
+                        assignee.as_deref(),
+                        estimate.as_deref(),
+                        json,
+                    ),
+
+                    TicketCommands::Get { id, key, json } => {
+                        commands::work::ticket::get(id.as_deref(), key.as_deref(), json)
+                    }
+
+                    TicketCommands::List {
+                        project_id,
+                        status,
+                        design_id,
+                        assignee,
+                        json,
+                    } => commands::work::ticket::list(
+                        &project_id,
+                        status.as_deref(),
+                        design_id.as_deref(),
+                        assignee.as_deref(),
+                        json,
+                    ),
+
+                    TicketCommands::Update {
+                        id,
+                        title,
+                        description,
+                        priority,
+                        design_id,
+                        assignee,
+                        estimate,
+                        json,
+                    } => commands::work::ticket::update(
+                        &id,
+                        title.as_deref(),
+                        description.as_deref(),
+                        priority.as_deref(),
+                        design_id.as_deref(),
+                        assignee.as_deref(),
+                        estimate.as_deref(),
+                        json,
+                    ),
+
+                    TicketCommands::Transition { id, status, json } => {
+                        commands::work::ticket::transition(&id, &status, json)
+                    }
+                },
+
+                WorkCommands::Comment { command } => match command {
+                    CommentCommands::Add {
+                        project_id,
+                        target_type,
+                        target_id,
+                        author_type,
+                        author_name,
+                        body,
+                        json,
+                    } => commands::work::comment::add(
+                        &project_id,
+                        &target_type,
+                        &target_id,
+                        &author_type,
+                        &author_name,
+                        &body,
+                        json,
+                    ),
+
+                    CommentCommands::List {
+                        target_type,
+                        target_id,
+                        json,
+                    } => commands::work::comment::list(&target_type, &target_id, json),
+                },
+            };
+
+            match result {
+                Ok(code) => Ok(code),
+                Err(e) if json_mode => {
+                    eprintln!("{}", serde_json::json!({
+                        "ok": false,
+                        "error": format!("{:#}", e),
+                    }));
+                    Ok(1)
                 }
-
-                DesignCommands::Get { id, key, json } => {
-                    commands::work::design::get(id.as_deref(), key.as_deref(), json)
-                }
-
-                DesignCommands::List {
-                    project_id,
-                    status,
-                    json,
-                } => commands::work::design::list(&project_id, status.as_deref(), json),
-
-                DesignCommands::Update {
-                    id,
-                    title,
-                    markdown,
-                    markdown_file,
-                    json,
-                } => {
-                    let final_md = match (markdown, markdown_file) {
-                        (Some(_), Some(_)) => {
-                            anyhow::bail!("Cannot specify both --markdown and --markdown-file")
-                        }
-                        (Some(md), None) => Some(md),
-                        (None, Some(path)) => Some(std::fs::read_to_string(&path)?),
-                        (None, None) => None,
-                    };
-                    commands::work::design::update(&id, title.as_deref(), final_md.as_deref(), json)
-                }
-
-                DesignCommands::Transition { id, status, json } => {
-                    commands::work::design::transition(&id, &status, json)
-                }
-
-                DesignCommands::Resolve { design_id, json } => {
-                    commands::work::design::resolve(&design_id, json)
-                }
-            },
-
-            WorkCommands::Ticket { command } => match command {
-                TicketCommands::Create {
-                    project_id,
-                    title,
-                    description,
-                    priority,
-                    design_id,
-                    assignee,
-                    estimate,
-                    json,
-                } => commands::work::ticket::create(
-                    &project_id,
-                    &title,
-                    &description,
-                    &priority,
-                    design_id.as_deref(),
-                    assignee.as_deref(),
-                    estimate.as_deref(),
-                    json,
-                ),
-
-                TicketCommands::Get { id, key, json } => {
-                    commands::work::ticket::get(id.as_deref(), key.as_deref(), json)
-                }
-
-                TicketCommands::List {
-                    project_id,
-                    status,
-                    design_id,
-                    assignee,
-                    json,
-                } => commands::work::ticket::list(
-                    &project_id,
-                    status.as_deref(),
-                    design_id.as_deref(),
-                    assignee.as_deref(),
-                    json,
-                ),
-
-                TicketCommands::Update {
-                    id,
-                    title,
-                    description,
-                    priority,
-                    design_id,
-                    assignee,
-                    estimate,
-                    json,
-                } => commands::work::ticket::update(
-                    &id,
-                    title.as_deref(),
-                    description.as_deref(),
-                    priority.as_deref(),
-                    design_id.as_deref(),
-                    assignee.as_deref(),
-                    estimate.as_deref(),
-                    json,
-                ),
-
-                TicketCommands::Transition { id, status, json } => {
-                    commands::work::ticket::transition(&id, &status, json)
-                }
-            },
-
-            WorkCommands::Comment { command } => match command {
-                CommentCommands::Add {
-                    project_id,
-                    target_type,
-                    target_id,
-                    author_type,
-                    author_name,
-                    body,
-                    json,
-                } => commands::work::comment::add(
-                    &project_id,
-                    &target_type,
-                    &target_id,
-                    &author_type,
-                    &author_name,
-                    &body,
-                    json,
-                ),
-
-                CommentCommands::List {
-                    target_type,
-                    target_id,
-                    json,
-                } => commands::work::comment::list(&target_type, &target_id, json),
-            },
+                Err(e) => Err(e),
+            }
         },
     }
 }
