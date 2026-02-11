@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import schema from "./schema";
 import { createProject } from "./test_helpers";
 
@@ -95,7 +95,7 @@ describe("workComments", () => {
 
       // Try to add a comment to non-existent design
       await expect(
-        t.mutation(internal.workComments.addComment, {
+        t.mutation(api.workComments.addComment, {
           projectId,
           targetType: "design",
           targetId: "nonexistent-design-id",
@@ -116,7 +116,7 @@ describe("workComments", () => {
 
       // Try to add a comment to non-existent ticket
       await expect(
-        t.mutation(internal.workComments.addComment, {
+        t.mutation(api.workComments.addComment, {
           projectId,
           targetType: "ticket",
           targetId: "nonexistent-ticket-id",
@@ -145,7 +145,7 @@ describe("workComments", () => {
       });
 
       // Add multiple comments
-      await t.mutation(internal.workComments.addComment, {
+      await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "design",
         targetId: designId,
@@ -154,7 +154,7 @@ describe("workComments", () => {
         body: "First comment",
       });
 
-      await t.mutation(internal.workComments.addComment, {
+      await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "design",
         targetId: designId,
@@ -163,7 +163,7 @@ describe("workComments", () => {
         body: "Second comment",
       });
 
-      await t.mutation(internal.workComments.addComment, {
+      await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "design",
         targetId: designId,
@@ -230,7 +230,7 @@ describe("workComments", () => {
       });
 
       // Add comments to both
-      await t.mutation(internal.workComments.addComment, {
+      await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "design",
         targetId: design1Id,
@@ -239,7 +239,7 @@ describe("workComments", () => {
         body: "Comment for design 1",
       });
 
-      await t.mutation(internal.workComments.addComment, {
+      await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "design",
         targetId: design2Id,
@@ -249,7 +249,7 @@ describe("workComments", () => {
       });
 
       // List comments for design1
-      const design1Comments = await t.query(internal.workComments.listComments, {
+      const design1Comments = await t.query(api.workComments.listComments, {
         targetType: "design",
         targetId: design1Id,
       });
@@ -276,7 +276,7 @@ describe("workComments", () => {
       });
 
       // Add multiple comments
-      await t.mutation(internal.workComments.addComment, {
+      await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "ticket",
         targetId: ticketId,
@@ -285,7 +285,7 @@ describe("workComments", () => {
         body: "First comment",
       });
 
-      await t.mutation(internal.workComments.addComment, {
+      await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "ticket",
         targetId: ticketId,
@@ -294,7 +294,7 @@ describe("workComments", () => {
         body: "Second comment",
       });
 
-      await t.mutation(internal.workComments.addComment, {
+      await t.mutation(api.workComments.addComment, {
         projectId,
         targetType: "ticket",
         targetId: ticketId,

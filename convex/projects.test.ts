@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import schema from "./schema";
 import { createNode, createProject } from "./test_helpers";
 
@@ -196,7 +196,7 @@ describe("projects:deleteProject", () => {
     });
 
     // Create a design comment
-    await t.mutation(internal.workComments.addComment, {
+    await t.mutation(api.workComments.addComment, {
       projectId,
       targetType: "design",
       targetId: designId,
@@ -206,7 +206,7 @@ describe("projects:deleteProject", () => {
     });
 
     // Create a ticket comment
-    await t.mutation(internal.workComments.addComment, {
+    await t.mutation(api.workComments.addComment, {
       projectId,
       targetType: "ticket",
       targetId: ticketId,
@@ -226,13 +226,13 @@ describe("projects:deleteProject", () => {
     });
     expect(ticketsBefore.length).toBe(1);
 
-    const designCommentsBefore = await t.query(internal.workComments.listComments, {
+    const designCommentsBefore = await t.query(api.workComments.listComments, {
       targetType: "design",
       targetId: designId,
     });
     expect(designCommentsBefore.length).toBe(1);
 
-    const ticketCommentsBefore = await t.query(internal.workComments.listComments, {
+    const ticketCommentsBefore = await t.query(api.workComments.listComments, {
       targetType: "ticket",
       targetId: ticketId,
     });
@@ -256,13 +256,13 @@ describe("projects:deleteProject", () => {
     });
     expect(ticketsAfter).toEqual([]);
 
-    const designCommentsAfter = await t.query(internal.workComments.listComments, {
+    const designCommentsAfter = await t.query(api.workComments.listComments, {
       targetType: "design",
       targetId: designId,
     });
     expect(designCommentsAfter).toEqual([]);
 
-    const ticketCommentsAfter = await t.query(internal.workComments.listComments, {
+    const ticketCommentsAfter = await t.query(api.workComments.listComments, {
       targetType: "ticket",
       targetId: ticketId,
     });
