@@ -44,6 +44,7 @@ fn extract_json_flag_from_work_command(cmd: &WorkCommands) -> bool {
             DesignCommands::Update { json, .. } => *json,
             DesignCommands::Transition { json, .. } => *json,
             DesignCommands::Resolve { json, .. } => *json,
+            DesignCommands::ResolveToFile { json, .. } => *json,
         },
         WorkCommands::Ticket { command } => match command {
             TicketCommands::Create { json, .. } => *json,
@@ -693,6 +694,21 @@ enum DesignCommands {
         #[arg(long)]
         json: bool,
     },
+
+    /// Fetch a design and write its markdown to a file
+    ResolveToFile {
+        /// Design ID
+        #[arg(long)]
+        design_id: String,
+
+        /// Output file path
+        #[arg(long)]
+        output: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1178,6 +1194,10 @@ fn run() -> anyhow::Result<u8> {
 
                     DesignCommands::Resolve { design_id, json } => {
                         commands::work::design::resolve(&design_id, json)
+                    }
+
+                    DesignCommands::ResolveToFile { design_id, output, json } => {
+                        commands::work::design::resolve_to_file(&design_id, &output, json)
                     }
                 },
 

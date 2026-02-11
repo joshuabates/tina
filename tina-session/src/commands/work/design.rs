@@ -1,3 +1,4 @@
+use std::path::Path;
 use tina_session::convex;
 use serde_json::json;
 
@@ -146,6 +147,39 @@ pub fn resolve(design_id: &str, json: bool) -> Result<u8, anyhow::Error> {
                 }));
             } else {
                 println!("{}", d.markdown);
+            }
+            Ok(0)
+        }
+        None => {
+            if json {
+                eprintln!("{}", json!({
+                    "ok": false,
+                    "error": "Design not found"
+                }));
+            } else {
+                eprintln!("Design not found");
+            }
+            Ok(1)
+        }
+    }
+}
+
+pub fn resolve_to_file(design_id: &str, output: &Path, json: bool) -> Result<u8, anyhow::Error> {
+    let design = convex::run_convex(|mut writer| async move {
+        writer.get_design(design_id).await
+    })?;
+
+    match design {
+        Some(d) => {
+            std::fs::write(output, &d.markdown)?;
+            if json {
+                println!("{}", json!({
+                    "ok": true,
+                    "designId": d.id,
+                    "outputPath": output.display().to_string(),
+                }));
+            } else {
+                println!("Wrote design {} to {}", d.design_key, output.display());
             }
             Ok(0)
         }
