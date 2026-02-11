@@ -547,102 +547,37 @@ enum WorkCommands {
 enum DesignCommands {
     /// Create a new design
     Create {
-        /// Project ID
-        #[arg(long)]
-        project_id: String,
-
-        /// Design title
-        #[arg(long)]
-        title: String,
-
         /// Design content (markdown)
         #[arg(long)]
-        markdown: Option<String>,
+        content: Option<String>,
 
         /// Read markdown from file instead of inline
         #[arg(long)]
         markdown_file: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
     },
 
-    /// Get a design by ID or key
-    Get {
-        /// Design ID
-        #[arg(long)]
-        id: Option<String>,
-
-        /// Design key (e.g., DESIGN-001)
-        #[arg(long)]
-        key: Option<String>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// List designs
-    List {
-        /// Project ID
-        #[arg(long)]
-        project_id: String,
-
-        /// Filter by status
-        #[arg(long)]
-        status: Option<String>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Update a design
+    /// Update an existing design
     Update {
         /// Design ID
         #[arg(long)]
         id: String,
 
-        /// New title
+        /// Design content (markdown)
         #[arg(long)]
-        title: Option<String>,
-
-        /// New markdown content
-        #[arg(long)]
-        markdown: Option<String>,
+        content: Option<String>,
 
         /// Read markdown from file instead of inline
         #[arg(long)]
         markdown_file: Option<PathBuf>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
     },
 
-    /// Transition a design to a new status
-    Transition {
+    /// Fetch and display a design by ID
+    Resolve {
         /// Design ID
         #[arg(long)]
         id: String,
 
-        /// New status
-        #[arg(long)]
-        status: String,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Resolve (fetch) a design by ID for orchestration
-    Resolve {
-        /// Design ID
-        #[arg(long)]
-        design_id: String,
-
-        /// Output as JSON
+        /// Output as JSON (full record) instead of markdown
         #[arg(long)]
         json: bool,
     },
@@ -650,77 +585,14 @@ enum DesignCommands {
 
 #[derive(Subcommand)]
 enum TicketCommands {
-    /// Create a new ticket
-    Create {
-        /// Project ID
-        #[arg(long)]
-        project_id: String,
+    /// List tickets
+    List,
 
+    /// Create a ticket
+    Create {
         /// Ticket title
         #[arg(long)]
         title: String,
-
-        /// Ticket description
-        #[arg(long)]
-        description: String,
-
-        /// Priority level
-        #[arg(long, default_value = "medium")]
-        priority: String,
-
-        /// Related design ID
-        #[arg(long)]
-        design_id: Option<String>,
-
-        /// Assignee
-        #[arg(long)]
-        assignee: Option<String>,
-
-        /// Time estimate
-        #[arg(long)]
-        estimate: Option<String>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Get a ticket by ID or key
-    Get {
-        /// Ticket ID
-        #[arg(long)]
-        id: Option<String>,
-
-        /// Ticket key (e.g., TICKET-001)
-        #[arg(long)]
-        key: Option<String>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// List tickets
-    List {
-        /// Project ID
-        #[arg(long)]
-        project_id: String,
-
-        /// Filter by status
-        #[arg(long)]
-        status: Option<String>,
-
-        /// Filter by design ID
-        #[arg(long)]
-        design_id: Option<String>,
-
-        /// Filter by assignee
-        #[arg(long)]
-        assignee: Option<String>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
     },
 
     /// Update a ticket
@@ -732,94 +604,19 @@ enum TicketCommands {
         /// New title
         #[arg(long)]
         title: Option<String>,
-
-        /// New description
-        #[arg(long)]
-        description: Option<String>,
-
-        /// New priority
-        #[arg(long)]
-        priority: Option<String>,
-
-        /// New related design ID
-        #[arg(long)]
-        design_id: Option<String>,
-
-        /// New assignee
-        #[arg(long)]
-        assignee: Option<String>,
-
-        /// New time estimate
-        #[arg(long)]
-        estimate: Option<String>,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Transition a ticket to a new status
-    Transition {
-        /// Ticket ID
-        #[arg(long)]
-        id: String,
-
-        /// New status
-        #[arg(long)]
-        status: String,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
     },
 }
 
 #[derive(Subcommand)]
 enum CommentCommands {
-    /// Add a comment
-    Add {
-        /// Project ID
-        #[arg(long)]
-        project_id: String,
+    /// List comments
+    List,
 
-        /// Target type ("design" or "ticket")
+    /// Create a comment
+    Create {
+        /// Comment content
         #[arg(long)]
-        target_type: String,
-
-        /// Target ID (design or ticket)
-        #[arg(long)]
-        target_id: String,
-
-        /// Author type ("human" or "agent")
-        #[arg(long)]
-        author_type: String,
-
-        /// Author name
-        #[arg(long)]
-        author_name: String,
-
-        /// Comment body
-        #[arg(long)]
-        body: String,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// List comments for a target
-    List {
-        /// Target type ("design" or "ticket")
-        #[arg(long)]
-        target_type: String,
-
-        /// Target ID (design or ticket)
-        #[arg(long)]
-        target_id: String,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
+        content: String,
     },
 }
 
@@ -827,22 +624,6 @@ enum CommentCommands {
 enum OutputFormat {
     Text,
     Json,
-}
-
-fn resolve_markdown(
-    inline: Option<String>,
-    file: Option<PathBuf>,
-) -> anyhow::Result<String> {
-    use anyhow::Context;
-    match (inline, file) {
-        (Some(_), Some(_)) => {
-            anyhow::bail!("Cannot specify both --markdown and --markdown-file")
-        }
-        (Some(md), None) => Ok(md),
-        (None, Some(path)) => std::fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read markdown file: {}", path.display())),
-        (None, None) => anyhow::bail!("Must specify either --markdown or --markdown-file"),
-    }
 }
 
 fn main() -> ExitCode {
@@ -1108,138 +889,32 @@ fn run() -> anyhow::Result<u8> {
         Commands::Work { command } => match command {
             WorkCommands::Design { command } => match command {
                 DesignCommands::Create {
-                    project_id,
-                    title,
-                    markdown,
+                    content,
                     markdown_file,
-                    json,
-                } => {
-                    let md = resolve_markdown(markdown, markdown_file)?;
-                    commands::work::design_create(&project_id, &title, &md, json)
-                }
-
-                DesignCommands::Get { id, key, json } => {
-                    commands::work::design_get(id.as_deref(), key.as_deref(), json)
-                }
-
-                DesignCommands::List {
-                    project_id,
-                    status,
-                    json,
-                } => commands::work::design_list(&project_id, status.as_deref(), json),
+                } => commands::work::design::create(content.as_deref(), markdown_file.as_deref()),
 
                 DesignCommands::Update {
                     id,
-                    title,
-                    markdown,
+                    content,
                     markdown_file,
-                    json,
-                } => {
-                    let md = if markdown.is_some() || markdown_file.is_some() {
-                        Some(resolve_markdown(markdown, markdown_file)?)
-                    } else {
-                        None
-                    };
-                    commands::work::design_update(&id, title.as_deref(), md.as_deref(), json)
-                }
+                } => commands::work::design::update(&id, content.as_deref(), markdown_file.as_deref()),
 
-                DesignCommands::Transition { id, status, json } => {
-                    commands::work::design_transition(&id, &status, json)
-                }
-
-                DesignCommands::Resolve { design_id, json } => {
-                    commands::work::design_resolve(&design_id, json)
+                DesignCommands::Resolve { id, json } => {
+                    commands::work::design::resolve(&id, json)
                 }
             },
 
             WorkCommands::Ticket { command } => match command {
-                TicketCommands::Create {
-                    project_id,
-                    title,
-                    description,
-                    priority,
-                    design_id,
-                    assignee,
-                    estimate,
-                    json,
-                } => commands::work::ticket_create(
-                    &project_id,
-                    &title,
-                    &description,
-                    &priority,
-                    design_id.as_deref(),
-                    assignee.as_deref(),
-                    estimate.as_deref(),
-                    json,
-                ),
-
-                TicketCommands::Get { id, key, json } => {
-                    commands::work::ticket_get(id.as_deref(), key.as_deref(), json)
-                }
-
-                TicketCommands::List {
-                    project_id,
-                    status,
-                    design_id,
-                    assignee,
-                    json,
-                } => commands::work::ticket_list(
-                    &project_id,
-                    status.as_deref(),
-                    design_id.as_deref(),
-                    assignee.as_deref(),
-                    json,
-                ),
-
-                TicketCommands::Update {
-                    id,
-                    title,
-                    description,
-                    priority,
-                    design_id,
-                    assignee,
-                    estimate,
-                    json,
-                } => commands::work::ticket_update(
-                    &id,
-                    title.as_deref(),
-                    description.as_deref(),
-                    priority.as_deref(),
-                    design_id.as_deref(),
-                    assignee.as_deref(),
-                    estimate.as_deref(),
-                    json,
-                ),
-
-                TicketCommands::Transition { id, status, json } => {
-                    commands::work::ticket_transition(&id, &status, json)
+                TicketCommands::List => commands::work::ticket::list(),
+                TicketCommands::Create { title } => commands::work::ticket::create(&title),
+                TicketCommands::Update { id, title } => {
+                    commands::work::ticket::update(&id, title.as_deref())
                 }
             },
 
             WorkCommands::Comment { command } => match command {
-                CommentCommands::Add {
-                    project_id,
-                    target_type,
-                    target_id,
-                    author_type,
-                    author_name,
-                    body,
-                    json,
-                } => commands::work::comment_add(
-                    &project_id,
-                    &target_type,
-                    &target_id,
-                    &author_type,
-                    &author_name,
-                    &body,
-                    json,
-                ),
-
-                CommentCommands::List {
-                    target_type,
-                    target_id,
-                    json,
-                } => commands::work::comment_list(&target_type, &target_id, json),
+                CommentCommands::List => commands::work::comment::list(),
+                CommentCommands::Create { content } => commands::work::comment::create(&content),
             },
         },
     }
