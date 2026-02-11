@@ -1,13 +1,14 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import schema from "./schema";
+import { createProject } from "./test_helpers";
 
 describe("projectCounters:allocateKey", () => {
   test("allocates key 1 on first call and seeds counter to 2", async () => {
     const t = convexTest(schema);
 
-    const projectId = await t.mutation(api.projects.createProject, {
+    const projectId = await createProject(t, {
       name: "counter-test-project",
       repoPath: "/Users/joshua/Projects/counter-test",
     });
@@ -30,7 +31,7 @@ describe("projectCounters:allocateKey", () => {
   test("allocates key 2 on second call and increments counter", async () => {
     const t = convexTest(schema);
 
-    const projectId = await t.mutation(api.projects.createProject, {
+    const projectId = await createProject(t, {
       name: "counter-test-project-2",
       repoPath: "/Users/joshua/Projects/counter-test-2",
     });
@@ -57,7 +58,7 @@ describe("projectCounters:allocateKey", () => {
   test("maintains separate counters for different types", async () => {
     const t = convexTest(schema);
 
-    const projectId = await t.mutation(api.projects.createProject, {
+    const projectId = await createProject(t, {
       name: "counter-test-project-3",
       repoPath: "/Users/joshua/Projects/counter-test-3",
     });
@@ -95,11 +96,11 @@ describe("projectCounters:allocateKey", () => {
   test("maintains separate counters for different projects", async () => {
     const t = convexTest(schema);
 
-    const project1Id = await t.mutation(api.projects.createProject, {
+    const project1Id = await createProject(t, {
       name: "counter-test-project-4a",
       repoPath: "/Users/joshua/Projects/counter-test-4a",
     });
-    const project2Id = await t.mutation(api.projects.createProject, {
+    const project2Id = await createProject(t, {
       name: "counter-test-project-4b",
       repoPath: "/Users/joshua/Projects/counter-test-4b",
     });
