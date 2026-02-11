@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 /**
  * Cleanup expired telemetry data based on retention policy.
@@ -212,9 +213,9 @@ export const aggregateSpansIntoRollups = internalMutation({
  */
 export const cleanupExpiredTelemetryWrapper = internalMutation({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<{ deletedSpans: number; deletedEvents: number; deletedRollups: number }> => {
     const currentTime = new Date().toISOString();
-    return await cleanupExpiredTelemetry(ctx, { currentTime });
+    return await ctx.runMutation(internal.cron.cleanupExpiredTelemetry, { currentTime });
   },
 });
 
@@ -225,7 +226,7 @@ export const aggregateSpansIntoRollupsWrapper = internalMutation({
   args: {
     granularityMin: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ rollupsCreated: number }> => {
     const now = Date.now();
     const granularityMs = args.granularityMin * 60 * 1000;
 
@@ -236,7 +237,7 @@ export const aggregateSpansIntoRollupsWrapper = internalMutation({
     const windowStart = new Date(windowStartMs).toISOString();
     const windowEnd = new Date(windowEndMs).toISOString();
 
-    return await aggregateSpansIntoRollups(ctx, {
+    return await ctx.runMutation(internal.cron.aggregateSpansIntoRollups, {
       windowStart,
       windowEnd,
       granularityMin: args.granularityMin,

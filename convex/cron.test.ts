@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 import { createFeatureFixture } from "./test_helpers";
 
@@ -38,7 +38,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
     });
 
     // Run cleanup with current time = 2026-02-10T10:00:00Z
-    const result = await t.mutation(api.cron.cleanupExpiredTelemetry, {
+    const result = await t.mutation(internal.cron.cleanupExpiredTelemetry, {
       currentTime: "2026-02-10T10:00:00Z",
     });
 
@@ -86,7 +86,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
     });
 
     // Run cleanup with current time = 2026-02-10T10:00:00Z
-    const result = await t.mutation(api.cron.cleanupExpiredTelemetry, {
+    const result = await t.mutation(internal.cron.cleanupExpiredTelemetry, {
       currentTime: "2026-02-10T10:00:00Z",
     });
 
@@ -127,7 +127,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
     });
 
     // Run cleanup with current time = 2026-02-10T10:00:00Z
-    const result = await t.mutation(api.cron.cleanupExpiredTelemetry, {
+    const result = await t.mutation(internal.cron.cleanupExpiredTelemetry, {
       currentTime: "2026-02-10T10:00:00Z",
     });
 
@@ -180,7 +180,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
     });
 
     // Run cleanup with current time = 2026-02-10T10:00:00Z
-    const result = await t.mutation(api.cron.cleanupExpiredTelemetry, {
+    const result = await t.mutation(internal.cron.cleanupExpiredTelemetry, {
       currentTime: "2026-02-10T10:00:00Z",
     });
 
@@ -223,7 +223,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
     });
 
     // Run cleanup with current time = 2026-02-10T10:00:00Z
-    const result = await t.mutation(api.cron.cleanupExpiredTelemetry, {
+    const result = await t.mutation(internal.cron.cleanupExpiredTelemetry, {
       currentTime: "2026-02-10T10:00:00Z",
     });
 
@@ -241,7 +241,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
   test("handles empty database gracefully", async () => {
     const t = convexTest(schema);
 
-    const result = await t.mutation(api.cron.cleanupExpiredTelemetry, {
+    const result = await t.mutation(internal.cron.cleanupExpiredTelemetry, {
       currentTime: "2026-02-10T10:00:00Z",
     });
 
@@ -302,7 +302,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
     }
 
     // Run rollup for window 10:00:00 - 10:15:00
-    const result = await t.mutation(api.cron.aggregateSpansIntoRollups, {
+    const result = await t.mutation(internal.cron.aggregateSpansIntoRollups, {
       windowStart: "2026-02-10T10:00:00Z",
       windowEnd: "2026-02-10T10:15:00Z",
       granularityMin: 15,
@@ -353,7 +353,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
     }
 
     // Run hourly rollup
-    const result = await t.mutation(api.cron.aggregateSpansIntoRollups, {
+    const result = await t.mutation(internal.cron.aggregateSpansIntoRollups, {
       windowStart: "2026-02-10T10:00:00Z",
       windowEnd: "2026-02-10T11:00:00Z",
       granularityMin: 60,
@@ -392,7 +392,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
     }
 
     // Run daily rollup (1440 minutes = 24 hours)
-    const result = await t.mutation(api.cron.aggregateSpansIntoRollups, {
+    const result = await t.mutation(internal.cron.aggregateSpansIntoRollups, {
       windowStart: "2026-02-10T00:00:00Z",
       windowEnd: "2026-02-11T00:00:00Z",
       granularityMin: 1440,
@@ -452,7 +452,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
     });
 
     // Run rollup
-    const result = await t.mutation(api.cron.aggregateSpansIntoRollups, {
+    const result = await t.mutation(internal.cron.aggregateSpansIntoRollups, {
       windowStart: "2026-02-10T10:00:00Z",
       windowEnd: "2026-02-10T10:15:00Z",
       granularityMin: 15,
@@ -486,7 +486,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
   test("handles empty window gracefully", async () => {
     const t = convexTest(schema);
 
-    const result = await t.mutation(api.cron.aggregateSpansIntoRollups, {
+    const result = await t.mutation(internal.cron.aggregateSpansIntoRollups, {
       windowStart: "2026-02-10T10:00:00Z",
       windowEnd: "2026-02-10T10:15:00Z",
       granularityMin: 15,
@@ -513,7 +513,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
     });
 
     // Run first rollup
-    await t.mutation(api.cron.aggregateSpansIntoRollups, {
+    await t.mutation(internal.cron.aggregateSpansIntoRollups, {
       windowStart: "2026-02-10T10:00:00Z",
       windowEnd: "2026-02-10T10:15:00Z",
       granularityMin: 15,
@@ -533,7 +533,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
     });
 
     // Run rollup again
-    const result = await t.mutation(api.cron.aggregateSpansIntoRollups, {
+    const result = await t.mutation(internal.cron.aggregateSpansIntoRollups, {
       windowStart: "2026-02-10T10:00:00Z",
       windowEnd: "2026-02-10T10:15:00Z",
       granularityMin: 15,

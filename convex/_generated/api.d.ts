@@ -12,6 +12,7 @@ import type * as actions from "../actions.js";
 import type * as admin from "../admin.js";
 import type * as commits from "../commits.js";
 import type * as cron from "../cron.js";
+import type * as crons from "../crons.js";
 import type * as events from "../events.js";
 import type * as generated_orchestrationCore from "../generated/orchestrationCore.js";
 import type * as nodes from "../nodes.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   commits: typeof commits;
   cron: typeof cron;
+  crons: typeof crons;
   events: typeof events;
   "generated/orchestrationCore": typeof generated_orchestrationCore;
   nodes: typeof nodes;
