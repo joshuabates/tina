@@ -2,6 +2,7 @@ use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::fs;
 use std::process::Command;
+use tempfile::TempDir;
 
 fn tina_session_bin() -> std::path::PathBuf {
     let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -263,4 +264,117 @@ fn comment_list() {
         ])
         .assert()
         .success();
+}
+
+// Additional integration tests for help output and validation
+
+#[test]
+fn work_help_shows_subcommands() {
+    Command::new(tina_session_bin())
+        .args(["work", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Design management"))
+        .stdout(predicate::str::contains("Ticket management"))
+        .stdout(predicate::str::contains("Comment management"));
+}
+
+#[test]
+fn design_create_help_shows_arguments() {
+    Command::new(tina_session_bin())
+        .args(["work", "design", "create", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--project-id"))
+        .stdout(predicate::str::contains("--title"))
+        .stdout(predicate::str::contains("--markdown"))
+        .stdout(predicate::str::contains("--markdown-file"))
+        .stdout(predicate::str::contains("--json"));
+}
+
+#[test]
+fn ticket_create_help_shows_default_priority() {
+    Command::new(tina_session_bin())
+        .args(["work", "ticket", "create", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--priority"))
+        .stdout(predicate::str::contains("default"))
+        .stdout(predicate::str::contains("medium"));
+}
+
+#[test]
+fn design_create_rejects_both_markdown_sources() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let markdown_file = temp_dir.path().join("design.md");
+    fs::write(&markdown_file, "# Content").expect("Failed to write markdown file");
+
+    Command::new(tina_session_bin())
+        .args([
+            "work", "design", "create",
+            "--project-id", "proj-123",
+            "--title", "Test Design",
+            "--markdown", "# Inline",
+            "--markdown-file", markdown_file.to_str().unwrap(),
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Cannot specify both --markdown and --markdown-file"));
+}
+
+#[test]
+fn design_create_requires_markdown_or_file() {
+    Command::new(tina_session_bin())
+        .args([
+            "work", "design", "create",
+            "--project-id", "proj-123",
+            "--title", "Test Design",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Must specify either --markdown or --markdown-file"));
+}
+
+#[test]
+fn design_update_rejects_both_markdown_sources() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let markdown_file = temp_dir.path().join("design.md");
+    fs::write(&markdown_file, "# Content").expect("Failed to write markdown file");
+
+    Command::new(tina_session_bin())
+        .args([
+            "work", "design", "update",
+            "--id", "design-123",
+            "--markdown", "# Inline",
+            "--markdown-file", markdown_file.to_str().unwrap(),
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Cannot specify both --markdown and --markdown-file"));
+}
+
+#[test]
+fn design_get_rejects_both_id_and_key() {
+    Command::new(tina_session_bin())
+        .args([
+            "work", "design", "get",
+            "--id", "design-123",
+            "--key", "DESIGN-1",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Cannot specify both --id and --key"));
+}
+
+#[test]
+fn ticket_get_rejects_both_id_and_key() {
+    Command::new(tina_session_bin())
+        .args([
+            "work", "ticket", "get",
+            "--id", "ticket-123",
+            "--key", "TICKET-1",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Cannot specify both --id and --key"));
 }
