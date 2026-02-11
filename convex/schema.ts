@@ -21,6 +21,7 @@ export default defineSchema({
   orchestrations: defineTable({
     ...orchestrationCoreTableFields,
     projectId: v.optional(v.id("projects")),
+    designId: v.optional(v.id("designs")),
   })
     .index("by_feature", ["featureName"])
     .index("by_node", ["nodeId"])
