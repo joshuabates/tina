@@ -1,0 +1,296 @@
+@use '../../styles/tokens' as *;
+
+.ticketDetail {
+  max-width: 960px;
+  padding: 16px;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ticketKey {
+  font-family: $font-mono;
+  font-size: 12px;
+  font-weight: 600;
+  color: $text-muted;
+}
+
+.ticketTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 4px 0 8px;
+}
+
+.badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.priorityBadge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  &[data-priority="urgent"] {
+    color: hsl(var(--destructive, 0 84% 60%));
+  }
+
+  &[data-priority="high"] {
+    color: hsl(var(--status-warning, 38 92% 50%));
+  }
+
+  &[data-priority="medium"] {
+    color: $text-primary;
+  }
+
+  &[data-priority="low"] {
+    color: $text-muted;
+  }
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.actionButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid $border-color;
+  background: $bg-card;
+  color: $text-primary;
+  cursor: pointer;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.editButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid $border-color;
+  background: $bg-card;
+  color: $text-primary;
+  cursor: pointer;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+  }
+}
+
+.descriptionBody {
+  font-size: 13px;
+  line-height: 1.6;
+  color: $text-primary;
+  padding: 12px;
+  border: 1px solid $border-color;
+  border-radius: 6px;
+  background: $bg-card;
+  margin-bottom: 24px;
+  white-space: pre-wrap;
+}
+
+.metadataGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.metadataItem {
+  padding: 8px;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: $bg-card;
+}
+
+.metadataLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+}
+
+.metadataValue {
+  font-size: 13px;
+  color: $text-primary;
+  margin-top: 2px;
+}
+
+.unassigned {
+  color: $text-muted;
+}
+
+.designLink {
+  font-family: $font-mono;
+  font-size: 12px;
+  font-weight: 600;
+  color: $accent;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.loading {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeletonRow {
+  height: 32px;
+  width: 100%;
+  background: hsl(var(--border));
+  border-radius: 4px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.notFound {
+  padding: 32px;
+  text-align: center;
+  color: $text-muted;
+  font-size: 13px;
+}
+
+// Edit form styles
+.editForm {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid $border-color;
+  border-radius: 6px;
+  background: $bg-card;
+}
+
+.formField {
+  margin-bottom: 8px;
+}
+
+.formLabel {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+  margin-bottom: 4px;
+}
+
+.formInput {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: $bg-primary;
+  color: $text-primary;
+
+  &:focus {
+    outline: 2px solid $ring-color;
+    outline-offset: 1px;
+  }
+}
+
+.formTextarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: $bg-primary;
+  color: $text-primary;
+  resize: vertical;
+
+  &:focus {
+    outline: 2px solid $ring-color;
+    outline-offset: 1px;
+  }
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+}
+
+.cancelButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid $border-color;
+  background: $bg-card;
+  color: $text-muted;
+  cursor: pointer;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+  }
+}
+
+.submitButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid $accent;
+  background: $accent;
+  color: $accent-foreground;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.errorMessage {
+  margin-top: 8px;
+  font-size: 12px;
+  color: hsl(var(--destructive, 0 84% 60%));
+}
+
+.sectionHeading {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+  margin-bottom: 8px;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

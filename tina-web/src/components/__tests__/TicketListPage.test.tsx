@@ -117,7 +117,9 @@ const defaultStates: Partial<QueryStateMap> = {
     }),
   ]),
   "tickets.list": querySuccess(tickets),
+  "tickets.get": querySuccess(tickets[0]),
   "designs.list": querySuccess(designs),
+  "workComments.list": querySuccess([]),
 }
 
 function renderApp(route: string, states: Partial<QueryStateMap> = defaultStates) {

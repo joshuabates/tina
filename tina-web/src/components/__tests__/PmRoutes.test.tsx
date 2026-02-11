@@ -13,6 +13,13 @@ import {
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
 
 vi.mock("@/hooks/useTypedQuery")
+vi.mock("convex/react", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("convex/react")>()
+  return {
+    ...mod,
+    useMutation: vi.fn(() => vi.fn()),
+  }
+})
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
