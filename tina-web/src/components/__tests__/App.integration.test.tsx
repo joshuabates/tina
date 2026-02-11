@@ -184,7 +184,7 @@ describe("App - runtime-backed URL and selection flow", () => {
     expect(screen.getByText(/no tasks for this phase/i)).toBeInTheDocument()
   })
 
-  it("switching orchestrations clears phase selection via selection service", async () => {
+  it("switching orchestrations auto-selects phase of new orchestration", async () => {
     const user = userEvent.setup()
     renderApp("/?orch=abc123&phase=phase1")
 
@@ -193,7 +193,9 @@ describe("App - runtime-backed URL and selection flow", () => {
 
     await waitFor(() => {
       expectFeaturePage("my-other-feature", "tina/my-other-feature")
-      expect(screen.getAllByText(/no phase selected/i).length).toBeGreaterThan(0)
+      // Phase auto-selection picks the current phase of the new orchestration,
+      // which has no tasks, so we see "No tasks for this phase"
+      expect(screen.getByText(/no tasks for this phase/i)).toBeInTheDocument()
     })
   })
 })

@@ -52,5 +52,5 @@ fn exec_codex_rejects_empty_model() {
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("must not be empty"));
+        .stderr(predicate::str::contains("does not route to codex"));
 }
