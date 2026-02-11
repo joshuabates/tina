@@ -1115,18 +1115,18 @@ fn run() -> anyhow::Result<u8> {
                     json,
                 } => {
                     let md = resolve_markdown(markdown, markdown_file)?;
-                    commands::work::design_create(&project_id, &title, &md, json)
+                    commands::work::design::create(&project_id, &title, &md, json)
                 }
 
                 DesignCommands::Get { id, key, json } => {
-                    commands::work::design_get(id.as_deref(), key.as_deref(), json)
+                    commands::work::design::get(id.as_deref(), key.as_deref(), json)
                 }
 
                 DesignCommands::List {
                     project_id,
                     status,
                     json,
-                } => commands::work::design_list(&project_id, status.as_deref(), json),
+                } => commands::work::design::list(&project_id, status.as_deref(), json),
 
                 DesignCommands::Update {
                     id,
@@ -1140,15 +1140,15 @@ fn run() -> anyhow::Result<u8> {
                     } else {
                         None
                     };
-                    commands::work::design_update(&id, title.as_deref(), md.as_deref(), json)
+                    commands::work::design::update(&id, title.as_deref(), md.as_deref(), json)
                 }
 
                 DesignCommands::Transition { id, status, json } => {
-                    commands::work::design_transition(&id, &status, json)
+                    commands::work::design::transition(&id, &status, json)
                 }
 
                 DesignCommands::Resolve { design_id, json } => {
-                    commands::work::design_resolve(&design_id, json)
+                    commands::work::design::resolve(&design_id, json)
                 }
             },
 
@@ -1162,7 +1162,7 @@ fn run() -> anyhow::Result<u8> {
                     assignee,
                     estimate,
                     json,
-                } => commands::work::ticket_create(
+                } => commands::work::ticket::create(
                     &project_id,
                     &title,
                     &description,
@@ -1174,7 +1174,7 @@ fn run() -> anyhow::Result<u8> {
                 ),
 
                 TicketCommands::Get { id, key, json } => {
-                    commands::work::ticket_get(id.as_deref(), key.as_deref(), json)
+                    commands::work::ticket::get(id.as_deref(), key.as_deref(), json)
                 }
 
                 TicketCommands::List {
@@ -1183,7 +1183,7 @@ fn run() -> anyhow::Result<u8> {
                     design_id,
                     assignee,
                     json,
-                } => commands::work::ticket_list(
+                } => commands::work::ticket::list(
                     &project_id,
                     status.as_deref(),
                     design_id.as_deref(),
@@ -1200,7 +1200,7 @@ fn run() -> anyhow::Result<u8> {
                     assignee,
                     estimate,
                     json,
-                } => commands::work::ticket_update(
+                } => commands::work::ticket::update(
                     &id,
                     title.as_deref(),
                     description.as_deref(),
@@ -1212,7 +1212,7 @@ fn run() -> anyhow::Result<u8> {
                 ),
 
                 TicketCommands::Transition { id, status, json } => {
-                    commands::work::ticket_transition(&id, &status, json)
+                    commands::work::ticket::transition(&id, &status, json)
                 }
             },
 
@@ -1225,7 +1225,7 @@ fn run() -> anyhow::Result<u8> {
                     author_name,
                     body,
                     json,
-                } => commands::work::comment_add(
+                } => commands::work::comment::add(
                     &project_id,
                     &target_type,
                     &target_id,
@@ -1239,7 +1239,7 @@ fn run() -> anyhow::Result<u8> {
                     target_type,
                     target_id,
                     json,
-                } => commands::work::comment_list(&target_type, &target_id, json),
+                } => commands::work::comment::list(&target_type, &target_id, json),
             },
         },
     }
