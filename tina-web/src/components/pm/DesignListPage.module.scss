@@ -1,0 +1,214 @@
+@use '../../styles/tokens' as *;
+
+.designList {
+  max-width: 960px;
+  padding: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-weight: 500;
+  color: $text-muted;
+  border-bottom: 1px solid $border-color;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  color: $text-primary;
+}
+
+.table tr {
+  cursor: pointer;
+
+  &:hover td {
+    background: hsl(var(--accent) / 0.04);
+  }
+}
+
+.designKey {
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.designTitle {
+  font-size: 12px;
+  color: $text-muted;
+  margin-top: 2px;
+}
+
+.empty {
+  padding: 32px;
+  text-align: center;
+  color: $text-muted;
+  font-size: 13px;
+}
+
+.createButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid $border-color;
+  background: $bg-card;
+  color: $text-primary;
+  cursor: pointer;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+  }
+}
+
+.loading {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeletonRow {
+  height: 32px;
+  width: 100%;
+  background: hsl(var(--border));
+  border-radius: 4px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.noProject {
+  padding: 32px;
+  text-align: center;
+  color: $text-muted;
+  font-size: 13px;
+}
+
+.createForm {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid $border-color;
+  border-radius: 6px;
+  background: $bg-card;
+}
+
+.formField {
+  margin-bottom: 8px;
+}
+
+.formLabel {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+  margin-bottom: 4px;
+}
+
+.formInput {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: $bg-primary;
+  color: $text-primary;
+
+  &:focus {
+    outline: 2px solid $ring-color;
+    outline-offset: 1px;
+  }
+}
+
+.formTextarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 8px 10px;
+  font-family: $font-mono;
+  font-size: 12px;
+  line-height: 1.6;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: $bg-primary;
+  color: $text-primary;
+  resize: vertical;
+
+  &:focus {
+    outline: 2px solid $ring-color;
+    outline-offset: 1px;
+  }
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+}
+
+.cancelButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid $border-color;
+  background: $bg-card;
+  color: $text-muted;
+  cursor: pointer;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+  }
+}
+
+.submitButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid $accent;
+  background: $accent;
+  color: $accent-foreground;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.errorMessage {
+  margin-top: 8px;
+  font-size: 12px;
+  color: hsl(var(--destructive, 0 84% 60%));
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
