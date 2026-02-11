@@ -1,23 +1,24 @@
 import { useState } from "react"
 import { Option } from "effect"
-import { useSearchParams, useNavigate } from "react-router-dom"
+import { useSearchParams, useNavigate, Link } from "react-router-dom"
 import { useMutation } from "convex/react"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { TicketListQuery } from "@/services/data/queryDefs"
+import { TicketListQuery, DesignListQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
-import type { TicketSummary } from "@/schemas"
+import type { TicketSummary, DesignSummary } from "@/schemas"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "./TicketListPage.module.scss"
 
 const TICKET_STATUS_LABELS: Record<string, string> = {
-  open: "Open",
+  todo: "Todo",
   in_progress: "In Progress",
-  done: "Done",
-  closed: "Closed",
+  in_review: "In Review",
   blocked: "Blocked",
+  done: "Done",
+  canceled: "Canceled",
 }
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -37,16 +38,20 @@ function priorityLabel(priority: string): string {
 
 function TicketCreateForm({
   projectId,
+  designs,
   onCancel,
   onCreated,
 }: {
   projectId: string
+  designs: readonly DesignSummary[]
   onCancel: () => void
   onCreated: (ticketId: string) => void
 }) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState("medium")
+  const [designId, setDesignId] = useState("")
+  const [assignee, setAssignee] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const createTicket = useMutation(api.tickets.createTicket)
@@ -63,6 +68,8 @@ function TicketCreateForm({
         title: title.trim(),
         description: description.trim(),
         priority,
+        ...(designId ? { designId: designId as Id<"designs"> } : {}),
+        ...(assignee.trim() ? { assignee: assignee.trim() } : {}),
       })
       onCreated(ticketId as unknown as string)
     } catch (err) {
@@ -110,6 +117,33 @@ function TicketCreateForm({
           <option value="urgent">Urgent</option>
         </select>
       </div>
+      <div className={styles.formField}>
+        <label className={styles.formLabel} htmlFor="ticket-design">Design Link</label>
+        <select
+          id="ticket-design"
+          className={styles.formInput}
+          value={designId}
+          onChange={(e) => setDesignId(e.target.value)}
+        >
+          <option value="">None</option>
+          {designs.map((d) => (
+            <option key={d._id} value={d._id}>
+              {d.designKey}: {d.title}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className={styles.formField}>
+        <label className={styles.formLabel} htmlFor="ticket-assignee">Assignee</label>
+        <input
+          id="ticket-assignee"
+          className={styles.formInput}
+          type="text"
+          value={assignee}
+          onChange={(e) => setAssignee(e.target.value)}
+          placeholder="Assignee name"
+        />
+      </div>
       {error && <div className={styles.errorMessage}>{error}</div>}
       <div className={styles.formActions}>
         <button
@@ -142,6 +176,10 @@ export function TicketListPage() {
     projectId: projectId ?? "",
   })
 
+  const designsResult = useTypedQuery(DesignListQuery, {
+    projectId: projectId ?? "",
+  })
+
   if (!projectId) {
     return (
       <div data-testid="ticket-list-page" className={styles.ticketList}>
@@ -150,7 +188,7 @@ export function TicketListPage() {
     )
   }
 
-  if (isAnyQueryLoading(ticketsResult)) {
+  if (isAnyQueryLoading(ticketsResult, designsResult)) {
     return (
       <div data-testid="ticket-list-page" className={styles.ticketList}>
         <div className={styles.header}>
@@ -165,16 +203,19 @@ export function TicketListPage() {
     )
   }
 
-  const queryError = firstQueryError(ticketsResult)
+  const queryError = firstQueryError(ticketsResult, designsResult)
   if (queryError) {
     throw queryError
   }
 
-  if (ticketsResult.status !== "success") {
+  if (ticketsResult.status !== "success" || designsResult.status !== "success") {
     return null
   }
 
   const tickets = ticketsResult.data
+  const designs = designsResult.data
+
+  const designMap = new Map(designs.map((d) => [d._id, d]))
 
   const handleRowClick = (ticket: TicketSummary) => {
     navigate(`/pm/tickets/${ticket._id}?project=${projectId}`)
@@ -200,6 +241,7 @@ export function TicketListPage() {
       {showCreateForm && (
         <TicketCreateForm
           projectId={projectId}
+          designs={designs}
           onCancel={() => setShowCreateForm(false)}
           onCreated={handleCreated}
         />
@@ -214,39 +256,62 @@ export function TicketListPage() {
               <th>Ticket</th>
               <th>Status</th>
               <th>Priority</th>
+              <th>Design Link</th>
               <th>Assignee</th>
             </tr>
           </thead>
           <tbody>
-            {tickets.map((ticket) => (
-              <tr
-                key={ticket._id}
-                onClick={() => handleRowClick(ticket)}
-                role="row"
-              >
-                <td>
-                  <div className={styles.ticketKey}>{ticket.ticketKey}</div>
-                  <div className={styles.ticketTitle}>{ticket.title}</div>
-                </td>
-                <td>
-                  <StatusBadge
-                    status={toStatusBadgeStatus(ticket.status)}
-                    label={ticketStatusLabel(ticket.status)}
-                  />
-                </td>
-                <td>
-                  <span className={styles.priorityBadge} data-priority={ticket.priority}>
-                    {priorityLabel(ticket.priority)}
-                  </span>
-                </td>
-                <td>
-                  {Option.isSome(ticket.assignee)
-                    ? ticket.assignee.value
-                    : <span className={styles.unassigned}>—</span>
-                  }
-                </td>
-              </tr>
-            ))}
+            {tickets.map((ticket) => {
+              const rawDesignId = Option.isSome(ticket.designId)
+                ? ticket.designId.value
+                : undefined
+              const design = rawDesignId
+                ? designMap.get(rawDesignId)
+                : undefined
+
+              return (
+                <tr
+                  key={ticket._id}
+                  onClick={() => handleRowClick(ticket)}
+                  role="row"
+                >
+                  <td>
+                    <div className={styles.ticketKey}>{ticket.ticketKey}</div>
+                    <div className={styles.ticketTitle}>{ticket.title}</div>
+                  </td>
+                  <td>
+                    <StatusBadge
+                      status={toStatusBadgeStatus(ticket.status)}
+                      label={ticketStatusLabel(ticket.status)}
+                    />
+                  </td>
+                  <td>
+                    <span className={styles.priorityBadge} data-priority={ticket.priority}>
+                      {priorityLabel(ticket.priority)}
+                    </span>
+                  </td>
+                  <td>
+                    {design && rawDesignId ? (
+                      <Link
+                        to={`/pm/designs/${rawDesignId}?project=${projectId}`}
+                        className={styles.designLink}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {design.designKey}
+                      </Link>
+                    ) : (
+                      <span className={styles.unassigned}>—</span>
+                    )}
+                  </td>
+                  <td>
+                    {Option.isSome(ticket.assignee)
+                      ? ticket.assignee.value
+                      : <span className={styles.unassigned}>—</span>
+                    }
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}
