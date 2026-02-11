@@ -148,6 +148,51 @@ export const deleteProject = mutation({
       await ctx.db.delete(orchestration._id);
     }
 
+    // Delete project-scoped PM entities
+    const designs = await ctx.db
+      .query("designs")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const design of designs) {
+      // Delete comments targeting this design
+      const designComments = await ctx.db
+        .query("workComments")
+        .withIndex("by_target", (q) =>
+          q.eq("targetType", "design").eq("targetId", design._id),
+        )
+        .collect();
+      for (const comment of designComments) {
+        await ctx.db.delete(comment._id);
+      }
+      await ctx.db.delete(design._id);
+    }
+
+    const tickets = await ctx.db
+      .query("tickets")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const ticket of tickets) {
+      const ticketComments = await ctx.db
+        .query("workComments")
+        .withIndex("by_target", (q) =>
+          q.eq("targetType", "ticket").eq("targetId", ticket._id),
+        )
+        .collect();
+      for (const comment of ticketComments) {
+        await ctx.db.delete(comment._id);
+      }
+      await ctx.db.delete(ticket._id);
+    }
+
+    // Delete project counters
+    const counters = await ctx.db
+      .query("projectCounters")
+      .withIndex("by_project_type", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const counter of counters) {
+      await ctx.db.delete(counter._id);
+    }
+
     await ctx.db.delete(args.projectId);
 
     return {
