@@ -147,4 +147,74 @@ export default defineSchema({
     .index("by_orchestration", ["orchestrationId"])
     .index("by_phase", ["orchestrationId", "phaseNumber"])
     .index("by_path", ["planPath"]),
+
+  telemetrySpans: defineTable({
+    traceId: v.string(),
+    spanId: v.string(),
+    parentSpanId: v.optional(v.string()),
+    orchestrationId: v.optional(v.id("orchestrations")),
+    featureName: v.optional(v.string()),
+    phaseNumber: v.optional(v.string()),
+    teamName: v.optional(v.string()),
+    taskId: v.optional(v.string()),
+    source: v.string(),
+    operation: v.string(),
+    startedAt: v.string(),
+    endedAt: v.optional(v.string()),
+    durationMs: v.optional(v.number()),
+    status: v.string(),
+    errorCode: v.optional(v.string()),
+    errorDetail: v.optional(v.string()),
+    attrs: v.optional(v.string()),
+    recordedAt: v.string(),
+  })
+    .index("by_span_id", ["spanId"])
+    .index("by_trace_time", ["traceId", "recordedAt"])
+    .index("by_orchestration_time", ["orchestrationId", "recordedAt"])
+    .index("by_source_time", ["source", "recordedAt"])
+    .index("by_operation_time", ["operation", "recordedAt"]),
+
+  telemetryEvents: defineTable({
+    traceId: v.string(),
+    spanId: v.string(),
+    parentSpanId: v.optional(v.string()),
+    orchestrationId: v.optional(v.id("orchestrations")),
+    featureName: v.optional(v.string()),
+    phaseNumber: v.optional(v.string()),
+    teamName: v.optional(v.string()),
+    taskId: v.optional(v.string()),
+    source: v.string(),
+    eventType: v.string(),
+    severity: v.string(),
+    message: v.string(),
+    status: v.optional(v.string()),
+    attrs: v.optional(v.string()),
+    recordedAt: v.string(),
+  })
+    .index("by_trace_time", ["traceId", "recordedAt"])
+    .index("by_orchestration_time", ["orchestrationId", "recordedAt"])
+    .index("by_source_time", ["source", "recordedAt"])
+    .index("by_event_type_time", ["eventType", "recordedAt"]),
+
+  telemetryRollups: defineTable({
+    windowStart: v.string(),
+    windowEnd: v.string(),
+    granularityMin: v.number(),
+    source: v.string(),
+    operation: v.string(),
+    orchestrationId: v.optional(v.id("orchestrations")),
+    phaseNumber: v.optional(v.string()),
+    spanCount: v.number(),
+    errorCount: v.number(),
+    eventCount: v.number(),
+    p95DurationMs: v.optional(v.number()),
+    maxDurationMs: v.optional(v.number()),
+  })
+    .index("by_window_source", ["windowStart", "source"])
+    .index("by_window_operation", ["windowStart", "operation"])
+    .index("by_window_source_operation", [
+      "windowStart",
+      "source",
+      "operation",
+    ]),
 });
