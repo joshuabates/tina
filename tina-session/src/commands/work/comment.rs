@@ -1,4 +1,4 @@
-pub fn add(
+pub fn comment_add(
     project_id: &str,
     target_type: &str,
     target_id: &str,
@@ -8,19 +8,19 @@ pub fn add(
     _json: bool,
 ) -> Result<u8, anyhow::Error> {
     eprintln!(
-        "comment add not implemented: project_id={}, target_type={}, target_id={}",
+        "comment_add not implemented: project_id={}, target_type={}, target_id={}",
         project_id, target_type, target_id
     );
     Ok(0)
 }
 
-pub fn list(
+pub fn comment_list(
     target_type: &str,
     target_id: &str,
     _json: bool,
 ) -> Result<u8, anyhow::Error> {
     eprintln!(
-        "comment list not implemented: target_type={}, target_id={}",
+        "comment_list not implemented: target_type={}, target_id={}",
         target_type, target_id
     );
     Ok(0)
