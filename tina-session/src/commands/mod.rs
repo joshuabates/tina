@@ -19,4 +19,3 @@ pub mod state_sync;
 pub mod status;
 pub mod stop;
 pub mod wait;
-pub mod work;
