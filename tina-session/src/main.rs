@@ -314,6 +314,12 @@ enum Commands {
         #[command(subcommand)]
         command: OrchestrateCommands,
     },
+
+    /// Work management subcommands (designs, tickets, comments)
+    Work {
+        #[command(subcommand)]
+        command: WorkCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -513,6 +519,104 @@ enum OrchestrateCommands {
         /// Issues or error reason (comma-separated for review_gaps)
         #[arg(long)]
         issues: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum WorkCommands {
+    /// Design management
+    Design {
+        #[command(subcommand)]
+        command: DesignCommands,
+    },
+
+    /// Ticket management
+    Ticket {
+        #[command(subcommand)]
+        command: TicketCommands,
+    },
+
+    /// Comment management
+    Comment {
+        #[command(subcommand)]
+        command: CommentCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum DesignCommands {
+    /// Create a new design
+    Create {
+        /// Design content (markdown)
+        #[arg(long)]
+        content: Option<String>,
+
+        /// Read markdown from file instead of inline
+        #[arg(long)]
+        markdown_file: Option<PathBuf>,
+    },
+
+    /// Update an existing design
+    Update {
+        /// Design ID
+        #[arg(long)]
+        id: String,
+
+        /// Design content (markdown)
+        #[arg(long)]
+        content: Option<String>,
+
+        /// Read markdown from file instead of inline
+        #[arg(long)]
+        markdown_file: Option<PathBuf>,
+    },
+
+    /// Fetch and display a design by ID
+    Resolve {
+        /// Design ID
+        #[arg(long)]
+        id: String,
+
+        /// Output as JSON (full record) instead of markdown
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum TicketCommands {
+    /// List tickets
+    List,
+
+    /// Create a ticket
+    Create {
+        /// Ticket title
+        #[arg(long)]
+        title: String,
+    },
+
+    /// Update a ticket
+    Update {
+        /// Ticket ID
+        #[arg(long)]
+        id: String,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum CommentCommands {
+    /// List comments
+    List,
+
+    /// Create a comment
+    Create {
+        /// Comment content
+        #[arg(long)]
+        content: String,
     },
 }
 
@@ -780,6 +884,38 @@ fn run() -> anyhow::Result<u8> {
                 git_range.as_deref(),
                 issues.as_deref(),
             ),
+        },
+
+        Commands::Work { command } => match command {
+            WorkCommands::Design { command } => match command {
+                DesignCommands::Create {
+                    content,
+                    markdown_file,
+                } => commands::work::design::create(content.as_deref(), markdown_file.as_deref()),
+
+                DesignCommands::Update {
+                    id,
+                    content,
+                    markdown_file,
+                } => commands::work::design::update(&id, content.as_deref(), markdown_file.as_deref()),
+
+                DesignCommands::Resolve { id, json } => {
+                    commands::work::design::resolve(&id, json)
+                }
+            },
+
+            WorkCommands::Ticket { command } => match command {
+                TicketCommands::List => commands::work::ticket::list(),
+                TicketCommands::Create { title } => commands::work::ticket::create(&title),
+                TicketCommands::Update { id, title } => {
+                    commands::work::ticket::update(&id, title.as_deref())
+                }
+            },
+
+            WorkCommands::Comment { command } => match command {
+                CommentCommands::List => commands::work::comment::list(),
+                CommentCommands::Create { content } => commands::work::comment::create(&content),
+            },
         },
     }
 }
