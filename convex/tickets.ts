@@ -76,38 +76,34 @@ export const listTickets = query({
     assignee: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let query_obj;
+    let queryObj;
 
     // Use proper indexes based on filters
     if (args.designId) {
-      query_obj = ctx.db
+      queryObj = ctx.db
         .query("tickets")
         .withIndex("by_design", (q) => q.eq("designId", args.designId));
     } else if (args.status !== undefined) {
-      query_obj = ctx.db
+      queryObj = ctx.db
         .query("tickets")
         .withIndex("by_project_status", (q) =>
           q.eq("projectId", args.projectId).eq("status", args.status!),
         );
     } else {
-      query_obj = ctx.db
+      queryObj = ctx.db
         .query("tickets")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId));
     }
 
-    if (args.designId && args.assignee) {
-      query_obj = query_obj.filter((q) => q.eq(q.field("assignee"), args.assignee));
+    if (args.assignee) {
+      queryObj = queryObj.filter((q) => q.eq(q.field("assignee"), args.assignee));
     }
 
     if (args.designId && args.status !== undefined) {
-      query_obj = query_obj.filter((q) => q.eq(q.field("status"), args.status));
+      queryObj = queryObj.filter((q) => q.eq(q.field("status"), args.status));
     }
 
-    if (args.assignee && !args.designId) {
-      query_obj = query_obj.filter((q) => q.eq(q.field("assignee"), args.assignee));
-    }
-
-    return await query_obj.order("desc").collect();
+    return await queryObj.order("desc").collect();
   },
 });
 
@@ -135,7 +131,7 @@ export const updateTicket = mutation({
     }
 
     const now = new Date().toISOString();
-    const updates: any = { updatedAt: now };
+    const updates: Record<string, string | undefined> = { updatedAt: now };
 
     if (args.title !== undefined) {
       updates.title = args.title;
