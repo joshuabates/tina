@@ -2,13 +2,13 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
-import { createNode } from "./test_helpers";
+import { createNode, createProject } from "./test_helpers";
 
 describe("projects:deleteProject", () => {
   test("deletes project, orchestrations, and associated records", async () => {
     const t = convexTest(schema);
 
-    const projectId = await t.mutation(api.projects.createProject, {
+    const projectId = await createProject(t, {
       name: "delete-target",
       repoPath: "/Users/joshua/Projects/delete-target",
     });
@@ -157,7 +157,7 @@ describe("projects:deleteProject", () => {
   test("returns deleted false when project is missing", async () => {
     const t = convexTest(schema);
 
-    const projectId = await t.mutation(api.projects.createProject, {
+    const projectId = await createProject(t, {
       name: "missing-project",
       repoPath: "/Users/joshua/Projects/missing-project",
     });
@@ -175,7 +175,7 @@ describe("projects:deleteProject", () => {
   test("deletes project and cascades to PM tables (designs, tickets, comments, counters)", async () => {
     const t = convexTest(schema);
 
-    const projectId = await t.mutation(api.projects.createProject, {
+    const projectId = await createProject(t, {
       name: "pm-cascade-test",
       repoPath: "/Users/joshua/Projects/pm-cascade-test",
     });

@@ -44,6 +44,31 @@ async function deleteSupervisorStateByFeatureName(
   return states.length;
 }
 
+async function deleteEntitiesWithComments(
+  ctx: MutationCtx,
+  table: "designs" | "tickets",
+  targetType: "design" | "ticket",
+  projectId: Id<"projects">,
+) {
+  const entities = await ctx.db
+    .query(table)
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  for (const entity of entities) {
+    const comments = await ctx.db
+      .query("workComments")
+      .withIndex("by_target", (q) =>
+        q.eq("targetType", targetType).eq("targetId", entity._id),
+      )
+      .collect();
+    for (const comment of comments) {
+      await ctx.db.delete(comment._id);
+    }
+    await ctx.db.delete(entity._id);
+  }
+}
+
 export const listProjects = query({
   args: {},
   handler: async (ctx) => {
@@ -149,40 +174,8 @@ export const deleteProject = mutation({
     }
 
     // Delete project-scoped PM entities
-    const designs = await ctx.db
-      .query("designs")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-    for (const design of designs) {
-      // Delete comments targeting this design
-      const designComments = await ctx.db
-        .query("workComments")
-        .withIndex("by_target", (q) =>
-          q.eq("targetType", "design").eq("targetId", design._id),
-        )
-        .collect();
-      for (const comment of designComments) {
-        await ctx.db.delete(comment._id);
-      }
-      await ctx.db.delete(design._id);
-    }
-
-    const tickets = await ctx.db
-      .query("tickets")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-    for (const ticket of tickets) {
-      const ticketComments = await ctx.db
-        .query("workComments")
-        .withIndex("by_target", (q) =>
-          q.eq("targetType", "ticket").eq("targetId", ticket._id),
-        )
-        .collect();
-      for (const comment of ticketComments) {
-        await ctx.db.delete(comment._id);
-      }
-      await ctx.db.delete(ticket._id);
-    }
+    await deleteEntitiesWithComments(ctx, "designs", "design", args.projectId);
+    await deleteEntitiesWithComments(ctx, "tickets", "ticket", args.projectId);
 
     // Delete project counters
     const counters = await ctx.db
