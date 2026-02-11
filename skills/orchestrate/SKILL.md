@@ -25,34 +25,78 @@ You are a TEAM LEAD coordinating TEAMMATES. Do not do the work yourself - spawn 
 
 ```bash
 # Parse optional arguments
-# Invocation: /tina:orchestrate [--model <model>] [--feature <name>] <design-doc-path>
+# Invocation: /tina:orchestrate [--model <model>] [--feature <name>] [--design-id <id>] [<design-doc-path>]
 # Examples:
 #   /tina:orchestrate docs/plans/feature-design.md
 #   /tina:orchestrate --feature verbose-flag design.md
 #   /tina:orchestrate --model haiku --feature auth docs/plans/auth-design.md
+#   /tina:orchestrate --design-id abc123
+#   /tina:orchestrate --design-id abc123 --feature my-feature
 
 MODEL_OVERRIDE=""  # empty means planner decides per-task
 FEATURE_OVERRIDE=""  # empty means derive from design doc
+DESIGN_ID=""  # empty means use file path
 
 # Parse named arguments (order-independent)
 while [[ "$1" == --* ]]; do
     case "$1" in
         --model) MODEL_OVERRIDE="$2"; shift 2 ;;
         --feature) FEATURE_OVERRIDE="$2"; shift 2 ;;
+        --design-id) DESIGN_ID="$2"; shift 2 ;;
         *) break ;;
     esac
 done
-DESIGN_DOC="$1"
+DESIGN_DOC="$1"  # may be empty when --design-id is used
 
-TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
+# Validate: exactly one of DESIGN_DOC or DESIGN_ID must be set
+if [[ -n "$DESIGN_DOC" && -n "$DESIGN_ID" ]]; then
+    echo "ERROR: Cannot specify both a design doc path and --design-id"
+    exit 1
+fi
+if [[ -z "$DESIGN_DOC" && -z "$DESIGN_ID" ]]; then
+    echo "ERROR: Must specify either a design doc path or --design-id"
+    exit 1
+fi
+```
 
-# Feature name: use --feature if provided, otherwise derive from H1 title
-if [[ -n "$FEATURE_OVERRIDE" ]]; then
-    FEATURE_NAME="$FEATURE_OVERRIDE"
+**When `DESIGN_ID` is set**, resolve the design from Convex before continuing:
+
+```bash
+if [[ -n "$DESIGN_ID" ]]; then
+    # Resolve design content from Convex
+    RESOLVE_JSON=$(tina-session work design resolve --design-id "$DESIGN_ID" --json)
+
+    # Extract fields from resolved JSON
+    DESIGN_TITLE=$(echo "$RESOLVE_JSON" | jq -r '.title')
+    DESIGN_MARKDOWN=$(echo "$RESOLVE_JSON" | jq -r '.markdown')
+    DESIGN_STATUS=$(echo "$RESOLVE_JSON" | jq -r '.status')
+
+    # Count phases from resolved markdown
+    TOTAL_PHASES=$(echo "$DESIGN_MARKDOWN" | grep -cE "^##+ Phase [0-9]")
+
+    # Check for pre-approval in resolved markdown
+    if echo "$DESIGN_MARKDOWN" | grep -q "^## Architectural Context"; then
+        DESIGN_PRE_APPROVED=true
+    fi
+
+    # Derive feature name from design title if --feature not provided
+    if [[ -n "$FEATURE_OVERRIDE" ]]; then
+        FEATURE_NAME="$FEATURE_OVERRIDE"
+    else
+        FEATURE_NAME=$(echo "$DESIGN_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g; s/[^a-z0-9-]//g; s/--*/-/g; s/^-//; s/-$//')
+    fi
 else
-    # Extract from first H1 heading, slugify: lowercase, spaces to hyphens, strip non-alphanum
-    H1_TITLE=$(grep -m1 "^# " "$DESIGN_DOC" | sed 's/^# //')
-    FEATURE_NAME=$(echo "$H1_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g; s/[^a-z0-9-]//g; s/--*/-/g; s/^-//; s/-$//')
+    # File-based path: extract info from local design doc
+    TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
+
+    # Feature name: use --feature if provided, otherwise derive from H1 title
+    if [[ -n "$FEATURE_OVERRIDE" ]]; then
+        FEATURE_NAME="$FEATURE_OVERRIDE"
+    else
+        # Extract from first H1 heading, slugify: lowercase, spaces to hyphens, strip non-alphanum
+        H1_TITLE=$(grep -m1 "^# " "$DESIGN_DOC" | sed 's/^# //')
+        FEATURE_NAME=$(echo "$H1_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g; s/[^a-z0-9-]//g; s/--*/-/g; s/^-//; s/-$//')
+    fi
 fi
 
 TEAM_NAME="${FEATURE_NAME}-orchestration"
@@ -64,11 +108,15 @@ If `MODEL_OVERRIDE` is set, pass it to phase-planner prompts so all tasks use th
 
 ## STEP 1a: Check if design is pre-approved
 
-Read the design doc and check for `## Architectural Context` section. If present, the design has already been reviewed by the architect skill and can skip validation:
+Check for `## Architectural Context` section. If present, the design has already been reviewed by the architect skill and can skip validation:
 
 ```bash
-if grep -q "^## Architectural Context" "$DESIGN_DOC"; then
-    DESIGN_PRE_APPROVED=true
+# For --design-id path, DESIGN_PRE_APPROVED was already set during resolution above.
+# For file-based path, check the local file:
+if [[ -z "$DESIGN_ID" ]]; then
+    if grep -q "^## Architectural Context" "$DESIGN_DOC"; then
+        DESIGN_PRE_APPROVED=true
+    fi
 fi
 ```
 
@@ -100,15 +148,25 @@ If team exists, DO NOT create new team or tasks. Instead:
 Before creating the team, initialize the orchestration. This creates the git worktree, statusline config, supervisor-state.json, and writes the orchestration record to Convex:
 
 ```bash
-INIT_JSON=$(tina-session init \
-  --feature "$FEATURE_NAME" \
-  --cwd "$PWD" \
-  --design-doc "$DESIGN_DOC" \
-  --branch "tina/$FEATURE_NAME" \
-  --total-phases "$TOTAL_PHASES")
+# Build init command based on which path we're using
+if [[ -n "$DESIGN_ID" ]]; then
+    INIT_JSON=$(tina-session init \
+      --feature "$FEATURE_NAME" \
+      --cwd "$PWD" \
+      --design-id "$DESIGN_ID" \
+      --branch "tina/$FEATURE_NAME" \
+      --total-phases "$TOTAL_PHASES")
+else
+    INIT_JSON=$(tina-session init \
+      --feature "$FEATURE_NAME" \
+      --cwd "$PWD" \
+      --design-doc "$DESIGN_DOC" \
+      --branch "tina/$FEATURE_NAME" \
+      --total-phases "$TOTAL_PHASES")
+fi
 ```
 
-The command outputs JSON to stdout: `{orchestration_id, team_id, worktree_path, feature, branch, design_doc, total_phases}`. Parse it to extract the values you need:
+The command outputs JSON to stdout: `{orchestration_id, team_id, worktree_path, feature, branch, design_doc, total_phases, design_id?}`. Parse it to extract the values you need:
 
 ```bash
 ORCHESTRATION_ID=$(echo "$INIT_JSON" | jq -r '.orchestration_id')
@@ -182,7 +240,7 @@ The design has `## Architectural Context` (added by `tina:architect` on approval
    TaskUpdate: validate-design, metadata: { validation_status: "pre-approved", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID" }
    ```
 2. Print: `"Design pre-approved (has Architectural Context). Skipping validation."`
-3. Check for `## Prerequisites` section in the design doc. If present, show prerequisites to user and ask for confirmation before continuing.
+3. Check for `## Prerequisites` section in the design content (file or resolved markdown). If present, show prerequisites to user and ask for confirmation before continuing.
 4. Proceed directly to spawning planner for phase 1 (same as the "validate complete" handler in STEP 5). The worktree was already created by `tina-session init` in STEP 1c.
 
 **If `DESIGN_PRE_APPROVED` is false:**
@@ -416,6 +474,7 @@ Task metadata carries orchestration state:
 | Data | Location |
 |------|----------|
 | Design doc path | Team description |
+| Design ID (Convex) | validate-design task metadata (set during init, null if file-based) |
 | Worktree path | validate-design task metadata (set during init) |
 | Team ID (orchestration) | validate-design task metadata (set during init) |
 | Plan path | plan-phase-N task metadata |
@@ -467,7 +526,14 @@ Ready for merge/PR workflow.
 ## Invocation
 
 ```
+# From a local design doc file:
 /tina:orchestrate docs/plans/2026-01-26-myfeature-design.md
+
+# From a Convex design document ID:
+/tina:orchestrate --design-id abc123
+
+# With optional overrides:
+/tina:orchestrate --design-id abc123 --feature my-feature --model haiku
 ```
 
 ## Implementation Details
@@ -478,11 +544,17 @@ Create all tasks upfront with proper dependencies. This is done ONCE at orchestr
 
 **Step-by-step task creation:**
 
-1. **Extract design info:**
+1. **Extract design info** (see STEP 1 for full parsing with `--design-id` support):
 ```bash
+# File-based:
 DESIGN_DOC="$1"
 TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
 FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
+
+# OR ID-based (--design-id):
+# RESOLVE_JSON=$(tina-session work design resolve --design-id "$DESIGN_ID" --json)
+# TOTAL_PHASES from resolved markdown, FEATURE_NAME from title
+
 TEAM_NAME="${FEATURE_NAME}-orchestration"
 ```
 
@@ -502,7 +574,8 @@ TaskCreate {
   "description": "Validate design document",
   "activeForm": "Validating design document",
   "metadata": {
-    "design_doc_path": "<DESIGN_DOC>",
+    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
+    "design_id": "<DESIGN_ID or null>",
     "worktree_path": "<WORKTREE_PATH>",
     "team_id": "<TEAM_ID>",
     "output_path": "<WORKTREE_PATH>/.claude/tina/reports/design-validation.md"
@@ -510,7 +583,7 @@ TaskCreate {
 }
 ```
 
-Note: `worktree_path`, `orchestration_id`, and `team_id` are captured from `tina-session init` JSON output in STEP 1c. They're stored in validate-design metadata so all downstream tasks can access them. The `team_id` is the Convex document ID of the orchestration team, used as `parent_team_id` when registering phase execution teams. Set `output_path` so validator/reviewer agents don't need to infer report locations.
+Note: `worktree_path`, `orchestration_id`, and `team_id` are captured from `tina-session init` JSON output in STEP 1c. They're stored in validate-design metadata so all downstream tasks can access them. The `team_id` is the Convex document ID of the orchestration team, used as `parent_team_id` when registering phase execution teams. Set `output_path` so validator/reviewer agents don't need to infer report locations. When `--design-id` is used, `design_doc_path` is `convex://<DESIGN_ID>` and the resolved design markdown is at `{worktree}/.claude/tina/design.md` (written by `tina-session init`).
 
 4. **Create phase tasks (for each phase 1 to N):**
 ```json
@@ -520,7 +593,8 @@ TaskCreate {
   "activeForm": "Planning phase <N>",
   "metadata": {
     "phase_num": <N>,
-    "design_doc_path": "<DESIGN_DOC>",
+    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
+    "design_id": "<DESIGN_ID or null>",
     "model_override": "<MODEL_OVERRIDE or empty>"
   }
 }
@@ -541,7 +615,8 @@ TaskCreate {
   "activeForm": "Reviewing phase <N>",
   "metadata": {
     "phase_num": <N>,
-    "design_doc_path": "<DESIGN_DOC>",
+    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
+    "design_id": "<DESIGN_ID or null>",
     "output_path": "<WORKTREE_PATH>/.claude/tina/reports/phase-<N>-review.md"
   }
 }
@@ -855,8 +930,8 @@ Orchestration tasks store metadata for monitoring and recovery:
 
 | Task | Required Metadata |
 |------|-------------------|
-| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path`, `team_id`, `output_path` |
-| `plan-phase-N` | `plan_path` |
+| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path`, `team_id`, `design_id` (if ID-based), `output_path` |
+| `plan-phase-N` | `plan_path`, `design_id` (if ID-based) |
 | `execute-phase-N` | `phase_team_name`, `parent_team_id`, `started_at` |
 | `execute-phase-N` (on complete) | `git_range`, `completed_at` |
 | `review-phase-N` | `status: "pass"\|"gaps"`, `issues[]` (if gaps), `output_path` |
@@ -1026,12 +1101,12 @@ Error: <error description>
 
 Current state preserved in task list.
 To resume after fixing the issue:
-  /tina:orchestrate <design-doc-path>
+  /tina:orchestrate <design-doc-path>  (or --design-id <id>)
 
 To reset and start fresh:
   rm -rf ~/.claude/teams/${TEAM_NAME}.json
   rm -rf ~/.claude/tasks/${TEAM_NAME}/
-  /tina:orchestrate <design-doc-path>
+  /tina:orchestrate <design-doc-path>  (or --design-id <id>)
 
 To manually inspect state:
   TaskList
