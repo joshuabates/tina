@@ -5,7 +5,7 @@ import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { DesignListQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
-import { generateIdempotencyKey } from "@/lib/utils"
+import { generateIdempotencyKey, kebabCase } from "@/lib/utils"
 import { validateDesignForLaunch } from "@convex/designValidation"
 import { PRESETS } from "@convex/policyPresets"
 import type { PolicySnapshot } from "@convex/policyPresets"
@@ -15,13 +15,6 @@ import { PolicyEditor } from "./PolicyEditor"
 import type { Id } from "@convex/_generated/dataModel"
 import formStyles from "../FormDialog.module.scss"
 import styles from "./LaunchModal.module.scss"
-
-function kebabCase(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-}
 
 function useDesignValidation(design: DesignSummary | undefined) {
   return useMemo(() => {

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useMutation } from "convex/react"
 import { Option } from "effect"
@@ -6,7 +6,8 @@ import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { DesignListQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
-import { generateIdempotencyKey } from "@/lib/utils"
+import { generateIdempotencyKey, kebabCase } from "@/lib/utils"
+import { validateDesignForLaunch } from "@convex/designValidation"
 import { PRESETS } from "@convex/policyPresets"
 import type { PolicySnapshot } from "@convex/policyPresets"
 import type { Id } from "@convex/_generated/dataModel"
@@ -14,22 +15,18 @@ import type { DesignSummary } from "@/schemas"
 import { PolicyEditor } from "./PolicyEditor"
 import styles from "./LaunchOrchestrationPage.module.scss"
 
-function kebabCase(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-}
-
-function isDesignReady(design: DesignSummary): boolean {
-  const required = Option.getOrElse(design.requiredMarkers, () => [] as string[])
-  const completed = Option.getOrElse(design.completedMarkers, () => [] as string[])
-  const phaseCount = Option.getOrElse(design.phaseCount, () => 0)
-  const phaseStructureValid = Option.getOrElse(design.phaseStructureValid, () => false)
-
-  if (required.length === 0) return false
-  const allComplete = required.every((m) => completed.includes(m))
-  return allComplete && phaseStructureValid && phaseCount >= 1
+function useDesignValidation(design: DesignSummary | undefined) {
+  return useMemo(() => {
+    if (!design) return { valid: false, errors: ["No design selected"] }
+    const requiredMarkers = Option.getOrUndefined(design.requiredMarkers)
+    const completedMarkers = Option.getOrUndefined(design.completedMarkers)
+    return validateDesignForLaunch({
+      requiredMarkers: requiredMarkers ? [...requiredMarkers] : undefined,
+      completedMarkers: completedMarkers ? [...completedMarkers] : undefined,
+      phaseCount: Option.getOrUndefined(design.phaseCount),
+      phaseStructureValid: Option.getOrUndefined(design.phaseStructureValid),
+    })
+  }, [design])
 }
 
 export function LaunchOrchestrationPage() {
@@ -51,6 +48,10 @@ export function LaunchOrchestrationPage() {
   })
 
   const launch = useMutation(api.controlPlane.launchOrchestration)
+
+  const designs = designsResult.status === "success" ? designsResult.data : []
+  const selectedDesign = designs.find((d) => d._id === selectedDesignId)
+  const validation = useDesignValidation(selectedDesign)
 
   if (!projectIdParam) {
     return (
@@ -83,16 +84,12 @@ export function LaunchOrchestrationPage() {
     return null
   }
 
-  const designs = designsResult.data
-  const selectedDesign = designs.find((d) => d._id === selectedDesignId)
-  const designReady = selectedDesign ? isDesignReady(selectedDesign) : false
-
   const branchName = featureName ? `tina/${kebabCase(featureName)}` : ""
 
   const canSubmit =
     featureName.trim().length > 0 &&
     selectedDesignId.length > 0 &&
-    designReady &&
+    validation.valid &&
     !submitting
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -109,6 +106,12 @@ export function LaunchOrchestrationPage() {
 
     if (!selectedDesignId) {
       setError("Please select a design")
+      setSubmitting(false)
+      return
+    }
+
+    if (!validation.valid) {
+      setError("Design validation must pass before launching")
       setSubmitting(false)
       return
     }
@@ -165,12 +168,21 @@ export function LaunchOrchestrationPage() {
               </option>
             ))}
           </select>
-          {selectedDesign && !designReady && (
-            <span className={styles.hint}>
-              Design validation incomplete — check markers and phase structure
-            </span>
-          )}
         </div>
+
+        {selectedDesign && (
+          <div className={`${styles.validationStatus} ${validation.valid ? styles.statusReady : styles.statusNotReady}`}>
+            <span>{validation.valid ? "Ready for launch" : "Not ready for launch"}</span>
+            {!validation.valid && validation.errors.map((err, i) => (
+              <div key={i} className={styles.statusDetail}>{err}</div>
+            ))}
+            {validation.valid && Option.isSome(selectedDesign.phaseCount) && (
+              <div className={styles.statusDetail}>
+                {Option.getOrUndefined(selectedDesign.phaseCount)} phase{Option.getOrUndefined(selectedDesign.phaseCount) !== 1 ? "s" : ""} detected
+              </div>
+            )}
+          </div>
+        )}
 
         <div className={styles.formField}>
           <label className={styles.formLabel} htmlFor="feature-name">
