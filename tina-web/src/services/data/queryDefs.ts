@@ -10,6 +10,9 @@ import {
   TelemetrySpan,
   TelemetryEvent,
   TelemetryRollup,
+  DesignSummary,
+  TicketSummary,
+  WorkComment,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -114,4 +117,50 @@ export const TelemetryRollupQuery = queryDef({
     operation: Schema.optional(Schema.String),
   }),
   schema: Schema.Array(TelemetryRollup),
+})
+
+export const DesignListQuery = queryDef({
+  key: "designs.list",
+  query: api.designs.listDesigns,
+  args: Schema.Struct({
+    projectId: Schema.String,
+    status: Schema.optional(Schema.String),
+  }),
+  schema: Schema.Array(DesignSummary),
+})
+
+export const DesignDetailQuery = queryDef({
+  key: "designs.get",
+  query: api.designs.getDesign,
+  args: Schema.Struct({ designId: Schema.String }),
+  schema: Schema.NullOr(DesignSummary),
+})
+
+export const TicketListQuery = queryDef({
+  key: "tickets.list",
+  query: api.tickets.listTickets,
+  args: Schema.Struct({
+    projectId: Schema.String,
+    status: Schema.optional(Schema.String),
+    designId: Schema.optional(Schema.String),
+    assignee: Schema.optional(Schema.String),
+  }),
+  schema: Schema.Array(TicketSummary),
+})
+
+export const TicketDetailQuery = queryDef({
+  key: "tickets.get",
+  query: api.tickets.getTicket,
+  args: Schema.Struct({ ticketId: Schema.String }),
+  schema: Schema.NullOr(TicketSummary),
+})
+
+export const CommentListQuery = queryDef({
+  key: "workComments.list",
+  query: api.workComments.listComments,
+  args: Schema.Struct({
+    targetType: Schema.String,
+    targetId: Schema.String,
+  }),
+  schema: Schema.Array(WorkComment),
 })

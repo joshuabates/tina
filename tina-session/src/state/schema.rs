@@ -432,6 +432,9 @@ pub struct SupervisorState {
     pub status: OrchestrationStatus,
     pub orchestration_started_at: DateTime<Utc>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub design_id: Option<String>,
+
     #[serde(default)]
     pub phases: HashMap<String, PhaseState>,
 
@@ -464,6 +467,36 @@ impl SupervisorState {
             current_phase: 1,
             status: OrchestrationStatus::Planning,
             orchestration_started_at: Utc::now(),
+            design_id: None,
+            phases: HashMap::new(),
+            timing: TimingStats::default(),
+            model_policy: ModelPolicy::default(),
+            review_policy: ReviewPolicy::default(),
+        }
+    }
+
+    /// Create a new supervisor state from a Convex design document ID.
+    ///
+    /// The `design_doc` path is set to a `convex://<id>` placeholder for backward
+    /// compatibility with code that reads the path field.
+    pub fn new_with_design_id(
+        feature: &str,
+        worktree_path: PathBuf,
+        branch: &str,
+        total_phases: u32,
+        design_id: &str,
+    ) -> Self {
+        Self {
+            version: 1,
+            feature: feature.to_string(),
+            design_doc: PathBuf::from(format!("convex://{}", design_id)),
+            worktree_path,
+            branch: branch.to_string(),
+            total_phases,
+            current_phase: 1,
+            status: OrchestrationStatus::Planning,
+            orchestration_started_at: Utc::now(),
+            design_id: Some(design_id.to_string()),
             phases: HashMap::new(),
             timing: TimingStats::default(),
             model_policy: ModelPolicy::default(),
@@ -794,6 +827,67 @@ mod tests {
         assert_eq!(state.model_policy.validator, "opus");
         assert_eq!(state.model_policy.executor, "opus");
         assert_eq!(state.review_policy.enforcement, ReviewEnforcement::TaskAndPhase);
+    }
+
+    #[test]
+    fn test_supervisor_state_design_id_defaults_to_none() {
+        let json = r#"{
+            "version": 1,
+            "feature": "auth",
+            "design_doc": "/docs/design.md",
+            "worktree_path": "/worktree",
+            "branch": "tina/auth",
+            "total_phases": 3,
+            "current_phase": 1,
+            "status": "planning",
+            "orchestration_started_at": "2024-01-01T00:00:00Z"
+        }"#;
+        let state: SupervisorState = serde_json::from_str(json).unwrap();
+        assert_eq!(state.design_id, None);
+    }
+
+    #[test]
+    fn test_supervisor_state_design_id_deserializes() {
+        let json = r#"{
+            "version": 1,
+            "feature": "auth",
+            "design_doc": "convex://abc123",
+            "worktree_path": "/worktree",
+            "branch": "tina/auth",
+            "total_phases": 3,
+            "current_phase": 1,
+            "status": "planning",
+            "orchestration_started_at": "2024-01-01T00:00:00Z",
+            "design_id": "abc123"
+        }"#;
+        let state: SupervisorState = serde_json::from_str(json).unwrap();
+        assert_eq!(state.design_id, Some("abc123".to_string()));
+    }
+
+    #[test]
+    fn test_supervisor_state_design_id_not_serialized_when_none() {
+        let state = SupervisorState::new(
+            "auth",
+            PathBuf::from("/docs/design.md"),
+            PathBuf::from("/worktree"),
+            "tina/auth",
+            3,
+        );
+        let json = serde_json::to_string(&state).unwrap();
+        assert!(!json.contains("design_id"));
+    }
+
+    #[test]
+    fn test_supervisor_state_new_with_design_id() {
+        let state = SupervisorState::new_with_design_id(
+            "auth",
+            PathBuf::from("/worktree"),
+            "tina/auth",
+            3,
+            "convex_design_123",
+        );
+        assert_eq!(state.design_id, Some("convex_design_123".to_string()));
+        assert_eq!(state.design_doc, PathBuf::from("convex://convex_design_123"));
     }
 
     #[test]

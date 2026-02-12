@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import { Option } from "effect"
 import { api } from "@convex/_generated/api"
 import type { Id } from "@convex/_generated/dataModel"
@@ -239,6 +240,7 @@ function SidebarContent() {
 
   return (
     <div className={styles.sidebar}>
+      <Link to="/pm" className={styles.pmLink}>Work Graph</Link>
       <SidebarNav projects={projects} activeDescendantId={activeDescendantId} />
     </div>
   )

@@ -2,13 +2,13 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
-import { createNode } from "./test_helpers";
+import { createNode, createProject } from "./test_helpers";
 
 describe("projects:deleteProject", () => {
   test("deletes project, orchestrations, and associated records", async () => {
     const t = convexTest(schema);
 
-    const projectId = await t.mutation(api.projects.createProject, {
+    const projectId = await createProject(t, {
       name: "delete-target",
       repoPath: "/Users/joshua/Projects/delete-target",
     });
@@ -157,7 +157,7 @@ describe("projects:deleteProject", () => {
   test("returns deleted false when project is missing", async () => {
     const t = convexTest(schema);
 
-    const projectId = await t.mutation(api.projects.createProject, {
+    const projectId = await createProject(t, {
       name: "missing-project",
       repoPath: "/Users/joshua/Projects/missing-project",
     });
@@ -170,5 +170,102 @@ describe("projects:deleteProject", () => {
       deletedProjectId: projectId,
       deletedOrchestrations: 0,
     });
+  });
+
+  test("deletes project and cascades to PM tables (designs, tickets, comments, counters)", async () => {
+    const t = convexTest(schema);
+
+    const projectId = await createProject(t, {
+      name: "pm-cascade-test",
+      repoPath: "/Users/joshua/Projects/pm-cascade-test",
+    });
+
+    // Create a design
+    const designId = await t.mutation(api.designs.createDesign, {
+      projectId,
+      title: "Test Design",
+      markdown: "# Test",
+    });
+
+    // Create a ticket
+    const ticketId = await t.mutation(api.tickets.createTicket, {
+      projectId,
+      title: "Test Ticket",
+      description: "Test ticket description",
+      priority: "medium",
+    });
+
+    // Create a design comment
+    await t.mutation(api.workComments.addComment, {
+      projectId,
+      targetType: "design",
+      targetId: designId,
+      authorType: "human",
+      authorName: "test-user",
+      body: "Design comment",
+    });
+
+    // Create a ticket comment
+    await t.mutation(api.workComments.addComment, {
+      projectId,
+      targetType: "ticket",
+      targetId: ticketId,
+      authorType: "agent",
+      authorName: "test-agent",
+      body: "Ticket comment",
+    });
+
+    // Verify entities exist before deletion
+    const designsBefore = await t.query(api.designs.listDesigns, {
+      projectId,
+    });
+    expect(designsBefore.length).toBe(1);
+
+    const ticketsBefore = await t.query(api.tickets.listTickets, {
+      projectId,
+    });
+    expect(ticketsBefore.length).toBe(1);
+
+    const designCommentsBefore = await t.query(api.workComments.listComments, {
+      targetType: "design",
+      targetId: designId,
+    });
+    expect(designCommentsBefore.length).toBe(1);
+
+    const ticketCommentsBefore = await t.query(api.workComments.listComments, {
+      targetType: "ticket",
+      targetId: ticketId,
+    });
+    expect(ticketCommentsBefore.length).toBe(1);
+
+    // Delete the project
+    const deleteResult = await t.mutation(api.projects.deleteProject, {
+      projectId,
+    });
+
+    expect(deleteResult.deleted).toBe(true);
+
+    // Verify all PM entities are deleted
+    const designsAfter = await t.query(api.designs.listDesigns, {
+      projectId,
+    });
+    expect(designsAfter).toEqual([]);
+
+    const ticketsAfter = await t.query(api.tickets.listTickets, {
+      projectId,
+    });
+    expect(ticketsAfter).toEqual([]);
+
+    const designCommentsAfter = await t.query(api.workComments.listComments, {
+      targetType: "design",
+      targetId: designId,
+    });
+    expect(designCommentsAfter).toEqual([]);
+
+    const ticketCommentsAfter = await t.query(api.workComments.listComments, {
+      targetType: "ticket",
+      targetId: ticketId,
+    });
+    expect(ticketCommentsAfter).toEqual([]);
   });
 });

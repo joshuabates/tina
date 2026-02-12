@@ -44,6 +44,31 @@ async function deleteSupervisorStateByFeatureName(
   return states.length;
 }
 
+async function deleteEntitiesWithComments(
+  ctx: MutationCtx,
+  table: "designs" | "tickets",
+  targetType: "design" | "ticket",
+  projectId: Id<"projects">,
+) {
+  const entities = await ctx.db
+    .query(table)
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+
+  for (const entity of entities) {
+    const comments = await ctx.db
+      .query("workComments")
+      .withIndex("by_target", (q) =>
+        q.eq("targetType", targetType).eq("targetId", entity._id),
+      )
+      .collect();
+    for (const comment of comments) {
+      await ctx.db.delete(comment._id);
+    }
+    await ctx.db.delete(entity._id);
+  }
+}
+
 export const listProjects = query({
   args: {},
   handler: async (ctx) => {
@@ -146,6 +171,19 @@ export const deleteProject = mutation({
       await deleteRowsByOrchestrationId(ctx, "commits", orchestration._id);
       await deleteRowsByOrchestrationId(ctx, "plans", orchestration._id);
       await ctx.db.delete(orchestration._id);
+    }
+
+    // Delete project-scoped PM entities
+    await deleteEntitiesWithComments(ctx, "designs", "design", args.projectId);
+    await deleteEntitiesWithComments(ctx, "tickets", "ticket", args.projectId);
+
+    // Delete project counters
+    const counters = await ctx.db
+      .query("projectCounters")
+      .withIndex("by_project_type", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const counter of counters) {
+      await ctx.db.delete(counter._id);
     }
 
     await ctx.db.delete(args.projectId);

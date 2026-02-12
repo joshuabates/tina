@@ -17,6 +17,7 @@ export const upsertOrchestration = mutation({
   args: {
     nodeId: v.id("nodes"),
     projectId: v.optional(v.id("projects")),
+    designId: v.optional(v.id("designs")),
     featureName: v.string(),
     designDocPath: v.string(),
     branch: v.string(),
@@ -49,6 +50,9 @@ export const upsertOrchestration = mutation({
       };
       if (args.projectId !== undefined) {
         patch.projectId = args.projectId;
+      }
+      if (args.designId !== undefined) {
+        patch.designId = args.designId;
       }
       await ctx.db.patch(existing._id, patch);
       return existing._id;

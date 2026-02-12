@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationRecord {
     pub project_id: Option<String>,
+    pub design_id: Option<String>,
     pub node_id: String,
     pub feature_name: String,
     pub design_doc_path: String,

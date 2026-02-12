@@ -246,3 +246,49 @@ pub struct RollupRecord {
     pub p95_duration_ms: Option<f64>,
     pub max_duration_ms: Option<f64>,
 }
+
+/// Design record for Convex `designs` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignRecord {
+    pub id: String,
+    pub project_id: String,
+    pub design_key: String,
+    pub title: String,
+    pub markdown: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub archived_at: Option<String>,
+}
+
+/// Ticket record for Convex `tickets` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TicketRecord {
+    pub id: String,
+    pub project_id: String,
+    pub design_id: Option<String>,
+    pub ticket_key: String,
+    pub title: String,
+    pub description: String,
+    pub status: String,
+    pub priority: String,
+    pub assignee: Option<String>,
+    pub estimate: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub closed_at: Option<String>,
+}
+
+/// Work comment record for Convex `workComments` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommentRecord {
+    pub id: String,
+    pub project_id: String,
+    pub target_type: String,
+    pub target_id: String,
+    pub author_type: String,
+    pub author_name: String,
+    pub body: String,
+    pub created_at: String,
+    pub edited_at: Option<String>,
+}

@@ -22,6 +22,8 @@ TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 **Required parameters from task.metadata:**
 - `phase_num`: Phase number to plan (may be decimal like "1.5")
 - `design_doc_path`: Path to design document
+- `worktree_path`: (optional) Worktree root, used for resolved design cache
+- `design_id`: (optional) Convex design document ID for latest content resolution
 - `model_override`: (optional) Model for all tasks
 - `remediation_for`: (optional) Original phase if remediation
 - `issues`: (optional) Gaps to address if remediation
@@ -71,6 +73,22 @@ You receive via spawn prompt:
 ## Planning Process
 
 You ARE the planner - execute the planning work directly using the planner agent methodology.
+
+### Resolve Design Content
+
+If `design_id` is present in task metadata, resolve the latest design content from Convex before reading:
+
+```bash
+# Resolve latest design content from Convex and write to local cache
+tina-session work design resolve-to-file \
+  --design-id "$DESIGN_ID" \
+  --output "$WORKTREE_PATH/.claude/tina/design.md"
+
+# Use resolved content as the design document
+DESIGN_DOC_PATH="$WORKTREE_PATH/.claude/tina/design.md"
+```
+
+If `design_id` is NOT present in task metadata, fall back to reading `design_doc_path` from the filesystem as normal.
 
 ### Read the Design Document
 

@@ -21,6 +21,7 @@ export default defineSchema({
   orchestrations: defineTable({
     ...orchestrationCoreTableFields,
     projectId: v.optional(v.id("projects")),
+    designId: v.optional(v.id("designs")),
   })
     .index("by_feature", ["featureName"])
     .index("by_node", ["nodeId"])
@@ -217,4 +218,58 @@ export default defineSchema({
       "source",
       "operation",
     ]),
+
+  designs: defineTable({
+    projectId: v.id("projects"),
+    designKey: v.string(),
+    title: v.string(),
+    markdown: v.string(),
+    status: v.string(), // draft | in_review | approved | archived
+    createdAt: v.string(),
+    updatedAt: v.string(),
+    archivedAt: v.optional(v.string()),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_status", ["projectId", "status"])
+    .index("by_key", ["designKey"]),
+
+  tickets: defineTable({
+    projectId: v.id("projects"),
+    designId: v.optional(v.id("designs")),
+    ticketKey: v.string(),
+    title: v.string(),
+    description: v.string(),
+    status: v.string(), // todo | in_progress | in_review | blocked | done | canceled
+    priority: v.string(), // low | medium | high | urgent
+    assignee: v.optional(v.string()),
+    estimate: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+    closedAt: v.optional(v.string()),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_status", ["projectId", "status"])
+    .index("by_design", ["designId"])
+    .index("by_key", ["ticketKey"])
+    .index("by_assignee", ["assignee"]),
+
+  workComments: defineTable({
+    projectId: v.id("projects"),
+    targetType: v.string(), // design | ticket
+    targetId: v.string(),
+    authorType: v.string(), // human | agent
+    authorName: v.string(),
+    body: v.string(),
+    createdAt: v.string(),
+    editedAt: v.optional(v.string()),
+  })
+    .index("by_target", ["targetType", "targetId"])
+    .index("by_project_created", ["projectId", "createdAt"]),
+
+  projectCounters: defineTable({
+    projectId: v.id("projects"),
+    counterType: v.string(), // design | ticket
+    nextValue: v.number(),
+  })
+    .index("by_project_type", ["projectId", "counterType"]),
 });

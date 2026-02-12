@@ -12,6 +12,54 @@ fn check_phase(phase: &str) -> anyhow::Result<()> {
     validate_phase(phase).map_err(|e| anyhow::anyhow!("{}", e))
 }
 
+/// Resolve markdown content from either inline or file source (optional).
+fn resolve_optional_markdown(
+    inline: Option<String>,
+    file: Option<PathBuf>,
+) -> anyhow::Result<Option<String>> {
+    match (inline, file) {
+        (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --markdown and --markdown-file"),
+        (Some(md), None) => Ok(Some(md)),
+        (None, Some(path)) => Ok(Some(std::fs::read_to_string(&path)?)),
+        (None, None) => Ok(None),
+    }
+}
+
+/// Resolve markdown content from either inline or file source (required).
+fn resolve_markdown(
+    inline: Option<String>,
+    file: Option<PathBuf>,
+) -> anyhow::Result<String> {
+    resolve_optional_markdown(inline, file)?
+        .ok_or_else(|| anyhow::anyhow!("Must specify either --markdown or --markdown-file"))
+}
+
+/// Extract the json flag from a WorkCommands enum variant.
+fn extract_json_flag_from_work_command(cmd: &WorkCommands) -> bool {
+    match cmd {
+        WorkCommands::Design { command } => match command {
+            DesignCommands::Create { json, .. } => *json,
+            DesignCommands::Get { json, .. } => *json,
+            DesignCommands::List { json, .. } => *json,
+            DesignCommands::Update { json, .. } => *json,
+            DesignCommands::Transition { json, .. } => *json,
+            DesignCommands::Resolve { json, .. } => *json,
+            DesignCommands::ResolveToFile { json, .. } => *json,
+        },
+        WorkCommands::Ticket { command } => match command {
+            TicketCommands::Create { json, .. } => *json,
+            TicketCommands::Get { json, .. } => *json,
+            TicketCommands::List { json, .. } => *json,
+            TicketCommands::Update { json, .. } => *json,
+            TicketCommands::Transition { json, .. } => *json,
+        },
+        WorkCommands::Comment { command } => match command {
+            CommentCommands::Add { json, .. } => *json,
+            CommentCommands::List { json, .. } => *json,
+        },
+    }
+}
+
 #[derive(Parser)]
 #[command(name = "tina-session")]
 #[command(about = "Phase lifecycle management for Tina orchestrations")]
@@ -33,9 +81,13 @@ enum Commands {
         #[arg(long)]
         cwd: PathBuf,
 
-        /// Path to design document
+        /// Path to design document (mutually exclusive with --design-id)
         #[arg(long)]
-        design_doc: PathBuf,
+        design_doc: Option<PathBuf>,
+
+        /// Convex design document ID (mutually exclusive with --design-doc)
+        #[arg(long)]
+        design_id: Option<String>,
 
         /// Git branch name
         #[arg(long)]
@@ -314,6 +366,12 @@ enum Commands {
         #[command(subcommand)]
         command: OrchestrateCommands,
     },
+
+    /// Work management subcommands (designs, tickets, comments)
+    Work {
+        #[command(subcommand)]
+        command: WorkCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -516,6 +574,326 @@ enum OrchestrateCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum WorkCommands {
+    /// Design management
+    Design {
+        #[command(subcommand)]
+        command: DesignCommands,
+    },
+
+    /// Ticket management
+    Ticket {
+        #[command(subcommand)]
+        command: TicketCommands,
+    },
+
+    /// Comment management
+    Comment {
+        #[command(subcommand)]
+        command: CommentCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum DesignCommands {
+    /// Create a new design
+    Create {
+        /// Project ID
+        #[arg(long)]
+        project_id: String,
+
+        /// Design title
+        #[arg(long)]
+        title: String,
+
+        /// Design content (markdown)
+        #[arg(long)]
+        markdown: Option<String>,
+
+        /// Read markdown from file instead of inline
+        #[arg(long)]
+        markdown_file: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Get a design by ID or key
+    Get {
+        /// Design ID
+        #[arg(long)]
+        id: Option<String>,
+
+        /// Design key
+        #[arg(long)]
+        key: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List designs in a project
+    List {
+        /// Project ID
+        #[arg(long)]
+        project_id: String,
+
+        /// Filter by status
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Update an existing design
+    Update {
+        /// Design ID
+        #[arg(long)]
+        id: String,
+
+        /// New title (optional)
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New content (markdown)
+        #[arg(long)]
+        markdown: Option<String>,
+
+        /// Read markdown from file instead of inline
+        #[arg(long)]
+        markdown_file: Option<PathBuf>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Transition a design to a new status
+    Transition {
+        /// Design ID
+        #[arg(long)]
+        id: String,
+
+        /// New status
+        #[arg(long)]
+        status: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Fetch and display a design by ID (resolve)
+    Resolve {
+        /// Design ID
+        #[arg(long)]
+        design_id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Fetch a design and write its markdown to a file
+    ResolveToFile {
+        /// Design ID
+        #[arg(long)]
+        design_id: String,
+
+        /// Output file path
+        #[arg(long)]
+        output: PathBuf,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum TicketCommands {
+    /// Create a new ticket
+    Create {
+        /// Project ID
+        #[arg(long)]
+        project_id: String,
+
+        /// Ticket title
+        #[arg(long)]
+        title: String,
+
+        /// Ticket description
+        #[arg(long)]
+        description: String,
+
+        /// Priority (default: medium)
+        #[arg(long, default_value = "medium")]
+        priority: String,
+
+        /// Associated design ID (optional)
+        #[arg(long)]
+        design_id: Option<String>,
+
+        /// Assignee (optional)
+        #[arg(long)]
+        assignee: Option<String>,
+
+        /// Time estimate (optional)
+        #[arg(long)]
+        estimate: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Get a ticket by ID or key
+    Get {
+        /// Ticket ID
+        #[arg(long)]
+        id: Option<String>,
+
+        /// Ticket key
+        #[arg(long)]
+        key: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List tickets in a project
+    List {
+        /// Project ID
+        #[arg(long)]
+        project_id: String,
+
+        /// Filter by status (optional)
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Filter by design ID (optional)
+        #[arg(long)]
+        design_id: Option<String>,
+
+        /// Filter by assignee (optional)
+        #[arg(long)]
+        assignee: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Update an existing ticket
+    Update {
+        /// Ticket ID
+        #[arg(long)]
+        id: String,
+
+        /// New title (optional)
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New description (optional)
+        #[arg(long)]
+        description: Option<String>,
+
+        /// New priority (optional)
+        #[arg(long)]
+        priority: Option<String>,
+
+        /// New design ID (optional)
+        #[arg(long)]
+        design_id: Option<String>,
+
+        /// Clear design link from ticket
+        #[arg(long)]
+        clear_design_id: bool,
+
+        /// New assignee (optional)
+        #[arg(long)]
+        assignee: Option<String>,
+
+        /// New time estimate (optional)
+        #[arg(long)]
+        estimate: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Transition a ticket to a new status
+    Transition {
+        /// Ticket ID
+        #[arg(long)]
+        id: String,
+
+        /// New status
+        #[arg(long)]
+        status: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum CommentCommands {
+    /// Add a new comment
+    Add {
+        /// Project ID
+        #[arg(long)]
+        project_id: String,
+
+        /// Target type (design or ticket)
+        #[arg(long)]
+        target_type: String,
+
+        /// Target ID (design or ticket ID)
+        #[arg(long)]
+        target_id: String,
+
+        /// Author type (human or agent)
+        #[arg(long)]
+        author_type: String,
+
+        /// Author name
+        #[arg(long)]
+        author_name: String,
+
+        /// Comment body
+        #[arg(long)]
+        body: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List comments for a target
+    List {
+        /// Target type (design or ticket)
+        #[arg(long)]
+        target_type: String,
+
+        /// Target ID (design or ticket ID)
+        #[arg(long)]
+        target_id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 enum OutputFormat {
     Text,
@@ -540,6 +918,7 @@ fn run() -> anyhow::Result<u8> {
             feature,
             cwd,
             design_doc,
+            design_id,
             branch,
             total_phases,
             review_enforcement,
@@ -552,7 +931,8 @@ fn run() -> anyhow::Result<u8> {
         } => commands::init::run(
             &feature,
             &cwd,
-            &design_doc,
+            design_doc.as_deref(),
+            design_id.as_deref(),
             &branch,
             total_phases,
             review_enforcement.as_deref(),
@@ -780,6 +1160,161 @@ fn run() -> anyhow::Result<u8> {
                 git_range.as_deref(),
                 issues.as_deref(),
             ),
+        },
+
+        Commands::Work { command } => {
+            let json_mode = extract_json_flag_from_work_command(&command);
+            let result = match command {
+                WorkCommands::Design { command } => match command {
+                    DesignCommands::Create {
+                        project_id,
+                        title,
+                        markdown,
+                        markdown_file,
+                        json,
+                    } => {
+                        let md = resolve_markdown(markdown, markdown_file)?;
+                        commands::work::design::create(&project_id, &title, &md, json)
+                    }
+
+                    DesignCommands::Get { id, key, json } => {
+                        commands::work::design::get(id.as_deref(), key.as_deref(), json)
+                    }
+
+                    DesignCommands::List {
+                        project_id,
+                        status,
+                        json,
+                    } => commands::work::design::list(&project_id, status.as_deref(), json),
+
+                    DesignCommands::Update {
+                        id,
+                        title,
+                        markdown,
+                        markdown_file,
+                        json,
+                    } => {
+                        let final_md = resolve_optional_markdown(markdown, markdown_file)?;
+                        commands::work::design::update(&id, title.as_deref(), final_md.as_deref(), json)
+                    }
+
+                    DesignCommands::Transition { id, status, json } => {
+                        commands::work::design::transition(&id, &status, json)
+                    }
+
+                    DesignCommands::Resolve { design_id, json } => {
+                        commands::work::design::resolve(&design_id, json)
+                    }
+
+                    DesignCommands::ResolveToFile { design_id, output, json } => {
+                        commands::work::design::resolve_to_file(&design_id, &output, json)
+                    }
+                },
+
+                WorkCommands::Ticket { command } => match command {
+                    TicketCommands::Create {
+                        project_id,
+                        title,
+                        description,
+                        priority,
+                        design_id,
+                        assignee,
+                        estimate,
+                        json,
+                    } => commands::work::ticket::create(
+                        &project_id,
+                        &title,
+                        &description,
+                        &priority,
+                        design_id.as_deref(),
+                        assignee.as_deref(),
+                        estimate.as_deref(),
+                        json,
+                    ),
+
+                    TicketCommands::Get { id, key, json } => {
+                        commands::work::ticket::get(id.as_deref(), key.as_deref(), json)
+                    }
+
+                    TicketCommands::List {
+                        project_id,
+                        status,
+                        design_id,
+                        assignee,
+                        json,
+                    } => commands::work::ticket::list(
+                        &project_id,
+                        status.as_deref(),
+                        design_id.as_deref(),
+                        assignee.as_deref(),
+                        json,
+                    ),
+
+                    TicketCommands::Update {
+                        id,
+                        title,
+                        description,
+                        priority,
+                        design_id,
+                        clear_design_id,
+                        assignee,
+                        estimate,
+                        json,
+                    } => commands::work::ticket::update(
+                        &id,
+                        title.as_deref(),
+                        description.as_deref(),
+                        priority.as_deref(),
+                        design_id.as_deref(),
+                        clear_design_id,
+                        assignee.as_deref(),
+                        estimate.as_deref(),
+                        json,
+                    ),
+
+                    TicketCommands::Transition { id, status, json } => {
+                        commands::work::ticket::transition(&id, &status, json)
+                    }
+                },
+
+                WorkCommands::Comment { command } => match command {
+                    CommentCommands::Add {
+                        project_id,
+                        target_type,
+                        target_id,
+                        author_type,
+                        author_name,
+                        body,
+                        json,
+                    } => commands::work::comment::add(
+                        &project_id,
+                        &target_type,
+                        &target_id,
+                        &author_type,
+                        &author_name,
+                        &body,
+                        json,
+                    ),
+
+                    CommentCommands::List {
+                        target_type,
+                        target_id,
+                        json,
+                    } => commands::work::comment::list(&target_type, &target_id, json),
+                },
+            };
+
+            match result {
+                Ok(code) => Ok(code),
+                Err(e) if json_mode => {
+                    eprintln!("{}", serde_json::json!({
+                        "ok": false,
+                        "error": format!("{:#}", e),
+                    }));
+                    Ok(1)
+                }
+                Err(e) => Err(e),
+            }
         },
     }
 }

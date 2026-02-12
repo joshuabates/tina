@@ -8,6 +8,11 @@ import {
   TelemetrySpanListQuery,
   TelemetryEventListQuery,
   TelemetryRollupQuery,
+  DesignListQuery,
+  DesignDetailQuery,
+  TicketListQuery,
+  TicketDetailQuery,
+  CommentListQuery,
 } from "../queryDefs"
 
 function decode<A, I>(schema: Schema.Schema<A, I>, input: unknown): A {
@@ -367,6 +372,235 @@ describe("queryDefs", () => {
 
     it("schema rejects invalid rollup data", () => {
       expectDecodeThrows(TelemetryRollupQuery.schema, [{ spanCount: "not-a-number" }])
+    })
+  })
+
+  describe("DesignListQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(DesignListQuery, "designs.list")
+    })
+
+    it("args schema requires projectId", () => {
+      const decoded = decode(DesignListQuery.args, { projectId: "proj123" })
+      expect(decoded.projectId).toBe("proj123")
+    })
+
+    it("args schema accepts optional status", () => {
+      const decoded = decode(DesignListQuery.args, {
+        projectId: "proj123",
+        status: "draft",
+      })
+      expect(decoded.status).toBe("draft")
+    })
+
+    it("args schema rejects missing projectId", () => {
+      expectDecodeThrows(DesignListQuery.args, {})
+    })
+
+    it("schema decodes valid design list data", () => {
+      const decoded = decode(DesignListQuery.schema, [
+        {
+          _id: "design123",
+          _creationTime: 1234567890,
+          projectId: "proj123",
+          designKey: "PROJ-D1",
+          title: "Test Design",
+          markdown: "# Design",
+          status: "draft",
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+          archivedAt: undefined,
+        },
+      ])
+
+      expect(decoded).toHaveLength(1)
+      expect(decoded[0].designKey).toBe("PROJ-D1")
+    })
+
+    it("schema rejects invalid design data", () => {
+      expectDecodeThrows(DesignListQuery.schema, [{ title: 123 }])
+    })
+  })
+
+  describe("DesignDetailQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(DesignDetailQuery, "designs.get")
+    })
+
+    it("args schema requires designId", () => {
+      const decoded = decode(DesignDetailQuery.args, { designId: "design123" })
+      expect(decoded.designId).toBe("design123")
+    })
+
+    it("args schema rejects missing designId", () => {
+      expectDecodeThrows(DesignDetailQuery.args, {})
+    })
+
+    it("schema decodes valid design detail data", () => {
+      const decoded = decode(DesignDetailQuery.schema, {
+        _id: "design123",
+        _creationTime: 1234567890,
+        projectId: "proj123",
+        designKey: "PROJ-D1",
+        title: "Test Design",
+        markdown: "# Design",
+        status: "draft",
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-01T00:00:00Z",
+        archivedAt: undefined,
+      })
+
+      expect(decoded).not.toBeNull()
+      expect(decoded!.designKey).toBe("PROJ-D1")
+    })
+
+    it("schema accepts null", () => {
+      const decoded = decode(DesignDetailQuery.schema, null)
+      expect(decoded).toBeNull()
+    })
+  })
+
+  describe("TicketListQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(TicketListQuery, "tickets.list")
+    })
+
+    it("args schema requires projectId", () => {
+      const decoded = decode(TicketListQuery.args, { projectId: "proj123" })
+      expect(decoded.projectId).toBe("proj123")
+    })
+
+    it("args schema accepts optional filters", () => {
+      const decoded = decode(TicketListQuery.args, {
+        projectId: "proj123",
+        status: "todo",
+        designId: "design123",
+        assignee: "alice",
+      })
+      expect(decoded.status).toBe("todo")
+      expect(decoded.designId).toBe("design123")
+      expect(decoded.assignee).toBe("alice")
+    })
+
+    it("args schema rejects missing projectId", () => {
+      expectDecodeThrows(TicketListQuery.args, {})
+    })
+
+    it("schema decodes valid ticket list data", () => {
+      const decoded = decode(TicketListQuery.schema, [
+        {
+          _id: "ticket123",
+          _creationTime: 1234567890,
+          projectId: "proj123",
+          designId: undefined,
+          ticketKey: "PROJ-1",
+          title: "Test Ticket",
+          description: "A test ticket",
+          status: "todo",
+          priority: "medium",
+          assignee: undefined,
+          estimate: undefined,
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+          closedAt: undefined,
+        },
+      ])
+
+      expect(decoded).toHaveLength(1)
+      expect(decoded[0].ticketKey).toBe("PROJ-1")
+    })
+
+    it("schema rejects invalid ticket data", () => {
+      expectDecodeThrows(TicketListQuery.schema, [{ title: 123 }])
+    })
+  })
+
+  describe("TicketDetailQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(TicketDetailQuery, "tickets.get")
+    })
+
+    it("args schema requires ticketId", () => {
+      const decoded = decode(TicketDetailQuery.args, { ticketId: "ticket123" })
+      expect(decoded.ticketId).toBe("ticket123")
+    })
+
+    it("args schema rejects missing ticketId", () => {
+      expectDecodeThrows(TicketDetailQuery.args, {})
+    })
+
+    it("schema decodes valid ticket detail data", () => {
+      const decoded = decode(TicketDetailQuery.schema, {
+        _id: "ticket123",
+        _creationTime: 1234567890,
+        projectId: "proj123",
+        designId: "design123",
+        ticketKey: "PROJ-1",
+        title: "Test Ticket",
+        description: "A test ticket",
+        status: "todo",
+        priority: "medium",
+        assignee: "alice",
+        estimate: "3h",
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-01T00:00:00Z",
+        closedAt: undefined,
+      })
+
+      expect(decoded).not.toBeNull()
+      expect(decoded!.ticketKey).toBe("PROJ-1")
+    })
+
+    it("schema accepts null", () => {
+      const decoded = decode(TicketDetailQuery.schema, null)
+      expect(decoded).toBeNull()
+    })
+  })
+
+  describe("CommentListQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(CommentListQuery, "workComments.list")
+    })
+
+    it("args schema requires targetType and targetId", () => {
+      const decoded = decode(CommentListQuery.args, {
+        targetType: "design",
+        targetId: "design123",
+      })
+      expect(decoded.targetType).toBe("design")
+      expect(decoded.targetId).toBe("design123")
+    })
+
+    it("args schema rejects missing targetType", () => {
+      expectDecodeThrows(CommentListQuery.args, { targetId: "design123" })
+    })
+
+    it("args schema rejects missing targetId", () => {
+      expectDecodeThrows(CommentListQuery.args, { targetType: "design" })
+    })
+
+    it("schema decodes valid comment list data", () => {
+      const decoded = decode(CommentListQuery.schema, [
+        {
+          _id: "comment123",
+          _creationTime: 1234567890,
+          projectId: "proj123",
+          targetType: "design",
+          targetId: "design123",
+          authorType: "human",
+          authorName: "Alice",
+          body: "Looks good!",
+          createdAt: "2024-01-01T00:00:00Z",
+          editedAt: undefined,
+        },
+      ])
+
+      expect(decoded).toHaveLength(1)
+      expect(decoded[0].authorName).toBe("Alice")
+    })
+
+    it("schema rejects invalid comment data", () => {
+      expectDecodeThrows(CommentListQuery.schema, [{ body: 123 }])
     })
   })
 })

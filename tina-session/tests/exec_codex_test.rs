@@ -1,15 +1,10 @@
+mod common;
+
 use assert_cmd::prelude::*;
+use common::tina_session_bin;
 use predicates::prelude::*;
 use std::process::Command;
 use tempfile::TempDir;
-
-fn tina_session_bin() -> std::path::PathBuf {
-    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("target");
-    path.push("debug");
-    path.push("tina-session");
-    path
-}
 
 #[test]
 fn exec_codex_rejects_claude_model() {
@@ -57,5 +52,5 @@ fn exec_codex_rejects_empty_model() {
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("must not be empty"));
+        .stderr(predicate::str::contains("does not route to codex"));
 }

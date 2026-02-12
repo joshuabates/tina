@@ -23,6 +23,7 @@ TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 **Required parameters from task.metadata:**
 - `design_doc_path`: Path to design document to validate
 - `worktree_path`: Worktree root used for default output locations
+- `design_id`: (optional) Convex design document ID for latest content resolution
 - `output_path`: (optional) Where to write validation report
 
 ## Boundaries
@@ -49,6 +50,22 @@ TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 ---
 
 You are validating a design document before it proceeds to planning.
+
+### Resolve Design Content
+
+If `design_id` is present in task metadata, resolve the latest design content from Convex before validation:
+
+```bash
+# Resolve latest design content from Convex and write to local cache
+tina-session work design resolve-to-file \
+  --design-id "$DESIGN_ID" \
+  --output "$WORKTREE_PATH/.claude/tina/design.md"
+
+# Use resolved content as the design document
+DESIGN_DOC_PATH="$WORKTREE_PATH/.claude/tina/design.md"
+```
+
+If `design_id` is NOT present in task metadata, fall back to reading `design_doc_path` from the filesystem as normal.
 
 ## Input
 
