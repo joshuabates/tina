@@ -228,6 +228,37 @@ Preset behavior:
 - Markdown import prefill behavior.
 - Launch modal shows full policy fields and clear validation errors.
 
+## Architectural Context
+
+**Patterns to follow:**
+- Route structure and shell pattern: `tina-web/src/App.tsx:13-27`
+- AppShell conditional layout (already has PM route detection): `tina-web/src/components/AppShell.tsx:17,56-69`
+- QuicklookDialog modal pattern (backdrop, focus trap, keyboard): `tina-web/src/components/QuicklookDialog.tsx:14-55`
+- Convex mutation validation pattern (project/design/node checks): `convex/controlPlane.ts:408-432`
+- Policy preset + override resolution: `convex/policyPresets.ts:90-107`
+- State machine transitions (ticket model): `convex/tickets.ts:181-225`
+- Component test pattern (mocked queries, builders, app-runtime harness): `tina-web/src/components/__tests__/PmRoutes.test.tsx:1-48`
+- Convex test pattern (convex-test, test_helpers): `convex/tickets.test.ts`, `convex/test_helpers.ts:147-168`
+
+**Code to reuse:**
+- `convex/policyPresets.ts` - PolicySnapshot/ReviewPolicyConfig/ModelPolicyConfig types + PRESETS constant for policy editor form
+- `convex/test_helpers.ts:createLaunchFixture` - Test fixture for launch integration tests
+- `tina-web/src/hooks/useFocusTrap.ts` + `useQuicklookKeyboard.ts` - Modal accessibility hooks
+- `tina-web/src/test/builders/domain.ts` - `buildProjectSummary`, `buildOrchestrationSummary` for component tests
+- `tina-web/src/test/harness/app-runtime.tsx` - `renderWithAppRuntime` for route/integration tests
+
+**Anti-patterns:**
+- Don't extend QuicklookDialog for form modals — it's designed for read-only quicklooks (no submit, fixed 600px). Build a parallel `FormDialog` component using the same hooks (`useFocusTrap`, `useQuicklookKeyboard`) but with form-appropriate layout (wider max-width for policy editor, footer with cancel/submit buttons).
+- Don't use `JSON.stringify` for policyOverrides in the new launch mutation — current `launchOrchestration` accepts `policyOverrides` as a JSON string (line 397, parsed at 454). The new mutation should accept a typed `PolicySnapshot` object directly instead of a stringified blob.
+- Don't add inline create/edit forms in the new workspace — existing PM pages use inline forms that push content down (e.g. `TicketListPage.tsx:218-225`). The design explicitly mandates modal-first.
+
+**Integration points:**
+- Route entry: Collapse `PmShell` nested routes (`/pm/tickets`, `/pm/designs`, `/pm/launch`) into single `/pm?project=<id>` with tab state managed via search param or local state
+- Sidebar: `Sidebar.tsx` already groups orchestrations by project — project click target changes from expanding the group to navigating to `/pm?project=<id>`
+- Node resolution: `launchOrchestration` mutation currently requires `nodeId` as arg (`controlPlane.ts:391`). New version should query online nodes server-side (heartbeat check at line 430-431) and auto-select, returning an error if none available.
+- Schema migration: Adding `complexityPreset`, `requiredMarkers`, `completedMarkers`, `phaseCount`, `phaseStructureValid`, `validationUpdatedAt` to designs table (`schema.ts:263-275`). Convex handles additive schema changes without migration — new optional fields just work. Make them `v.optional()` initially, then backfill existing designs.
+- Phase parsing: Convex mutations run in V8 isolates — standard regex (`/^## Phase \d+/gm`) works fine for markdown heading extraction in `createDesign`/`updateDesign` handlers.
+
 ## Acceptance Criteria
 
 - PM experience is project-centric, table-dual-mode, and modal-first.
