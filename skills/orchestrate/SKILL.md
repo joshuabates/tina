@@ -374,36 +374,61 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 
 ### Handling Each Message
 
+### Teammate Shutdown Protocol (REQUIRED)
+
+The orchestration team lead must keep only currently-needed teammates running.
+
+For every **terminal** teammate message (`VALIDATION_STATUS:*`, `plan-phase-N complete`, `execute-N complete`, `review-N complete`, or teammate `error/session_died`):
+
+1. Capture the sender name from the message metadata (`validator`, `planner-N`, `executor-N`, `reviewer-N`, `reviewer-N-secondary`, etc).
+2. Send shutdown request immediately:
+```json
+{
+  "type": "shutdown_request",
+  "recipient": "<sender-name>",
+  "content": "Work complete; shutting down to keep orchestration roster clean."
+}
+```
+3. Wait for shutdown acknowledgment (30s timeout).
+4. Then dispatch the next action.
+
+Only non-terminal progress updates (for example `execute-N started`) should skip shutdown.
+
 **On validator message:**
 1. Determine event: `validation_pass`, `validation_warning`, or `validation_stop`
 2. Check for prerequisites in design doc before calling advance; attach them to metadata for traceability, but continue without waiting for user confirmation unless HITL is explicitly enabled
 3. Call: `tina-session orchestrate advance --feature X --phase validation --event <event>`
 4. Mark validate-design task complete
-5. Dispatch returned action
+5. Shut down `validator` teammate (required protocol above)
+6. Dispatch returned action
 
 **On planner-N message:**
 1. Parse PLAN_PATH from message
 2. Call: `tina-session orchestrate advance --feature X --phase N --event plan_complete --plan-path P`
 3. Mark plan-phase-N task complete, store plan_path in metadata
-4. Dispatch returned action (spawn executor)
+4. Shut down `planner-N` teammate (required protocol above)
+5. Dispatch returned action (spawn executor)
 
 **On executor-N message:**
 1. Parse git_range from message
 2. If message is `execute-N started`: call `tina-session orchestrate advance --feature X --phase N --event execute_started` and dispatch returned action (likely `wait`)
 3. If message is `execute-N complete`: call `tina-session orchestrate advance --feature X --phase N --event execute_complete --git-range R`
 4. Mark execute-phase-N task complete, store git_range in metadata
-5. Dispatch returned action (spawn reviewer)
+5. On `execute-N complete` (or executor error/session_died), shut down `executor-N` teammate (required protocol above)
+6. Dispatch returned action (spawn reviewer)
 
 **On reviewer-N message:**
 1. Determine if pass or gaps
 2. Call: `tina-session orchestrate advance --feature X --phase N --event review_pass` (or `review_gaps --issues "..."`)
 3. Mark review-phase-N task complete
-4. Dispatch returned action (spawn next planner, finalize, or create remediation)
+4. Shut down the reporting reviewer teammate (`reviewer-N` or `reviewer-N-secondary`) before dispatch
+5. Dispatch returned action (spawn next planner, finalize, or create remediation)
 
 **On error message:**
 1. Call: `tina-session orchestrate advance --feature X --phase N --event error --issues "reason"`
-2. If action says `can_retry: true`, re-spawn the teammate
-3. If retries are exhausted and no explicit HITL gate is enabled, create remediation work and continue automatically (do not ask the user for a decision)
+2. Shut down the errored teammate before any retry/remediation dispatch
+3. If action says `can_retry: true`, re-spawn the teammate
+4. If retries are exhausted and no explicit HITL gate is enabled, create remediation work and continue automatically (do not ask the user for a decision)
 
 ### Resume via CLI
 
@@ -977,11 +1002,15 @@ if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase validation --event $EVENT
     TaskUpdate: validate-design, status: completed
     TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID", output_path: "$WORKTREE_PATH/.claude/tina/reports/design-validation.md" }
+    SendMessage: { type: "shutdown_request", recipient: "validator", content: "Validation complete" }
+    Wait up to 30s for validator shutdown acknowledgment
     # Dispatch NEXT_ACTION (see Action Dispatch table above)
 
 if message contains "VALIDATION_STATUS: Stop":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase validation --event validation_stop
     TaskUpdate: validate-design, status: completed, metadata: { validation_status: "stop" }
+    SendMessage: { type: "shutdown_request", recipient: "validator", content: "Validation stopped" }
+    Wait up to 30s for validator shutdown acknowledgment
     Print: "Design validation FAILED."
     Exit orchestration
 ```
@@ -993,6 +1022,8 @@ if message contains "plan-phase-N complete":
     if PLAN_PATH is relative: PLAN_PATH="$WORKTREE_PATH/$PLAN_PATH"
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event plan_complete --plan-path $PLAN_PATH
     TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: $PLAN_PATH }
+    SendMessage: { type: "shutdown_request", recipient: "planner-N", content: "Plan complete" }
+    Wait up to 30s for planner-N shutdown acknowledgment
     # Dispatch NEXT_ACTION (spawn executor)
 
 # Fallback for planner outputs that summarize completion in natural language.
@@ -1001,10 +1032,14 @@ if message contains "Phase N plan created and committed" and message contains "P
     if PLAN_PATH is relative: PLAN_PATH="$WORKTREE_PATH/$PLAN_PATH"
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event plan_complete --plan-path $PLAN_PATH
     TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: $PLAN_PATH }
+    SendMessage: { type: "shutdown_request", recipient: "planner-N", content: "Plan complete" }
+    Wait up to 30s for planner-N shutdown acknowledgment
     # Dispatch NEXT_ACTION (spawn executor)
 
 if message contains "error":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
+    SendMessage: { type: "shutdown_request", recipient: "planner-N", content: "Planner error; shutting down before retry/remediation" }
+    Wait up to 30s for planner-N shutdown acknowledgment
     # If can_retry: respawn planner; else escalate
 ```
 
@@ -1014,10 +1049,14 @@ if message contains "execute-N complete":
     Parse: git_range from "Git range: X..Y"
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event execute_complete --git-range $GIT_RANGE
     TaskUpdate: execute-phase-N, status: completed, metadata: { git_range: $GIT_RANGE }
+    SendMessage: { type: "shutdown_request", recipient: "executor-N", content: "Execution complete" }
+    Wait up to 30s for executor-N shutdown acknowledgment
     # Dispatch NEXT_ACTION (spawn reviewer)
 
 if message contains "session_died" or "error":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
+    SendMessage: { type: "shutdown_request", recipient: "executor-N", content: "Executor error; shutting down before retry/remediation" }
+    Wait up to 30s for executor-N shutdown acknowledgment
     # If can_retry: respawn executor
     # If action is remediate: create remediation tasks and continue
     # Do not request manual input unless HITL is explicitly enabled
@@ -1034,6 +1073,8 @@ call `advance` with the verdict. The state machine handles consensus internally:
 ```
 if message contains "review-N complete (pass)":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event review_pass
+    SendMessage: { type: "shutdown_request", recipient: "<reporting-reviewer-name>", content: "Review verdict received" }
+    Wait up to 30s for reviewer shutdown acknowledgment
     # If NEXT_ACTION is "wait": do nothing, wait for second reviewer
     # Otherwise: mark review-phase-N complete and dispatch NEXT_ACTION
     if NEXT_ACTION.action != "wait":
@@ -1043,6 +1084,8 @@ if message contains "review-N complete (pass)":
 if message contains "review-N complete (gaps)":
     Parse: issues from message
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event review_gaps --issues "issue1,issue2"
+    SendMessage: { type: "shutdown_request", recipient: "<reporting-reviewer-name>", content: "Review verdict received" }
+    Wait up to 30s for reviewer shutdown acknowledgment
     # If NEXT_ACTION is "wait": do nothing, wait for second reviewer
     if NEXT_ACTION.action != "wait":
         TaskUpdate: review-phase-N, status: completed, metadata: { status: "gaps", issues: [...], output_path: "$WORKTREE_PATH/.claude/tina/reports/phase-$N-review.md" }
@@ -1057,6 +1100,8 @@ if message contains "review-N complete (gaps)":
 
 if message contains "error":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
+    SendMessage: { type: "shutdown_request", recipient: "<reporting-reviewer-name>", content: "Reviewer error; shutting down before retry/remediation" }
+    Wait up to 30s for reviewer shutdown acknowledgment
     # If can_retry: respawn reviewer
     # If retries exhausted and no HITL gate: auto-remediate
 ```

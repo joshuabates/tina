@@ -38,6 +38,12 @@ function buildDetail(overrides: Partial<OrchestrationDetail> = {}): Orchestratio
     currentPhase: 1,
     phases: [buildPhase({ _id: "phase1", orchestrationId: "orch1", phaseNumber: "1" })],
     teamMembers: [
+      buildTeamMember({
+        _id: "member0",
+        orchestrationId: "orch1",
+        phaseNumber: "0",
+        agentName: "orchestrator",
+      }),
       buildTeamMember({ _id: "member1", orchestrationId: "orch1", phaseNumber: "1", agentName: "worker1" }),
       buildTeamMember({
         _id: "member2",
@@ -63,11 +69,23 @@ describe("TeamSection", () => {
     })
   })
 
-  it("renders team members with correct names", () => {
+  it("renders orchestration-scope members when no phase is selected", () => {
     render(<TeamSection detail={buildDetail()} />)
 
+    expect(screen.getByText("orchestrator")).toBeInTheDocument()
+    expect(screen.queryByText("worker1")).not.toBeInTheDocument()
+    expect(screen.queryByText("worker2")).not.toBeInTheDocument()
+  })
+
+  it("separates orchestration and phase members without duplication", () => {
+    setSelection("phase1")
+    render(<TeamSection detail={buildDetail()} />)
+
+    expect(screen.getByText("orchestrator")).toBeInTheDocument()
     expect(screen.getByText("worker1")).toBeInTheDocument()
     expect(screen.getByText("worker2")).toBeInTheDocument()
+    expect(screen.getAllByText("worker1")).toHaveLength(1)
+    expect(screen.getAllByText("worker2")).toHaveLength(1)
   })
 
   it("handles empty team members array", () => {
@@ -84,6 +102,7 @@ describe("TeamSection", () => {
   ])(
     "maps member status to $expected for currentPhase=$currentPhase memberPhase=$memberPhase",
     ({ currentPhase, memberPhase, expected }) => {
+      setSelection("phase1")
       render(
         <TeamSection
           detail={buildDetail({
@@ -114,7 +133,7 @@ describe("TeamSection", () => {
     const detail = buildDetail()
     const { rerender } = render(<TeamSection detail={detail} />)
 
-    expect(mockUseFocusable).toHaveBeenCalledWith("rightPanel.team", 2)
+    expect(mockUseFocusable).toHaveBeenCalledWith("rightPanel.team", 1)
 
     rerender(
       <TeamSection
@@ -125,19 +144,20 @@ describe("TeamSection", () => {
               _id: "member3",
               _creationTime: 1234567892,
               orchestrationId: "orch1",
-              phaseNumber: "1",
-              agentName: "worker3",
+              phaseNumber: "0",
+              agentName: "orchestrator-2",
             }),
           ],
         })}
       />,
     )
 
-    expect(mockUseFocusable).toHaveBeenCalledWith("rightPanel.team", 3)
+    expect(mockUseFocusable).toHaveBeenCalledWith("rightPanel.team", 2)
   })
 
   describe("shutdown tracking", () => {
     it("hides agents when shutdown event exists", () => {
+      setSelection("phase1")
       const shutdownEvents = [
         {
           _id: "event1",
@@ -174,6 +194,7 @@ describe("TeamSection", () => {
     })
 
     it("keeps active agents visible when no shutdown events exist", () => {
+      setSelection("phase1")
       installAppRuntimeQueryMock(mockUseTypedQuery, {
         states: {
           "events.list": querySuccess([]),
@@ -191,6 +212,7 @@ describe("TeamSection", () => {
     })
 
     it("handles invalid shutdown event JSON gracefully", () => {
+      setSelection("phase1")
       const invalidShutdownEvents = [
         {
           _id: "event1",
@@ -221,6 +243,7 @@ describe("TeamSection", () => {
     })
 
     it("removes multiple shut down agents from the roster", () => {
+      setSelection("phase1")
       const shutdownEvents = [
         {
           _id: "event1",
@@ -258,7 +281,26 @@ describe("TeamSection", () => {
         },
       })
 
-      render(<TeamSection detail={buildDetail()} />)
+      render(
+        <TeamSection
+          detail={buildDetail({
+            teamMembers: [
+              buildTeamMember({
+                _id: "member1",
+                orchestrationId: "orch1",
+                phaseNumber: "1",
+                agentName: "worker1",
+              }),
+              buildTeamMember({
+                _id: "member2",
+                orchestrationId: "orch1",
+                phaseNumber: "1",
+                agentName: "worker2",
+              }),
+            ],
+          })}
+        />,
+      )
 
       // Verify both members are removed
       expect(screen.queryByText("worker1")).not.toBeInTheDocument()

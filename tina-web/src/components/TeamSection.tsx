@@ -17,11 +17,16 @@ function mapTeamMember(
   member: OrchestrationTeamMember,
   activePhase: number,
 ): { name: string; memberStatus: MemberStatus } {
-  const memberPhaseNum = parseInt(member.phaseNumber, 10)
+  const memberPhaseNum = Number(member.phaseNumber)
 
   const memberStatus: MemberStatus = memberPhaseNum === activePhase ? "active" : "idle"
 
   return { name: member.agentName, memberStatus }
+}
+
+function isOrchestrationScopeMember(member: OrchestrationTeamMember): boolean {
+  const phaseNumber = Number(member.phaseNumber)
+  return !Number.isFinite(phaseNumber) || phaseNumber <= 0
 }
 
 export function TeamSection({ detail }: TeamSectionProps) {
@@ -65,9 +70,9 @@ export function TeamSection({ detail }: TeamSectionProps) {
     (member) => !shutdownMap.has(member.agentName),
   )
 
-  const orchestrationMembers = activeMembers.map((member) =>
-    mapTeamMember(member, detail.currentPhase)
-  )
+  const orchestrationMembers = activeMembers
+    .filter(isOrchestrationScopeMember)
+    .map((member) => mapTeamMember(member, detail.currentPhase))
   const selectedPhaseMembers = selectedPhaseNumber
     ? activeMembers
       .filter((member) => member.phaseNumber === selectedPhaseNumber)
