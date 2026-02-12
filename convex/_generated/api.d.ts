@@ -17,6 +17,7 @@ import type * as crons from "../crons.js";
 import type * as deleteHelpers from "../deleteHelpers.js";
 import type * as designs from "../designs.js";
 import type * as events from "../events.js";
+import type * as executionTasks from "../executionTasks.js";
 import type * as generated_orchestrationCore from "../generated/orchestrationCore.js";
 import type * as nodes from "../nodes.js";
 import type * as orchestrations from "../orchestrations.js";
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   deleteHelpers: typeof deleteHelpers;
   designs: typeof designs;
   events: typeof events;
+  executionTasks: typeof executionTasks;
   "generated/orchestrationCore": typeof generated_orchestrationCore;
   nodes: typeof nodes;
   orchestrations: typeof orchestrations;
