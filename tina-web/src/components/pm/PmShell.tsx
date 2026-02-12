@@ -11,7 +11,7 @@ import styles from "./PmShell.module.scss"
 
 type TabMode = "tickets" | "designs"
 
-function WorkspaceContent({ projectId, projectName }: { projectId: string; projectName: string }) {
+function WorkspaceContent({ projectName }: { projectName: string }) {
   const [activeTab, setActiveTab] = useState<TabMode>("tickets")
 
   return (
@@ -87,7 +87,7 @@ function PmWorkspace() {
   const project = projectsResult.data.find((p: ProjectSummary) => p._id === projectId)
   const projectName = project?.name ?? "Unknown Project"
 
-  return <WorkspaceContent projectId={projectId} projectName={projectName} />
+  return <WorkspaceContent projectName={projectName} />
 }
 
 export function PmShell() {
