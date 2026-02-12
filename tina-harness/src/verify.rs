@@ -224,6 +224,7 @@ mod tests {
         OrchestrationRecord {
             node_id: "node-1".to_string(),
             project_id: None,
+            design_id: None,
             feature_name: feature.to_string(),
             design_doc_path: "design.md".to_string(),
             branch: "tina/test".to_string(),
