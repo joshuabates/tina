@@ -5,6 +5,7 @@ import { Schema } from "effect";
 
 const optionalString = Schema.optionalWith(Schema.String, { as: "Option" });
 const optionalNumber = Schema.optionalWith(Schema.Number, { as: "Option" });
+const optionalBoolean = Schema.optionalWith(Schema.Boolean, { as: "Option" });
 
 export const orchestrationCoreFields = {
   nodeId: Schema.String,
@@ -18,4 +19,9 @@ export const orchestrationCoreFields = {
   startedAt: Schema.String,
   completedAt: optionalString,
   totalElapsedMins: optionalNumber,
+  policySnapshot: optionalString,
+  policySnapshotHash: optionalString,
+  presetOrigin: optionalString,
+  designOnly: optionalBoolean,
+  updatedAt: optionalString,
 } as const;

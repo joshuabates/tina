@@ -18,4 +18,9 @@ pub struct OrchestrationRecord {
     pub started_at: String,
     pub completed_at: Option<String>,
     pub total_elapsed_mins: Option<f64>,
+    pub policy_snapshot: Option<String>,
+    pub policy_snapshot_hash: Option<String>,
+    pub preset_origin: Option<String>,
+    pub design_only: Option<bool>,
+    pub updated_at: Option<String>,
 }
