@@ -23,6 +23,11 @@ export const createTicket = mutation({
       if (!design) {
         throw new Error(`Design not found: ${args.designId}`);
       }
+      if (design.projectId !== args.projectId) {
+        throw new Error(
+          `Design ${args.designId} does not belong to project ${args.projectId}`,
+        );
+      }
     }
 
     const keyNumber = await allocateKey(ctx, args.projectId, "ticket");
@@ -77,17 +82,21 @@ export const listTickets = query({
   },
   handler: async (ctx, args) => {
     let queryObj;
+    const status = args.status;
 
     // Use proper indexes based on filters
     if (args.designId) {
       queryObj = ctx.db
         .query("tickets")
         .withIndex("by_design", (q) => q.eq("designId", args.designId));
-    } else if (args.status !== undefined) {
+      queryObj = queryObj.filter((q) =>
+        q.eq(q.field("projectId"), args.projectId),
+      );
+    } else if (status !== undefined) {
       queryObj = ctx.db
         .query("tickets")
         .withIndex("by_project_status", (q) =>
-          q.eq("projectId", args.projectId).eq("status", args.status!),
+          q.eq("projectId", args.projectId).eq("status", status),
         );
     } else {
       queryObj = ctx.db
@@ -99,8 +108,8 @@ export const listTickets = query({
       queryObj = queryObj.filter((q) => q.eq(q.field("assignee"), args.assignee));
     }
 
-    if (args.designId && args.status !== undefined) {
-      queryObj = queryObj.filter((q) => q.eq(q.field("status"), args.status));
+    if (args.designId && status !== undefined) {
+      queryObj = queryObj.filter((q) => q.eq(q.field("status"), status));
     }
 
     return await queryObj.order("desc").collect();
@@ -114,6 +123,7 @@ export const updateTicket = mutation({
     description: v.optional(v.string()),
     priority: v.optional(v.string()),
     designId: v.optional(v.id("designs")),
+    clearDesignId: v.optional(v.boolean()),
     assignee: v.optional(v.string()),
     estimate: v.optional(v.string()),
   },
@@ -123,15 +133,24 @@ export const updateTicket = mutation({
       throw new Error(`Ticket not found: ${args.ticketId}`);
     }
 
+    if (args.clearDesignId && args.designId !== undefined) {
+      throw new Error("Cannot provide both designId and clearDesignId");
+    }
+
     if (args.designId) {
       const design = await ctx.db.get(args.designId);
       if (!design) {
         throw new Error(`Design not found: ${args.designId}`);
       }
+      if (design.projectId !== ticket.projectId) {
+        throw new Error(
+          `Design ${args.designId} does not belong to ticket project ${ticket.projectId}`,
+        );
+      }
     }
 
     const now = new Date().toISOString();
-    const updates: Record<string, string | undefined> = { updatedAt: now };
+    const updates: Record<string, unknown> = { updatedAt: now };
 
     if (args.title !== undefined) {
       updates.title = args.title;
@@ -144,6 +163,8 @@ export const updateTicket = mutation({
     }
     if (args.designId !== undefined) {
       updates.designId = args.designId;
+    } else if (args.clearDesignId) {
+      updates.designId = undefined;
     }
     if (args.assignee !== undefined) {
       updates.assignee = args.assignee;

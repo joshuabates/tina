@@ -355,5 +355,26 @@ describe("TicketDetailPage", () => {
         }),
       )
     })
+
+    it("save sends clearDesignId when linked design is changed to None", async () => {
+      const user = userEvent.setup()
+      renderApp("/pm/tickets/t1?project=p1", {
+        ...defaultStates,
+        "tickets.get": querySuccess(buildTicket({ designId: some("d1") })),
+      })
+
+      await user.click(screen.getByRole("button", { name: /^edit$/i }))
+
+      const designSelect = screen.getByLabelText(/design/i)
+      await user.selectOptions(designSelect, "")
+      await user.click(screen.getByRole("button", { name: /^save$/i }))
+
+      expect(mockMutationFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ticketId: "t1",
+          clearDesignId: true,
+        }),
+      )
+    })
   })
 })

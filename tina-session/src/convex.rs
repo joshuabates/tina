@@ -307,6 +307,7 @@ impl ConvexWriter {
         description: Option<&str>,
         priority: Option<&str>,
         design_id: Option<&str>,
+        clear_design_id: bool,
         assignee: Option<&str>,
         estimate: Option<&str>,
     ) -> anyhow::Result<String> {
@@ -317,6 +318,7 @@ impl ConvexWriter {
                 description,
                 priority,
                 design_id,
+                clear_design_id,
                 assignee,
                 estimate,
             )

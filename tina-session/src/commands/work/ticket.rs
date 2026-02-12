@@ -127,13 +127,27 @@ pub fn update(
     description: Option<&str>,
     priority: Option<&str>,
     design_id: Option<&str>,
+    clear_design_id: bool,
     assignee: Option<&str>,
     estimate: Option<&str>,
     json: bool,
 ) -> Result<u8, anyhow::Error> {
+    if design_id.is_some() && clear_design_id {
+        anyhow::bail!("Cannot specify both --design-id and --clear-design-id");
+    }
+
     let ticket_id = convex::run_convex(|mut writer| async move {
         writer
-            .update_ticket(id, title, description, priority, design_id, assignee, estimate)
+            .update_ticket(
+                id,
+                title,
+                description,
+                priority,
+                design_id,
+                clear_design_id,
+                assignee,
+                estimate,
+            )
             .await
     })?;
 

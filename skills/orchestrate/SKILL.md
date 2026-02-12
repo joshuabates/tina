@@ -1139,7 +1139,8 @@ TaskCreate {
     "phase_num": "<N>.5",
     "parent_phase": <N>,
     "issues": ["test coverage below 80%", "missing error handling"],
-    "design_doc_path": "<DESIGN_DOC>",
+    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
+    "design_id": "<DESIGN_ID or null>",
     "model_override": "<MODEL_OVERRIDE or empty>"
   }
 }
@@ -1160,7 +1161,8 @@ TaskCreate {
   "activeForm": "Reviewing phase <N>.5 remediation",
   "metadata": {
     "phase_num": "<N>.5",
-    "design_doc_path": "<DESIGN_DOC>"
+    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
+    "design_id": "<DESIGN_ID or null>"
   }
 }
 ```

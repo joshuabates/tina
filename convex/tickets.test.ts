@@ -108,6 +108,34 @@ describe("tickets", () => {
       }
     });
 
+    test("throws when design belongs to a different project", async () => {
+      const t = convexTest(schema);
+      const projectA = await createProject(t, {
+        name: "PROJA",
+        repoPath: "/Users/joshua/Projects/proja",
+      });
+      const projectB = await createProject(t, {
+        name: "PROJB",
+        repoPath: "/Users/joshua/Projects/projb",
+      });
+
+      const designFromB = await t.mutation(api.designs.createDesign, {
+        projectId: projectB,
+        title: "Design B",
+        markdown: "# Design B",
+      });
+
+      await expect(
+        t.mutation(api.tickets.createTicket, {
+          projectId: projectA,
+          designId: designFromB,
+          title: "Cross project link",
+          description: "Should be rejected",
+          priority: "medium",
+        }),
+      ).rejects.toThrow("does not belong to project");
+    });
+
     test("throws on missing project", async () => {
       const t = convexTest(schema);
       // Create a project to get a valid ID format
@@ -298,6 +326,39 @@ describe("tickets", () => {
       expect(ticketsForA[0]?.title).toBe("Ticket for A");
     });
 
+    test("design filter does not leak tickets from other projects", async () => {
+      const t = convexTest(schema);
+      const projectA = await createProject(t, {
+        name: "LKA",
+        repoPath: "/Users/joshua/Projects/lka",
+      });
+      const projectB = await createProject(t, {
+        name: "LKB",
+        repoPath: "/Users/joshua/Projects/lkb",
+      });
+
+      const designInB = await t.mutation(api.designs.createDesign, {
+        projectId: projectB,
+        title: "Project B design",
+        markdown: "# B",
+      });
+
+      await t.mutation(api.tickets.createTicket, {
+        projectId: projectB,
+        designId: designInB,
+        title: "Ticket in B",
+        description: "Should stay in B",
+        priority: "high",
+      });
+
+      const leaked = await t.query(api.tickets.listTickets, {
+        projectId: projectA,
+        designId: designInB,
+      });
+
+      expect(leaked).toHaveLength(0);
+    });
+
     test("filters by assignee", async () => {
       const t = convexTest(schema);
       const projectId = await createProject(t, {
@@ -465,6 +526,89 @@ describe("tickets", () => {
       expect(ticket?.title).toBe("Original");
       expect(ticket?.assignee).toBe("alice");
       expect(ticket?.priority).toBe("low");
+    });
+
+    test("can unlink design with clearDesignId", async () => {
+      const t = convexTest(schema);
+      const projectId = await createProject(t);
+
+      const designId = await t.mutation(api.designs.createDesign, {
+        projectId,
+        title: "Linked design",
+        markdown: "# Linked",
+      });
+
+      const ticketId = await t.mutation(api.tickets.createTicket, {
+        projectId,
+        designId,
+        title: "Linked ticket",
+        description: "Has design",
+        priority: "medium",
+      });
+
+      await t.mutation(api.tickets.updateTicket, {
+        ticketId,
+        clearDesignId: true,
+      });
+
+      const ticket = await t.query(api.tickets.getTicket, { ticketId });
+      expect(ticket?.designId).toBeUndefined();
+    });
+
+    test("throws when update links design from another project", async () => {
+      const t = convexTest(schema);
+      const projectA = await createProject(t, {
+        name: "UPA",
+        repoPath: "/Users/joshua/Projects/upa",
+      });
+      const projectB = await createProject(t, {
+        name: "UPB",
+        repoPath: "/Users/joshua/Projects/upb",
+      });
+
+      const designFromB = await t.mutation(api.designs.createDesign, {
+        projectId: projectB,
+        title: "Design B",
+        markdown: "# B",
+      });
+
+      const ticketInA = await t.mutation(api.tickets.createTicket, {
+        projectId: projectA,
+        title: "Ticket A",
+        description: "In project A",
+        priority: "low",
+      });
+
+      await expect(
+        t.mutation(api.tickets.updateTicket, {
+          ticketId: ticketInA,
+          designId: designFromB,
+        }),
+      ).rejects.toThrow("does not belong to ticket project");
+    });
+
+    test("throws when both designId and clearDesignId are provided", async () => {
+      const t = convexTest(schema);
+      const projectId = await createProject(t);
+      const designId = await t.mutation(api.designs.createDesign, {
+        projectId,
+        title: "Design",
+        markdown: "# Design",
+      });
+      const ticketId = await t.mutation(api.tickets.createTicket, {
+        projectId,
+        title: "Ticket",
+        description: "Desc",
+        priority: "medium",
+      });
+
+      await expect(
+        t.mutation(api.tickets.updateTicket, {
+          ticketId,
+          designId,
+          clearDesignId: true,
+        }),
+      ).rejects.toThrow("Cannot provide both designId and clearDesignId");
     });
 
     test("throws on missing ticket", async () => {

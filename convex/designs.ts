@@ -58,12 +58,13 @@ export const listDesigns = query({
   },
   handler: async (ctx, args) => {
     let queryObj;
+    const status = args.status;
 
-    if (args.status) {
+    if (status !== undefined) {
       queryObj = ctx.db
         .query("designs")
         .withIndex("by_project_status", (q) =>
-          q.eq("projectId", args.projectId).eq("status", args.status),
+          q.eq("projectId", args.projectId).eq("status", status),
         );
     } else {
       queryObj = ctx.db

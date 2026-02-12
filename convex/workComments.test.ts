@@ -126,6 +126,67 @@ describe("workComments", () => {
         }),
       ).rejects.toThrow();
     });
+
+    test("throws when projectId does not match design project", async () => {
+      const t = convexTest(schema);
+
+      const projectA = await createProject(t, {
+        name: "comments-proj-a",
+        repoPath: "/Users/joshua/Projects/comments-proj-a",
+      });
+      const projectB = await createProject(t, {
+        name: "comments-proj-b",
+        repoPath: "/Users/joshua/Projects/comments-proj-b",
+      });
+
+      const designId = await t.mutation(api.designs.createDesign, {
+        projectId: projectA,
+        title: "Design A",
+        markdown: "# A",
+      });
+
+      await expect(
+        t.mutation(api.workComments.addComment, {
+          projectId: projectB,
+          targetType: "design",
+          targetId: designId,
+          authorType: "human",
+          authorName: "alice",
+          body: "Wrong project",
+        }),
+      ).rejects.toThrow("Project mismatch");
+    });
+
+    test("throws when projectId does not match ticket project", async () => {
+      const t = convexTest(schema);
+
+      const projectA = await createProject(t, {
+        name: "comments-ticket-a",
+        repoPath: "/Users/joshua/Projects/comments-ticket-a",
+      });
+      const projectB = await createProject(t, {
+        name: "comments-ticket-b",
+        repoPath: "/Users/joshua/Projects/comments-ticket-b",
+      });
+
+      const ticketId = await t.mutation(api.tickets.createTicket, {
+        projectId: projectA,
+        title: "Ticket A",
+        description: "Owned by A",
+        priority: "medium",
+      });
+
+      await expect(
+        t.mutation(api.workComments.addComment, {
+          projectId: projectB,
+          targetType: "ticket",
+          targetId: ticketId,
+          authorType: "agent",
+          authorName: "bot",
+          body: "Wrong project",
+        }),
+      ).rejects.toThrow("Project mismatch");
+    });
   });
 
   describe("listComments", () => {

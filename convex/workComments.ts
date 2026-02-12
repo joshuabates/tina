@@ -12,23 +12,35 @@ export const addComment = mutation({
     body: v.string(),
   },
   handler: async (ctx, args) => {
+    let targetProjectId: Id<"projects">;
+
     // Validate target exists using O(1) lookup
     if (args.targetType === "design") {
       const design = await ctx.db.get(args.targetId as Id<"designs">);
       if (!design) {
         throw new Error(`Design not found: ${args.targetId}`);
       }
+      targetProjectId = design.projectId;
     } else if (args.targetType === "ticket") {
       const ticket = await ctx.db.get(args.targetId as Id<"tickets">);
       if (!ticket) {
         throw new Error(`Ticket not found: ${args.targetId}`);
       }
+      targetProjectId = ticket.projectId;
+    } else {
+      throw new Error(`Unsupported targetType: ${args.targetType}`);
+    }
+
+    if (targetProjectId !== args.projectId) {
+      throw new Error(
+        `Project mismatch: target belongs to ${targetProjectId}, got ${args.projectId}`,
+      );
     }
 
     // Create comment with current timestamp
     const now = new Date().toISOString();
     const commentId = await ctx.db.insert("workComments", {
-      projectId: args.projectId,
+      projectId: targetProjectId,
       targetType: args.targetType,
       targetId: args.targetId,
       authorType: args.authorType,

@@ -812,6 +812,10 @@ enum TicketCommands {
         #[arg(long)]
         design_id: Option<String>,
 
+        /// Clear design link from ticket
+        #[arg(long)]
+        clear_design_id: bool,
+
         /// New assignee (optional)
         #[arg(long)]
         assignee: Option<String>,
@@ -1252,6 +1256,7 @@ fn run() -> anyhow::Result<u8> {
                         description,
                         priority,
                         design_id,
+                        clear_design_id,
                         assignee,
                         estimate,
                         json,
@@ -1261,6 +1266,7 @@ fn run() -> anyhow::Result<u8> {
                         description.as_deref(),
                         priority.as_deref(),
                         design_id.as_deref(),
+                        clear_design_id,
                         assignee.as_deref(),
                         estimate.as_deref(),
                         json,

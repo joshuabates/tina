@@ -1453,6 +1453,7 @@ impl TinaConvexClient {
         description: Option<&str>,
         priority: Option<&str>,
         design_id: Option<&str>,
+        clear_design_id: bool,
         assignee: Option<&str>,
         estimate: Option<&str>,
     ) -> Result<String> {
@@ -1469,6 +1470,9 @@ impl TinaConvexClient {
         }
         if let Some(did) = design_id {
             args.insert("designId".into(), Value::from(did));
+        }
+        if clear_design_id {
+            args.insert("clearDesignId".into(), Value::from(true));
         }
         if let Some(a) = assignee {
             args.insert("assignee".into(), Value::from(a));

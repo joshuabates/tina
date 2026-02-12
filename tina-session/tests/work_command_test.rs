@@ -18,6 +18,7 @@ fn design_create_requires_fields() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn design_create_with_markdown() {
     Command::new(tina_session_bin())
         .args([
@@ -31,6 +32,7 @@ fn design_create_with_markdown() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn design_create_with_markdown_file() {
     let temp_file = "/tmp/test-design.md";
     fs::write(temp_file, "# Test Content").unwrap();
@@ -57,6 +59,7 @@ fn design_get_requires_id_or_key() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn design_get_with_id() {
     Command::new(tina_session_bin())
         .args(["work", "design", "get", "--id", "design1"])
@@ -73,6 +76,7 @@ fn design_list_requires_project_id() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn design_list() {
     Command::new(tina_session_bin())
         .args(["work", "design", "list", "--project-id", "proj1"])
@@ -89,6 +93,7 @@ fn design_update_requires_id() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn design_update() {
     Command::new(tina_session_bin())
         .args([
@@ -101,6 +106,7 @@ fn design_update() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn design_transition() {
     Command::new(tina_session_bin())
         .args([
@@ -121,6 +127,7 @@ fn design_resolve_requires_design_id() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn design_resolve() {
     Command::new(tina_session_bin())
         .args(["work", "design", "resolve", "--design-id", "design1"])
@@ -139,6 +146,7 @@ fn ticket_create_requires_fields() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn ticket_create() {
     Command::new(tina_session_bin())
         .args([
@@ -160,6 +168,7 @@ fn ticket_get_requires_id_or_key() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn ticket_get_with_id() {
     Command::new(tina_session_bin())
         .args(["work", "ticket", "get", "--id", "ticket1"])
@@ -176,6 +185,7 @@ fn ticket_list_requires_project_id() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn ticket_list() {
     Command::new(tina_session_bin())
         .args(["work", "ticket", "list", "--project-id", "proj1"])
@@ -192,6 +202,49 @@ fn ticket_update_requires_id() {
 }
 
 #[test]
+fn ticket_update_rejects_both_design_link_options() {
+    Command::new(tina_session_bin())
+        .args([
+            "work",
+            "ticket",
+            "update",
+            "--id",
+            "ticket-123",
+            "--design-id",
+            "design-123",
+            "--clear-design-id",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "Cannot specify both --design-id and --clear-design-id",
+        ));
+}
+
+#[test]
+fn ticket_update_json_wraps_validation_error() {
+    Command::new(tina_session_bin())
+        .args([
+            "work",
+            "ticket",
+            "update",
+            "--id",
+            "ticket-123",
+            "--design-id",
+            "design-123",
+            "--clear-design-id",
+            "--json",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("\"ok\":false"))
+        .stderr(predicate::str::contains(
+            "Cannot specify both --design-id and --clear-design-id",
+        ));
+}
+
+#[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn ticket_update() {
     Command::new(tina_session_bin())
         .args([
@@ -204,6 +257,7 @@ fn ticket_update() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn ticket_transition() {
     Command::new(tina_session_bin())
         .args([
@@ -226,6 +280,7 @@ fn comment_add_requires_fields() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn comment_add() {
     Command::new(tina_session_bin())
         .args([
@@ -250,6 +305,7 @@ fn comment_list_requires_fields() {
 }
 
 #[test]
+#[ignore = "requires live Convex PM functions and valid IDs"]
 fn comment_list() {
     Command::new(tina_session_bin())
         .args([
@@ -296,6 +352,16 @@ fn ticket_create_help_shows_default_priority() {
         .stdout(predicate::str::contains("--priority"))
         .stdout(predicate::str::contains("default"))
         .stdout(predicate::str::contains("medium"));
+}
+
+#[test]
+fn ticket_update_help_shows_clear_design_id() {
+    Command::new(tina_session_bin())
+        .args(["work", "ticket", "update", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--clear-design-id"))
+        .stdout(predicate::str::contains("Clear design link from ticket"));
 }
 
 #[test]

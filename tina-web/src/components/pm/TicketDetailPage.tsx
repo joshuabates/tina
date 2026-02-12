@@ -81,15 +81,29 @@ function TicketEditForm({
     setSubmitting(true)
     setError(null)
     try {
-      await updateTicket({
+      const payload: {
+        ticketId: Id<"tickets">
+        title: string
+        description: string
+        priority: string
+        designId?: Id<"designs">
+        clearDesignId?: boolean
+        assignee?: string
+        estimate?: string
+      } = {
         ticketId: ticket._id as Id<"tickets">,
         title: title.trim(),
         description: description.trim(),
         priority,
-        ...(designId ? { designId: designId as Id<"designs"> } : {}),
         ...(assignee.trim() ? { assignee: assignee.trim() } : {}),
         ...(estimate.trim() ? { estimate: estimate.trim() } : {}),
-      })
+      }
+      if (designId) {
+        payload.designId = designId as Id<"designs">
+      } else if (Option.isSome(ticket.designId)) {
+        payload.clearDesignId = true
+      }
+      await updateTicket(payload)
       onSaved()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update ticket")
