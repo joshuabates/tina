@@ -555,6 +555,43 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
   });
 });
 
+describe("controlPlane:enqueueControlAction:auditTrail", () => {
+  // Single-action audit trail is covered by "records orchestrationEvent audit trail
+  // on successful enqueue" in the payload validation block above.
+
+  test("records separate events for multiple actions", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "pause",
+      payload: '{"feature":"test","phase":"1"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "audit-multi-1",
+    });
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "resume",
+      payload: '{"feature":"test"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "audit-multi-2",
+    });
+
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(2);
+  });
+});
+
 describe("controlPlane:listControlActions", () => {
   test("returns actions ordered by createdAt desc", async () => {
     const t = convexTest(schema, modules);
