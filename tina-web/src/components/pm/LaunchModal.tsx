@@ -1,34 +1,19 @@
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import { useMutation } from "convex/react"
 import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
+import { useDesignValidation } from "@/hooks/useDesignValidation"
 import { DesignListQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { generateIdempotencyKey, kebabCase } from "@/lib/utils"
-import { validateDesignForLaunch } from "@convex/designValidation"
 import { PRESETS } from "@convex/policyPresets"
 import type { PolicySnapshot } from "@convex/policyPresets"
-import type { DesignSummary } from "@/schemas"
 import { FormDialog } from "../FormDialog"
 import { PolicyEditor } from "./PolicyEditor"
 import type { Id } from "@convex/_generated/dataModel"
 import formStyles from "../FormDialog.module.scss"
 import styles from "./LaunchModal.module.scss"
-
-function useDesignValidation(design: DesignSummary | undefined) {
-  return useMemo(() => {
-    if (!design) return { valid: false, errors: ["No design selected"] }
-    const requiredMarkers = Option.getOrUndefined(design.requiredMarkers)
-    const completedMarkers = Option.getOrUndefined(design.completedMarkers)
-    return validateDesignForLaunch({
-      requiredMarkers: requiredMarkers ? [...requiredMarkers] : undefined,
-      completedMarkers: completedMarkers ? [...completedMarkers] : undefined,
-      phaseCount: Option.getOrUndefined(design.phaseCount),
-      phaseStructureValid: Option.getOrUndefined(design.phaseStructureValid),
-    })
-  }, [design])
-}
 
 interface LaunchModalProps {
   projectId: string
