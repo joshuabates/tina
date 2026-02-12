@@ -527,6 +527,7 @@ fn extract_orchestration_record(obj: &BTreeMap<String, Value>) -> OrchestrationR
         policy_snapshot_hash: value_as_opt_str(obj, "policySnapshotHash"),
         preset_origin: value_as_opt_str(obj, "presetOrigin"),
         design_only: value_as_opt_bool(obj, "designOnly"),
+        policy_revision: value_as_opt_f64(obj, "policyRevision"),
         updated_at: value_as_opt_str(obj, "updatedAt"),
     }
 }
@@ -1595,6 +1596,12 @@ mod tests {
             started_at: "2026-02-07T10:00:00Z".to_string(),
             completed_at: Some("2026-02-07T12:00:00Z".to_string()),
             total_elapsed_mins: Some(120.0),
+            policy_snapshot: None,
+            policy_snapshot_hash: None,
+            preset_origin: None,
+            design_only: None,
+            policy_revision: None,
+            updated_at: None,
         };
 
         let args = orchestration_to_args(&orch);
@@ -1641,6 +1648,12 @@ mod tests {
             started_at: "2026-02-07T10:00:00Z".to_string(),
             completed_at: None,
             total_elapsed_mins: None,
+            policy_snapshot: None,
+            policy_snapshot_hash: None,
+            preset_origin: None,
+            design_only: None,
+            policy_revision: None,
+            updated_at: None,
         };
 
         let args = orchestration_to_args(&orch);
@@ -1668,6 +1681,12 @@ mod tests {
             started_at: "2026-02-11T10:00:00Z".to_string(),
             completed_at: None,
             total_elapsed_mins: None,
+            policy_snapshot: None,
+            policy_snapshot_hash: None,
+            preset_origin: None,
+            design_only: None,
+            policy_revision: None,
+            updated_at: None,
         };
 
         let args = orchestration_to_args(&orch);

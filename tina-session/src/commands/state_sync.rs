@@ -31,6 +31,12 @@ pub fn orchestration_args_from_state(
         started_at: state.orchestration_started_at.to_rfc3339(),
         completed_at,
         total_elapsed_mins,
+        policy_snapshot: None,
+        policy_snapshot_hash: None,
+        preset_origin: None,
+        design_only: None,
+        policy_revision: None,
+        updated_at: None,
     }
 }
 

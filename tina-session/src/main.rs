@@ -576,6 +576,36 @@ enum OrchestrateCommands {
         #[arg(long)]
         issues: Option<String>,
     },
+
+    /// Update model and/or review policy for future work
+    SetPolicy {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Model policy as JSON (optional, only provided fields are updated)
+        #[arg(long)]
+        model_json: Option<String>,
+
+        /// Review policy as JSON (optional, only provided fields are updated)
+        #[arg(long)]
+        review_json: Option<String>,
+    },
+
+    /// Update the model for a single role
+    SetRoleModel {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Role to update (validator, planner, executor, reviewer)
+        #[arg(long)]
+        role: String,
+
+        /// New model name (opus, sonnet, haiku)
+        #[arg(long)]
+        model: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1166,6 +1196,18 @@ fn run() -> anyhow::Result<u8> {
                 git_range.as_deref(),
                 issues.as_deref(),
             ),
+
+            OrchestrateCommands::SetPolicy {
+                feature,
+                model_json,
+                review_json,
+            } => commands::orchestrate::set_policy(&feature, model_json.as_deref(), review_json.as_deref()),
+
+            OrchestrateCommands::SetRoleModel {
+                feature,
+                role,
+                model,
+            } => commands::orchestrate::set_role_model(&feature, &role, &model),
         },
 
         Commands::Work { command } => {

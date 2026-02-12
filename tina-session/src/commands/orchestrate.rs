@@ -252,6 +252,83 @@ fn record_next_telemetry(
     })
 }
 
+/// Update model and/or review policy for future work.
+pub fn set_policy(
+    feature: &str,
+    model_json: Option<&str>,
+    review_json: Option<&str>,
+) -> anyhow::Result<u8> {
+    if model_json.is_none() && review_json.is_none() {
+        anyhow::bail!("at least one of --model-json or --review-json is required");
+    }
+
+    let mut state = tina_session::state::schema::SupervisorState::load(feature)?;
+
+    if let Some(json) = model_json {
+        let patch: tina_session::state::schema::ModelPolicy = serde_json::from_str(json)
+            .map_err(|e| anyhow::anyhow!("invalid model policy JSON: {}", e))?;
+        state.model_policy = patch;
+    }
+
+    if let Some(json) = review_json {
+        let patch: tina_session::state::schema::ReviewPolicy = serde_json::from_str(json)
+            .map_err(|e| anyhow::anyhow!("invalid review policy JSON: {}", e))?;
+        state.review_policy = patch;
+    }
+
+    state.save()?;
+
+    let output = serde_json::json!({
+        "success": true,
+        "model_policy": state.model_policy,
+        "review_policy": state.review_policy,
+    });
+    println!("{}", serde_json::to_string(&output)?);
+    Ok(0)
+}
+
+/// Update the model for a single role.
+pub fn set_role_model(feature: &str, role: &str, model: &str) -> anyhow::Result<u8> {
+    let valid_roles = ["validator", "planner", "executor", "reviewer"];
+    if !valid_roles.contains(&role) {
+        anyhow::bail!(
+            "invalid role: '{}'. Allowed: {}",
+            role,
+            valid_roles.join(", ")
+        );
+    }
+
+    let valid_models = ["opus", "sonnet", "haiku"];
+    if !valid_models.contains(&model) {
+        anyhow::bail!(
+            "invalid model: '{}'. Allowed: {}",
+            model,
+            valid_models.join(", ")
+        );
+    }
+
+    let mut state = tina_session::state::schema::SupervisorState::load(feature)?;
+
+    match role {
+        "validator" => state.model_policy.validator = model.to_string(),
+        "planner" => state.model_policy.planner = model.to_string(),
+        "executor" => state.model_policy.executor = model.to_string(),
+        "reviewer" => state.model_policy.reviewer = model.to_string(),
+        _ => unreachable!(),
+    }
+
+    state.save()?;
+
+    let output = serde_json::json!({
+        "success": true,
+        "role": role,
+        "model": model,
+        "model_policy": state.model_policy,
+    });
+    println!("{}", serde_json::to_string(&output)?);
+    Ok(0)
+}
+
 /// Sync to Convex and record telemetry (best-effort).
 fn sync_to_convex_with_telemetry(
     _ctx: &TelemetryContext,
