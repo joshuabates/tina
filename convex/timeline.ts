@@ -32,23 +32,23 @@ export const getUnifiedTimeline = query({
       .collect();
 
     for (const action of controlActions) {
-      if (args.since && action.createdAt < args.since) continue;
+      // Request entry (filter by createdAt)
+      if (!args.since || action.createdAt >= args.since) {
+        entries.push({
+          id: `cpa-req-${action._id}`,
+          timestamp: action.createdAt,
+          source: "control_action",
+          category: "request",
+          summary: `${action.actionType} requested by ${action.requestedBy}`,
+          detail: action.payload,
+          status: action.status,
+          actionType: action.actionType,
+          reasonCode: null,
+        });
+      }
 
-      // Request entry
-      entries.push({
-        id: `cpa-req-${action._id}`,
-        timestamp: action.createdAt,
-        source: "control_action",
-        category: "request",
-        summary: `${action.actionType} requested by ${action.requestedBy}`,
-        detail: action.payload,
-        status: action.status,
-        actionType: action.actionType,
-        reasonCode: null,
-      });
-
-      // Completion entry (if completed/failed)
-      if (action.completedAt) {
+      // Completion entry (filter by completedAt)
+      if (action.completedAt && (!args.since || action.completedAt >= args.since)) {
         let reasonCode: string | null = null;
         if (action.status === "failed" && action.result) {
           try {

@@ -296,16 +296,34 @@ describe("timeline:getUnifiedTimeline", () => {
     expect(entries[0].summary).toBe("New event");
   });
 
-  test("default limit is 100", async () => {
+  test("since filter includes completion when completedAt >= since but createdAt < since", async () => {
     const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "timeline-test");
 
-    // Just verify the query works without limit
-    const entries = await t.query(api.timeline.getUnifiedTimeline, {
-      orchestrationId,
+    // Action created at t=1000, completed at t=3000
+    await t.run(async (ctx) => {
+      await ctx.db.insert("controlPlaneActions", {
+        orchestrationId,
+        actionType: "pause",
+        payload: '{"feature":"timeline-test","phase":"1"}',
+        requestedBy: "web-ui",
+        idempotencyKey: "key-since-completion",
+        status: "completed",
+        result: '{"paused":true}',
+        createdAt: 1000,
+        completedAt: 3000,
+      });
     });
 
-    expect(Array.isArray(entries)).toBe(true);
+    // since=2000: request (t=1000) excluded, completion (t=3000) included
+    const entries = await t.query(api.timeline.getUnifiedTimeline, {
+      orchestrationId,
+      since: 2000,
+    });
+
+    expect(entries.length).toBe(1);
+    expect(entries[0].source).toBe("action_completion");
+    expect(entries[0].timestamp).toBe(3000);
   });
 
   test("entry IDs have correct prefixes", async () => {
