@@ -202,16 +202,16 @@ Integration tests:
 
 **Patterns to follow:**
 - Convex module structure (mutation/query exports): `convex/workComments.ts` (closest analog — target validation, author types)
-- Target validation via index lookup + parent-scoping: `convex/workComments.ts:14-32`
+- Target validation via index lookup + parent-scoping: `convex/workComments.ts:14-38`
 - Convex test harness with `convexTest(schema)` + fixture builders: `convex/test_helpers.ts`
 - Effect `Schema` types for frontend: `tina-web/src/schemas/workComment.ts`
-- Typed query definitions via `queryDef()`: `tina-web/src/services/data/queryDefs.ts:158-166`
-- `useTypedQuery` hook + `matchQueryResult` for data fetching: `tina-web/src/components/pm/CommentTimeline.tsx:130-178`
+- Typed query definitions via `queryDef()`: `tina-web/src/services/data/queryDefs.ts:159-167`
+- `useTypedQuery` hook for data fetching: `tina-web/src/components/pm/CommentTimeline.tsx:130-178`
 - Rust arg builders as `BTreeMap<String, Value>`: `tina-data/src/convex_client.rs:17-60`
 
 **Code to reuse:**
-- `convex/test_helpers.ts` — `createFeatureFixture()` provides node + orchestration for tests
-- `convex/commits.ts:52-62` — `getCommit` query (validate commit SHA exists)
+- `convex/test_helpers.ts` — `createFeatureFixture()` (line 85) provides node + orchestration for tests
+- `convex/commits.ts:52-62` — `getCommit` query (validate commit SHA exists globally; must also check `orchestrationId` match)
 - `convex/tasks.ts:36-48` — `loadTaskEventsForOrchestration` + `deduplicateTaskEvents` (validate task exists)
 - `tina-web/src/components/QuicklookDialog.tsx` — dialog frame for quicklook panels
 - `tina-web/src/components/pm/CommentTimeline.tsx` — composer + timeline pattern (adapt for feedback)
@@ -221,22 +221,25 @@ Integration tests:
 - Don't add `feedbackEntries` to `orchestrationCoreTableFields` — feedback is a separate concern scoped by `orchestrationId` foreign key (like `commits`, `plans`).
 
 **Integration points:**
-- Schema: add `feedbackEntries` table to `convex/schema.ts:294` (before closing bracket)
+- Schema: add `feedbackEntries` table to `convex/schema.ts` (before closing `});` at line 327)
 - Convex API: new file `convex/feedbackEntries.ts` (follows `workComments.ts` pattern)
 - Tests: new file `convex/feedbackEntries.test.ts` (follows `workComments.test.ts` pattern)
-- Frontend schema: new file `tina-web/src/schemas/feedbackEntry.ts`, export from `tina-web/src/schemas/index.ts`
+- Frontend schema: new file `tina-web/src/schemas/feedbackEntry.ts`, export from `tina-web/src/schemas/index.ts:17`
 - Query defs: add `FeedbackEntryListQuery`, `BlockingFeedbackSummaryQuery` to `tina-web/src/services/data/queryDefs.ts`
-- UI: add feedback section inside `tina-web/src/components/TaskQuicklook.tsx:88-96` (before closing `</QuicklookDialog>`) and `tina-web/src/components/CommitQuicklook.tsx:87-96` (before closing `</div>`)
-- UI: add blocking feedback summary to `tina-web/src/components/RightPanel.tsx:28-33` (new section in stack)
+- UI (task): add feedback section inside `tina-web/src/components/TaskQuicklook.tsx:88-95` (before closing `</QuicklookDialog>`)
+- UI (commit): add feedback section inside `tina-web/src/components/CommitQuicklook.tsx:47-93` (inside `content` div). **Note:** `CommitQuicklook` does NOT use `QuicklookDialog` — it builds its own modal with backdrop/dialog/close. Integration pattern differs from `TaskQuicklook`.
+- UI: add blocking feedback summary to `tina-web/src/components/RightPanel.tsx:28-34` (new section in stack, after `ActionTimeline`)
 - Rust wrappers: add methods to `tina-data/src/convex_client.rs` (create, resolve, reopen, list, blocking summary)
 
-**Design clarifications needed (addressed below):**
+**Design clarifications (resolved):**
 
-1. **Task target validation**: Tasks are event-sourced in `taskEvents` — there's no stable doc ID. `targetTaskId` should be the `taskId` string key (e.g., `"1"`, `"2"`). Validation requires `loadTaskEventsForOrchestration` + `deduplicateTaskEvents` to confirm the task exists. This is heavier than commit validation (simple `by_sha` index lookup). Consider caching or accepting that task validation is best-effort on the latest event snapshot.
+1. **Task target validation**: Tasks are event-sourced in `taskEvents` — there's no stable doc ID. `targetTaskId` should be the `taskId` string key (e.g., `"1"`, `"2"`). Validation requires `loadTaskEventsForOrchestration` + `deduplicateTaskEvents` to confirm the task exists. This is heavier than commit validation (simple `by_sha` index lookup). Accept that task validation is best-effort on the latest event snapshot.
 
-2. **Race handling**: Convex mutations are serializable transactions — concurrent resolve/reopen mutations won't corrupt state. The `updatedAt` optimistic check is only useful for detecting stale UI (user clicks resolve on an already-resolved entry). Clarify this is a staleness guard, not a concurrency primitive.
+2. **Commit target validation**: `getCommit` uses the global `by_sha` index — it does not scope to a specific orchestration. `createFeedbackEntry` must additionally verify `commit.orchestrationId === args.orchestrationId` after the SHA lookup.
 
-3. **Index with optional fields**: `by_target_status_created` uses `targetTaskId` (optional). Rows where `targetTaskId` is undefined will be indexed with `undefined` as key. This index only works for task-targeted queries — commit queries must use `by_target_commit_status_created`. This split is intentional and correct, just noting it.
+3. **Race handling**: Convex mutations are serializable transactions — concurrent resolve/reopen mutations won't corrupt state. The `updatedAt` optimistic check is a staleness guard for UI (detect that the user is acting on stale data), not a concurrency primitive.
+
+4. **Index with optional fields**: `by_target_status_created` uses `targetTaskId` (optional). Rows where `targetTaskId` is undefined will be indexed with `undefined` as key. This index only works for task-targeted queries — commit queries must use `by_target_commit_status_created`. This split is intentional and correct.
 
 ## Phase 1 to Phase 2 Handoff Boundary
 
