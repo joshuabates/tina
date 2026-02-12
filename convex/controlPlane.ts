@@ -472,6 +472,7 @@ export const getActivePolicy = query({
     const supervisorState = await ctx.db
       .query("supervisorStates")
       .withIndex("by_feature", (q) => q.eq("featureName", orchestration.featureName))
+      .order("desc")
       .first();
 
     if (!supervisorState) return null;
