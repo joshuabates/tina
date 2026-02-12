@@ -191,15 +191,6 @@ export function TicketDetailPage() {
             </span>
           </div>
         </div>
-        <div className={styles.metadataItem} data-testid="meta-assignee">
-          <div className={styles.metadataLabel}>Assignee</div>
-          <div className={styles.metadataValue}>
-            {Option.isSome(ticket.assignee)
-              ? ticket.assignee.value
-              : <span className={styles.unassigned}>Unassigned</span>
-            }
-          </div>
-        </div>
         <div className={styles.metadataItem} data-testid="meta-estimate">
           <div className={styles.metadataLabel}>Estimate</div>
           <div className={styles.metadataValue}>

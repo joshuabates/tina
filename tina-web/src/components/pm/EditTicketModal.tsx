@@ -23,9 +23,6 @@ export function EditTicketModal({
   const [title, setTitle] = useState(ticket.title)
   const [description, setDescription] = useState(ticket.description)
   const [priority, setPriority] = useState(ticket.priority)
-  const [assignee, setAssignee] = useState(
-    Option.isSome(ticket.assignee) ? ticket.assignee.value : "",
-  )
   const [estimate, setEstimate] = useState(
     Option.isSome(ticket.estimate) ? ticket.estimate.value : "",
   )
@@ -50,14 +47,12 @@ export function EditTicketModal({
         priority: string
         designId?: Id<"designs">
         clearDesignId?: boolean
-        assignee?: string
         estimate?: string
       } = {
         ticketId: ticket._id as Id<"tickets">,
         title: title.trim(),
         description: description.trim(),
         priority,
-        ...(assignee.trim() ? { assignee: assignee.trim() } : {}),
         ...(estimate.trim() ? { estimate: estimate.trim() } : {}),
       }
       if (designId) {
@@ -109,17 +104,6 @@ export function EditTicketModal({
             <option value="high">High</option>
             <option value="urgent">Urgent</option>
           </select>
-        </div>
-        <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="edit-assignee">Assignee</label>
-          <input
-            id="edit-assignee"
-            className={styles.formInput}
-            type="text"
-            value={assignee}
-            onChange={(e) => setAssignee(e.target.value)}
-            placeholder="Assignee name"
-          />
         </div>
         <div className={styles.formField}>
           <label className={styles.formLabel} htmlFor="edit-estimate">Estimate</label>

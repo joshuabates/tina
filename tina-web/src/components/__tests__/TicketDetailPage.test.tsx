@@ -46,7 +46,6 @@ function buildTicket(overrides: Partial<TicketSummary> = {}): TicketSummary {
     description: "Add a login form with email and password fields",
     status: "todo",
     priority: "high",
-    assignee: none<string>(),
     estimate: none<string>(),
     createdAt: "2024-01-01T10:00:00Z",
     updatedAt: "2024-01-01T12:00:00Z",
@@ -151,22 +150,6 @@ describe("TicketDetailPage", () => {
 
     const priorityLabel = screen.getByText("Priority")
     expect(priorityLabel).toBeInTheDocument()
-  })
-
-  it("renders assignee metadata when present", () => {
-    renderApp("/pm/tickets/t1?project=p1", {
-      ...defaultStates,
-      "tickets.get": querySuccess(buildTicket({ assignee: some("alice") })),
-    })
-
-    expect(screen.getByText("alice")).toBeInTheDocument()
-  })
-
-  it("renders unassigned when no assignee", () => {
-    renderApp("/pm/tickets/t1?project=p1")
-
-    const assigneeSection = screen.getByTestId("meta-assignee")
-    expect(within(assigneeSection).getByText("Unassigned")).toBeInTheDocument()
   })
 
   it("renders estimate when present", () => {
@@ -302,7 +285,7 @@ describe("TicketDetailPage", () => {
       expect(screen.getByTestId("ticket-edit-form")).toBeInTheDocument()
     })
 
-    it("edit form has title, description, priority, assignee, estimate, design fields", async () => {
+    it("edit form has title, description, priority, estimate, design fields", async () => {
       const user = userEvent.setup()
       renderApp("/pm/tickets/t1?project=p1")
 
@@ -311,7 +294,6 @@ describe("TicketDetailPage", () => {
       expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/description/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/priority/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/assignee/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/estimate/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/design/i)).toBeInTheDocument()
     })
@@ -321,7 +303,7 @@ describe("TicketDetailPage", () => {
       renderApp("/pm/tickets/t1?project=p1", {
         ...defaultStates,
         "tickets.get": querySuccess(
-          buildTicket({ assignee: some("alice"), estimate: some("2h") }),
+          buildTicket({ estimate: some("2h") }),
         ),
       })
 
@@ -332,7 +314,6 @@ describe("TicketDetailPage", () => {
         "Add a login form with email and password fields",
       )
       expect(screen.getByLabelText(/priority/i)).toHaveValue("high")
-      expect(screen.getByLabelText(/assignee/i)).toHaveValue("alice")
       expect(screen.getByLabelText(/estimate/i)).toHaveValue("2h")
     })
 

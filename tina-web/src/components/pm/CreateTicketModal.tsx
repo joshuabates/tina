@@ -23,7 +23,6 @@ export function CreateTicketModal({
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState("medium")
   const [designId, setDesignId] = useState("")
-  const [assignee, setAssignee] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const createTicket = useMutation(api.tickets.createTicket)
@@ -41,7 +40,6 @@ export function CreateTicketModal({
         description: description.trim(),
         priority,
         ...(designId ? { designId: designId as Id<"designs"> } : {}),
-        ...(assignee.trim() ? { assignee: assignee.trim() } : {}),
       })
       onCreated(ticketId as unknown as string)
     } catch (err) {
@@ -105,17 +103,6 @@ export function CreateTicketModal({
               </option>
             ))}
           </select>
-        </div>
-        <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="ticket-assignee">Assignee</label>
-          <input
-            id="ticket-assignee"
-            className={styles.formInput}
-            type="text"
-            value={assignee}
-            onChange={(e) => setAssignee(e.target.value)}
-            placeholder="Assignee name"
-          />
         </div>
         {error && <div className={styles.errorMessage}>{error}</div>}
         <div className={styles.formActions}>
