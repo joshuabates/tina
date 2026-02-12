@@ -22,6 +22,53 @@ pub struct ActionPayload {
     pub policy: Option<serde_json::Value>,
 }
 
+/// Machine-parseable error codes for action dispatch results.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchErrorCode {
+    PayloadMissingField,
+    PayloadInvalid,
+    CliExitNonZero,
+    CliSpawnFailed,
+    UnknownActionType,
+}
+
+/// Structured result from action dispatch, serialized as JSON for the queue completion message.
+#[derive(Debug, serde::Serialize)]
+pub struct DispatchResult {
+    pub success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<DispatchErrorCode>,
+    pub message: String,
+}
+
+impl DispatchResult {
+    pub fn ok(message: String) -> Self {
+        Self {
+            success: true,
+            error_code: None,
+            message,
+        }
+    }
+
+    pub fn err(code: DispatchErrorCode, message: String) -> Self {
+        Self {
+            success: false,
+            error_code: Some(code),
+            message,
+        }
+    }
+
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(self).unwrap_or_else(|_| {
+            format!(
+                "{{\"success\":{},\"message\":\"{}\"}}",
+                self.success, self.message
+            )
+        })
+    }
+}
+
 /// Dispatch a single inbound action: claim it, execute the CLI command, complete it.
 pub async fn dispatch_action(
     client: &Arc<Mutex<TinaConvexClient>>,
@@ -47,23 +94,24 @@ pub async fn dispatch_action(
         .map_err(|e| anyhow::anyhow!("failed to parse action payload: {}", e))?;
 
     // Build and execute CLI command
-    let result = execute_action(&action.action_type, &payload).await;
-
-    // Report result
-    let (result_msg, success) = match &result {
-        Ok(output) => (output.clone(), true),
-        Err(e) => (format!("error: {}", e), false),
+    let dispatch_result = match execute_action(&action.action_type, &payload).await {
+        Ok(output) => DispatchResult::ok(output),
+        Err(e) => {
+            let code = classify_error(&e);
+            DispatchResult::err(code, format!("{}", e))
+        }
     };
 
+    // Report result
     let mut client = client.lock().await;
     client
-        .complete_action(&action.id, &result_msg, success)
+        .complete_action(&action.id, &dispatch_result.to_json(), dispatch_result.success)
         .await?;
 
-    if success {
+    if dispatch_result.success {
         info!(action_type = %action.action_type, action_id = %action.id, "action completed");
     } else {
-        error!(action_type = %action.action_type, action_id = %action.id, error = %result_msg, "action failed");
+        error!(action_type = %action.action_type, action_id = %action.id, error = %dispatch_result.message, "action failed");
     }
 
     Ok(())
@@ -92,6 +140,22 @@ async fn execute_action(action_type: &str, payload: &ActionPayload) -> Result<St
     }
 
     Ok(stdout)
+}
+
+/// Classify an anyhow error into a deterministic error code.
+fn classify_error(err: &anyhow::Error) -> DispatchErrorCode {
+    let msg = err.to_string();
+    if msg.contains("missing") && (msg.contains("field") || msg.contains("payload")) {
+        DispatchErrorCode::PayloadMissingField
+    } else if msg.contains("unknown action type") {
+        DispatchErrorCode::UnknownActionType
+    } else if msg.contains("exited with") {
+        DispatchErrorCode::CliExitNonZero
+    } else if msg.contains("parse") || msg.contains("invalid") {
+        DispatchErrorCode::PayloadInvalid
+    } else {
+        DispatchErrorCode::CliSpawnFailed
+    }
 }
 
 /// Build the tina-session CLI arguments for a given action type.
@@ -541,5 +605,82 @@ mod tests {
         let result = build_cli_args("start_orchestration", &p);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("total_phases"));
+    }
+
+    // --- DispatchResult / DispatchErrorCode tests ---
+
+    #[test]
+    fn test_dispatch_result_ok_serializes() {
+        let r = DispatchResult::ok("done".to_string());
+        assert!(r.success);
+        assert!(r.error_code.is_none());
+        let json: serde_json::Value = serde_json::from_str(&r.to_json()).unwrap();
+        assert_eq!(json["success"], true);
+        assert_eq!(json["message"], "done");
+        assert!(json.get("error_code").is_none());
+    }
+
+    #[test]
+    fn test_dispatch_result_err_serializes() {
+        let r = DispatchResult::err(
+            DispatchErrorCode::CliExitNonZero,
+            "exited with 1".to_string(),
+        );
+        assert!(!r.success);
+        assert!(r.error_code.is_some());
+        let json: serde_json::Value = serde_json::from_str(&r.to_json()).unwrap();
+        assert_eq!(json["success"], false);
+        assert_eq!(json["error_code"], "cli_exit_non_zero");
+        assert_eq!(json["message"], "exited with 1");
+    }
+
+    #[test]
+    fn test_classify_error_missing_field() {
+        let err = anyhow::anyhow!("action payload missing 'feature' field");
+        let code = classify_error(&err);
+        assert!(matches!(code, DispatchErrorCode::PayloadMissingField));
+    }
+
+    #[test]
+    fn test_classify_error_unknown_action_type() {
+        let err = anyhow::anyhow!("unknown action type: foo");
+        let code = classify_error(&err);
+        assert!(matches!(code, DispatchErrorCode::UnknownActionType));
+    }
+
+    #[test]
+    fn test_classify_error_cli_exit_non_zero() {
+        let err = anyhow::anyhow!("tina-session exited with exit status: 1");
+        let code = classify_error(&err);
+        assert!(matches!(code, DispatchErrorCode::CliExitNonZero));
+    }
+
+    #[test]
+    fn test_classify_error_payload_invalid() {
+        let err = anyhow::anyhow!("failed to parse action payload: invalid json");
+        let code = classify_error(&err);
+        assert!(matches!(code, DispatchErrorCode::PayloadInvalid));
+    }
+
+    #[test]
+    fn test_classify_error_fallback_spawn_failed() {
+        let err = anyhow::anyhow!("No such file or directory");
+        let code = classify_error(&err);
+        assert!(matches!(code, DispatchErrorCode::CliSpawnFailed));
+    }
+
+    #[test]
+    fn test_dispatch_error_code_serializes_snake_case() {
+        let codes = vec![
+            (DispatchErrorCode::PayloadMissingField, "payload_missing_field"),
+            (DispatchErrorCode::PayloadInvalid, "payload_invalid"),
+            (DispatchErrorCode::CliExitNonZero, "cli_exit_non_zero"),
+            (DispatchErrorCode::CliSpawnFailed, "cli_spawn_failed"),
+            (DispatchErrorCode::UnknownActionType, "unknown_action_type"),
+        ];
+        for (code, expected) in codes {
+            let json = serde_json::to_string(&code).unwrap();
+            assert_eq!(json, format!("\"{}\"", expected));
+        }
     }
 }
