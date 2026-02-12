@@ -66,6 +66,12 @@ function buildDesign(overrides: Partial<DesignSummary> = {}): DesignSummary {
     createdAt: "2024-01-01T10:00:00Z",
     updatedAt: "2024-01-01T12:00:00Z",
     archivedAt: none<string>(),
+    complexityPreset: none<string>(),
+    requiredMarkers: none<string[]>(),
+    completedMarkers: none<string[]>(),
+    phaseCount: none<number>(),
+    phaseStructureValid: none<boolean>(),
+    validationUpdatedAt: none<string>(),
     ...overrides,
   }
 }

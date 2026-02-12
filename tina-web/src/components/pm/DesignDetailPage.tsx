@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { useMutation } from "convex/react"
+import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { DesignDetailQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
@@ -107,6 +108,19 @@ export function DesignDetailPage() {
     setEditing(false)
   }
 
+  const updateMarkers = useMutation(api.designs.updateDesignMarkers)
+
+  const handleToggleMarker = async (marker: string) => {
+    const current = Option.getOrElse(() => [] as string[])(design.completedMarkers)
+    const next = current.includes(marker)
+      ? current.filter((m: string) => m !== marker)
+      : [...current, marker]
+    await updateMarkers({
+      designId: designId as Id<"designs">,
+      completedMarkers: next,
+    })
+  }
+
   const actions = getTransitionActions(design.status)
 
   return (
@@ -142,6 +156,52 @@ export function DesignDetailPage() {
       </div>
 
       <pre className={styles.markdownBody}>{design.markdown}</pre>
+
+      {Option.getOrUndefined(design.complexityPreset) && (
+        <div className={styles.section} data-testid="validation-section">
+          <h3 className={styles.sectionTitle}>Validation</h3>
+          <div className={styles.metadata}>
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Complexity</span>
+              <span>{Option.getOrUndefined(design.complexityPreset)}</span>
+            </div>
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Phases</span>
+              <span>{Option.getOrElse(() => 0)(design.phaseCount)}</span>
+            </div>
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Phase Structure</span>
+              <span>{Option.getOrElse(() => false)(design.phaseStructureValid) ? "Valid" : "Invalid"}</span>
+            </div>
+          </div>
+          {(() => {
+            const required = Option.getOrElse(() => [] as string[])(design.requiredMarkers)
+            const completed = Option.getOrElse(() => [] as string[])(design.completedMarkers)
+            return required.length > 0 ? (
+              <div data-testid="marker-checklist">
+                <h4>Markers</h4>
+                <ul style={{ listStyle: "none", padding: 0 }}>
+                  {required.map((marker: string) => (
+                    <li key={marker} style={{ padding: "4px 0" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={completed.includes(marker)}
+                          onChange={() => handleToggleMarker(marker)}
+                        />
+                        <span style={{ textTransform: "capitalize" }}>
+                          {marker.replace(/_/g, " ")}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null
+          })()}
+        </div>
+      )}
+
       {editing && (
         <EditDesignModal
           design={design}

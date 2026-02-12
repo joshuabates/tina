@@ -143,6 +143,26 @@
   margin-bottom: 8px;
 }
 
+.metadata {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.metadataItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metadataLabel {
+  font-size: 11px;
+  color: $text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
 .loading {
   display: flex;
   flex-direction: column;
