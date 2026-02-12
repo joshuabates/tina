@@ -1,4 +1,6 @@
 import { query, mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 const RUNTIME_ACTION_TYPES = [
@@ -12,6 +14,57 @@ const RUNTIME_ACTION_TYPES = [
   "task_set_model",
 ] as const;
 
+interface InsertControlActionParams {
+  orchestrationId: Id<"orchestrations">;
+  nodeId: Id<"nodes">;
+  actionType: string;
+  payload: string;
+  requestedBy: string;
+  idempotencyKey: string;
+}
+
+async function insertControlActionWithQueue(
+  ctx: MutationCtx,
+  params: InsertControlActionParams,
+): Promise<Id<"controlPlaneActions">> {
+  const existing = await ctx.db
+    .query("controlPlaneActions")
+    .withIndex("by_idempotency", (q) =>
+      q.eq("idempotencyKey", params.idempotencyKey),
+    )
+    .first();
+  if (existing) {
+    return existing._id;
+  }
+
+  const now = Date.now();
+
+  const actionId = await ctx.db.insert("controlPlaneActions", {
+    orchestrationId: params.orchestrationId,
+    actionType: params.actionType,
+    payload: params.payload,
+    requestedBy: params.requestedBy,
+    idempotencyKey: params.idempotencyKey,
+    status: "pending",
+    createdAt: now,
+  });
+
+  const queueActionId = await ctx.db.insert("inboundActions", {
+    nodeId: params.nodeId,
+    orchestrationId: params.orchestrationId,
+    type: params.actionType,
+    payload: params.payload,
+    status: "pending",
+    createdAt: now,
+    controlActionId: actionId,
+    idempotencyKey: params.idempotencyKey,
+  });
+
+  await ctx.db.patch(actionId, { queueActionId });
+
+  return actionId;
+}
+
 export const startOrchestration = mutation({
   args: {
     orchestrationId: v.id("orchestrations"),
@@ -24,19 +77,14 @@ export const startOrchestration = mutation({
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
-    // Check idempotency
-    const existing = await ctx.db
-      .query("controlPlaneActions")
-      .withIndex("by_idempotency", (q) =>
-        q.eq("idempotencyKey", args.idempotencyKey),
-      )
-      .first();
-    if (existing) {
-      return existing._id;
-    }
-
     // Patch orchestration with policy metadata
-    const patchFields: Record<string, unknown> = {
+    const patchFields: {
+      policySnapshot: string;
+      policySnapshotHash: string;
+      updatedAt: string;
+      presetOrigin?: string;
+      designOnly?: boolean;
+    } = {
       policySnapshot: args.policySnapshot,
       policySnapshotHash: args.policySnapshotHash,
       updatedAt: new Date().toISOString(),
@@ -49,41 +97,20 @@ export const startOrchestration = mutation({
     }
     await ctx.db.patch(args.orchestrationId, patchFields);
 
-    // Insert control-plane action log entry
-    const actionId = await ctx.db.insert("controlPlaneActions", {
+    const payload = JSON.stringify({
+      policySnapshotHash: args.policySnapshotHash,
+      presetOrigin: args.presetOrigin,
+      designOnly: args.designOnly,
+    });
+
+    return insertControlActionWithQueue(ctx, {
       orchestrationId: args.orchestrationId,
+      nodeId: args.nodeId,
       actionType: "start_orchestration",
-      payload: JSON.stringify({
-        policySnapshotHash: args.policySnapshotHash,
-        presetOrigin: args.presetOrigin,
-        designOnly: args.designOnly,
-      }),
+      payload,
       requestedBy: args.requestedBy,
       idempotencyKey: args.idempotencyKey,
-      status: "pending",
-      createdAt: Date.now(),
     });
-
-    // Insert inboundActions queue row
-    const queueActionId = await ctx.db.insert("inboundActions", {
-      nodeId: args.nodeId,
-      orchestrationId: args.orchestrationId,
-      type: "start_orchestration",
-      payload: JSON.stringify({
-        policySnapshotHash: args.policySnapshotHash,
-        presetOrigin: args.presetOrigin,
-        designOnly: args.designOnly,
-      }),
-      status: "pending",
-      createdAt: Date.now(),
-      controlActionId: actionId,
-      idempotencyKey: args.idempotencyKey,
-    });
-
-    // Link queue action back to control-plane action
-    await ctx.db.patch(actionId, { queueActionId });
-
-    return actionId;
   },
 });
 
@@ -97,7 +124,6 @@ export const enqueueControlAction = mutation({
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
-    // Validate action type
     if (
       !(RUNTIME_ACTION_TYPES as readonly string[]).includes(args.actionType)
     ) {
@@ -106,44 +132,14 @@ export const enqueueControlAction = mutation({
       );
     }
 
-    // Check idempotency
-    const existing = await ctx.db
-      .query("controlPlaneActions")
-      .withIndex("by_idempotency", (q) =>
-        q.eq("idempotencyKey", args.idempotencyKey),
-      )
-      .first();
-    if (existing) {
-      return existing._id;
-    }
-
-    // Insert control-plane action log entry
-    const actionId = await ctx.db.insert("controlPlaneActions", {
+    return insertControlActionWithQueue(ctx, {
       orchestrationId: args.orchestrationId,
+      nodeId: args.nodeId,
       actionType: args.actionType,
       payload: args.payload,
       requestedBy: args.requestedBy,
       idempotencyKey: args.idempotencyKey,
-      status: "pending",
-      createdAt: Date.now(),
     });
-
-    // Insert inboundActions queue row
-    const queueActionId = await ctx.db.insert("inboundActions", {
-      nodeId: args.nodeId,
-      orchestrationId: args.orchestrationId,
-      type: args.actionType,
-      payload: args.payload,
-      status: "pending",
-      createdAt: Date.now(),
-      controlActionId: actionId,
-      idempotencyKey: args.idempotencyKey,
-    });
-
-    // Link queue action back to control-plane action
-    await ctx.db.patch(actionId, { queueActionId });
-
-    return actionId;
   },
 });
 
@@ -173,15 +169,13 @@ export const getLatestPolicySnapshot = query({
     if (!orchestration) {
       return null;
     }
-    const { policySnapshot, policySnapshotHash, presetOrigin } =
-      orchestration as Record<string, unknown>;
-    if (!policySnapshot) {
+    if (!orchestration.policySnapshot) {
       return null;
     }
     return {
-      policySnapshot: policySnapshot as string,
-      policySnapshotHash: (policySnapshotHash as string) ?? null,
-      presetOrigin: (presetOrigin as string | undefined) ?? null,
+      policySnapshot: orchestration.policySnapshot,
+      policySnapshotHash: orchestration.policySnapshotHash ?? null,
+      presetOrigin: orchestration.presetOrigin ?? null,
     };
   },
 });
