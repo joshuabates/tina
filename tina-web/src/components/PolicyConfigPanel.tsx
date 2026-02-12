@@ -3,10 +3,10 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import type { Id } from "@convex/_generated/dataModel"
 import { generateIdempotencyKey } from "@/lib/utils"
+import { MODEL_OPTIONS, controlSelectClass } from "@/lib/control-plane-styles"
 import { StatPanel } from "@/components/ui/stat-panel"
 import { MonoText } from "@/components/ui/mono-text"
 
-const MODEL_OPTIONS = ["opus", "sonnet", "haiku"] as const
 const ROLES = ["validator", "planner", "executor", "reviewer"] as const
 
 interface PolicyConfigPanelProps {
@@ -92,7 +92,7 @@ export function PolicyConfigPanel({ orchestrationId, nodeId, featureName }: Poli
                 {role}
               </MonoText>
               <select
-                className="flex-1 text-[8px] bg-muted/45 border border-border/70 rounded px-1.5 py-0.5 text-foreground"
+                className={controlSelectClass}
                 value={modelPolicy[role] ?? "opus"}
                 onChange={(e) => handleRoleModelChange(role, e.target.value)}
                 disabled={pendingRole !== null}

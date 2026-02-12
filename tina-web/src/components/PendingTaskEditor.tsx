@@ -3,10 +3,9 @@ import { useQuery, useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import type { Id } from "@convex/_generated/dataModel"
 import { generateIdempotencyKey } from "@/lib/utils"
+import { MODEL_OPTIONS, controlBtnClass, controlSelectClass } from "@/lib/control-plane-styles"
 import { StatPanel } from "@/components/ui/stat-panel"
 import { MonoText } from "@/components/ui/mono-text"
-
-const MODEL_OPTIONS = ["opus", "sonnet", "haiku"] as const
 
 interface PendingTaskEditorProps {
   orchestrationId: string
@@ -127,12 +126,8 @@ export function PendingTaskEditor({
 
   const pendingCount = tasks.filter((t) => t.status === "pending").length
 
-  const selectClass =
-    "flex-1 text-[8px] bg-muted/45 border border-border/70 rounded px-1.5 py-0.5 text-foreground"
   const inputClass =
     "w-full text-[8px] bg-muted/45 border border-border/70 rounded px-1.5 py-0.5 text-foreground"
-  const btnClass =
-    "w-full flex items-center justify-center gap-1 px-1.5 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground disabled:opacity-40 disabled:pointer-events-none"
 
   return (
     <StatPanel title="Tasks">
@@ -175,7 +170,7 @@ export function PendingTaskEditor({
 
               {task.status === "pending" ? (
                 <select
-                  className={selectClass}
+                  className={controlSelectClass}
                   value={task.model ?? "opus"}
                   onChange={(e) =>
                     handleModelChange(task.taskNumber, task.revision, e.target.value)
@@ -213,7 +208,7 @@ export function PendingTaskEditor({
           />
           <div className="flex gap-1.5">
             <select
-              className={selectClass}
+              className={controlSelectClass}
               value={insertModel}
               onChange={(e) => setInsertModel(e.target.value)}
               data-testid="insert-task-model"
@@ -225,7 +220,7 @@ export function PendingTaskEditor({
               ))}
             </select>
             <select
-              className={selectClass}
+              className={controlSelectClass}
               value={insertAfterTask}
               onChange={(e) => setInsertAfterTask(Number(e.target.value))}
               data-testid="insert-task-after"
@@ -239,9 +234,10 @@ export function PendingTaskEditor({
             </select>
           </div>
           <button
-            className={btnClass}
+            className={controlBtnClass}
             disabled={pendingTaskNum !== null || !insertSubject.trim()}
             onClick={handleInsert}
+            aria-label="Insert task"
             data-testid="insert-task-submit"
           >
             {pendingTaskNum === -1 ? "..." : "Insert"}

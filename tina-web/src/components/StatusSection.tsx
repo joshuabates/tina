@@ -5,6 +5,7 @@ import { useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import type { Id } from "@convex/_generated/dataModel"
 import { generateIdempotencyKey } from "@/lib/utils"
+import { controlBtnClass } from "@/lib/control-plane-styles"
 import { useFocusable } from "@/hooks/useFocusable"
 import { MonoText } from "@/components/ui/mono-text"
 import { StatPanel } from "@/components/ui/stat-panel"
@@ -47,9 +48,6 @@ export function StatusSection({ detail }: StatusSectionProps) {
   const canPause = PAUSABLE_STATUSES.has(detail.status) && !pendingAction
   const canResume = RESUMABLE_STATUSES.has(detail.status) && !pendingAction
   const canRetry = RETRYABLE_STATUSES.has(detail.status) && !pendingAction
-
-  const controlBtnClass =
-    "w-full flex items-center justify-center gap-1 px-1.5 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground disabled:opacity-40 disabled:pointer-events-none"
 
   const handleControlAction = async (actionType: ControlActionType) => {
     setPendingAction(actionType)
