@@ -25,17 +25,26 @@ interface InsertControlActionParams {
   idempotencyKey: string;
 }
 
-function validateRuntimePayload(actionType: string, rawPayload: string): void {
+function parseJsonWithFeature(
+  rawPayload: string,
+  actionType: string,
+): Record<string, unknown> {
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(rawPayload);
   } catch {
-    throw new Error(`Invalid payload: must be valid JSON`);
+    throw new Error("Invalid payload: must be valid JSON");
   }
 
   if (typeof parsed.feature !== "string" || !parsed.feature) {
     throw new Error(`Payload for "${actionType}" requires "feature" (string)`);
   }
+
+  return parsed;
+}
+
+function validateRuntimePayload(actionType: string, rawPayload: string): void {
+  const parsed = parseJsonWithFeature(rawPayload, actionType);
 
   const needsPhase = ["pause", "retry"];
   if (needsPhase.includes(actionType)) {
@@ -47,6 +56,12 @@ function validateRuntimePayload(actionType: string, rawPayload: string): void {
 
 const ALLOWED_MODELS = ["opus", "sonnet", "haiku"] as const;
 const ALLOWED_ROLES = ["validator", "planner", "executor", "reviewer"] as const;
+
+function validateModelName(model: unknown): asserts model is string {
+  if (typeof model !== "string" || !(ALLOWED_MODELS as readonly string[]).includes(model)) {
+    throw new Error(`Invalid model: "${model}". Allowed: ${ALLOWED_MODELS.join(", ")}`);
+  }
+}
 
 interface PolicyPayload {
   feature: string;
@@ -76,16 +91,8 @@ interface RoleModelPayload {
 }
 
 function parseBasePayload(rawPayload: string, actionType: string): Record<string, unknown> {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(rawPayload);
-  } catch {
-    throw new Error("Invalid payload: must be valid JSON");
-  }
+  const parsed = parseJsonWithFeature(rawPayload, actionType);
 
-  if (typeof parsed.feature !== "string" || !parsed.feature) {
-    throw new Error(`Payload for "${actionType}" requires "feature" (string)`);
-  }
   if (typeof parsed.targetRevision !== "number") {
     throw new Error(`Payload for "${actionType}" requires "targetRevision" (number)`);
   }
@@ -117,29 +124,9 @@ function validateRoleModelPayload(rawPayload: string): RoleModelPayload {
   if (typeof parsed.role !== "string" || !(ALLOWED_ROLES as readonly string[]).includes(parsed.role)) {
     throw new Error(`Invalid role: "${parsed.role}". Allowed: ${ALLOWED_ROLES.join(", ")}`);
   }
-  if (typeof parsed.model !== "string" || !(ALLOWED_MODELS as readonly string[]).includes(parsed.model)) {
-    throw new Error(`Invalid model: "${parsed.model}". Allowed: ${ALLOWED_MODELS.join(", ")}`);
-  }
+  validateModelName(parsed.model);
 
   return parsed as unknown as RoleModelPayload;
-}
-
-function parseTaskBasePayload(
-  rawPayload: string,
-  actionType: string,
-): Record<string, unknown> {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(rawPayload);
-  } catch {
-    throw new Error("Invalid payload: must be valid JSON");
-  }
-
-  if (typeof parsed.feature !== "string" || !parsed.feature) {
-    throw new Error(`Payload for "${actionType}" requires "feature" (string)`);
-  }
-
-  return parsed;
 }
 
 interface TaskEditPayload {
@@ -171,7 +158,7 @@ interface TaskSetModelPayload {
 }
 
 function validateTaskEditPayload(rawPayload: string): TaskEditPayload {
-  const parsed = parseTaskBasePayload(rawPayload, "task_edit");
+  const parsed = parseJsonWithFeature(rawPayload, "task_edit");
 
   if (typeof parsed.phaseNumber !== "string" || !parsed.phaseNumber) {
     throw new Error('Payload for "task_edit" requires "phaseNumber" (string)');
@@ -193,20 +180,14 @@ function validateTaskEditPayload(rawPayload: string): TaskEditPayload {
   }
 
   if (hasModel) {
-    if (
-      !(ALLOWED_MODELS as readonly string[]).includes(parsed.model as string)
-    ) {
-      throw new Error(
-        `Invalid model: "${parsed.model}". Allowed: ${ALLOWED_MODELS.join(", ")}`,
-      );
-    }
+    validateModelName(parsed.model);
   }
 
   return parsed as unknown as TaskEditPayload;
 }
 
 function validateTaskInsertPayload(rawPayload: string): TaskInsertPayload {
-  const parsed = parseTaskBasePayload(rawPayload, "task_insert");
+  const parsed = parseJsonWithFeature(rawPayload, "task_insert");
 
   if (typeof parsed.phaseNumber !== "string" || !parsed.phaseNumber) {
     throw new Error(
@@ -219,14 +200,8 @@ function validateTaskInsertPayload(rawPayload: string): TaskInsertPayload {
   if (typeof parsed.subject !== "string" || !parsed.subject) {
     throw new Error('Payload for "task_insert" requires "subject" (string)');
   }
-  if (
-    parsed.model !== undefined &&
-    (typeof parsed.model !== "string" ||
-      !(ALLOWED_MODELS as readonly string[]).includes(parsed.model))
-  ) {
-    throw new Error(
-      `Invalid model: "${parsed.model}". Allowed: ${ALLOWED_MODELS.join(", ")}`,
-    );
+  if (parsed.model !== undefined) {
+    validateModelName(parsed.model);
   }
   if (parsed.dependsOn !== undefined && !Array.isArray(parsed.dependsOn)) {
     throw new Error(
@@ -238,7 +213,7 @@ function validateTaskInsertPayload(rawPayload: string): TaskInsertPayload {
 }
 
 function validateTaskSetModelPayload(rawPayload: string): TaskSetModelPayload {
-  const parsed = parseTaskBasePayload(rawPayload, "task_set_model");
+  const parsed = parseJsonWithFeature(rawPayload, "task_set_model");
 
   if (typeof parsed.phaseNumber !== "string" || !parsed.phaseNumber) {
     throw new Error(
@@ -255,14 +230,7 @@ function validateTaskSetModelPayload(rawPayload: string): TaskSetModelPayload {
       'Payload for "task_set_model" requires "revision" (number)',
     );
   }
-  if (
-    typeof parsed.model !== "string" ||
-    !(ALLOWED_MODELS as readonly string[]).includes(parsed.model)
-  ) {
-    throw new Error(
-      `Invalid model: "${parsed.model}". Allowed: ${ALLOWED_MODELS.join(", ")}`,
-    );
-  }
+  validateModelName(parsed.model);
 
   return parsed as unknown as TaskSetModelPayload;
 }
@@ -281,6 +249,40 @@ async function checkAndIncrementRevision(
     );
   }
   await ctx.db.patch(orchestrationId, { policyRevision: currentRevision + 1 });
+}
+
+async function lookupPendingTaskWithRevision(
+  ctx: MutationCtx,
+  orchestrationId: Id<"orchestrations">,
+  phaseNumber: string,
+  taskNumber: number,
+  revision: number,
+) {
+  const task = await ctx.db
+    .query("executionTasks")
+    .withIndex("by_orchestration_phase_task", (q) =>
+      q
+        .eq("orchestrationId", orchestrationId)
+        .eq("phaseNumber", phaseNumber)
+        .eq("taskNumber", taskNumber),
+    )
+    .first();
+  if (!task) {
+    throw new Error(
+      `Task ${taskNumber} not found in phase ${phaseNumber}`,
+    );
+  }
+  if (task.status !== "pending") {
+    throw new Error(
+      `Cannot modify task ${taskNumber}: status is "${task.status}" (must be "pending")`,
+    );
+  }
+  if (task.revision !== revision) {
+    throw new Error(
+      `Task revision conflict: expected ${revision}, current is ${task.revision}. Reload and retry.`,
+    );
+  }
+  return task;
 }
 
 async function insertControlActionWithQueue(
@@ -538,30 +540,9 @@ export const enqueueControlAction = mutation({
       await checkAndIncrementRevision(ctx, args.orchestrationId, rolePayload.targetRevision);
     } else if (args.actionType === "task_edit") {
       const payload = validateTaskEditPayload(args.payload);
-      const task = await ctx.db
-        .query("executionTasks")
-        .withIndex("by_orchestration_phase_task", (q) =>
-          q
-            .eq("orchestrationId", args.orchestrationId)
-            .eq("phaseNumber", payload.phaseNumber)
-            .eq("taskNumber", payload.taskNumber),
-        )
-        .first();
-      if (!task) {
-        throw new Error(
-          `Task ${payload.taskNumber} not found in phase ${payload.phaseNumber}`,
-        );
-      }
-      if (task.status !== "pending") {
-        throw new Error(
-          `Cannot edit task ${payload.taskNumber}: status is "${task.status}" (must be "pending")`,
-        );
-      }
-      if (task.revision !== payload.revision) {
-        throw new Error(
-          `Task revision conflict: expected ${payload.revision}, current is ${task.revision}. Reload and retry.`,
-        );
-      }
+      const task = await lookupPendingTaskWithRevision(
+        ctx, args.orchestrationId, payload.phaseNumber, payload.taskNumber, payload.revision,
+      );
       const patch: Record<string, unknown> = {
         revision: task.revision + 1,
         updatedAt: Date.now(),
@@ -637,30 +618,9 @@ export const enqueueControlAction = mutation({
       });
     } else if (args.actionType === "task_set_model") {
       const payload = validateTaskSetModelPayload(args.payload);
-      const task = await ctx.db
-        .query("executionTasks")
-        .withIndex("by_orchestration_phase_task", (q) =>
-          q
-            .eq("orchestrationId", args.orchestrationId)
-            .eq("phaseNumber", payload.phaseNumber)
-            .eq("taskNumber", payload.taskNumber),
-        )
-        .first();
-      if (!task) {
-        throw new Error(
-          `Task ${payload.taskNumber} not found in phase ${payload.phaseNumber}`,
-        );
-      }
-      if (task.status !== "pending") {
-        throw new Error(
-          `Cannot modify task ${payload.taskNumber}: status is "${task.status}" (must be "pending")`,
-        );
-      }
-      if (task.revision !== payload.revision) {
-        throw new Error(
-          `Task revision conflict: expected ${payload.revision}, current is ${task.revision}. Reload and retry.`,
-        );
-      }
+      const task = await lookupPendingTaskWithRevision(
+        ctx, args.orchestrationId, payload.phaseNumber, payload.taskNumber, payload.revision,
+      );
       await ctx.db.patch(task._id, {
         model: payload.model,
         revision: task.revision + 1,
