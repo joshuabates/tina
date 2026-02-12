@@ -289,6 +289,66 @@ Tests and validation:
 
 - Control-plane features are measurable, observable, and can be rolled back safely by feature flag.
 
+## Success Metrics
+
+**Goal:** All 4 target outcomes demonstrable in harness test scenarios (launch from web, pause/resume/retry, policy reconfiguration, task edit/insert).
+
+**Baseline command:**
+```bash
+mise run test:web     # Current web test coverage
+npm test              # Current Convex function test coverage
+```
+
+**Progress command:** (run after each phase)
+```bash
+mise run test:web     # Web tests for new UI surfaces
+npm test              # Convex function tests for control-plane APIs
+```
+
+**Target:**
+- Phase 1: Schema + controlPlane.ts functions tested (≥90% coverage of new functions)
+- Phase 2: E2E launch test from web UI → daemon → tina-session init
+- Phase 3: E2E pause/resume/retry tests with action log verification
+- Phase 4: Policy reconfiguration tests with immutability guarantees
+- Phase 5: Task edit/insert tests with revision conflict detection
+- Phase 6: Full harness scenario for launch-to-completion with all controls exercised
+
+**ROI threshold:** Operator can launch, control, and reconfigure orchestrations entirely from web UI, with full audit trail. Manual CLI invocations for launch/control eliminated.
+
+## Architectural Context
+
+**Patterns to follow:**
+- Convex mutation/query pattern: `convex/actions.ts:4-74` (submitAction, claimAction, completeAction)
+- Daemon action dispatch: `tina-daemon/src/actions.rs:92-165` (build_cli_args switch with typed payloads)
+- Test pattern: `convex/orchestrations.test.ts:1-50` (convexTest + test_helpers.createNode/createProject)
+- Web UI mutation pattern: `tina-web/src/components/pm/DesignDetailPage.tsx:1-80` (useMutation from convex/react)
+- Schema with indexes: `convex/schema.ts:112-124` (inboundActions table structure)
+
+**Code to reuse:**
+- `convex/actions.ts` - Queue primitives (submitAction, claimAction, completeAction) for control-plane actions
+- `tina-daemon/src/actions.rs:10-17` - ActionPayload struct for typed daemon dispatch
+- `convex/test_helpers.ts` - createNode, createProject for test setup
+- `tina-session/src/state/schema.rs:249-412` - ModelPolicy and ReviewPolicy structs (already exist, persist in policySnapshot)
+- `tina-session/src/commands/init.rs:29-66` - Existing --design-id path for canonical launch
+- `tina-web/src/components/ui/status-badge.tsx` - StatusBadge component for control action status display
+
+**Integration:**
+- Entry: New launch form in tina-web (under PM shell, next to design detail page)
+- Backend flow: Web UI → `convex/controlPlane.ts:startOrchestration` → writes `controlPlaneActions` + `inboundActions` → daemon polls queue → `tina-daemon/src/actions.rs:dispatch_action` → `tina-session init --design-id`
+- Existing tables: `inboundActions` queue + `orchestrations` record already support design-linked launches
+- Node requirement: `orchestrations.nodeId` is required (not optional), so launch form must include node selector
+
+**Anti-patterns:**
+- Don't introduce markdown-only launch paths - designs must come from `designs` table (`projectId` + `designId` required)
+- Don't skip idempotency keys in `controlPlaneActions` - every action must be idempotent
+- Don't mutate `policySnapshot` after orchestration starts - snapshot is immutable, only future work can be reconfigured
+- Don't write raw action queue rows from web - route through `controlPlane.ts` to ensure action-log + queue consistency
+
+**New patterns to establish:**
+- Policy preset templates (strict/balanced/fast) - no existing preset system, define in TypeScript constants or Convex config
+- `controlPlaneActions` table as durable action log linked to queue via `controlActionId` foreign key
+- Revision-based optimistic concurrency for policy updates (targetRevision field in payload)
+
 ## Risks and Mitigations
 
 - Risk: command contract drift between daemon and `tina-session`.
