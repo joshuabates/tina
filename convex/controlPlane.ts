@@ -230,6 +230,7 @@ export const launchOrchestration = mutation({
       policySnapshotHash: policyHash,
       presetOrigin: args.policyPreset,
       designOnly,
+      policyRevision: 1,
     });
 
     // Build launch payload for daemon

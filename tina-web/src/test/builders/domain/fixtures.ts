@@ -137,6 +137,7 @@ export function buildOrchestrationDetail(
     policySnapshotHash: none<string>(),
     presetOrigin: none<string>(),
     designOnly: none<boolean>(),
+    policyRevision: none<number>(),
     updatedAt: none<string>(),
     nodeName: "node1",
     phases,

@@ -22,5 +22,6 @@ pub struct OrchestrationRecord {
     pub policy_snapshot_hash: Option<String>,
     pub preset_origin: Option<String>,
     pub design_only: Option<bool>,
+    pub policy_revision: Option<f64>,
     pub updated_at: Option<String>,
 }

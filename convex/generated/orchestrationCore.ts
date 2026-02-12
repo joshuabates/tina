@@ -19,5 +19,6 @@ export const orchestrationCoreTableFields = {
   policySnapshotHash: v.optional(v.string()),
   presetOrigin: v.optional(v.string()),
   designOnly: v.optional(v.boolean()),
+  policyRevision: v.optional(v.number()),
   updatedAt: v.optional(v.string()),
 } as const;

@@ -23,5 +23,6 @@ export const orchestrationCoreFields = {
   policySnapshotHash: optionalString,
   presetOrigin: optionalString,
   designOnly: optionalBoolean,
+  policyRevision: optionalNumber,
   updatedAt: optionalString,
 } as const;
