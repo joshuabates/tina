@@ -131,17 +131,24 @@ interface CreateDesignOptions {
   projectId: string;
   title?: string;
   markdown?: string;
+  complexityPreset?: string;
 }
 
 export async function createDesign(
   t: ConvexHarness,
   options: CreateDesignOptions,
 ) {
-  return await t.mutation(api.designs.createDesign, {
+  const args: Record<string, unknown> = {
     projectId: options.projectId as any,
     title: options.title ?? "Test Design",
     markdown: options.markdown ?? "# Test Design\n\nTest content.",
-  });
+  };
+
+  if (options.complexityPreset !== undefined) {
+    args.complexityPreset = options.complexityPreset;
+  }
+
+  return await t.mutation(api.designs.createDesign, args as any);
 }
 
 export async function createLaunchFixture(
