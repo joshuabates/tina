@@ -1,20 +1,10 @@
 import { query, mutation } from "./_generated/server";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { resolvePolicy, hashPolicy } from "./policyPresets";
 import { HEARTBEAT_TIMEOUT_MS } from "./nodes";
-
-async function checkFeatureFlag(
-  ctx: MutationCtx | QueryCtx,
-  key: string,
-): Promise<boolean> {
-  const flag = await ctx.db
-    .query("featureFlags")
-    .withIndex("by_key", (q: any) => q.eq("key", key))
-    .first();
-  return flag?.enabled ?? false;
-}
+import { isFeatureFlagEnabled, CP_FLAGS } from "./featureFlags";
 
 const RUNTIME_ACTION_TYPES = [
   "pause",
@@ -410,9 +400,9 @@ export const launchOrchestration = mutation({
   },
   handler: async (ctx, args) => {
     // Feature flag gate
-    const launchEnabled = await checkFeatureFlag(ctx, "cp.launch_from_web");
+    const launchEnabled = await isFeatureFlagEnabled(ctx, CP_FLAGS.LAUNCH_FROM_WEB);
     if (!launchEnabled) {
-      throw new Error("Launch from web is not enabled. Set cp.launch_from_web feature flag to enable.");
+      throw new Error(`Launch from web is not enabled. Set ${CP_FLAGS.LAUNCH_FROM_WEB} feature flag to enable.`);
     }
 
     // Validate project exists
@@ -548,18 +538,18 @@ export const enqueueControlAction = mutation({
 
     // Feature flag gates per action category
     const FLAG_MAP: Record<string, string> = {
-      pause: "cp.runtime_controls",
-      resume: "cp.runtime_controls",
-      retry: "cp.runtime_controls",
-      orchestration_set_policy: "cp.policy_reconfiguration",
-      orchestration_set_role_model: "cp.policy_reconfiguration",
-      task_edit: "cp.task_reconfiguration",
-      task_insert: "cp.task_reconfiguration",
-      task_set_model: "cp.task_reconfiguration",
+      pause: CP_FLAGS.RUNTIME_CONTROLS,
+      resume: CP_FLAGS.RUNTIME_CONTROLS,
+      retry: CP_FLAGS.RUNTIME_CONTROLS,
+      orchestration_set_policy: CP_FLAGS.POLICY_RECONFIGURATION,
+      orchestration_set_role_model: CP_FLAGS.POLICY_RECONFIGURATION,
+      task_edit: CP_FLAGS.TASK_RECONFIGURATION,
+      task_insert: CP_FLAGS.TASK_RECONFIGURATION,
+      task_set_model: CP_FLAGS.TASK_RECONFIGURATION,
     };
     const flagKey = FLAG_MAP[args.actionType];
     if (flagKey) {
-      const flagEnabled = await checkFeatureFlag(ctx, flagKey);
+      const flagEnabled = await isFeatureFlagEnabled(ctx, flagKey);
       if (!flagEnabled) {
         throw new Error(
           `Action "${args.actionType}" is not enabled. Set ${flagKey} feature flag to enable.`,

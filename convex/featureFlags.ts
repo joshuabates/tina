@@ -1,4 +1,5 @@
 import { query, mutation } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 
 /** Control-plane feature flag keys for staged rollout. */
@@ -9,14 +10,22 @@ export const CP_FLAGS = {
   TASK_RECONFIGURATION: "cp.task_reconfiguration",
 } as const;
 
+/** Shared logic: check if a feature flag is enabled. */
+export async function isFeatureFlagEnabled(
+  ctx: MutationCtx | QueryCtx,
+  key: string,
+): Promise<boolean> {
+  const flag = await ctx.db
+    .query("featureFlags")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .first();
+  return flag?.enabled ?? false;
+}
+
 export const getFlag = query({
   args: { key: v.string() },
   handler: async (ctx, args) => {
-    const flag = await ctx.db
-      .query("featureFlags")
-      .withIndex("by_key", (q) => q.eq("key", args.key))
-      .first();
-    return flag?.enabled ?? false;
+    return isFeatureFlagEnabled(ctx, args.key);
   },
 });
 
