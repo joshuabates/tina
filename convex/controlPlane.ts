@@ -77,25 +77,32 @@ export const startOrchestration = mutation({
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
-    // Patch orchestration with policy metadata
-    const patchFields: {
-      policySnapshot: string;
-      policySnapshotHash: string;
-      updatedAt: string;
-      presetOrigin?: string;
-      designOnly?: boolean;
-    } = {
-      policySnapshot: args.policySnapshot,
-      policySnapshotHash: args.policySnapshotHash,
-      updatedAt: new Date().toISOString(),
-    };
-    if (args.presetOrigin !== undefined) {
-      patchFields.presetOrigin = args.presetOrigin;
+    // Only set policy snapshot if not already set (immutable once written)
+    const existing = await ctx.db.get(args.orchestrationId);
+    if (!existing) {
+      throw new Error("Orchestration not found");
     }
-    if (args.designOnly !== undefined) {
-      patchFields.designOnly = args.designOnly;
+
+    if (!existing.policySnapshot) {
+      const patchFields: {
+        policySnapshot: string;
+        policySnapshotHash: string;
+        updatedAt: string;
+        presetOrigin?: string;
+        designOnly?: boolean;
+      } = {
+        policySnapshot: args.policySnapshot,
+        policySnapshotHash: args.policySnapshotHash,
+        updatedAt: new Date().toISOString(),
+      };
+      if (args.presetOrigin !== undefined) {
+        patchFields.presetOrigin = args.presetOrigin;
+      }
+      if (args.designOnly !== undefined) {
+        patchFields.designOnly = args.designOnly;
+      }
+      await ctx.db.patch(args.orchestrationId, patchFields);
     }
-    await ctx.db.patch(args.orchestrationId, patchFields);
 
     const payload = JSON.stringify({
       policySnapshotHash: args.policySnapshotHash,

@@ -102,6 +102,75 @@ describe("controlPlane:startOrchestration", () => {
     expect(actions.length).toBe(1);
   });
 
+  test("links inboundActions row back to control action", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    const actionId = await t.mutation(api.controlPlane.startOrchestration, {
+      orchestrationId,
+      nodeId,
+      policySnapshot: '{"key":"value"}',
+      policySnapshotHash: "abc123",
+      requestedBy: "web-ui",
+      idempotencyKey: "linkage-test",
+    });
+
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    const queueActionId = actions[0].queueActionId!;
+
+    // Verify the inbound action links back to the control action
+    const inboundAction = await t.run(async (ctx) => {
+      return await ctx.db.get(queueActionId);
+    });
+    expect(inboundAction).not.toBeNull();
+    expect(inboundAction!.controlActionId).toBe(actionId);
+    expect(inboundAction!.idempotencyKey).toBe("linkage-test");
+    expect(inboundAction!.type).toBe("start_orchestration");
+    expect(inboundAction!.orchestrationId).toBe(orchestrationId);
+    expect(inboundAction!.nodeId).toBe(nodeId);
+  });
+
+  test("does not overwrite existing policy snapshot", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await t.mutation(api.controlPlane.startOrchestration, {
+      orchestrationId,
+      nodeId,
+      policySnapshot: '{"original":"policy"}',
+      policySnapshotHash: "hash-original",
+      presetOrigin: "original-preset",
+      requestedBy: "web-ui",
+      idempotencyKey: "first-start",
+    });
+
+    // Second call with different idempotency key should not overwrite
+    await t.mutation(api.controlPlane.startOrchestration, {
+      orchestrationId,
+      nodeId,
+      policySnapshot: '{"overwrite":"attempt"}',
+      policySnapshotHash: "hash-overwrite",
+      presetOrigin: "new-preset",
+      requestedBy: "cli",
+      idempotencyKey: "second-start",
+    });
+
+    const snapshot = await t.query(api.controlPlane.getLatestPolicySnapshot, {
+      orchestrationId,
+    });
+    expect(snapshot!.policySnapshot).toBe('{"original":"policy"}');
+    expect(snapshot!.policySnapshotHash).toBe("hash-original");
+    expect(snapshot!.presetOrigin).toBe("original-preset");
+  });
+
   test("omits optional fields when not provided", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(
@@ -152,6 +221,37 @@ describe("controlPlane:enqueueControlAction", () => {
     expect(actions[0].actionType).toBe("pause");
     expect(actions[0].status).toBe("pending");
     expect(actions[0].queueActionId).toBeTruthy();
+  });
+
+  test("links inboundActions row back to control action", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "pause",
+      payload: '{"reason":"test"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "enqueue-linkage",
+    });
+
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    const queueActionId = actions[0].queueActionId!;
+
+    const inboundAction = await t.run(async (ctx) => {
+      return await ctx.db.get(queueActionId);
+    });
+    expect(inboundAction).not.toBeNull();
+    expect(inboundAction!.controlActionId).toBe(actionId);
+    expect(inboundAction!.idempotencyKey).toBe("enqueue-linkage");
+    expect(inboundAction!.type).toBe("pause");
+    expect(inboundAction!.payload).toBe('{"reason":"test"}');
   });
 
   test("rejects invalid action type", async () => {
@@ -383,5 +483,31 @@ describe("controlPlane:getLatestPolicySnapshot", () => {
     expect(snapshot!.policySnapshot).toBe('{"enforce":"strict"}');
     expect(snapshot!.policySnapshotHash).toBe("hash-strict");
     expect(snapshot!.presetOrigin).toBe("strict-preset");
+  });
+});
+
+describe("controlPlane:startOrchestration schema validation", () => {
+  test("rejects nonexistent orchestration ID", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    // Delete the orchestration to make the ID stale
+    await t.run(async (ctx) => {
+      await ctx.db.delete(orchestrationId);
+    });
+
+    await expect(
+      t.mutation(api.controlPlane.startOrchestration, {
+        orchestrationId,
+        nodeId,
+        policySnapshot: "{}",
+        policySnapshotHash: "hash",
+        requestedBy: "web-ui",
+        idempotencyKey: "stale-id",
+      }),
+    ).rejects.toThrow();
   });
 });
