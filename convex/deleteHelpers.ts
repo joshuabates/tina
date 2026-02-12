@@ -46,6 +46,25 @@ export async function deleteOrchestrationAssociationsStep(
     };
   }
 
+  const controlPlaneActions = await ctx.db
+    .query("controlPlaneActions")
+    .withIndex("by_orchestration_created", (q) =>
+      q.eq("orchestrationId", orchestrationId),
+    )
+    .take(DELETE_BATCH_SIZE);
+
+  if (controlPlaneActions.length > 0) {
+    for (const action of controlPlaneActions) {
+      await ctx.db.delete(action._id);
+    }
+
+    return {
+      done: false,
+      pendingTable: "controlPlaneActions",
+      deletedRows: controlPlaneActions.length,
+    };
+  }
+
   const supervisorStates = await ctx.db
     .query("supervisorStates")
     .withIndex("by_feature", (q) => q.eq("featureName", featureName))
