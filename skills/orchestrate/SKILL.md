@@ -240,7 +240,7 @@ The design has `## Architectural Context` (added by `tina:architect` on approval
    TaskUpdate: validate-design, metadata: { validation_status: "pre-approved", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID" }
    ```
 2. Print: `"Design pre-approved (has Architectural Context). Skipping validation."`
-3. Check for `## Prerequisites` section in the design content (file or resolved markdown). If present, show prerequisites to user and ask for confirmation before continuing.
+3. Check for `## Prerequisites` section in the design content (file or resolved markdown). If present, record them in task metadata and continue automatically (no user prompt unless HITL is explicitly enabled for this run).
 4. Proceed directly to spawning planner for phase 1 (same as the "validate complete" handler in STEP 5). The worktree was already created by `tina-session init` in STEP 1c.
 
 **If `DESIGN_PRE_APPROVED` is false:**
@@ -363,20 +363,20 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 | `spawn_planner` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=planner. If claude: spawn `tina:phase-planner`. |
 | `spawn_executor` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=executor. If claude: spawn `tina:phase-executor`. |
 | `spawn_reviewer` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=reviewer. If claude: spawn `tina:phase-reviewer`. If `.secondary_model` is present, spawn a second reviewer with that model (also routing-checked) in parallel for consensus review. |
-| `consensus_disagreement` | Surface to user: "Reviewers disagree on phase `.phase`. Verdict 1: `.verdict_1`, Verdict 2: `.verdict_2`. Please resolve manually." |
+| `consensus_disagreement` | Default to autonomous handling: treat disagreement as gaps and create remediation from `.issues`. Only surface to user when an explicit HITL gate is enabled. |
 | `reuse_plan` | Run plan staleness check: if `tina:plan-validator` agent exists, spawn it to validate the plan. On Pass/Warning: auto-complete plan task, dispatch executor. On Stop: discard stale plan and spawn planner instead. If no validator agent exists, proceed directly to executor. |
 | `wait` | No action required; keep waiting for teammate updates |
 | `finalize` | Invoke `tina:finishing-a-development-branch` |
 | `complete` | Report orchestration complete |
 | `stopped` | Report validation failure and exit |
-| `error` | If `.can_retry`, retry once; else escalate to user |
+| `error` | If `.can_retry`, retry once. If retries are exhausted and no explicit HITL gate is enabled, create remediation work automatically instead of requesting manual input. |
 | `remediate` | Create remediation tasks and spawn planner for `.remediation_phase` |
 
 ### Handling Each Message
 
 **On validator message:**
 1. Determine event: `validation_pass`, `validation_warning`, or `validation_stop`
-2. Check for prerequisites in design doc before calling advance (ask user to confirm)
+2. Check for prerequisites in design doc before calling advance; attach them to metadata for traceability, but continue without waiting for user confirmation unless HITL is explicitly enabled
 3. Call: `tina-session orchestrate advance --feature X --phase validation --event <event>`
 4. Mark validate-design task complete
 5. Dispatch returned action
@@ -403,7 +403,7 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 **On error message:**
 1. Call: `tina-session orchestrate advance --feature X --phase N --event error --issues "reason"`
 2. If action says `can_retry: true`, re-spawn the teammate
-3. If `can_retry: false`, escalate to user
+3. If retries are exhausted and no explicit HITL gate is enabled, create remediation work and continue automatically (do not ask the user for a decision)
 
 ### Resume via CLI
 
@@ -971,9 +971,7 @@ if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
     # Check for prerequisites BEFORE advancing state
     Read design doc, look for "## Prerequisites" section
     If prerequisites exist:
-        Print each prerequisite to user
-        Ask: "These prerequisites must be in place before starting. Are they all set up?"
-        Wait for user confirmation before continuing
+        Record prerequisites in task metadata and continue automatically
 
     # Advance state via CLI
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase validation --event $EVENT
@@ -1020,7 +1018,9 @@ if message contains "execute-N complete":
 
 if message contains "session_died" or "error":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
-    # If can_retry: respawn executor; else escalate
+    # If can_retry: respawn executor
+    # If action is remediate: create remediation tasks and continue
+    # Do not request manual input unless HITL is explicitly enabled
 ```
 
 **On reviewer-N message (including consensus):**
@@ -1057,23 +1057,16 @@ if message contains "review-N complete (gaps)":
 
 if message contains "error":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "reason"
-    # If can_retry: respawn reviewer; else escalate
+    # If can_retry: respawn reviewer
+    # If retries exhausted and no HITL gate: auto-remediate
 ```
 
 **On consensus disagreement (from CLI):**
 ```
 if NEXT_ACTION is "consensus_disagreement":
-    Print:
-    ---------------------------------------------------------------
-    REVIEW CONSENSUS DISAGREEMENT: Phase <phase>
-      Reviewer 1: <verdict_1>
-      Reviewer 2: <verdict_2>
-      Issues: <issues>
-
-    Please resolve manually:
-      - To accept as pass: TaskUpdate review-phase-N, status: completed, metadata: { status: "pass" }
-      - To accept as gaps: TaskUpdate review-phase-N, status: completed, metadata: { status: "gaps", issues: [...] }
-    ---------------------------------------------------------------
+    # Autonomous default (no HITL): treat disagreement as gaps and remediate
+    NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event review_gaps --issues "<issues>"
+    # Dispatch returned action
 ```
 
 **Error handling and retry tracking:**
@@ -1210,7 +1203,7 @@ The reviewer for N.5 checks ONLY:
 - Were the specific gaps addressed?
 - Did the remediation introduce new issues?
 
-If remediation review also finds gaps, create another remediation (N.5.5). However, after 2 remediation cycles, escalate to user.
+If remediation review also finds gaps, create another remediation (N.5.5). After 2 remediation cycles, mark orchestration failed with diagnostics and exit autonomously (no interactive prompt) unless HITL is explicitly enabled.
 
 **Remediation limit tracking:**
 ```json
@@ -1220,7 +1213,7 @@ TaskUpdate {
 }
 ```
 
-If `remediation_depth >= 2` and still finding gaps, exit with error requiring human intervention.
+If `remediation_depth >= 2` and still finding gaps, exit with an explicit error artifact and preserved state for later recovery, without requesting interactive user input.
 
 ## Model Policy
 

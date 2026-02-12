@@ -100,6 +100,29 @@ Check the exit code to determine the error type. A `session_died` (exit 3) means
 
 Do NOT use raw tmux commands or manual polling. The wait command handles everything.
 
+**Blocked exit handling (exit code 1):**
+
+When wait exits blocked, read phase status details and report them as an error to the orchestrator:
+
+```bash
+STATUS_JSON="$WORKTREE_PATH/.claude/tina/phase-$PHASE_NUM/status.json"
+REASON=$(jq -r '.reason // "blocked"' "$STATUS_JSON" 2>/dev/null || echo "blocked")
+GATE=$(jq -r '.gate // empty' "$STATUS_JSON" 2>/dev/null || true)
+if [ -n "$GATE" ]; then
+  ERROR_REASON="blocked at ${GATE} gate: $REASON"
+else
+  ERROR_REASON="$REASON"
+fi
+```
+
+Then send:
+
+```
+execute-N error: <ERROR_REASON>
+```
+
+Do not ask the user for options. Report and exit.
+
 ## Step 3: Report Completion
 
 Message the orchestrator:
@@ -138,6 +161,11 @@ execute-2 error: session_died
 
 **tina-session wait times out (only when timeout is explicitly set):**
 - Message orchestrator: `execute-N error: timeout after <seconds> seconds`
+
+**tina-session wait returns blocked (exit code 1):**
+- Read `status.json` and include gate/reason when present
+- Message orchestrator: `execute-N error: blocked at <gate> gate: <reason>`
+- Exit without user prompts
 
 ## Important
 

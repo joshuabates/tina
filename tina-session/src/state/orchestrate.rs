@@ -54,10 +54,7 @@ pub enum Action {
     },
 
     /// Reuse an existing plan (skip planning).
-    ReusePlan {
-        phase: String,
-        plan_path: String,
-    },
+    ReusePlan { phase: String, plan_path: String },
 
     /// Start the finalize workflow.
     Finalize,
@@ -66,9 +63,7 @@ pub enum Action {
     Complete,
 
     /// Orchestration was stopped by validation failure.
-    Stopped {
-        reason: String,
-    },
+    Stopped { reason: String },
 
     /// An error occurred; retry or escalate.
     Error {
@@ -94,9 +89,7 @@ pub enum Action {
     },
 
     /// No immediate action required.
-    Wait {
-        reason: String,
-    },
+    Wait { reason: String },
 }
 
 /// Events that advance the orchestration state machine.
@@ -146,6 +139,17 @@ fn non_default_model(model: &str, default: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// True when an execution error is a hard-gate quality failure that should
+/// produce remediation work instead of manual escalation.
+fn is_gate_failure_reason(reason: &str) -> bool {
+    let reason = reason.to_ascii_lowercase();
+    reason.contains("verification gate")
+        || reason.contains("verify gate")
+        || reason.contains("check verify")
+        || reason.contains("complexity gate")
+        || reason.contains("check complexity")
 }
 
 /// Return the secondary reviewer model when consensus is enabled.
@@ -628,6 +632,24 @@ pub fn advance_state(
         }
 
         AdvanceEvent::Error { reason } => {
+            let should_remediate = state
+                .phases
+                .get(phase)
+                .map(|phase_state| {
+                    matches!(phase_state.status, PhaseStatus::Executing)
+                        && is_gate_failure_reason(&reason)
+                })
+                .unwrap_or(false);
+
+            if should_remediate {
+                if let Some(phase_state) = state.phases.get_mut(phase) {
+                    if let Some(start) = phase_state.execution_started_at {
+                        phase_state.breakdown.execution_mins = Some(duration_mins(start, now));
+                    }
+                }
+                return handle_review_gaps(state, phase, now, vec![reason]);
+            }
+
             // Record the error in phase state
             if let Some(phase_state) = state.phases.get_mut(phase) {
                 phase_state.status = PhaseStatus::Blocked;
@@ -696,7 +718,9 @@ fn handle_review_gaps(
 /// Ensure a phase entry exists in the state.
 fn ensure_phase(state: &mut SupervisorState, phase_key: &str) {
     if !state.phases.contains_key(phase_key) {
-        state.phases.insert(phase_key.to_string(), PhaseState::new());
+        state
+            .phases
+            .insert(phase_key.to_string(), PhaseState::new());
     }
 }
 
@@ -955,9 +979,7 @@ mod tests {
     #[test]
     fn test_advance_plan_complete() {
         let mut state = test_state(3);
-        state
-            .phases
-            .insert("1".to_string(), PhaseState::new());
+        state.phases.insert("1".to_string(), PhaseState::new());
         let action = advance_state(
             &mut state,
             "1",
@@ -1011,8 +1033,7 @@ mod tests {
                 ..PhaseState::default()
             },
         );
-        let action =
-            advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
+        let action = advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
         assert!(matches!(action, Action::Wait { .. }));
         assert_eq!(state.phases["1"].status, PhaseStatus::Executing);
         assert_eq!(state.status, OrchestrationStatus::Executing);
@@ -1148,9 +1169,7 @@ mod tests {
     #[test]
     fn test_advance_error() {
         let mut state = test_state(3);
-        state
-            .phases
-            .insert("1".to_string(), PhaseState::new());
+        state.phases.insert("1".to_string(), PhaseState::new());
         let action = advance_state(
             &mut state,
             "1",
@@ -1159,9 +1178,49 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(matches!(action, Action::Error { can_retry: true, .. }));
+        assert!(matches!(
+            action,
+            Action::Error {
+                can_retry: true,
+                ..
+            }
+        ));
         assert_eq!(state.phases["1"].status, PhaseStatus::Blocked);
         assert_eq!(state.status, OrchestrationStatus::Blocked);
+    }
+
+    #[test]
+    fn test_advance_error_verification_gate_creates_remediation() {
+        let mut state = test_state(3);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Executing,
+                execution_started_at: Some(Utc::now()),
+                ..PhaseState::default()
+            },
+        );
+
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::Error {
+                reason: "BLOCKED at verification gate: pre-existing test failures".to_string(),
+            },
+        )
+        .unwrap();
+
+        assert!(matches!(
+            action,
+            Action::Remediate {
+                ref phase,
+                ref remediation_phase,
+                ..
+            } if phase == "1" && remediation_phase == "1.5"
+        ));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
+        assert_eq!(state.phases["1.5"].status, PhaseStatus::Planning);
+        assert_eq!(state.status, OrchestrationStatus::Planning);
     }
 
     #[test]
@@ -1260,7 +1319,13 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(matches!(action, Action::Error { can_retry: false, .. }));
+        assert!(matches!(
+            action,
+            Action::Error {
+                can_retry: false,
+                ..
+            }
+        ));
         assert_eq!(state.phases["1"].status, PhaseStatus::Blocked);
     }
 
@@ -1554,8 +1619,7 @@ mod tests {
         assert!(matches!(action, Action::SpawnValidator { .. }));
 
         // 2) ValidationPass -> Planning phase 1
-        let action =
-            advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
+        let action = advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
         assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "1"));
         assert_eq!(state.status, OrchestrationStatus::Planning);
         assert_eq!(state.phases["1"].status, PhaseStatus::Planning);
@@ -1611,8 +1675,7 @@ mod tests {
         let mut state = test_state(2);
 
         // Validation
-        let action =
-            advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
+        let action = advance_state(&mut state, "validation", AdvanceEvent::ValidationPass).unwrap();
         assert!(matches!(action, Action::SpawnPlanner { ref phase, .. } if phase == "1"));
 
         // Phase 1: plan -> execute -> review
@@ -1879,7 +1942,13 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(matches!(action, Action::Error { can_retry: true, .. }));
+        assert!(matches!(
+            action,
+            Action::Error {
+                can_retry: true,
+                ..
+            }
+        ));
         assert_eq!(state.status, OrchestrationStatus::Blocked);
         assert_eq!(state.phases["1"].status, PhaseStatus::Blocked);
 
