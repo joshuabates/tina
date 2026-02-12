@@ -1,0 +1,78 @@
+@use '../../styles/tokens' as *;
+
+.policyEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.presetRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.presetButtons {
+  display: flex;
+  gap: 6px;
+}
+
+.presetButton {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid $border-color;
+  background: $bg-card;
+  color: $text-primary;
+  cursor: pointer;
+  text-transform: capitalize;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+  }
+}
+
+.fieldset {
+  border: 1px solid $border-color;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 0;
+}
+
+.legend {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--muted-foreground));
+  padding: 0 4px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.fieldRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fieldLabel {
+  font-size: 10px;
+  font-weight: 500;
+  color: $text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  padding-top: 6px;
+}
