@@ -1,12 +1,15 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { allocateKey } from "./projectCounters";
+import { seedMarkersFromPreset, parsePhaseStructure } from "./designPresets";
+import type { ComplexityPreset } from "./designPresets";
 
 export const createDesign = mutation({
   args: {
     projectId: v.id("projects"),
     title: v.string(),
     markdown: v.string(),
+    complexityPreset: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -18,7 +21,7 @@ export const createDesign = mutation({
     const designKey = `${project.name.toUpperCase()}-D${keyNumber}`;
     const now = new Date().toISOString();
 
-    return await ctx.db.insert("designs", {
+    const insertFields: Record<string, unknown> = {
       projectId: args.projectId,
       designKey,
       title: args.title,
@@ -26,7 +29,22 @@ export const createDesign = mutation({
       status: "draft",
       createdAt: now,
       updatedAt: now,
-    });
+    };
+
+    if (args.complexityPreset) {
+      const preset = args.complexityPreset as ComplexityPreset;
+      const requiredMarkers = seedMarkersFromPreset(preset);
+      const { phaseCount, phaseStructureValid } = parsePhaseStructure(args.markdown);
+
+      insertFields.complexityPreset = preset;
+      insertFields.requiredMarkers = requiredMarkers;
+      insertFields.completedMarkers = [];
+      insertFields.phaseCount = phaseCount;
+      insertFields.phaseStructureValid = phaseStructureValid;
+      insertFields.validationUpdatedAt = now;
+    }
+
+    return await ctx.db.insert("designs", insertFields as any);
   },
 });
 
@@ -89,7 +107,7 @@ export const updateDesign = mutation({
     }
 
     const now = new Date().toISOString();
-    const updates: Record<string, string | undefined> = {
+    const updates: Record<string, unknown> = {
       updatedAt: now,
     };
 
@@ -98,6 +116,10 @@ export const updateDesign = mutation({
     }
     if (args.markdown !== undefined) {
       updates.markdown = args.markdown;
+      const { phaseCount, phaseStructureValid } = parsePhaseStructure(args.markdown);
+      updates.phaseCount = phaseCount;
+      updates.phaseStructureValid = phaseStructureValid;
+      updates.validationUpdatedAt = now;
     }
 
     await ctx.db.patch(args.designId, updates);
@@ -145,6 +167,27 @@ export const transitionDesign = mutation({
     }
 
     await ctx.db.patch(args.designId, update);
+    return args.designId;
+  },
+});
+
+export const updateDesignMarkers = mutation({
+  args: {
+    designId: v.id("designs"),
+    completedMarkers: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const design = await ctx.db.get(args.designId);
+    if (!design) {
+      throw new Error(`Design not found: ${args.designId}`);
+    }
+
+    const now = new Date().toISOString();
+    await ctx.db.patch(args.designId, {
+      completedMarkers: args.completedMarkers,
+      validationUpdatedAt: now,
+      updatedAt: now,
+    });
     return args.designId;
   },
 });
