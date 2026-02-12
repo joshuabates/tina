@@ -102,7 +102,6 @@ export function TicketListPage() {
               <th>Status</th>
               <th>Priority</th>
               <th>Design Link</th>
-              <th>Assignee</th>
             </tr>
           </thead>
           <tbody>
@@ -146,12 +145,6 @@ export function TicketListPage() {
                     ) : (
                       <span className={styles.unassigned}>—</span>
                     )}
-                  </td>
-                  <td>
-                    {Option.isSome(ticket.assignee)
-                      ? ticket.assignee.value
-                      : <span className={styles.unassigned}>—</span>
-                    }
                   </td>
                 </tr>
               )

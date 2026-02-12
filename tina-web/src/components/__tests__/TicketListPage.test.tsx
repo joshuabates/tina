@@ -61,7 +61,6 @@ function buildTicketSummary(overrides: Partial<TicketSummary> = {}): TicketSumma
     description: "Add login form",
     status: "todo",
     priority: "medium",
-    assignee: none<string>(),
     estimate: none<string>(),
     createdAt: "2024-01-01T10:00:00Z",
     updatedAt: "2024-01-01T12:00:00Z",
@@ -91,7 +90,6 @@ const tickets: TicketSummary[] = [
     title: "Implement login",
     status: "todo",
     priority: "high",
-    assignee: some("alice"),
     designId: some("d1"),
   }),
   buildTicketSummary({
@@ -101,7 +99,6 @@ const tickets: TicketSummary[] = [
     title: "Add dashboard",
     status: "in_progress",
     priority: "medium",
-    assignee: none<string>(),
     designId: none<string>(),
   }),
 ]
@@ -187,12 +184,6 @@ describe("TicketListPage", () => {
 
     expect(screen.getByText("High")).toBeInTheDocument()
     expect(screen.getByText("Medium")).toBeInTheDocument()
-  })
-
-  it("displays assignee when present", () => {
-    renderApp("/pm?project=p1")
-
-    expect(screen.getByText("alice")).toBeInTheDocument()
   })
 
   it("renders Design Link column header", () => {
@@ -284,18 +275,6 @@ describe("TicketListPage", () => {
       expect(options[0]).toHaveTextContent("None")
       expect(options[1]).toHaveTextContent("ALPHA-D1")
       expect(options[2]).toHaveTextContent("ALPHA-D2")
-    })
-
-    it("shows assignee text input in modal", async () => {
-      const user = userEvent.setup()
-      renderApp("/pm?project=p1")
-
-      await user.click(screen.getByRole("button", { name: /create ticket/i }))
-
-      const dialog = screen.getByRole("dialog")
-      const assigneeInput = within(dialog).getByLabelText(/assignee/i)
-      expect(assigneeInput).toBeInTheDocument()
-      expect(assigneeInput).toHaveAttribute("type", "text")
     })
 
     it("closes modal when close button is clicked", async () => {
