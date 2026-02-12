@@ -3,6 +3,7 @@ import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { resolvePolicy, hashPolicy } from "./policyPresets";
+import { HEARTBEAT_TIMEOUT_MS } from "./nodes";
 
 const RUNTIME_ACTION_TYPES = [
   "pause",
@@ -159,7 +160,6 @@ export const launchOrchestration = mutation({
     if (!node) {
       throw new Error(`Node not found: ${args.nodeId}`);
     }
-    const HEARTBEAT_TIMEOUT_MS = 60_000;
     if (Date.now() - node.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
       throw new Error(`Node "${node.name}" is offline`);
     }
@@ -181,9 +181,14 @@ export const launchOrchestration = mutation({
     const designOnly = ticketIds.length === 0;
 
     // Resolve policy snapshot
-    const overrides = args.policyOverrides
-      ? JSON.parse(args.policyOverrides)
-      : undefined;
+    let overrides;
+    if (args.policyOverrides) {
+      try {
+        overrides = JSON.parse(args.policyOverrides);
+      } catch {
+        throw new Error("Invalid policyOverrides: must be valid JSON");
+      }
+    }
     const policy = resolvePolicy(args.policyPreset, overrides);
     const policyJson = JSON.stringify(policy);
     const policyHash = await hashPolicy(policy);
