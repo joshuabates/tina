@@ -362,6 +362,142 @@ describe("controlPlane:enqueueControlAction", () => {
   });
 });
 
+describe("controlPlane:enqueueControlAction payload validation", () => {
+  test("rejects invalid JSON payload for pause", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "pause",
+        payload: "not-json",
+        requestedBy: "web-ui",
+        idempotencyKey: "bad-json-1",
+      }),
+    ).rejects.toThrow("Invalid payload: must be valid JSON");
+  });
+
+  test("rejects payload missing feature for pause", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "pause",
+        payload: '{"reason":"test"}',
+        requestedBy: "web-ui",
+        idempotencyKey: "no-feature-1",
+      }),
+    ).rejects.toThrow('requires "feature"');
+  });
+
+  test("rejects payload missing phase for pause", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "pause",
+        payload: '{"feature":"my-feat"}',
+        requestedBy: "web-ui",
+        idempotencyKey: "no-phase-pause",
+      }),
+    ).rejects.toThrow('requires "phase"');
+  });
+
+  test("rejects payload missing phase for retry", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "retry",
+        payload: '{"feature":"my-feat"}',
+        requestedBy: "web-ui",
+        idempotencyKey: "no-phase-retry",
+      }),
+    ).rejects.toThrow('requires "phase"');
+  });
+
+  test("accepts valid payload with feature and phase for pause", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "pause",
+      payload: '{"feature":"my-feat","phase":"phase-1"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "valid-pause",
+    });
+
+    expect(actionId).toBeTruthy();
+  });
+
+  test("accepts valid payload with feature for resume (phase optional)", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "resume",
+      payload: '{"feature":"my-feat"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "valid-resume",
+    });
+
+    expect(actionId).toBeTruthy();
+  });
+
+  test("skips validation for non-runtime-control actions", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    // task_edit doesn't require feature/phase validation
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_edit",
+      payload: '{}',
+      requestedBy: "web-ui",
+      idempotencyKey: "no-validate-task-edit",
+    });
+
+    expect(actionId).toBeTruthy();
+  });
+});
+
 describe("controlPlane:listControlActions", () => {
   test("returns actions ordered by createdAt desc", async () => {
     const t = convexTest(schema, modules);

@@ -25,6 +25,36 @@ interface InsertControlActionParams {
   idempotencyKey: string;
 }
 
+interface RuntimePayload {
+  feature: string;
+  phase?: string;
+}
+
+function validateRuntimePayload(actionType: string, rawPayload: string): RuntimePayload {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(rawPayload);
+  } catch {
+    throw new Error(`Invalid payload: must be valid JSON`);
+  }
+
+  if (typeof parsed.feature !== "string" || !parsed.feature) {
+    throw new Error(`Payload for "${actionType}" requires "feature" (string)`);
+  }
+
+  const needsPhase = ["pause", "retry"];
+  if (needsPhase.includes(actionType)) {
+    if (typeof parsed.phase !== "string" || !parsed.phase) {
+      throw new Error(`Payload for "${actionType}" requires "phase" (string)`);
+    }
+  }
+
+  return {
+    feature: parsed.feature as string,
+    phase: typeof parsed.phase === "string" ? parsed.phase : undefined,
+  };
+}
+
 async function insertControlActionWithQueue(
   ctx: MutationCtx,
   params: InsertControlActionParams,
@@ -266,6 +296,11 @@ export const enqueueControlAction = mutation({
       throw new Error(
         `Invalid actionType: "${args.actionType}". Allowed: ${RUNTIME_ACTION_TYPES.join(", ")}`,
       );
+    }
+
+    // Validate payload structure for runtime control actions
+    if (["pause", "resume", "retry"].includes(args.actionType)) {
+      validateRuntimePayload(args.actionType, args.payload);
     }
 
     return insertControlActionWithQueue(ctx, {
