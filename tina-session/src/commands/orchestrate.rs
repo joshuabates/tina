@@ -329,6 +329,75 @@ pub fn set_role_model(feature: &str, role: &str, model: &str) -> anyhow::Result<
     Ok(0)
 }
 
+/// Acknowledge a task edit (mutation already applied in Convex).
+pub fn task_edit(
+    feature: &str,
+    phase: &str,
+    task_number: u32,
+    revision: u32,
+    subject: Option<&str>,
+    description: Option<&str>,
+    model: Option<&str>,
+) -> anyhow::Result<u8> {
+    let output = serde_json::json!({
+        "success": true,
+        "action": "task_edit",
+        "feature": feature,
+        "phase": phase,
+        "task_number": task_number,
+        "revision": revision,
+        "subject": subject,
+        "description": description,
+        "model": model,
+    });
+    println!("{}", serde_json::to_string(&output)?);
+    Ok(0)
+}
+
+/// Acknowledge a task insertion (mutation already applied in Convex).
+pub fn task_insert(
+    feature: &str,
+    phase: &str,
+    after_task: u32,
+    subject: &str,
+    model: Option<&str>,
+    depends_on: Option<&str>,
+) -> anyhow::Result<u8> {
+    let output = serde_json::json!({
+        "success": true,
+        "action": "task_insert",
+        "feature": feature,
+        "phase": phase,
+        "after_task": after_task,
+        "subject": subject,
+        "model": model,
+        "depends_on": depends_on,
+    });
+    println!("{}", serde_json::to_string(&output)?);
+    Ok(0)
+}
+
+/// Acknowledge a task model override (mutation already applied in Convex).
+pub fn task_set_model(
+    feature: &str,
+    phase: &str,
+    task_number: u32,
+    revision: u32,
+    model: &str,
+) -> anyhow::Result<u8> {
+    let output = serde_json::json!({
+        "success": true,
+        "action": "task_set_model",
+        "feature": feature,
+        "phase": phase,
+        "task_number": task_number,
+        "revision": revision,
+        "model": model,
+    });
+    println!("{}", serde_json::to_string(&output)?);
+    Ok(0)
+}
+
 /// Sync to Convex and record telemetry (best-effort).
 fn sync_to_convex_with_telemetry(
     _ctx: &TelemetryContext,
