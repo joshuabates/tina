@@ -332,6 +332,17 @@ describe("controlPlane:enqueueControlAction", () => {
       "cp-feature",
     );
 
+    // Seed tasks so task_edit/task_set_model can find them
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [
+        { taskNumber: 1, subject: "Task one" },
+        { taskNumber: 2, subject: "Task two" },
+        { taskNumber: 3, subject: "Task three" },
+      ],
+    });
+
     const runtimeTypes = [
       "pause",
       "resume",
@@ -349,9 +360,9 @@ describe("controlPlane:enqueueControlAction", () => {
       retry: '{"feature":"test","phase":"2"}',
       orchestration_set_policy: JSON.stringify({ feature: "test", targetRevision: 0 }),
       orchestration_set_role_model: JSON.stringify({ feature: "test", targetRevision: 1, role: "executor", model: "opus" }),
-      task_edit: "{}",
-      task_insert: "{}",
-      task_set_model: "{}",
+      task_edit: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, subject: "Updated" }),
+      task_insert: JSON.stringify({ feature: "test", phaseNumber: "1", afterTask: 1, subject: "New task" }),
+      task_set_model: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 2, revision: 1, model: "haiku" }),
     };
 
     for (const actionType of runtimeTypes) {
@@ -534,24 +545,24 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
     expect(events[0].detail).toBe('{"feature":"my-feat","phase":"phase-1"}');
   });
 
-  test("skips validation for non-runtime-control actions", async () => {
+  test("task action types require proper payload validation", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(
       t,
       "cp-feature",
     );
 
-    // task_edit doesn't require feature/phase validation
-    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
-      orchestrationId,
-      nodeId,
-      actionType: "task_edit",
-      payload: '{}',
-      requestedBy: "web-ui",
-      idempotencyKey: "no-validate-task-edit",
-    });
-
-    expect(actionId).toBeTruthy();
+    // task_edit with empty payload should now be rejected (requires feature, phaseNumber, etc.)
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: "{}",
+        requestedBy: "web-ui",
+        idempotencyKey: "validate-task-edit",
+      }),
+    ).rejects.toThrow('requires "feature"');
   });
 });
 
@@ -1784,5 +1795,678 @@ describe("controlPlane:policyReconfiguration:integration", () => {
         idempotencyKey: "concurrent-b",
       }),
     ).rejects.toThrow("Policy revision conflict");
+  });
+});
+
+describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
+  test("rejects task_edit with invalid JSON", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: "not-json",
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-bad-json",
+      }),
+    ).rejects.toThrow("Invalid payload: must be valid JSON");
+  });
+
+  test("rejects task_edit missing feature", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({ phaseNumber: "1", taskNumber: 1, revision: 1, subject: "x" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-no-feature",
+      }),
+    ).rejects.toThrow('requires "feature"');
+  });
+
+  test("rejects task_edit missing phaseNumber", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({ feature: "test", taskNumber: 1, revision: 1, subject: "x" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-no-phase",
+      }),
+    ).rejects.toThrow('requires "phaseNumber"');
+  });
+
+  test("rejects task_edit missing taskNumber", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", revision: 1, subject: "x" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-no-tasknum",
+      }),
+    ).rejects.toThrow('requires "taskNumber"');
+  });
+
+  test("rejects task_edit missing revision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, subject: "x" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-no-rev",
+      }),
+    ).rejects.toThrow('requires "revision"');
+  });
+
+  test("rejects task_edit with no edit fields", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1 }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-no-fields",
+      }),
+    ).rejects.toThrow("requires at least one edit field");
+  });
+
+  test("rejects task_edit with invalid model", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, model: "gpt-4" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-bad-model",
+      }),
+    ).rejects.toThrow('Invalid model: "gpt-4"');
+  });
+
+  test("rejects task_edit when task not found", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 99, revision: 1, subject: "x" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-not-found",
+      }),
+    ).rejects.toThrow("Task 99 not found in phase 1");
+  });
+
+  test("rejects task_edit when task status is not pending", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [{ taskNumber: 1, subject: "Task one" }],
+    });
+
+    // Patch task status to in_progress
+    await t.run(async (ctx) => {
+      const task = await ctx.db
+        .query("executionTasks")
+        .withIndex("by_orchestration_phase_task", (q) =>
+          q.eq("orchestrationId", orchestrationId).eq("phaseNumber", "1").eq("taskNumber", 1),
+        )
+        .first();
+      await ctx.db.patch(task!._id, { status: "in_progress" });
+    });
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, subject: "Updated" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-not-pending",
+      }),
+    ).rejects.toThrow('status is "in_progress" (must be "pending")');
+  });
+
+  test("rejects task_edit with stale revision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [{ taskNumber: 1, subject: "Task one" }],
+    });
+
+    // Successfully edit task (revision 1 -> 2)
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_edit",
+      payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, subject: "First edit" }),
+      requestedBy: "web-ui",
+      idempotencyKey: "task-edit-rev1",
+    });
+
+    // Try again with stale revision 1 (now 2)
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, subject: "Stale edit" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-edit-stale",
+      }),
+    ).rejects.toThrow("Task revision conflict");
+  });
+
+  test("accepts valid task_edit and patches the task", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [{ taskNumber: 1, subject: "Original subject" }],
+    });
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_edit",
+      payload: JSON.stringify({
+        feature: "test",
+        phaseNumber: "1",
+        taskNumber: 1,
+        revision: 1,
+        subject: "Updated subject",
+        description: "New description",
+      }),
+      requestedBy: "web-ui",
+      idempotencyKey: "task-edit-valid",
+    });
+
+    expect(actionId).toBeTruthy();
+
+    // Verify task was patched
+    const task = await t.query(api.executionTasks.getExecutionTask, {
+      orchestrationId,
+      phaseNumber: "1",
+      taskNumber: 1,
+    });
+    expect(task!.subject).toBe("Updated subject");
+    expect(task!.description).toBe("New description");
+    expect(task!.revision).toBe(2);
+  });
+
+  test("task_edit only updates provided fields", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [{ taskNumber: 1, subject: "Original", description: "Keep this" }],
+    });
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_edit",
+      payload: JSON.stringify({
+        feature: "test",
+        phaseNumber: "1",
+        taskNumber: 1,
+        revision: 1,
+        subject: "Changed",
+      }),
+      requestedBy: "web-ui",
+      idempotencyKey: "task-edit-partial",
+    });
+
+    const task = await t.query(api.executionTasks.getExecutionTask, {
+      orchestrationId,
+      phaseNumber: "1",
+      taskNumber: 1,
+    });
+    expect(task!.subject).toBe("Changed");
+    expect(task!.description).toBe("Keep this");
+  });
+});
+
+describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
+  test("rejects task_insert missing feature", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_insert",
+        payload: JSON.stringify({ phaseNumber: "1", afterTask: 0, subject: "New" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-insert-no-feature",
+      }),
+    ).rejects.toThrow('requires "feature"');
+  });
+
+  test("rejects task_insert missing phaseNumber", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_insert",
+        payload: JSON.stringify({ feature: "test", afterTask: 0, subject: "New" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-insert-no-phase",
+      }),
+    ).rejects.toThrow('requires "phaseNumber"');
+  });
+
+  test("rejects task_insert missing afterTask", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_insert",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", subject: "New" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-insert-no-after",
+      }),
+    ).rejects.toThrow('requires "afterTask"');
+  });
+
+  test("rejects task_insert missing subject", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_insert",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", afterTask: 0 }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-insert-no-subject",
+      }),
+    ).rejects.toThrow('requires "subject"');
+  });
+
+  test("rejects task_insert with invalid model", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_insert",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", afterTask: 0, subject: "New", model: "gpt-4" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-insert-bad-model",
+      }),
+    ).rejects.toThrow('Invalid model: "gpt-4"');
+  });
+
+  test("rejects task_insert with invalid dependsOn type", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_insert",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", afterTask: 0, subject: "New", dependsOn: "not-array" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-insert-bad-deps",
+      }),
+    ).rejects.toThrow('"dependsOn" to be an array');
+  });
+
+  test("rejects task_insert when afterTask not found", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_insert",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", afterTask: 99, subject: "New" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-insert-after-not-found",
+      }),
+    ).rejects.toThrow("afterTask 99 not found in phase 1");
+  });
+
+  test("rejects task_insert when dependency not found", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [{ taskNumber: 1, subject: "Task one" }],
+    });
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_insert",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", afterTask: 1, subject: "New", dependsOn: [99] }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-insert-dep-not-found",
+      }),
+    ).rejects.toThrow("Dependency task 99 not found in phase 1");
+  });
+
+  test("accepts task_insert at beginning (afterTask: 0) with no existing tasks", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_insert",
+      payload: JSON.stringify({ feature: "test", phaseNumber: "1", afterTask: 0, subject: "First task" }),
+      requestedBy: "web-ui",
+      idempotencyKey: "task-insert-beginning",
+    });
+
+    expect(actionId).toBeTruthy();
+
+    const tasks = await t.query(api.executionTasks.listExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+    });
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].subject).toBe("First task");
+    expect(tasks[0].taskNumber).toBe(1);
+    expect(tasks[0].status).toBe("pending");
+    expect(tasks[0].revision).toBe(1);
+    expect(tasks[0].insertedBy).toBe("web-ui");
+  });
+
+  test("accepts valid task_insert and assigns max+1 taskNumber", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [
+        { taskNumber: 1, subject: "Task one" },
+        { taskNumber: 2, subject: "Task two" },
+      ],
+    });
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_insert",
+      payload: JSON.stringify({
+        feature: "test",
+        phaseNumber: "1",
+        afterTask: 1,
+        subject: "Inserted task",
+        description: "Inserted desc",
+        model: "haiku",
+        dependsOn: [1],
+      }),
+      requestedBy: "web-ui",
+      idempotencyKey: "task-insert-valid",
+    });
+
+    expect(actionId).toBeTruthy();
+
+    const tasks = await t.query(api.executionTasks.listExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+    });
+    expect(tasks).toHaveLength(3);
+
+    const inserted = tasks.find((t) => t.taskNumber === 3);
+    expect(inserted).toBeDefined();
+    expect(inserted!.subject).toBe("Inserted task");
+    expect(inserted!.description).toBe("Inserted desc");
+    expect(inserted!.model).toBe("haiku");
+    expect(inserted!.dependsOn).toEqual([1]);
+    expect(inserted!.insertedBy).toBe("web-ui");
+    expect(inserted!.revision).toBe(1);
+  });
+});
+
+describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
+  test("rejects task_set_model missing feature", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_set_model",
+        payload: JSON.stringify({ phaseNumber: "1", taskNumber: 1, revision: 1, model: "opus" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-model-no-feature",
+      }),
+    ).rejects.toThrow('requires "feature"');
+  });
+
+  test("rejects task_set_model missing phaseNumber", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_set_model",
+        payload: JSON.stringify({ feature: "test", taskNumber: 1, revision: 1, model: "opus" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-model-no-phase",
+      }),
+    ).rejects.toThrow('requires "phaseNumber"');
+  });
+
+  test("rejects task_set_model missing taskNumber", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_set_model",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", revision: 1, model: "opus" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-model-no-tasknum",
+      }),
+    ).rejects.toThrow('requires "taskNumber"');
+  });
+
+  test("rejects task_set_model missing revision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_set_model",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, model: "opus" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-model-no-rev",
+      }),
+    ).rejects.toThrow('requires "revision"');
+  });
+
+  test("rejects task_set_model with invalid model", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_set_model",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, model: "gpt-4" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-model-bad-model",
+      }),
+    ).rejects.toThrow('Invalid model: "gpt-4"');
+  });
+
+  test("rejects task_set_model when task not found", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_set_model",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 99, revision: 1, model: "opus" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-model-not-found",
+      }),
+    ).rejects.toThrow("Task 99 not found in phase 1");
+  });
+
+  test("rejects task_set_model when task status is not pending", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [{ taskNumber: 1, subject: "Task one" }],
+    });
+
+    await t.run(async (ctx) => {
+      const task = await ctx.db
+        .query("executionTasks")
+        .withIndex("by_orchestration_phase_task", (q) =>
+          q.eq("orchestrationId", orchestrationId).eq("phaseNumber", "1").eq("taskNumber", 1),
+        )
+        .first();
+      await ctx.db.patch(task!._id, { status: "completed" });
+    });
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_set_model",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, model: "opus" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-model-not-pending",
+      }),
+    ).rejects.toThrow('status is "completed" (must be "pending")');
+  });
+
+  test("rejects task_set_model with stale revision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [{ taskNumber: 1, subject: "Task one" }],
+    });
+
+    // Successfully set model (revision 1 -> 2)
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_set_model",
+      payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, model: "haiku" }),
+      requestedBy: "web-ui",
+      idempotencyKey: "task-model-rev1",
+    });
+
+    // Try again with stale revision 1 (now 2)
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_set_model",
+        payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, model: "opus" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "task-model-stale",
+      }),
+    ).rejects.toThrow("Task revision conflict");
+  });
+
+  test("accepts valid task_set_model and patches the task", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [{ taskNumber: 1, subject: "Task one" }],
+    });
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_set_model",
+      payload: JSON.stringify({ feature: "test", phaseNumber: "1", taskNumber: 1, revision: 1, model: "haiku" }),
+      requestedBy: "web-ui",
+      idempotencyKey: "task-model-valid",
+    });
+
+    expect(actionId).toBeTruthy();
+
+    const task = await t.query(api.executionTasks.getExecutionTask, {
+      orchestrationId,
+      phaseNumber: "1",
+      taskNumber: 1,
+    });
+    expect(task!.model).toBe("haiku");
+    expect(task!.revision).toBe(2);
   });
 });

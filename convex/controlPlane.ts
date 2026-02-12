@@ -124,6 +124,149 @@ function validateRoleModelPayload(rawPayload: string): RoleModelPayload {
   return parsed as unknown as RoleModelPayload;
 }
 
+function parseTaskBasePayload(
+  rawPayload: string,
+  actionType: string,
+): Record<string, unknown> {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(rawPayload);
+  } catch {
+    throw new Error("Invalid payload: must be valid JSON");
+  }
+
+  if (typeof parsed.feature !== "string" || !parsed.feature) {
+    throw new Error(`Payload for "${actionType}" requires "feature" (string)`);
+  }
+
+  return parsed;
+}
+
+interface TaskEditPayload {
+  feature: string;
+  phaseNumber: string;
+  taskNumber: number;
+  revision: number;
+  subject?: string;
+  description?: string;
+  model?: string;
+}
+
+interface TaskInsertPayload {
+  feature: string;
+  phaseNumber: string;
+  afterTask: number;
+  subject: string;
+  description?: string;
+  model?: string;
+  dependsOn?: number[];
+}
+
+interface TaskSetModelPayload {
+  feature: string;
+  phaseNumber: string;
+  taskNumber: number;
+  revision: number;
+  model: string;
+}
+
+function validateTaskEditPayload(rawPayload: string): TaskEditPayload {
+  const parsed = parseTaskBasePayload(rawPayload, "task_edit");
+
+  if (typeof parsed.phaseNumber !== "string" || !parsed.phaseNumber) {
+    throw new Error('Payload for "task_edit" requires "phaseNumber" (string)');
+  }
+  if (typeof parsed.taskNumber !== "number") {
+    throw new Error('Payload for "task_edit" requires "taskNumber" (number)');
+  }
+  if (typeof parsed.revision !== "number") {
+    throw new Error('Payload for "task_edit" requires "revision" (number)');
+  }
+
+  const hasSubject = typeof parsed.subject === "string";
+  const hasDescription = typeof parsed.description === "string";
+  const hasModel = typeof parsed.model === "string";
+  if (!hasSubject && !hasDescription && !hasModel) {
+    throw new Error(
+      'Payload for "task_edit" requires at least one edit field: "subject", "description", or "model"',
+    );
+  }
+
+  if (hasModel) {
+    if (
+      !(ALLOWED_MODELS as readonly string[]).includes(parsed.model as string)
+    ) {
+      throw new Error(
+        `Invalid model: "${parsed.model}". Allowed: ${ALLOWED_MODELS.join(", ")}`,
+      );
+    }
+  }
+
+  return parsed as unknown as TaskEditPayload;
+}
+
+function validateTaskInsertPayload(rawPayload: string): TaskInsertPayload {
+  const parsed = parseTaskBasePayload(rawPayload, "task_insert");
+
+  if (typeof parsed.phaseNumber !== "string" || !parsed.phaseNumber) {
+    throw new Error(
+      'Payload for "task_insert" requires "phaseNumber" (string)',
+    );
+  }
+  if (typeof parsed.afterTask !== "number") {
+    throw new Error('Payload for "task_insert" requires "afterTask" (number)');
+  }
+  if (typeof parsed.subject !== "string" || !parsed.subject) {
+    throw new Error('Payload for "task_insert" requires "subject" (string)');
+  }
+  if (
+    parsed.model !== undefined &&
+    (typeof parsed.model !== "string" ||
+      !(ALLOWED_MODELS as readonly string[]).includes(parsed.model))
+  ) {
+    throw new Error(
+      `Invalid model: "${parsed.model}". Allowed: ${ALLOWED_MODELS.join(", ")}`,
+    );
+  }
+  if (parsed.dependsOn !== undefined && !Array.isArray(parsed.dependsOn)) {
+    throw new Error(
+      'Payload for "task_insert" requires "dependsOn" to be an array',
+    );
+  }
+
+  return parsed as unknown as TaskInsertPayload;
+}
+
+function validateTaskSetModelPayload(rawPayload: string): TaskSetModelPayload {
+  const parsed = parseTaskBasePayload(rawPayload, "task_set_model");
+
+  if (typeof parsed.phaseNumber !== "string" || !parsed.phaseNumber) {
+    throw new Error(
+      'Payload for "task_set_model" requires "phaseNumber" (string)',
+    );
+  }
+  if (typeof parsed.taskNumber !== "number") {
+    throw new Error(
+      'Payload for "task_set_model" requires "taskNumber" (number)',
+    );
+  }
+  if (typeof parsed.revision !== "number") {
+    throw new Error(
+      'Payload for "task_set_model" requires "revision" (number)',
+    );
+  }
+  if (
+    typeof parsed.model !== "string" ||
+    !(ALLOWED_MODELS as readonly string[]).includes(parsed.model)
+  ) {
+    throw new Error(
+      `Invalid model: "${parsed.model}". Allowed: ${ALLOWED_MODELS.join(", ")}`,
+    );
+  }
+
+  return parsed as unknown as TaskSetModelPayload;
+}
+
 async function checkAndIncrementRevision(
   ctx: MutationCtx,
   orchestrationId: Id<"orchestrations">,
@@ -393,6 +536,136 @@ export const enqueueControlAction = mutation({
     } else if (args.actionType === "orchestration_set_role_model") {
       const rolePayload = validateRoleModelPayload(args.payload);
       await checkAndIncrementRevision(ctx, args.orchestrationId, rolePayload.targetRevision);
+    } else if (args.actionType === "task_edit") {
+      const payload = validateTaskEditPayload(args.payload);
+      const task = await ctx.db
+        .query("executionTasks")
+        .withIndex("by_orchestration_phase_task", (q) =>
+          q
+            .eq("orchestrationId", args.orchestrationId)
+            .eq("phaseNumber", payload.phaseNumber)
+            .eq("taskNumber", payload.taskNumber),
+        )
+        .first();
+      if (!task) {
+        throw new Error(
+          `Task ${payload.taskNumber} not found in phase ${payload.phaseNumber}`,
+        );
+      }
+      if (task.status !== "pending") {
+        throw new Error(
+          `Cannot edit task ${payload.taskNumber}: status is "${task.status}" (must be "pending")`,
+        );
+      }
+      if (task.revision !== payload.revision) {
+        throw new Error(
+          `Task revision conflict: expected ${payload.revision}, current is ${task.revision}. Reload and retry.`,
+        );
+      }
+      const patch: Record<string, unknown> = {
+        revision: task.revision + 1,
+        updatedAt: Date.now(),
+      };
+      if (payload.subject !== undefined) patch.subject = payload.subject;
+      if (payload.description !== undefined)
+        patch.description = payload.description;
+      if (payload.model !== undefined) patch.model = payload.model;
+      await ctx.db.patch(task._id, patch);
+    } else if (args.actionType === "task_insert") {
+      const payload = validateTaskInsertPayload(args.payload);
+      if (payload.afterTask > 0) {
+        const afterTask = await ctx.db
+          .query("executionTasks")
+          .withIndex("by_orchestration_phase_task", (q) =>
+            q
+              .eq("orchestrationId", args.orchestrationId)
+              .eq("phaseNumber", payload.phaseNumber)
+              .eq("taskNumber", payload.afterTask),
+          )
+          .first();
+        if (!afterTask) {
+          throw new Error(
+            `afterTask ${payload.afterTask} not found in phase ${payload.phaseNumber}`,
+          );
+        }
+      }
+      if (payload.dependsOn) {
+        for (const dep of payload.dependsOn) {
+          const depTask = await ctx.db
+            .query("executionTasks")
+            .withIndex("by_orchestration_phase_task", (q) =>
+              q
+                .eq("orchestrationId", args.orchestrationId)
+                .eq("phaseNumber", payload.phaseNumber)
+                .eq("taskNumber", dep),
+            )
+            .first();
+          if (!depTask) {
+            throw new Error(
+              `Dependency task ${dep} not found in phase ${payload.phaseNumber}`,
+            );
+          }
+        }
+      }
+      const allTasks = await ctx.db
+        .query("executionTasks")
+        .withIndex("by_orchestration_phase", (q) =>
+          q
+            .eq("orchestrationId", args.orchestrationId)
+            .eq("phaseNumber", payload.phaseNumber),
+        )
+        .collect();
+      const maxTaskNumber = allTasks.reduce(
+        (max, t) => Math.max(max, t.taskNumber),
+        0,
+      );
+      const newTaskNumber = maxTaskNumber + 1;
+      const now = Date.now();
+      await ctx.db.insert("executionTasks", {
+        orchestrationId: args.orchestrationId,
+        phaseNumber: payload.phaseNumber,
+        taskNumber: newTaskNumber,
+        subject: payload.subject,
+        description: payload.description,
+        status: "pending",
+        model: payload.model,
+        dependsOn: payload.dependsOn,
+        revision: 1,
+        insertedBy: args.requestedBy,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else if (args.actionType === "task_set_model") {
+      const payload = validateTaskSetModelPayload(args.payload);
+      const task = await ctx.db
+        .query("executionTasks")
+        .withIndex("by_orchestration_phase_task", (q) =>
+          q
+            .eq("orchestrationId", args.orchestrationId)
+            .eq("phaseNumber", payload.phaseNumber)
+            .eq("taskNumber", payload.taskNumber),
+        )
+        .first();
+      if (!task) {
+        throw new Error(
+          `Task ${payload.taskNumber} not found in phase ${payload.phaseNumber}`,
+        );
+      }
+      if (task.status !== "pending") {
+        throw new Error(
+          `Cannot modify task ${payload.taskNumber}: status is "${task.status}" (must be "pending")`,
+        );
+      }
+      if (task.revision !== payload.revision) {
+        throw new Error(
+          `Task revision conflict: expected ${payload.revision}, current is ${task.revision}. Reload and retry.`,
+        );
+      }
+      await ctx.db.patch(task._id, {
+        model: payload.model,
+        revision: task.revision + 1,
+        updatedAt: Date.now(),
+      });
     }
 
     const actionId = await insertControlActionWithQueue(ctx, {
