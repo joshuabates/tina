@@ -13,6 +13,7 @@ import {
   DesignSummary,
   TicketSummary,
   WorkComment,
+  NodeSummary,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -163,4 +164,11 @@ export const CommentListQuery = queryDef({
     targetId: Schema.String,
   }),
   schema: Schema.Array(WorkComment),
+})
+
+export const NodeListQuery = queryDef({
+  key: "nodes.list",
+  query: api.nodes.listNodes,
+  args: Schema.Struct({}),
+  schema: Schema.Array(NodeSummary),
 })

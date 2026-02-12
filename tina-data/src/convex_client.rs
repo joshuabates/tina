@@ -494,6 +494,13 @@ fn value_as_u32(map: &BTreeMap<String, Value>, key: &str) -> u32 {
     }
 }
 
+fn value_as_opt_bool(map: &BTreeMap<String, Value>, key: &str) -> Option<bool> {
+    match map.get(key) {
+        Some(Value::Boolean(b)) => Some(*b),
+        _ => None,
+    }
+}
+
 fn value_as_id(map: &BTreeMap<String, Value>, key: &str) -> String {
     match map.get(key) {
         Some(Value::String(s)) => s.clone(),
@@ -516,6 +523,11 @@ fn extract_orchestration_record(obj: &BTreeMap<String, Value>) -> OrchestrationR
         started_at: value_as_str(obj, "startedAt"),
         completed_at: value_as_opt_str(obj, "completedAt"),
         total_elapsed_mins: value_as_opt_f64(obj, "totalElapsedMins"),
+        policy_snapshot: value_as_opt_str(obj, "policySnapshot"),
+        policy_snapshot_hash: value_as_opt_str(obj, "policySnapshotHash"),
+        preset_origin: value_as_opt_str(obj, "presetOrigin"),
+        design_only: value_as_opt_bool(obj, "designOnly"),
+        updated_at: value_as_opt_str(obj, "updatedAt"),
     }
 }
 
