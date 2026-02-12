@@ -1,0 +1,185 @@
+@use '../../styles/tokens' as *;
+
+.page {
+  max-width: 600px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: 16px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.formField {
+  margin-bottom: 12px;
+}
+
+.formLabel {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+  margin-bottom: 4px;
+}
+
+.formInput {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: $bg-primary;
+  color: $text-primary;
+
+  &:focus {
+    outline: 2px solid $ring-color;
+    outline-offset: 1px;
+  }
+}
+
+.formSelect {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: $bg-primary;
+  color: $text-primary;
+
+  &:focus {
+    outline: 2px solid $ring-color;
+    outline-offset: 1px;
+  }
+}
+
+.presetButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.presetButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid $border-color;
+  background: $bg-card;
+  color: $text-primary;
+  cursor: pointer;
+  text-transform: capitalize;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+  }
+
+  &.active {
+    background: $accent;
+    color: $accent-foreground;
+    border-color: $accent;
+  }
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.actionButton {
+  font-size: 12px;
+  padding: 6px 16px;
+  border-radius: 4px;
+  border: 1px solid $border-color;
+  background: $bg-card;
+  color: $text-primary;
+  cursor: pointer;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+  }
+
+  &.primary {
+    background: $accent;
+    color: $accent-foreground;
+    border-color: $accent;
+
+    &:hover {
+      opacity: 0.9;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.hint {
+  display: block;
+  font-size: 11px;
+  color: $text-muted;
+  margin-top: 4px;
+  font-family: $font-mono;
+}
+
+.warning {
+  display: block;
+  font-size: 11px;
+  color: hsl(var(--destructive, 0 84% 60%));
+  margin-top: 4px;
+}
+
+.errorMessage {
+  font-size: 12px;
+  color: hsl(var(--destructive, 0 84% 60%));
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--destructive, 0 84% 60%) / 0.3);
+  border-radius: 4px;
+  background: hsl(var(--destructive, 0 84% 60%) / 0.08);
+}
+
+.successBanner {
+  font-size: 12px;
+  color: hsl(var(--primary, 214 100% 50%));
+  padding: 8px 12px;
+  border: 1px solid hsl(var(--primary, 214 100% 50%) / 0.3);
+  border-radius: 4px;
+  background: hsl(var(--primary, 214 100% 50%) / 0.08);
+  margin-bottom: 16px;
+  font-family: $font-mono;
+
+  code {
+    font-weight: 600;
+  }
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeletonBar {
+  height: 20px;
+  width: 200px;
+  background: hsl(var(--border));
+  border-radius: 4px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
