@@ -5,6 +5,7 @@ import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { DesignListQuery, NodeListQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
+import { generateIdempotencyKey } from "@/lib/utils"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "./LaunchOrchestrationPage.module.scss"
 
@@ -15,10 +16,6 @@ function kebabCase(str: string): string {
     .toLowerCase()
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-]/g, "")
-}
-
-function generateIdempotencyKey(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
 }
 
 export function LaunchOrchestrationPage() {

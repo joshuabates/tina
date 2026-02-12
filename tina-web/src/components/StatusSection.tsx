@@ -4,6 +4,7 @@ import { Settings, Pause, Play, RotateCcw } from "lucide-react"
 import { useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import type { Id } from "@convex/_generated/dataModel"
+import { generateIdempotencyKey } from "@/lib/utils"
 import { useFocusable } from "@/hooks/useFocusable"
 import { MonoText } from "@/components/ui/mono-text"
 import { StatPanel } from "@/components/ui/stat-panel"
@@ -13,10 +14,6 @@ import {
   statusTextClass,
   toStatusBadgeStatus,
 } from "@/components/ui/status-styles"
-
-function generateIdempotencyKey(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
-}
 
 type ControlActionType = "pause" | "resume" | "retry"
 
@@ -50,6 +47,9 @@ export function StatusSection({ detail }: StatusSectionProps) {
   const canPause = PAUSABLE_STATUSES.has(detail.status) && !pendingAction
   const canResume = RESUMABLE_STATUSES.has(detail.status) && !pendingAction
   const canRetry = RETRYABLE_STATUSES.has(detail.status) && !pendingAction
+
+  const controlBtnClass =
+    "w-full flex items-center justify-center gap-1 px-1.5 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground disabled:opacity-40 disabled:pointer-events-none"
 
   const handleControlAction = async (actionType: ControlActionType) => {
     setPendingAction(actionType)
@@ -108,7 +108,7 @@ export function StatusSection({ detail }: StatusSectionProps) {
 
         <div className="grid grid-cols-3 gap-1.5">
           <button
-            className="w-full flex items-center justify-center gap-1 px-1.5 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground disabled:opacity-40 disabled:pointer-events-none"
+            className={controlBtnClass}
             disabled={!canPause}
             onClick={() => handleControlAction("pause")}
             aria-label="Pause orchestration"
@@ -118,7 +118,7 @@ export function StatusSection({ detail }: StatusSectionProps) {
             {pendingAction === "pause" ? "..." : "Pause"}
           </button>
           <button
-            className="w-full flex items-center justify-center gap-1 px-1.5 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground disabled:opacity-40 disabled:pointer-events-none"
+            className={controlBtnClass}
             disabled={!canResume}
             onClick={() => handleControlAction("resume")}
             aria-label="Resume orchestration"
@@ -128,7 +128,7 @@ export function StatusSection({ detail }: StatusSectionProps) {
             {pendingAction === "resume" ? "..." : "Resume"}
           </button>
           <button
-            className="w-full flex items-center justify-center gap-1 px-1.5 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground disabled:opacity-40 disabled:pointer-events-none"
+            className={controlBtnClass}
             disabled={!canRetry}
             onClick={() => handleControlAction("retry")}
             aria-label="Retry orchestration phase"
