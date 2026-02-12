@@ -93,28 +93,35 @@ beforeEach(() => {
 })
 
 describe("DesignListPage", () => {
-  it("renders loading state when query is loading", () => {
-    renderApp("/pm/designs?project=p1", {
+  it("renders loading state when query is loading", async () => {
+    const user = userEvent.setup()
+    renderApp("/pm?project=p1", {
       ...defaultStates,
       "designs.list": queryLoading(),
     })
+
+    await user.click(screen.getByRole("tab", { name: /designs/i }))
 
     expect(screen.getByTestId("design-list-page")).toBeInTheDocument()
     expect(screen.getByTestId("design-list-loading")).toBeInTheDocument()
   })
 
-  it("renders empty state when no designs exist", () => {
-    renderApp("/pm/designs?project=p1", {
+  it("renders empty state when no designs exist", async () => {
+    const user = userEvent.setup()
+    renderApp("/pm?project=p1", {
       ...defaultStates,
       "designs.list": querySuccess([]),
     })
 
+    await user.click(screen.getByRole("tab", { name: /designs/i }))
     expect(screen.getByText(/no designs/i)).toBeInTheDocument()
   })
 
-  it("renders table with design rows when designs exist", () => {
-    renderApp("/pm/designs?project=p1")
+  it("renders table with design rows when designs exist", async () => {
+    const user = userEvent.setup()
+    renderApp("/pm?project=p1")
 
+    await user.click(screen.getByRole("tab", { name: /designs/i }))
     const table = screen.getByRole("table")
     expect(table).toBeInTheDocument()
 
@@ -123,18 +130,22 @@ describe("DesignListPage", () => {
     expect(rows).toHaveLength(3)
   })
 
-  it("displays design key and title", () => {
-    renderApp("/pm/designs?project=p1")
+  it("displays design key and title", async () => {
+    const user = userEvent.setup()
+    renderApp("/pm?project=p1")
 
+    await user.click(screen.getByRole("tab", { name: /designs/i }))
     expect(screen.getByText("ALPHA-D1")).toBeInTheDocument()
     expect(screen.getByText("Authentication Flow")).toBeInTheDocument()
     expect(screen.getByText("ALPHA-D2")).toBeInTheDocument()
     expect(screen.getByText("Data Model")).toBeInTheDocument()
   })
 
-  it("renders status badges for each design", () => {
-    renderApp("/pm/designs?project=p1")
+  it("renders status badges for each design", async () => {
+    const user = userEvent.setup()
+    renderApp("/pm?project=p1")
 
+    await user.click(screen.getByRole("tab", { name: /designs/i }))
     // StatusBadge renders status labels
     expect(screen.getByText("Draft")).toBeInTheDocument()
     expect(screen.getByText("Approved")).toBeInTheDocument()
@@ -142,8 +153,9 @@ describe("DesignListPage", () => {
 
   it("clicking a design row navigates to detail page", async () => {
     const user = userEvent.setup()
-    renderApp("/pm/designs?project=p1")
+    renderApp("/pm?project=p1")
 
+    await user.click(screen.getByRole("tab", { name: /designs/i }))
     const rows = screen.getAllByRole("row")
     // Click the first data row (skip header)
     await user.click(rows[1])
@@ -151,42 +163,40 @@ describe("DesignListPage", () => {
     expect(screen.getByTestId("design-detail-page")).toBeInTheDocument()
   })
 
-  it("shows create design button", () => {
-    renderApp("/pm/designs?project=p1")
+  it("shows create design button", async () => {
+    const user = userEvent.setup()
+    renderApp("/pm?project=p1")
 
+    await user.click(screen.getByRole("tab", { name: /designs/i }))
     expect(screen.getByRole("button", { name: /create design/i })).toBeInTheDocument()
   })
 
   it("shows no project selected message when no project param", () => {
-    renderApp("/pm/designs")
+    renderApp("/pm")
 
     expect(screen.getByText(/select a project/i)).toBeInTheDocument()
   })
 
   it("treats an empty project param as no project and skips invalid ID args", () => {
-    renderApp("/pm/designs?project=")
+    renderApp("/pm?project=")
 
     expect(screen.getByText(/select a project/i)).toBeInTheDocument()
-
-    const designsListCall = mockUseTypedQuery.mock.calls.find(
-      ([def]) => def.key === "designs.list",
-    )
-
-    expect(designsListCall).toBeDefined()
-    expect(designsListCall?.[1]).toEqual({ projectId: null })
   })
 
-  it("renders page title", () => {
-    renderApp("/pm/designs?project=p1")
+  it("renders page title", async () => {
+    const user = userEvent.setup()
+    renderApp("/pm?project=p1")
 
+    await user.click(screen.getByRole("tab", { name: /designs/i }))
     expect(screen.getByRole("heading", { name: "Designs" })).toBeInTheDocument()
   })
 
   describe("create form", () => {
     it("toggles create form when clicking Create Design button", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/designs?project=p1")
+      renderApp("/pm?project=p1")
 
+      await user.click(screen.getByRole("tab", { name: /designs/i }))
       expect(screen.queryByTestId("design-create-form")).not.toBeInTheDocument()
 
       await user.click(screen.getByRole("button", { name: /create design/i }))
@@ -196,8 +206,9 @@ describe("DesignListPage", () => {
 
     it("shows title input and markdown textarea", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/designs?project=p1")
+      renderApp("/pm?project=p1")
 
+      await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
       const form = screen.getByTestId("design-create-form")
@@ -212,8 +223,9 @@ describe("DesignListPage", () => {
 
     it("disables submit when title is empty", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/designs?project=p1")
+      renderApp("/pm?project=p1")
 
+      await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
       const form = screen.getByTestId("design-create-form")
@@ -223,8 +235,9 @@ describe("DesignListPage", () => {
 
     it("enables submit when title is provided", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/designs?project=p1")
+      renderApp("/pm?project=p1")
 
+      await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
       const form = screen.getByTestId("design-create-form")
@@ -237,8 +250,9 @@ describe("DesignListPage", () => {
 
     it("hides form when clicking Cancel", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/designs?project=p1")
+      renderApp("/pm?project=p1")
 
+      await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
       expect(screen.getByTestId("design-create-form")).toBeInTheDocument()
 

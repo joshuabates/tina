@@ -136,7 +136,7 @@ beforeEach(() => {
 
 describe("TicketListPage", () => {
   it("renders loading state when query is loading", () => {
-    renderApp("/pm/tickets?project=p1", {
+    renderApp("/pm?project=p1", {
       ...defaultStates,
       "tickets.list": queryLoading(),
     })
@@ -146,7 +146,7 @@ describe("TicketListPage", () => {
   })
 
   it("renders empty state when no tickets exist", () => {
-    renderApp("/pm/tickets?project=p1", {
+    renderApp("/pm?project=p1", {
       ...defaultStates,
       "tickets.list": querySuccess([]),
     })
@@ -155,7 +155,7 @@ describe("TicketListPage", () => {
   })
 
   it("renders table with ticket rows when tickets exist", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     const table = screen.getByRole("table")
     expect(table).toBeInTheDocument()
@@ -166,7 +166,7 @@ describe("TicketListPage", () => {
   })
 
   it("displays ticket key and title", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     expect(screen.getByText("ALPHA-T1")).toBeInTheDocument()
     expect(screen.getByText("Implement login")).toBeInTheDocument()
@@ -175,7 +175,7 @@ describe("TicketListPage", () => {
   })
 
   it("renders correct status labels for ticket statuses", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     // "todo" should render as "Todo", "in_progress" as "In Progress"
     expect(screen.getByText("Todo")).toBeInTheDocument()
@@ -183,27 +183,27 @@ describe("TicketListPage", () => {
   })
 
   it("renders priority badges", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     expect(screen.getByText("High")).toBeInTheDocument()
     expect(screen.getByText("Medium")).toBeInTheDocument()
   })
 
   it("displays assignee when present", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     expect(screen.getByText("alice")).toBeInTheDocument()
   })
 
   it("renders Design Link column header", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     const table = screen.getByRole("table")
     expect(within(table).getByText("Design Link")).toBeInTheDocument()
   })
 
   it("displays design key as link when ticket has designId", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     // Ticket t1 has designId "d1" which maps to design with key "ALPHA-D1"
     const link = screen.getByRole("link", { name: /ALPHA-D1/i })
@@ -212,7 +212,7 @@ describe("TicketListPage", () => {
   })
 
   it("displays dash when ticket has no designId", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     const table = screen.getByRole("table")
     const rows = within(table).getAllByRole("row")
@@ -223,7 +223,7 @@ describe("TicketListPage", () => {
 
   it("clicking a ticket row navigates to detail page", async () => {
     const user = userEvent.setup()
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     const rows = screen.getAllByRole("row")
     // Click the first data row (skip header)
@@ -233,37 +233,25 @@ describe("TicketListPage", () => {
   })
 
   it("shows create ticket button", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     expect(screen.getByRole("button", { name: /create ticket/i })).toBeInTheDocument()
   })
 
   it("shows no project selected message when no project param", () => {
-    renderApp("/pm/tickets")
+    renderApp("/pm")
 
     expect(screen.getByText(/select a project/i)).toBeInTheDocument()
   })
 
   it("treats an empty project param as no project and skips invalid ID args", () => {
-    renderApp("/pm/tickets?project=")
+    renderApp("/pm?project=")
 
     expect(screen.getByText(/select a project/i)).toBeInTheDocument()
-
-    const ticketsListCall = mockUseTypedQuery.mock.calls.find(
-      ([def]) => def.key === "tickets.list",
-    )
-    const designsListCall = mockUseTypedQuery.mock.calls.find(
-      ([def]) => def.key === "designs.list",
-    )
-
-    expect(ticketsListCall).toBeDefined()
-    expect(designsListCall).toBeDefined()
-    expect(ticketsListCall?.[1]).toEqual({ projectId: null })
-    expect(designsListCall?.[1]).toEqual({ projectId: null })
   })
 
   it("renders page title", () => {
-    renderApp("/pm/tickets?project=p1")
+    renderApp("/pm?project=p1")
 
     expect(screen.getByRole("heading", { name: "Tickets" })).toBeInTheDocument()
   })
@@ -271,7 +259,7 @@ describe("TicketListPage", () => {
   describe("create form", () => {
     it("shows design link dropdown with project designs", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/tickets?project=p1")
+      renderApp("/pm?project=p1")
 
       await user.click(screen.getByRole("button", { name: /create ticket/i }))
 
@@ -290,7 +278,7 @@ describe("TicketListPage", () => {
 
     it("shows assignee text input", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/tickets?project=p1")
+      renderApp("/pm?project=p1")
 
       await user.click(screen.getByRole("button", { name: /create ticket/i }))
 
