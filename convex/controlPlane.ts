@@ -303,7 +303,7 @@ export const enqueueControlAction = mutation({
       validateRuntimePayload(args.actionType, args.payload);
     }
 
-    return insertControlActionWithQueue(ctx, {
+    const actionId = await insertControlActionWithQueue(ctx, {
       orchestrationId: args.orchestrationId,
       nodeId: args.nodeId,
       actionType: args.actionType,
@@ -311,6 +311,18 @@ export const enqueueControlAction = mutation({
       requestedBy: args.requestedBy,
       idempotencyKey: args.idempotencyKey,
     });
+
+    // Record audit event
+    await ctx.db.insert("orchestrationEvents", {
+      orchestrationId: args.orchestrationId,
+      eventType: "control_action_requested",
+      source: "control_plane",
+      summary: `${args.actionType} requested by ${args.requestedBy}`,
+      detail: args.payload,
+      recordedAt: new Date().toISOString(),
+    });
+
+    return actionId;
   },
 });
 

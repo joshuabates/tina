@@ -477,6 +477,33 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
     expect(actionId).toBeTruthy();
   });
 
+  test("records orchestrationEvent audit trail on successful enqueue", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "pause",
+      payload: '{"feature":"my-feat","phase":"phase-1"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "audit-pause",
+    });
+
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].source).toBe("control_plane");
+    expect(events[0].summary).toContain("pause");
+    expect(events[0].summary).toContain("web-ui");
+    expect(events[0].detail).toBe('{"feature":"my-feat","phase":"phase-1"}');
+  });
+
   test("skips validation for non-runtime-control actions", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(
