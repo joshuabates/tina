@@ -24,6 +24,14 @@ pub struct ActionPayload {
     pub review_policy: Option<serde_json::Value>,
     pub role: Option<String>,
     pub model: Option<String>,
+    // Task reconfiguration fields
+    pub phase_number: Option<String>,
+    pub task_number: Option<u32>,
+    pub after_task: Option<u32>,
+    pub subject: Option<String>,
+    pub description: Option<String>,
+    pub revision: Option<u32>,
+    pub depends_on: Option<Vec<u32>>,
 }
 
 /// Machine-parseable error codes for action dispatch results.
@@ -340,6 +348,110 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
                 model.to_string(),
             ])
         }
+        "task_edit" => {
+            let phase_number = payload.phase_number.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("task_edit requires 'phase_number' in payload")
+            })?;
+            let task_number = payload.task_number.ok_or_else(|| {
+                anyhow::anyhow!("task_edit requires 'task_number' in payload")
+            })?;
+            let revision = payload.revision.ok_or_else(|| {
+                anyhow::anyhow!("task_edit requires 'revision' in payload")
+            })?;
+
+            let mut args = vec![
+                "orchestrate".to_string(),
+                "task-edit".to_string(),
+                "--feature".to_string(),
+                feature.to_string(),
+                "--phase".to_string(),
+                phase_number.to_string(),
+                "--task".to_string(),
+                task_number.to_string(),
+                "--revision".to_string(),
+                revision.to_string(),
+            ];
+            if let Some(ref subject) = payload.subject {
+                args.push("--subject".to_string());
+                args.push(subject.clone());
+            }
+            if let Some(ref description) = payload.description {
+                args.push("--description".to_string());
+                args.push(description.clone());
+            }
+            if let Some(ref model) = payload.model {
+                args.push("--model".to_string());
+                args.push(model.clone());
+            }
+            Ok(args)
+        }
+        "task_insert" => {
+            let phase_number = payload.phase_number.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("task_insert requires 'phase_number' in payload")
+            })?;
+            let after_task = payload.after_task.ok_or_else(|| {
+                anyhow::anyhow!("task_insert requires 'after_task' in payload")
+            })?;
+            let subject = payload.subject.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("task_insert requires 'subject' in payload")
+            })?;
+
+            let mut args = vec![
+                "orchestrate".to_string(),
+                "task-insert".to_string(),
+                "--feature".to_string(),
+                feature.to_string(),
+                "--phase".to_string(),
+                phase_number.to_string(),
+                "--after-task".to_string(),
+                after_task.to_string(),
+                "--subject".to_string(),
+                subject.to_string(),
+            ];
+            if let Some(ref model) = payload.model {
+                args.push("--model".to_string());
+                args.push(model.clone());
+            }
+            if let Some(ref deps) = payload.depends_on {
+                args.push("--depends-on".to_string());
+                args.push(
+                    deps.iter()
+                        .map(|d| d.to_string())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                );
+            }
+            Ok(args)
+        }
+        "task_set_model" => {
+            let phase_number = payload.phase_number.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("task_set_model requires 'phase_number' in payload")
+            })?;
+            let task_number = payload.task_number.ok_or_else(|| {
+                anyhow::anyhow!("task_set_model requires 'task_number' in payload")
+            })?;
+            let revision = payload.revision.ok_or_else(|| {
+                anyhow::anyhow!("task_set_model requires 'revision' in payload")
+            })?;
+            let model = payload.model.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("task_set_model requires 'model' in payload")
+            })?;
+
+            Ok(vec![
+                "orchestrate".to_string(),
+                "task-set-model".to_string(),
+                "--feature".to_string(),
+                feature.to_string(),
+                "--phase".to_string(),
+                phase_number.to_string(),
+                "--task".to_string(),
+                task_number.to_string(),
+                "--revision".to_string(),
+                revision.to_string(),
+                "--model".to_string(),
+                model.to_string(),
+            ])
+        }
         other => bail!("unknown action type: {}", other),
     }
 }
@@ -363,6 +475,13 @@ mod tests {
             review_policy: None,
             role: None,
             model: None,
+            phase_number: None,
+            task_number: None,
+            after_task: None,
+            subject: None,
+            description: None,
+            revision: None,
+            depends_on: None,
         }
     }
 
@@ -392,6 +511,13 @@ mod tests {
             review_policy: None,
             role: None,
             model: None,
+            phase_number: None,
+            task_number: None,
+            after_task: None,
+            subject: None,
+            description: None,
+            revision: None,
+            depends_on: None,
         };
         let args = build_cli_args("reject_plan", &p).unwrap();
         assert_eq!(
@@ -477,6 +603,13 @@ mod tests {
             review_policy: None,
             role: None,
             model: None,
+            phase_number: None,
+            task_number: None,
+            after_task: None,
+            subject: None,
+            description: None,
+            revision: None,
+            depends_on: None,
         };
         let result = build_cli_args("approve_plan", &p);
         assert!(result.is_err());
@@ -507,6 +640,13 @@ mod tests {
             review_policy: None,
             role: None,
             model: None,
+            phase_number: None,
+            task_number: None,
+            after_task: None,
+            subject: None,
+            description: None,
+            revision: None,
+            depends_on: None,
         };
         let args = build_cli_args("reject_plan", &p).unwrap();
         assert_eq!(
@@ -538,6 +678,13 @@ mod tests {
             review_policy: None,
             role: None,
             model: None,
+            phase_number: None,
+            task_number: None,
+            after_task: None,
+            subject: None,
+            description: None,
+            revision: None,
+            depends_on: None,
         }
     }
 
@@ -771,6 +918,278 @@ mod tests {
         let mut p = payload("auth", None);
         p.role = Some("implementer".to_string());
         let result = build_cli_args("orchestration_set_role_model", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("model"));
+    }
+
+    // --- task_edit tests ---
+
+    #[test]
+    fn test_task_edit_basic() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.task_number = Some(3);
+        p.revision = Some(2);
+        p.subject = Some("Updated subject".to_string());
+        p.description = Some("Updated desc".to_string());
+        let args = build_cli_args("task_edit", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "orchestrate",
+                "task-edit",
+                "--feature",
+                "auth",
+                "--phase",
+                "1",
+                "--task",
+                "3",
+                "--revision",
+                "2",
+                "--subject",
+                "Updated subject",
+                "--description",
+                "Updated desc",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_task_edit_with_model() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("2".to_string());
+        p.task_number = Some(1);
+        p.revision = Some(1);
+        p.model = Some("haiku".to_string());
+        let args = build_cli_args("task_edit", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "orchestrate",
+                "task-edit",
+                "--feature",
+                "auth",
+                "--phase",
+                "2",
+                "--task",
+                "1",
+                "--revision",
+                "1",
+                "--model",
+                "haiku",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_task_edit_minimal() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.task_number = Some(2);
+        p.revision = Some(1);
+        let args = build_cli_args("task_edit", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "orchestrate",
+                "task-edit",
+                "--feature",
+                "auth",
+                "--phase",
+                "1",
+                "--task",
+                "2",
+                "--revision",
+                "1",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_task_edit_missing_phase_number() {
+        let mut p = payload("auth", None);
+        p.task_number = Some(1);
+        p.revision = Some(1);
+        let result = build_cli_args("task_edit", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("phase_number"));
+    }
+
+    #[test]
+    fn test_task_edit_missing_task_number() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.revision = Some(1);
+        let result = build_cli_args("task_edit", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("task_number"));
+    }
+
+    #[test]
+    fn test_task_edit_missing_revision() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.task_number = Some(1);
+        let result = build_cli_args("task_edit", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("revision"));
+    }
+
+    // --- task_insert tests ---
+
+    #[test]
+    fn test_task_insert_basic() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.after_task = Some(2);
+        p.subject = Some("New task".to_string());
+        let args = build_cli_args("task_insert", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "orchestrate",
+                "task-insert",
+                "--feature",
+                "auth",
+                "--phase",
+                "1",
+                "--after-task",
+                "2",
+                "--subject",
+                "New task",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_task_insert_with_model_and_depends() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("2".to_string());
+        p.after_task = Some(0);
+        p.subject = Some("First task".to_string());
+        p.model = Some("opus".to_string());
+        p.depends_on = Some(vec![1, 3]);
+        let args = build_cli_args("task_insert", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "orchestrate",
+                "task-insert",
+                "--feature",
+                "auth",
+                "--phase",
+                "2",
+                "--after-task",
+                "0",
+                "--subject",
+                "First task",
+                "--model",
+                "opus",
+                "--depends-on",
+                "1,3",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_task_insert_missing_phase_number() {
+        let mut p = payload("auth", None);
+        p.after_task = Some(1);
+        p.subject = Some("New task".to_string());
+        let result = build_cli_args("task_insert", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("phase_number"));
+    }
+
+    #[test]
+    fn test_task_insert_missing_after_task() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.subject = Some("New task".to_string());
+        let result = build_cli_args("task_insert", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("after_task"));
+    }
+
+    #[test]
+    fn test_task_insert_missing_subject() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.after_task = Some(1);
+        let result = build_cli_args("task_insert", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("subject"));
+    }
+
+    // --- task_set_model tests ---
+
+    #[test]
+    fn test_task_set_model_basic() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.task_number = Some(2);
+        p.revision = Some(1);
+        p.model = Some("sonnet".to_string());
+        let args = build_cli_args("task_set_model", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "orchestrate",
+                "task-set-model",
+                "--feature",
+                "auth",
+                "--phase",
+                "1",
+                "--task",
+                "2",
+                "--revision",
+                "1",
+                "--model",
+                "sonnet",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_task_set_model_missing_phase_number() {
+        let mut p = payload("auth", None);
+        p.task_number = Some(1);
+        p.revision = Some(1);
+        p.model = Some("sonnet".to_string());
+        let result = build_cli_args("task_set_model", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("phase_number"));
+    }
+
+    #[test]
+    fn test_task_set_model_missing_task_number() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.revision = Some(1);
+        p.model = Some("sonnet".to_string());
+        let result = build_cli_args("task_set_model", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("task_number"));
+    }
+
+    #[test]
+    fn test_task_set_model_missing_revision() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.task_number = Some(1);
+        p.model = Some("sonnet".to_string());
+        let result = build_cli_args("task_set_model", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("revision"));
+    }
+
+    #[test]
+    fn test_task_set_model_missing_model() {
+        let mut p = payload("auth", None);
+        p.phase_number = Some("1".to_string());
+        p.task_number = Some(1);
+        p.revision = Some(1);
+        let result = build_cli_args("task_set_model", &p);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("model"));
     }
