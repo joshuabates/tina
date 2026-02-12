@@ -12,6 +12,7 @@ import type * as actions from "../actions.js";
 import type * as admin from "../admin.js";
 import type * as commits from "../commits.js";
 import type * as controlPlane from "../controlPlane.js";
+import type * as controlPlaneDashboard from "../controlPlaneDashboard.js";
 import type * as cron from "../cron.js";
 import type * as crons from "../crons.js";
 import type * as deleteHelpers from "../deleteHelpers.js";
@@ -27,14 +28,15 @@ import type * as plans from "../plans.js";
 import type * as policyPresets from "../policyPresets.js";
 import type * as projectCounters from "../projectCounters.js";
 import type * as projects from "../projects.js";
+import type * as reasonCodes from "../reasonCodes.js";
 import type * as supervisorStates from "../supervisorStates.js";
 import type * as tasks from "../tasks.js";
 import type * as teamMembers from "../teamMembers.js";
 import type * as teams from "../teams.js";
 import type * as telemetry from "../telemetry.js";
 import type * as test_helpers from "../test_helpers.js";
-import type * as timeline from "../timeline.js";
 import type * as tickets from "../tickets.js";
+import type * as timeline from "../timeline.js";
 import type * as workComments from "../workComments.js";
 
 import type {
@@ -48,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   commits: typeof commits;
   controlPlane: typeof controlPlane;
+  controlPlaneDashboard: typeof controlPlaneDashboard;
   cron: typeof cron;
   crons: typeof crons;
   deleteHelpers: typeof deleteHelpers;
@@ -63,14 +66,15 @@ declare const fullApi: ApiFromModules<{
   policyPresets: typeof policyPresets;
   projectCounters: typeof projectCounters;
   projects: typeof projects;
+  reasonCodes: typeof reasonCodes;
   supervisorStates: typeof supervisorStates;
   tasks: typeof tasks;
   teamMembers: typeof teamMembers;
   teams: typeof teams;
   telemetry: typeof telemetry;
   test_helpers: typeof test_helpers;
-  timeline: typeof timeline;
   tickets: typeof tickets;
+  timeline: typeof timeline;
   workComments: typeof workComments;
 }>;
 
