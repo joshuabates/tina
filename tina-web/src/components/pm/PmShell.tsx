@@ -6,13 +6,15 @@ import { DataErrorBoundary } from "../DataErrorBoundary"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { TicketListPage } from "./TicketListPage"
 import { DesignListPage } from "./DesignListPage"
+import { LaunchModal } from "./LaunchModal"
 import type { ProjectSummary } from "@/schemas"
 import styles from "./PmShell.module.scss"
 
 type TabMode = "tickets" | "designs"
 
-function WorkspaceContent({ projectName }: { projectName: string }) {
+function WorkspaceContent({ projectId, projectName }: { projectId: string; projectName: string }) {
   const [activeTab, setActiveTab] = useState<TabMode>("tickets")
+  const [showLaunchModal, setShowLaunchModal] = useState(false)
 
   return (
     <>
@@ -36,10 +38,19 @@ function WorkspaceContent({ projectName }: { projectName: string }) {
             Designs
           </button>
         </div>
+        <button
+          className={styles.launchButton}
+          onClick={() => setShowLaunchModal(true)}
+        >
+          Launch
+        </button>
       </div>
       <div role="tabpanel">
         {activeTab === "tickets" ? <TicketListPage /> : <DesignListPage />}
       </div>
+      {showLaunchModal && (
+        <LaunchModal projectId={projectId} onClose={() => setShowLaunchModal(false)} />
+      )}
     </>
   )
 }
@@ -87,7 +98,7 @@ function PmWorkspace() {
   const project = projectsResult.data.find((p: ProjectSummary) => p._id === projectId)
   const projectName = project?.name ?? "Unknown Project"
 
-  return <WorkspaceContent projectName={projectName} />
+  return <WorkspaceContent projectId={projectId} projectName={projectName} />
 }
 
 export function PmShell() {

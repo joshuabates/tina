@@ -43,6 +43,7 @@ const defaultStates: Partial<QueryStateMap> = {
   ]),
   "tickets.list": querySuccess([]),
   "designs.list": querySuccess([]),
+  "nodes.list": querySuccess([]),
 }
 
 function renderApp(route: string, states: Partial<QueryStateMap> = defaultStates) {
@@ -118,5 +119,28 @@ describe("PmShell - unified workspace", () => {
     renderApp("/pm")
 
     expect(screen.getByText(/select a project/i)).toBeInTheDocument()
+  })
+
+  it("renders Launch button in workspace header", () => {
+    renderApp("/pm?project=p1", {
+      ...defaultStates,
+      "designs.list": querySuccess([]),
+      "nodes.list": querySuccess([]),
+    })
+
+    expect(screen.getByRole("button", { name: /launch/i })).toBeInTheDocument()
+  })
+
+  it("opens launch modal when Launch button is clicked", async () => {
+    const user = userEvent.setup()
+    renderApp("/pm?project=p1", {
+      ...defaultStates,
+      "designs.list": querySuccess([]),
+      "nodes.list": querySuccess([]),
+    })
+
+    await user.click(screen.getByRole("button", { name: /launch/i }))
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
+    expect(screen.getByText("Launch Orchestration")).toBeInTheDocument()
   })
 })
