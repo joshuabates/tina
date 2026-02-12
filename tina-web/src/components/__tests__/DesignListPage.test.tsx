@@ -191,75 +191,52 @@ describe("DesignListPage", () => {
     expect(screen.getByRole("heading", { name: "Designs" })).toBeInTheDocument()
   })
 
-  describe("create form", () => {
-    it("toggles create form when clicking Create Design button", async () => {
+  describe("create form modal", () => {
+    it("opens modal when Create Design button is clicked", async () => {
       const user = userEvent.setup()
       renderApp("/pm?project=p1")
 
       await user.click(screen.getByRole("tab", { name: /designs/i }))
-      expect(screen.queryByTestId("design-create-form")).not.toBeInTheDocument()
-
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
-      expect(screen.getByTestId("design-create-form")).toBeInTheDocument()
+      const dialog = screen.getByRole("dialog")
+      expect(dialog).toBeInTheDocument()
+      expect(within(dialog).getByText("Create Design")).toBeInTheDocument()
     })
 
-    it("shows title input and markdown textarea", async () => {
+    it("shows title and content inputs in modal", async () => {
       const user = userEvent.setup()
       renderApp("/pm?project=p1")
 
       await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
-      const form = screen.getByTestId("design-create-form")
-      const titleInput = within(form).getByLabelText(/title/i)
-      expect(titleInput).toBeInTheDocument()
-      expect(titleInput).toHaveAttribute("type", "text")
-
-      const markdownTextarea = within(form).getByLabelText(/content/i)
-      expect(markdownTextarea).toBeInTheDocument()
-      expect(markdownTextarea.tagName).toBe("TEXTAREA")
+      const dialog = screen.getByRole("dialog")
+      expect(within(dialog).getByLabelText(/title/i)).toBeInTheDocument()
+      expect(within(dialog).getByLabelText(/content/i)).toBeInTheDocument()
     })
 
-    it("disables submit when title is empty", async () => {
+    it("submit button disabled when title is empty", async () => {
       const user = userEvent.setup()
       renderApp("/pm?project=p1")
 
       await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
-      const form = screen.getByTestId("design-create-form")
-      const submitButton = within(form).getByRole("button", { name: /create/i })
-      expect(submitButton).toBeDisabled()
+      const dialog = screen.getByRole("dialog")
+      expect(within(dialog).getByRole("button", { name: /^create$/i })).toBeDisabled()
     })
 
-    it("enables submit when title is provided", async () => {
+    it("closes modal on cancel", async () => {
       const user = userEvent.setup()
       renderApp("/pm?project=p1")
 
       await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
+      expect(screen.getByRole("dialog")).toBeInTheDocument()
 
-      const form = screen.getByTestId("design-create-form")
-      const titleInput = within(form).getByLabelText(/title/i)
-      await user.type(titleInput, "New Design")
-
-      const submitButton = within(form).getByRole("button", { name: /create/i })
-      expect(submitButton).toBeEnabled()
-    })
-
-    it("hides form when clicking Cancel", async () => {
-      const user = userEvent.setup()
-      renderApp("/pm?project=p1")
-
-      await user.click(screen.getByRole("tab", { name: /designs/i }))
-      await user.click(screen.getByRole("button", { name: /create design/i }))
-      expect(screen.getByTestId("design-create-form")).toBeInTheDocument()
-
-      const form = screen.getByTestId("design-create-form")
-      await user.click(within(form).getByRole("button", { name: /cancel/i }))
-
-      expect(screen.queryByTestId("design-create-form")).not.toBeInTheDocument()
+      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /cancel/i }))
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
     })
   })
 })
