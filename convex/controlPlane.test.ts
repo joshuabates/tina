@@ -212,7 +212,7 @@ describe("controlPlane:enqueueControlAction", () => {
       orchestrationId,
       nodeId,
       actionType: "pause",
-      payload: "{}",
+      payload: '{"feature":"test","phase":"1"}',
       requestedBy: "web-ui",
       idempotencyKey: "pause-1",
     });
@@ -239,7 +239,7 @@ describe("controlPlane:enqueueControlAction", () => {
       orchestrationId,
       nodeId,
       actionType: "pause",
-      payload: '{"reason":"test"}',
+      payload: '{"feature":"test","phase":"1"}',
       requestedBy: "web-ui",
       idempotencyKey: "enqueue-linkage",
     });
@@ -256,7 +256,7 @@ describe("controlPlane:enqueueControlAction", () => {
     expect(inboundAction!.controlActionId).toBe(actionId);
     expect(inboundAction!.idempotencyKey).toBe("enqueue-linkage");
     expect(inboundAction!.type).toBe("pause");
-    expect(inboundAction!.payload).toBe('{"reason":"test"}');
+    expect(inboundAction!.payload).toBe('{"feature":"test","phase":"1"}');
   });
 
   test("rejects invalid action type", async () => {
@@ -308,7 +308,7 @@ describe("controlPlane:enqueueControlAction", () => {
       orchestrationId,
       nodeId,
       actionType: "resume",
-      payload: "{}",
+      payload: '{"feature":"test"}',
       requestedBy: "web-ui",
       idempotencyKey: "resume-dedup",
     });
@@ -317,7 +317,7 @@ describe("controlPlane:enqueueControlAction", () => {
       orchestrationId,
       nodeId,
       actionType: "resume",
-      payload: '{"different":"data"}',
+      payload: '{"feature":"test"}',
       requestedBy: "cli",
       idempotencyKey: "resume-dedup",
     });
@@ -343,12 +343,23 @@ describe("controlPlane:enqueueControlAction", () => {
       "task_set_model",
     ];
 
+    const payloads: Record<string, string> = {
+      pause: '{"feature":"test","phase":"1"}',
+      resume: '{"feature":"test"}',
+      retry: '{"feature":"test","phase":"2"}',
+      orchestration_set_policy: "{}",
+      orchestration_set_role_model: "{}",
+      task_edit: "{}",
+      task_insert: "{}",
+      task_set_model: "{}",
+    };
+
     for (const actionType of runtimeTypes) {
       const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
         orchestrationId,
         nodeId,
         actionType,
-        payload: "{}",
+        payload: payloads[actionType] ?? "{}",
         requestedBy: "web-ui",
         idempotencyKey: `test-${actionType}`,
       });
@@ -437,6 +448,25 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
         idempotencyKey: "no-phase-retry",
       }),
     ).rejects.toThrow('requires "phase"');
+  });
+
+  test("rejects payload missing feature for resume", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "resume",
+        payload: "{}",
+        requestedBy: "web-ui",
+        idempotencyKey: "resume-no-feature",
+      }),
+    ).rejects.toThrow('requires "feature"');
   });
 
   test("accepts valid payload with feature and phase for pause", async () => {
@@ -537,7 +567,7 @@ describe("controlPlane:listControlActions", () => {
       orchestrationId,
       nodeId,
       actionType: "pause",
-      payload: "{}",
+      payload: '{"feature":"test","phase":"1"}',
       requestedBy: "web-ui",
       idempotencyKey: "action-1",
     });
@@ -546,7 +576,7 @@ describe("controlPlane:listControlActions", () => {
       orchestrationId,
       nodeId,
       actionType: "resume",
-      payload: "{}",
+      payload: '{"feature":"test"}',
       requestedBy: "web-ui",
       idempotencyKey: "action-2",
     });
@@ -572,7 +602,7 @@ describe("controlPlane:listControlActions", () => {
         orchestrationId,
         nodeId,
         actionType: "pause",
-        payload: "{}",
+        payload: '{"feature":"test","phase":"1"}',
         requestedBy: "web-ui",
         idempotencyKey: `limit-test-${i}`,
       });

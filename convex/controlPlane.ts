@@ -25,12 +25,7 @@ interface InsertControlActionParams {
   idempotencyKey: string;
 }
 
-interface RuntimePayload {
-  feature: string;
-  phase?: string;
-}
-
-function validateRuntimePayload(actionType: string, rawPayload: string): RuntimePayload {
+function validateRuntimePayload(actionType: string, rawPayload: string): void {
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(rawPayload);
@@ -48,11 +43,6 @@ function validateRuntimePayload(actionType: string, rawPayload: string): Runtime
       throw new Error(`Payload for "${actionType}" requires "phase" (string)`);
     }
   }
-
-  return {
-    feature: parsed.feature as string,
-    phase: typeof parsed.phase === "string" ? parsed.phase : undefined,
-  };
 }
 
 async function insertControlActionWithQueue(
