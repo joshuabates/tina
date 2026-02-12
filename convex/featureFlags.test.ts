@@ -71,6 +71,25 @@ describe("featureFlags:setFlag", () => {
     expect(result).toBe(false);
   });
 
+  test("updates description on existing flag", async () => {
+    const t = convexTest(schema);
+    await t.mutation(api.featureFlags.setFlag, {
+      key: "cp.runtime_controls",
+      enabled: true,
+      description: "Original description",
+    });
+
+    await t.mutation(api.featureFlags.setFlag, {
+      key: "cp.runtime_controls",
+      enabled: true,
+      description: "Updated description",
+    });
+
+    const flags = await t.query(api.featureFlags.listFlags, {});
+    const flag = flags.find((f: { key: string }) => f.key === "cp.runtime_controls");
+    expect(flag?.description).toBe("Updated description");
+  });
+
   test("returns existing document id on update", async () => {
     const t = convexTest(schema);
     const id1 = await t.mutation(api.featureFlags.setFlag, {

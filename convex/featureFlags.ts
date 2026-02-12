@@ -42,6 +42,7 @@ export const setFlag = mutation({
     if (existing) {
       await ctx.db.patch(existing._id, {
         enabled: args.enabled,
+        ...(args.description !== undefined && { description: args.description }),
         updatedAt: Date.now(),
       });
       return existing._id;
