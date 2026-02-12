@@ -318,36 +318,47 @@ npm test              # Convex function tests for control-plane APIs
 ## Architectural Context
 
 **Patterns to follow:**
-- Convex mutation/query pattern: `convex/actions.ts:4-74` (submitAction, claimAction, completeAction)
-- Daemon action dispatch: `tina-daemon/src/actions.rs:92-165` (build_cli_args switch with typed payloads)
-- Test pattern: `convex/orchestrations.test.ts:1-50` (convexTest + test_helpers.createNode/createProject)
-- Web UI mutation pattern: `tina-web/src/components/pm/DesignDetailPage.tsx:1-80` (useMutation from convex/react)
-- Schema with indexes: `convex/schema.ts:112-124` (inboundActions table structure)
+- Convex mutation/query pattern: `convex/actions.ts:3-73` (submitAction, claimAction, completeAction with v.args validation)
+- Daemon action dispatch: `tina-daemon/src/actions.rs:18-164` (dispatch_action flow: claim → execute → complete)
+- CLI args builder: `tina-daemon/src/actions.rs:91-164` (build_cli_args switch with typed ActionPayload)
+- Test pattern: `convex/orchestrations.test.ts:0-60` (convexTest + test_helpers for fixture setup)
+- Web UI mutation pattern: `tina-web/src/components/pm/DesignDetailPage.tsx:121-177` (useMutation with loading states)
+- Schema with indexes: `convex/schema.ts:112-124` (inboundActions table with by_node_status, by_orchestration indexes)
+- Validation args: `convex/orchestrations.ts:15-30` (v.string(), v.id(), v.optional() for mutation args)
+- Error handling: `tina-daemon/src/actions.rs:79-84` (anyhow::bail! with context)
+- Node listing: `convex/nodes.ts:56-67` (listNodes query with heartbeat-based status)
 
 **Code to reuse:**
-- `convex/actions.ts` - Queue primitives (submitAction, claimAction, completeAction) for control-plane actions
-- `tina-daemon/src/actions.rs:10-17` - ActionPayload struct for typed daemon dispatch
-- `convex/test_helpers.ts` - createNode, createProject for test setup
-- `tina-session/src/state/schema.rs:249-412` - ModelPolicy and ReviewPolicy structs (already exist, persist in policySnapshot)
-- `tina-session/src/commands/init.rs:29-66` - Existing --design-id path for canonical launch
+- `convex/actions.ts:3-73` - Queue primitives (submitAction, claimAction, completeAction) for control-plane actions
+- `tina-daemon/src/actions.rs:10-16` - ActionPayload struct for typed daemon dispatch
+- `convex/test_helpers.ts:41-127` - createNode, createProject, createOrchestration test helpers
+- `tina-session/src/state/schema.rs:248-412` - ModelPolicy (249-302) and ReviewPolicy (369-412) structs
+- `tina-session/src/state/schema.rs:424-449` - SupervisorState with model_policy (445) and review_policy (448) fields
+- `tina-session/src/commands/init.rs:29-99` - Existing --design-id path for canonical launch
 - `tina-web/src/components/ui/status-badge.tsx` - StatusBadge component for control action status display
+- `convex/nodes.ts:56-67` - listNodes query pattern for node selector data
+- `contracts/orchestration-core.contract.json` - Contract format for shared Convex/Rust types
+- `scripts/generate-contracts.mjs` - Contract generation script (run after schema changes)
 
 **Integration:**
 - Entry: New launch form in tina-web (under PM shell, next to design detail page)
 - Backend flow: Web UI → `convex/controlPlane.ts:startOrchestration` → writes `controlPlaneActions` + `inboundActions` → daemon polls queue → `tina-daemon/src/actions.rs:dispatch_action` → `tina-session init --design-id`
 - Existing tables: `inboundActions` queue + `orchestrations` record already support design-linked launches
-- Node requirement: `orchestrations.nodeId` is required (not optional), so launch form must include node selector
+- Node requirement: `orchestrations.nodeId` is required (not optional), so launch form must include node selector using `api.nodes.listNodes`
+- Policy storage: SupervisorState already has `model_policy` and `review_policy` fields - serialize to JSON for Convex `policySnapshot`
 
 **Anti-patterns:**
 - Don't introduce markdown-only launch paths - designs must come from `designs` table (`projectId` + `designId` required)
-- Don't skip idempotency keys in `controlPlaneActions` - every action must be idempotent
+- Don't skip idempotency keys in `controlPlaneActions` - every action must be idempotent (use `by_idempotency` index)
 - Don't mutate `policySnapshot` after orchestration starts - snapshot is immutable, only future work can be reconfigured
 - Don't write raw action queue rows from web - route through `controlPlane.ts` to ensure action-log + queue consistency
+- Don't use `ctx.db.insert` without validating args - always use `v.string()`, `v.id()`, `v.optional()` in mutation args
 
 **New patterns to establish:**
 - Policy preset templates (strict/balanced/fast) - no existing preset system, define in TypeScript constants or Convex config
 - `controlPlaneActions` table as durable action log linked to queue via `controlActionId` foreign key
 - Revision-based optimistic concurrency for policy updates (targetRevision field in payload)
+- Hash-based policy snapshot immutability (serialize policy → JSON → hash → store both in orchestration record)
 
 ## Risks and Mitigations
 
