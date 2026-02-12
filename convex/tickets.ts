@@ -9,7 +9,6 @@ export const createTicket = mutation({
     title: v.string(),
     description: v.string(),
     priority: v.string(), // low | medium | high | urgent
-    assignee: v.optional(v.string()),
     estimate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -42,7 +41,6 @@ export const createTicket = mutation({
       description: args.description,
       status: "todo",
       priority: args.priority,
-      assignee: args.assignee,
       estimate: args.estimate,
       createdAt: now,
       updatedAt: now,
@@ -78,7 +76,6 @@ export const listTickets = query({
     projectId: v.id("projects"),
     status: v.optional(v.string()),
     designId: v.optional(v.id("designs")),
-    assignee: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let queryObj;
@@ -104,10 +101,6 @@ export const listTickets = query({
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId));
     }
 
-    if (args.assignee) {
-      queryObj = queryObj.filter((q) => q.eq(q.field("assignee"), args.assignee));
-    }
-
     if (args.designId && status !== undefined) {
       queryObj = queryObj.filter((q) => q.eq(q.field("status"), status));
     }
@@ -124,7 +117,6 @@ export const updateTicket = mutation({
     priority: v.optional(v.string()),
     designId: v.optional(v.id("designs")),
     clearDesignId: v.optional(v.boolean()),
-    assignee: v.optional(v.string()),
     estimate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -165,9 +157,6 @@ export const updateTicket = mutation({
       updates.designId = args.designId;
     } else if (args.clearDesignId) {
       updates.designId = undefined;
-    }
-    if (args.assignee !== undefined) {
-      updates.assignee = args.assignee;
     }
     if (args.estimate !== undefined) {
       updates.estimate = args.estimate;
