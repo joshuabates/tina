@@ -14,6 +14,12 @@ pub struct ActionPayload {
     pub phase: Option<String>,
     pub feedback: Option<String>,
     pub issues: Option<String>,
+    // Launch-specific fields (start_orchestration)
+    pub design_id: Option<String>,
+    pub cwd: Option<String>,
+    pub branch: Option<String>,
+    pub total_phases: Option<u32>,
+    pub policy: Option<serde_json::Value>,
 }
 
 /// Dispatch a single inbound action: claim it, execute the CLI command, complete it.
@@ -160,6 +166,75 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
                 "retry".to_string(),
             ])
         }
+        "start_orchestration" => {
+            let design_id = payload.design_id.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("start_orchestration requires 'design_id' in payload")
+            })?;
+            let cwd = payload
+                .cwd
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("start_orchestration requires 'cwd' in payload"))?;
+            let branch = payload.branch.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("start_orchestration requires 'branch' in payload")
+            })?;
+            let total_phases = payload.total_phases.ok_or_else(|| {
+                anyhow::anyhow!("start_orchestration requires 'total_phases' in payload")
+            })?;
+
+            let mut args = vec![
+                "init".to_string(),
+                feature.to_string(),
+                "--cwd".to_string(),
+                cwd.to_string(),
+                "--design-id".to_string(),
+                design_id.to_string(),
+                "--branch".to_string(),
+                branch.to_string(),
+                total_phases.to_string(),
+            ];
+
+            // Apply policy overrides from snapshot if present
+            if let Some(policy) = &payload.policy {
+                if let Some(review) = policy.get("review") {
+                    if let Some(v) = review.get("enforcement").and_then(|v| v.as_str()) {
+                        args.push("--review-enforcement".to_string());
+                        args.push(v.to_string());
+                    }
+                    if let Some(v) = review.get("detector_scope").and_then(|v| v.as_str()) {
+                        args.push("--detector-scope".to_string());
+                        args.push(v.to_string());
+                    }
+                    if let Some(v) = review.get("architect_mode").and_then(|v| v.as_str()) {
+                        args.push("--architect-mode".to_string());
+                        args.push(v.to_string());
+                    }
+                    if let Some(v) = review
+                        .get("test_integrity_profile")
+                        .and_then(|v| v.as_str())
+                    {
+                        args.push("--test-integrity-profile".to_string());
+                        args.push(v.to_string());
+                    }
+                    if let Some(v) = review.get("hard_block_detectors").and_then(|v| v.as_bool()) {
+                        if !v {
+                            args.push("--no-hard-block-detectors".to_string());
+                        }
+                    }
+                    if let Some(v) = review.get("allow_rare_override").and_then(|v| v.as_bool()) {
+                        if !v {
+                            args.push("--no-allow-rare-override".to_string());
+                        }
+                    }
+                    if let Some(v) = review.get("require_fix_first").and_then(|v| v.as_bool()) {
+                        if !v {
+                            args.push("--no-require-fix-first".to_string());
+                        }
+                    }
+                }
+            }
+
+            Ok(args)
+        }
         other => bail!("unknown action type: {}", other),
     }
 }
@@ -174,6 +249,11 @@ mod tests {
             phase: phase.map(|p| p.to_string()),
             feedback: None,
             issues: None,
+            design_id: None,
+            cwd: None,
+            branch: None,
+            total_phases: None,
+            policy: None,
         }
     }
 
@@ -194,6 +274,11 @@ mod tests {
             phase: Some("2".to_string()),
             feedback: Some("needs error handling".to_string()),
             issues: None,
+            design_id: None,
+            cwd: None,
+            branch: None,
+            total_phases: None,
+            policy: None,
         };
         let args = build_cli_args("reject_plan", &p).unwrap();
         assert_eq!(
@@ -270,6 +355,11 @@ mod tests {
             phase: Some("1".to_string()),
             feedback: None,
             issues: None,
+            design_id: None,
+            cwd: None,
+            branch: None,
+            total_phases: None,
+            policy: None,
         };
         let result = build_cli_args("approve_plan", &p);
         assert!(result.is_err());
@@ -291,6 +381,11 @@ mod tests {
             phase: Some("1".to_string()),
             feedback: None,
             issues: Some("missing tests".to_string()),
+            design_id: None,
+            cwd: None,
+            branch: None,
+            total_phases: None,
+            policy: None,
         };
         let args = build_cli_args("reject_plan", &p).unwrap();
         assert_eq!(
@@ -305,5 +400,146 @@ mod tests {
                 "missing tests"
             ]
         );
+    }
+
+    fn launch_payload() -> ActionPayload {
+        ActionPayload {
+            feature: Some("auth".to_string()),
+            phase: None,
+            feedback: None,
+            issues: None,
+            design_id: Some("design_abc".to_string()),
+            cwd: Some("/tmp/worktree".to_string()),
+            branch: Some("tina/auth".to_string()),
+            total_phases: Some(3),
+            policy: None,
+        }
+    }
+
+    #[test]
+    fn test_start_orchestration_basic() {
+        let p = launch_payload();
+        let args = build_cli_args("start_orchestration", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "init",
+                "auth",
+                "--cwd",
+                "/tmp/worktree",
+                "--design-id",
+                "design_abc",
+                "--branch",
+                "tina/auth",
+                "3",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_start_orchestration_with_policy() {
+        let mut p = launch_payload();
+        p.policy = Some(serde_json::json!({
+            "review": {
+                "enforcement": "task_and_phase",
+                "detector_scope": "whole_repo_pattern_index",
+                "architect_mode": "manual_plus_auto",
+                "test_integrity_profile": "strict_baseline",
+                "hard_block_detectors": false,
+                "allow_rare_override": false,
+                "require_fix_first": false,
+            }
+        }));
+        let args = build_cli_args("start_orchestration", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "init",
+                "auth",
+                "--cwd",
+                "/tmp/worktree",
+                "--design-id",
+                "design_abc",
+                "--branch",
+                "tina/auth",
+                "3",
+                "--review-enforcement",
+                "task_and_phase",
+                "--detector-scope",
+                "whole_repo_pattern_index",
+                "--architect-mode",
+                "manual_plus_auto",
+                "--test-integrity-profile",
+                "strict_baseline",
+                "--no-hard-block-detectors",
+                "--no-allow-rare-override",
+                "--no-require-fix-first",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_start_orchestration_policy_defaults_omitted() {
+        // When boolean policy flags are true (the defaults), no flags are emitted
+        let mut p = launch_payload();
+        p.policy = Some(serde_json::json!({
+            "review": {
+                "hard_block_detectors": true,
+                "allow_rare_override": true,
+                "require_fix_first": true,
+            }
+        }));
+        let args = build_cli_args("start_orchestration", &p).unwrap();
+        // Should only have the base args, no --no-* flags
+        assert_eq!(
+            args,
+            vec![
+                "init",
+                "auth",
+                "--cwd",
+                "/tmp/worktree",
+                "--design-id",
+                "design_abc",
+                "--branch",
+                "tina/auth",
+                "3",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_start_orchestration_missing_design_id() {
+        let mut p = launch_payload();
+        p.design_id = None;
+        let result = build_cli_args("start_orchestration", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("design_id"));
+    }
+
+    #[test]
+    fn test_start_orchestration_missing_cwd() {
+        let mut p = launch_payload();
+        p.cwd = None;
+        let result = build_cli_args("start_orchestration", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("cwd"));
+    }
+
+    #[test]
+    fn test_start_orchestration_missing_branch() {
+        let mut p = launch_payload();
+        p.branch = None;
+        let result = build_cli_args("start_orchestration", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("branch"));
+    }
+
+    #[test]
+    fn test_start_orchestration_missing_total_phases() {
+        let mut p = launch_payload();
+        p.total_phases = None;
+        let result = build_cli_args("start_orchestration", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("total_phases"));
     }
 }
