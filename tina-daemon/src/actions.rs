@@ -20,6 +20,10 @@ pub struct ActionPayload {
     pub branch: Option<String>,
     pub total_phases: Option<u32>,
     pub policy: Option<serde_json::Value>,
+    pub model_policy: Option<serde_json::Value>,
+    pub review_policy: Option<serde_json::Value>,
+    pub role: Option<String>,
+    pub model: Option<String>,
 }
 
 /// Machine-parseable error codes for action dispatch results.
@@ -299,6 +303,43 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
 
             Ok(args)
         }
+        "orchestration_set_policy" => {
+            let mut args = vec![
+                "orchestrate".to_string(),
+                "set-policy".to_string(),
+                "--feature".to_string(),
+                feature.to_string(),
+            ];
+            if let Some(model_policy) = &payload.model_policy {
+                args.push("--model-json".to_string());
+                args.push(serde_json::to_string(model_policy)?);
+            }
+            if let Some(review_policy) = &payload.review_policy {
+                args.push("--review-json".to_string());
+                args.push(serde_json::to_string(review_policy)?);
+            }
+            Ok(args)
+        }
+        "orchestration_set_role_model" => {
+            let role = payload
+                .role
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("orchestration_set_role_model requires 'role' in payload"))?;
+            let model = payload
+                .model
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("orchestration_set_role_model requires 'model' in payload"))?;
+            Ok(vec![
+                "orchestrate".to_string(),
+                "set-role-model".to_string(),
+                "--feature".to_string(),
+                feature.to_string(),
+                "--role".to_string(),
+                role.to_string(),
+                "--model".to_string(),
+                model.to_string(),
+            ])
+        }
         other => bail!("unknown action type: {}", other),
     }
 }
@@ -318,6 +359,10 @@ mod tests {
             branch: None,
             total_phases: None,
             policy: None,
+            model_policy: None,
+            review_policy: None,
+            role: None,
+            model: None,
         }
     }
 
@@ -343,6 +388,10 @@ mod tests {
             branch: None,
             total_phases: None,
             policy: None,
+            model_policy: None,
+            review_policy: None,
+            role: None,
+            model: None,
         };
         let args = build_cli_args("reject_plan", &p).unwrap();
         assert_eq!(
@@ -424,6 +473,10 @@ mod tests {
             branch: None,
             total_phases: None,
             policy: None,
+            model_policy: None,
+            review_policy: None,
+            role: None,
+            model: None,
         };
         let result = build_cli_args("approve_plan", &p);
         assert!(result.is_err());
@@ -450,6 +503,10 @@ mod tests {
             branch: None,
             total_phases: None,
             policy: None,
+            model_policy: None,
+            review_policy: None,
+            role: None,
+            model: None,
         };
         let args = build_cli_args("reject_plan", &p).unwrap();
         assert_eq!(
@@ -477,6 +534,10 @@ mod tests {
             branch: Some("tina/auth".to_string()),
             total_phases: Some(3),
             policy: None,
+            model_policy: None,
+            review_policy: None,
+            role: None,
+            model: None,
         }
     }
 
@@ -605,6 +666,113 @@ mod tests {
         let result = build_cli_args("start_orchestration", &p);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("total_phases"));
+    }
+
+    // --- orchestration_set_policy tests ---
+
+    #[test]
+    fn test_set_policy_with_both_policies() {
+        let mut p = payload("auth", None);
+        p.model_policy = Some(serde_json::json!({"implementer": "haiku"}));
+        p.review_policy = Some(serde_json::json!({"enforcement": "phase_only"}));
+        let args = build_cli_args("orchestration_set_policy", &p).unwrap();
+        assert_eq!(args[0], "orchestrate");
+        assert_eq!(args[1], "set-policy");
+        assert_eq!(args[2], "--feature");
+        assert_eq!(args[3], "auth");
+        assert_eq!(args[4], "--model-json");
+        let model_json: serde_json::Value = serde_json::from_str(&args[5]).unwrap();
+        assert_eq!(model_json, serde_json::json!({"implementer": "haiku"}));
+        assert_eq!(args[6], "--review-json");
+        let review_json: serde_json::Value = serde_json::from_str(&args[7]).unwrap();
+        assert_eq!(review_json, serde_json::json!({"enforcement": "phase_only"}));
+    }
+
+    #[test]
+    fn test_set_policy_model_only() {
+        let mut p = payload("auth", None);
+        p.model_policy = Some(serde_json::json!({"implementer": "opus"}));
+        let args = build_cli_args("orchestration_set_policy", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "orchestrate",
+                "set-policy",
+                "--feature",
+                "auth",
+                "--model-json",
+                &serde_json::to_string(&serde_json::json!({"implementer": "opus"})).unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_set_policy_review_only() {
+        let mut p = payload("auth", None);
+        p.review_policy = Some(serde_json::json!({"enforcement": "task_only"}));
+        let args = build_cli_args("orchestration_set_policy", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "orchestrate",
+                "set-policy",
+                "--feature",
+                "auth",
+                "--review-json",
+                &serde_json::to_string(&serde_json::json!({"enforcement": "task_only"})).unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_set_policy_neither_policy() {
+        let p = payload("auth", None);
+        let args = build_cli_args("orchestration_set_policy", &p).unwrap();
+        assert_eq!(
+            args,
+            vec!["orchestrate", "set-policy", "--feature", "auth"]
+        );
+    }
+
+    // --- orchestration_set_role_model tests ---
+
+    #[test]
+    fn test_set_role_model() {
+        let mut p = payload("auth", None);
+        p.role = Some("implementer".to_string());
+        p.model = Some("haiku".to_string());
+        let args = build_cli_args("orchestration_set_role_model", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "orchestrate",
+                "set-role-model",
+                "--feature",
+                "auth",
+                "--role",
+                "implementer",
+                "--model",
+                "haiku",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_set_role_model_missing_role() {
+        let mut p = payload("auth", None);
+        p.model = Some("haiku".to_string());
+        let result = build_cli_args("orchestration_set_role_model", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("role"));
+    }
+
+    #[test]
+    fn test_set_role_model_missing_model() {
+        let mut p = payload("auth", None);
+        p.role = Some("implementer".to_string());
+        let result = build_cli_args("orchestration_set_role_model", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("model"));
     }
 
     // --- DispatchResult / DispatchErrorCode tests ---
