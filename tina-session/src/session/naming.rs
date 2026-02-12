@@ -82,8 +82,11 @@ pub fn validate_phase(phase: &str) -> Result<(), String> {
 ///
 /// Format: tina-{feature}-phase-{phase}
 /// Phase can be an integer ("1", "2") or decimal for remediation ("1.5", "2.5").
+/// Dots are replaced with underscores to avoid tmux interpreting them as
+/// session:window.pane separators.
 pub fn session_name(feature: &str, phase: &str) -> String {
-    format!("tina-{}-phase-{}", feature, phase)
+    let safe_phase = phase.replace('.', "_");
+    format!("tina-{}-phase-{}", feature, safe_phase)
 }
 
 #[cfg(test)]
@@ -133,10 +136,10 @@ mod tests {
 
     #[test]
     fn test_session_name_decimal() {
-        assert_eq!(session_name("auth", "1.5"), "tina-auth-phase-1.5");
+        assert_eq!(session_name("auth", "1.5"), "tina-auth-phase-1_5");
         assert_eq!(
             session_name("api-refactor", "2.5"),
-            "tina-api-refactor-phase-2.5"
+            "tina-api-refactor-phase-2_5"
         );
     }
 
