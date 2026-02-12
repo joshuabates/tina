@@ -2470,3 +2470,229 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
     expect(task!.revision).toBe(2);
   });
 });
+
+describe("controlPlane:taskReconfiguration:integration", () => {
+  test("e2e: task_edit creates action log, modifies task, and records event", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [
+        { taskNumber: 1, subject: "Original subject" },
+        { taskNumber: 2, subject: "Task two" },
+        { taskNumber: 3, subject: "Task three" },
+      ],
+    });
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_edit",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        phaseNumber: "1",
+        taskNumber: 1,
+        revision: 1,
+        subject: "Updated subject",
+        model: "haiku",
+      }),
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-task-edit-001",
+    });
+
+    // 1. Action log entry exists with correct actionType
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionType).toBe("task_edit");
+    expect(actions[0].status).toBe("pending");
+    expect(actions[0].requestedBy).toBe("web:operator");
+    expect(actions[0].queueActionId).toBeDefined();
+
+    // 2. Task is modified with new subject/model and incremented revision
+    const task = await t.query(api.executionTasks.getExecutionTask, {
+      orchestrationId,
+      phaseNumber: "1",
+      taskNumber: 1,
+    });
+    expect(task!.subject).toBe("Updated subject");
+    expect(task!.model).toBe("haiku");
+    expect(task!.revision).toBe(2);
+
+    // 3. Audit event recorded
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].source).toBe("control_plane");
+    expect(events[0].summary).toContain("task_edit");
+    expect(events[0].summary).toContain("web:operator");
+  });
+
+  test("e2e: task_insert adds task and records audit trail", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [
+        { taskNumber: 1, subject: "Task one" },
+        { taskNumber: 2, subject: "Task two" },
+        { taskNumber: 3, subject: "Task three" },
+      ],
+    });
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_insert",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        phaseNumber: "1",
+        afterTask: 2,
+        subject: "Inserted task",
+      }),
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-task-insert-001",
+    });
+
+    // 1. 4 tasks exist (3 original + 1 inserted)
+    const tasks = await t.query(api.executionTasks.listExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+    });
+    expect(tasks).toHaveLength(4);
+
+    // 2. Inserted task has correct taskNumber (max+1 = 4)
+    const inserted = tasks.find((t) => t.taskNumber === 4);
+    expect(inserted).toBeDefined();
+    expect(inserted!.subject).toBe("Inserted task");
+    expect(inserted!.insertedBy).toBe("web:operator");
+
+    // 3. Audit event recorded
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].summary).toContain("task_insert");
+    expect(events[0].summary).toContain("web:operator");
+  });
+
+  test("e2e: edit + insert + model override sequence with correct revisions", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await t.mutation(api.executionTasks.seedExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+      tasks: [
+        { taskNumber: 1, subject: "Task one" },
+        { taskNumber: 2, subject: "Task two" },
+        { taskNumber: 3, subject: "Task three" },
+      ],
+    });
+
+    // Step 1: Edit task 1 (rev 1 -> 2)
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_edit",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        phaseNumber: "1",
+        taskNumber: 1,
+        revision: 1,
+        subject: "Edited task one",
+      }),
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-seq-edit",
+    });
+
+    // Step 2: Insert new task
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_insert",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        phaseNumber: "1",
+        afterTask: 2,
+        subject: "New task four",
+      }),
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-seq-insert",
+    });
+
+    // Step 3: Set model on task 3 (rev 1 -> 2)
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "task_set_model",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        phaseNumber: "1",
+        taskNumber: 3,
+        revision: 1,
+        model: "opus",
+      }),
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-seq-model",
+    });
+
+    // Verify final state: task 1 has updated subject + rev 2
+    const task1 = await t.query(api.executionTasks.getExecutionTask, {
+      orchestrationId,
+      phaseNumber: "1",
+      taskNumber: 1,
+    });
+    expect(task1!.subject).toBe("Edited task one");
+    expect(task1!.revision).toBe(2);
+
+    // New task 4 exists
+    const tasks = await t.query(api.executionTasks.listExecutionTasks, {
+      orchestrationId,
+      phaseNumber: "1",
+    });
+    expect(tasks).toHaveLength(4);
+    const task4 = tasks.find((t) => t.taskNumber === 4);
+    expect(task4).toBeDefined();
+    expect(task4!.subject).toBe("New task four");
+
+    // Task 3 has updated model + rev 2
+    const task3 = await t.query(api.executionTasks.getExecutionTask, {
+      orchestrationId,
+      phaseNumber: "1",
+      taskNumber: 3,
+    });
+    expect(task3!.model).toBe("opus");
+    expect(task3!.revision).toBe(2);
+
+    // 3 action log entries
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    expect(actions).toHaveLength(3);
+
+    // 3 audit events
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(3);
+  });
+});
