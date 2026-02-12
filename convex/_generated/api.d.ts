@@ -33,6 +33,7 @@ import type * as teamMembers from "../teamMembers.js";
 import type * as teams from "../teams.js";
 import type * as telemetry from "../telemetry.js";
 import type * as test_helpers from "../test_helpers.js";
+import type * as timeline from "../timeline.js";
 import type * as tickets from "../tickets.js";
 import type * as workComments from "../workComments.js";
 
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   teams: typeof teams;
   telemetry: typeof telemetry;
   test_helpers: typeof test_helpers;
+  timeline: typeof timeline;
   tickets: typeof tickets;
   workComments: typeof workComments;
 }>;

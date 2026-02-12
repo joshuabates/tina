@@ -1,0 +1,68 @@
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.entry {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.625rem;
+  border-left: 2px solid var(--border);
+  margin-left: 0.375rem;
+
+  &.request {
+    border-left-color: hsl(var(--primary) / 0.5);
+  }
+
+  &.success {
+    border-left-color: hsl(var(--status-success));
+  }
+
+  &.failure {
+    border-left-color: hsl(var(--status-blocked));
+  }
+
+  &.event {
+    border-left-color: hsl(var(--muted-foreground) / 0.4);
+  }
+}
+
+.timestamp {
+  flex-shrink: 0;
+  width: 3.5rem;
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.summary {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 0 0.25rem;
+  border-radius: 0.125rem;
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+
+  &.completed {
+    color: hsl(var(--status-success));
+    background: hsl(var(--status-success) / 0.1);
+  }
+
+  &.failed {
+    color: hsl(var(--status-blocked));
+    background: hsl(var(--status-blocked) / 0.1);
+  }
+
+  &.pending {
+    color: hsl(var(--muted-foreground));
+    background: hsl(var(--muted) / 0.5);
+  }
+}

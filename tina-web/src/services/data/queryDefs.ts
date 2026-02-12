@@ -14,6 +14,7 @@ import {
   TicketSummary,
   WorkComment,
   NodeSummary,
+  TimelineEntry,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -171,4 +172,14 @@ export const NodeListQuery = queryDef({
   query: api.nodes.listNodes,
   args: Schema.Struct({}),
   schema: Schema.Array(NodeSummary),
+})
+
+export const TimelineQuery = queryDef({
+  key: "timeline.unified",
+  query: api.timeline.getUnifiedTimeline,
+  args: Schema.Struct({
+    orchestrationId: Schema.String,
+    limit: Schema.optional(Schema.Number),
+  }),
+  schema: Schema.Array(TimelineEntry),
 })
