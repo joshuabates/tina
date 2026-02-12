@@ -46,21 +46,6 @@
   }
 }
 
-.formSelect {
-  width: 100%;
-  padding: 6px 10px;
-  font-size: 13px;
-  border: 1px solid $border-color;
-  border-radius: 4px;
-  background: $bg-primary;
-  color: $text-primary;
-
-  &:focus {
-    outline: 2px solid $ring-color;
-    outline-offset: 1px;
-  }
-}
-
 .presetButtons {
   display: flex;
   gap: 8px;

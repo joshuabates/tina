@@ -55,7 +55,7 @@ export function LaunchOrchestrationPage() {
     return (
       <div className={styles.page}>
         <h2 className={styles.title}>Launch Orchestration</h2>
-        <div className={styles.loading}>
+        <div className={styles.loading} data-testid="launch-orchestration-loading">
           <div className={styles.skeletonBar} />
           <div className={styles.skeletonBar} />
           <div className={styles.skeletonBar} />
@@ -132,7 +132,7 @@ export function LaunchOrchestrationPage() {
   const presets: PolicyPreset[] = ["balanced", "strict", "fast"]
 
   return (
-    <div className={styles.page}>
+    <div className={styles.page} data-testid="launch-orchestration-page">
       <h2 className={styles.title}>Launch Orchestration</h2>
 
       {result && (
@@ -143,14 +143,14 @@ export function LaunchOrchestrationPage() {
 
       {error && <div className={styles.errorMessage}>{error}</div>}
 
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form className={styles.form} data-testid="launch-form" onSubmit={handleSubmit}>
         <div className={styles.formField}>
           <label className={styles.formLabel} htmlFor="design-select">
             Design
           </label>
           <select
             id="design-select"
-            className={styles.formSelect}
+            className={styles.formInput}
             value={selectedDesignId}
             onChange={(e) => setSelectedDesignId(e.target.value)}
           >
@@ -169,7 +169,7 @@ export function LaunchOrchestrationPage() {
           </label>
           <select
             id="node-select"
-            className={styles.formSelect}
+            className={styles.formInput}
             value={selectedNodeId}
             onChange={(e) => setSelectedNodeId(e.target.value)}
           >
