@@ -4,17 +4,70 @@ import { api } from "./_generated/api";
 import schema from "./schema";
 import {
   createFeatureFixture,
-  createLaunchFixture,
   createDesign,
   createProject,
+  createNode,
   seedFeatureFlag,
   enableAllControlPlaneFlags,
 } from "./test_helpers";
+import type { ConvexHarness } from "./test_helpers";
 
 // Worktree module discovery: convex-test resolves modules via node_modules,
 // which points to the main repo. New modules in this worktree (controlPlane.ts)
 // are invisible without an explicit glob rooted here.
 const modules = import.meta.glob("./**/*.*s");
+
+const BALANCED_POLICY = {
+  review: {
+    enforcement: "task_and_phase" as const,
+    detector_scope: "whole_repo_pattern_index" as const,
+    architect_mode: "manual_plus_auto" as const,
+    test_integrity_profile: "strict_baseline" as const,
+    hard_block_detectors: true,
+    allow_rare_override: true,
+    require_fix_first: true,
+  },
+  model: {
+    validator: "opus",
+    planner: "opus",
+    executor: "opus",
+    reviewer: "opus",
+  },
+};
+
+const STRICT_POLICY = {
+  review: {
+    enforcement: "task_and_phase" as const,
+    detector_scope: "whole_repo_pattern_index" as const,
+    architect_mode: "manual_plus_auto" as const,
+    test_integrity_profile: "max_strict" as const,
+    hard_block_detectors: true,
+    allow_rare_override: false,
+    require_fix_first: true,
+  },
+  model: {
+    validator: "opus",
+    planner: "opus",
+    executor: "opus",
+    reviewer: "opus",
+  },
+};
+
+async function createValidatedLaunchFixture(t: ConvexHarness) {
+  const nodeId = await createNode(t);
+  const projectId = await createProject(t);
+  const designId = await createDesign(t, {
+    projectId,
+    markdown: "# Test Feature\n\n## Phase 1: Build\n\nBuild it\n\n## Phase 2: Test\n\nTest it",
+    complexityPreset: "simple",
+  });
+  // Complete all markers
+  await t.mutation(api.designs.updateDesignMarkers, {
+    designId,
+    completedMarkers: ["objective_defined", "scope_bounded"],
+  });
+  return { nodeId, projectId, designId };
+}
 
 describe("controlPlane:startOrchestration", () => {
   test("creates control action and inbound action with correct fields", async () => {
@@ -779,17 +832,15 @@ describe("controlPlane:startOrchestration schema validation", () => {
 describe("controlPlane:launchOrchestration", () => {
   test("creates orchestration, action log, queue, and event", async () => {
     const t = convexTest(schema, modules);
-    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    const { projectId, designId } = await createValidatedLaunchFixture(t);
     await enableAllControlPlaneFlags(t);
 
     const result = await t.mutation(api.controlPlane.launchOrchestration, {
       projectId,
       designId,
-      nodeId,
       feature: "my-feature",
       branch: "tina/my-feature",
-      totalPhases: 3,
-      policyPreset: "balanced",
+      policySnapshot: BALANCED_POLICY,
       requestedBy: "web-ui",
       idempotencyKey: "launch-1",
     });
@@ -805,8 +856,9 @@ describe("controlPlane:launchOrchestration", () => {
     expect(orchestration!.status).toBe("launching");
     expect(orchestration!.featureName).toBe("my-feature");
     expect(orchestration!.policySnapshotHash).toMatch(/^sha256-/);
-    expect(orchestration!.presetOrigin).toBe("balanced");
     expect(orchestration!.designOnly).toBe(true);
+    // totalPhases derived from design (2 phases in fixture markdown)
+    expect(orchestration!.totalPhases).toBe(2);
 
     // Verify control action was created
     const actions = await t.query(api.controlPlane.listControlActions, {
@@ -818,7 +870,7 @@ describe("controlPlane:launchOrchestration", () => {
 
   test("rejects nonexistent project", async () => {
     const t = convexTest(schema, modules);
-    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    const { projectId, designId } = await createValidatedLaunchFixture(t);
     await enableAllControlPlaneFlags(t);
 
     // Delete the project to make ID invalid
@@ -830,11 +882,9 @@ describe("controlPlane:launchOrchestration", () => {
       t.mutation(api.controlPlane.launchOrchestration, {
         projectId,
         designId,
-        nodeId,
         feature: "my-feature",
         branch: "tina/my-feature",
-        totalPhases: 3,
-        policyPreset: "balanced",
+        policySnapshot: BALANCED_POLICY,
         requestedBy: "web-ui",
         idempotencyKey: "launch-bad-project",
       }),
@@ -843,79 +893,132 @@ describe("controlPlane:launchOrchestration", () => {
 
   test("rejects design not belonging to project", async () => {
     const t = convexTest(schema, modules);
-    const { nodeId } = await createLaunchFixture(t);
+    await createValidatedLaunchFixture(t);
     await enableAllControlPlaneFlags(t);
 
     // Create a second project with its own design
     const projectB = await createProject(t, { name: "Other", repoPath: "/other" });
     const designB = await createDesign(t, { projectId: projectB });
 
-    // Use projectA's fixture but designB from projectB
+    // Use projectA but designB from projectB
     const projectA = await createProject(t, { name: "Main", repoPath: "/main" });
 
     await expect(
       t.mutation(api.controlPlane.launchOrchestration, {
         projectId: projectA,
         designId: designB,
-        nodeId,
         feature: "cross-ref",
         branch: "tina/cross-ref",
-        totalPhases: 2,
-        policyPreset: "balanced",
+        policySnapshot: BALANCED_POLICY,
         requestedBy: "web-ui",
         idempotencyKey: "launch-cross-design",
       }),
     ).rejects.toThrow("does not belong to project");
   });
 
-  test("rejects offline node", async () => {
+  test("rejects when no nodes are online", async () => {
     const t = convexTest(schema, modules);
-    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    const { projectId, designId } = await createValidatedLaunchFixture(t);
     await enableAllControlPlaneFlags(t);
 
-    // Patch lastHeartbeat to old value to simulate offline node
-    await t.run(async (ctx) => {
-      await ctx.db.patch(nodeId, { lastHeartbeat: Date.now() - 120_000 });
-    });
+    // Make node offline by setting old heartbeat
+    const nodes = await t.run(async (ctx) => ctx.db.query("nodes").collect());
+    for (const node of nodes) {
+      await t.run(async (ctx) => {
+        await ctx.db.patch(node._id, { lastHeartbeat: Date.now() - 120_000 });
+      });
+    }
 
     await expect(
       t.mutation(api.controlPlane.launchOrchestration, {
         projectId,
         designId,
-        nodeId,
         feature: "my-feature",
         branch: "tina/my-feature",
-        totalPhases: 3,
-        policyPreset: "balanced",
+        policySnapshot: BALANCED_POLICY,
         requestedBy: "web-ui",
-        idempotencyKey: "launch-offline",
+        idempotencyKey: "launch-no-nodes",
       }),
-    ).rejects.toThrow("offline");
+    ).rejects.toThrow("No online nodes available");
   });
 
-  test("rejects unknown preset name", async () => {
+  test("rejects launch when design markers incomplete", async () => {
     const t = convexTest(schema, modules);
-    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    await createNode(t);
+    const projectId = await createProject(t);
+    const designId = await createDesign(t, {
+      projectId,
+      markdown: "# Test\n\n## Phase 1: Build\n\nBuild it",
+      complexityPreset: "standard",
+    });
+    // Leave markers incomplete
     await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.launchOrchestration, {
         projectId,
         designId,
-        nodeId,
-        feature: "my-feature",
-        branch: "tina/my-feature",
-        totalPhases: 3,
-        policyPreset: "turbo",
+        feature: "incomplete",
+        branch: "tina/incomplete",
+        policySnapshot: BALANCED_POLICY,
         requestedBy: "web-ui",
-        idempotencyKey: "launch-bad-preset",
+        idempotencyKey: "launch-incomplete",
       }),
-    ).rejects.toThrow("Unknown preset");
+    ).rejects.toThrow("Design not ready for launch");
+  });
+
+  test("rejects launch when phase structure invalid", async () => {
+    const t = convexTest(schema, modules);
+    await createNode(t);
+    const projectId = await createProject(t);
+    const designId = await createDesign(t, {
+      projectId,
+      markdown: "# No phases here",
+      complexityPreset: "simple",
+    });
+    await t.mutation(api.designs.updateDesignMarkers, {
+      designId,
+      completedMarkers: ["objective_defined", "scope_bounded"],
+    });
+    await enableAllControlPlaneFlags(t);
+
+    await expect(
+      t.mutation(api.controlPlane.launchOrchestration, {
+        projectId,
+        designId,
+        feature: "bad-phases",
+        branch: "tina/bad-phases",
+        policySnapshot: BALANCED_POLICY,
+        requestedBy: "web-ui",
+        idempotencyKey: "launch-bad-phases",
+      }),
+    ).rejects.toThrow("Design not ready for launch");
+  });
+
+  test("derives totalPhases from design phaseCount", async () => {
+    const t = convexTest(schema, modules);
+    const { projectId, designId } = await createValidatedLaunchFixture(t);
+    await enableAllControlPlaneFlags(t);
+
+    const result = await t.mutation(api.controlPlane.launchOrchestration, {
+      projectId,
+      designId,
+      feature: "derived-phases",
+      branch: "tina/derived-phases",
+      policySnapshot: BALANCED_POLICY,
+      requestedBy: "web-ui",
+      idempotencyKey: "launch-derived",
+    });
+
+    const orchestration = await t.run(async (ctx) => {
+      return await ctx.db.get(result.orchestrationId);
+    });
+    expect(orchestration!.totalPhases).toBe(2);
   });
 
   test("designOnly is false when ticketIds provided", async () => {
     const t = convexTest(schema, modules);
-    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    const { projectId, designId } = await createValidatedLaunchFixture(t);
     await enableAllControlPlaneFlags(t);
 
     // Create a ticket for this project
@@ -929,12 +1032,10 @@ describe("controlPlane:launchOrchestration", () => {
     const result = await t.mutation(api.controlPlane.launchOrchestration, {
       projectId,
       designId,
-      nodeId,
       feature: "ticketed-feature",
       branch: "tina/ticketed-feature",
-      totalPhases: 2,
       ticketIds: [ticketId],
-      policyPreset: "balanced",
+      policySnapshot: BALANCED_POLICY,
       requestedBy: "web-ui",
       idempotencyKey: "launch-with-tickets",
     });
@@ -947,17 +1048,15 @@ describe("controlPlane:launchOrchestration", () => {
 
   test("idempotency: same key returns same IDs", async () => {
     const t = convexTest(schema, modules);
-    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    const { projectId, designId } = await createValidatedLaunchFixture(t);
     await enableAllControlPlaneFlags(t);
 
     const args = {
       projectId,
       designId,
-      nodeId,
       feature: "idem-feature",
       branch: "tina/idem-feature",
-      totalPhases: 3,
-      policyPreset: "balanced",
+      policySnapshot: BALANCED_POLICY,
       requestedBy: "web-ui",
       idempotencyKey: "launch-dedup",
     };
@@ -972,17 +1071,15 @@ describe("controlPlane:launchOrchestration", () => {
 describe("controlPlane:launchOrchestration:integration", () => {
   test("e2e: launch creates orchestration, action-log, queue, and event", async () => {
     const t = convexTest(schema, modules);
-    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    const { projectId, designId } = await createValidatedLaunchFixture(t);
     await enableAllControlPlaneFlags(t);
 
     const result = await t.mutation(api.controlPlane.launchOrchestration, {
       projectId,
       designId,
-      nodeId,
       feature: "e2e-launch",
       branch: "tina/e2e-launch",
-      totalPhases: 3,
-      policyPreset: "strict",
+      policySnapshot: STRICT_POLICY,
       requestedBy: "web:operator",
       idempotencyKey: "e2e-launch-001",
     });
@@ -994,7 +1091,8 @@ describe("controlPlane:launchOrchestration:integration", () => {
     expect(orch).not.toBeNull();
     expect(orch!.featureName).toBe("e2e-launch");
     expect(orch!.status).toBe("launching");
-    expect(orch!.totalPhases).toBe(3);
+    // totalPhases derived from design (2 phases in fixture markdown)
+    expect(orch!.totalPhases).toBe(2);
     expect(orch!.policySnapshot).toBeDefined();
     const policy = JSON.parse(orch!.policySnapshot as string);
     expect(policy.review.test_integrity_profile).toBe("max_strict");
@@ -2784,17 +2882,15 @@ describe("controlPlane:featureFlagGuards", () => {
   describe("launchOrchestration", () => {
     test("rejects when cp.launch_from_web flag is not set", async () => {
       const t = convexTest(schema, modules);
-      const { nodeId, projectId, designId } = await createLaunchFixture(t);
+      const { projectId, designId } = await createValidatedLaunchFixture(t);
 
       await expect(
         t.mutation(api.controlPlane.launchOrchestration, {
           projectId,
           designId,
-          nodeId,
           feature: "gated-feature",
           branch: "tina/gated-feature",
-          totalPhases: 2,
-          policyPreset: "balanced",
+          policySnapshot: BALANCED_POLICY,
           requestedBy: "web-ui",
           idempotencyKey: "flag-gate-launch-1",
         }),
@@ -2803,18 +2899,16 @@ describe("controlPlane:featureFlagGuards", () => {
 
     test("rejects when cp.launch_from_web flag is explicitly disabled", async () => {
       const t = convexTest(schema, modules);
-      const { nodeId, projectId, designId } = await createLaunchFixture(t);
+      const { projectId, designId } = await createValidatedLaunchFixture(t);
       await seedFeatureFlag(t, "cp.launch_from_web", false);
 
       await expect(
         t.mutation(api.controlPlane.launchOrchestration, {
           projectId,
           designId,
-          nodeId,
           feature: "gated-feature",
           branch: "tina/gated-feature",
-          totalPhases: 2,
-          policyPreset: "balanced",
+          policySnapshot: BALANCED_POLICY,
           requestedBy: "web-ui",
           idempotencyKey: "flag-gate-launch-2",
         }),
@@ -2823,17 +2917,15 @@ describe("controlPlane:featureFlagGuards", () => {
 
     test("succeeds when cp.launch_from_web flag is enabled", async () => {
       const t = convexTest(schema, modules);
-      const { nodeId, projectId, designId } = await createLaunchFixture(t);
+      const { projectId, designId } = await createValidatedLaunchFixture(t);
       await seedFeatureFlag(t, "cp.launch_from_web", true);
 
       const result = await t.mutation(api.controlPlane.launchOrchestration, {
         projectId,
         designId,
-        nodeId,
         feature: "gated-feature",
         branch: "tina/gated-feature",
-        totalPhases: 2,
-        policyPreset: "balanced",
+        policySnapshot: BALANCED_POLICY,
         requestedBy: "web-ui",
         idempotencyKey: "flag-gate-launch-3",
       });
