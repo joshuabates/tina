@@ -1034,7 +1034,7 @@ describe("controlPlane:runtime-controls:integration", () => {
       "cp-feature",
     );
 
-    await t.mutation(api.controlPlane.enqueueControlAction, {
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
       nodeId,
       actionType: "resume",
@@ -1043,12 +1043,25 @@ describe("controlPlane:runtime-controls:integration", () => {
       idempotencyKey: "e2e-resume-001",
     });
 
+    // 1. Control-plane action log
     const actions = await t.query(api.controlPlane.listControlActions, {
       orchestrationId,
     });
     expect(actions).toHaveLength(1);
     expect(actions[0].actionType).toBe("resume");
+    expect(actions[0].status).toBe("pending");
+    expect(actions[0].requestedBy).toBe("web:operator");
+    expect(actions[0].queueActionId).toBeDefined();
 
+    // 2. Queue entry linked back
+    const queueAction = await t.run(async (ctx) => {
+      return await ctx.db.get(actions[0].queueActionId!);
+    });
+    expect(queueAction).not.toBeNull();
+    expect(queueAction!.controlActionId).toBe(actionId);
+    expect(queueAction!.type).toBe("resume");
+
+    // 3. Audit event
     const events = await t.query(api.events.listEvents, {
       orchestrationId,
       eventType: "control_action_requested",
@@ -1064,7 +1077,7 @@ describe("controlPlane:runtime-controls:integration", () => {
       "cp-feature",
     );
 
-    await t.mutation(api.controlPlane.enqueueControlAction, {
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
       nodeId,
       actionType: "retry",
@@ -1073,12 +1086,25 @@ describe("controlPlane:runtime-controls:integration", () => {
       idempotencyKey: "e2e-retry-001",
     });
 
+    // 1. Control-plane action log
     const actions = await t.query(api.controlPlane.listControlActions, {
       orchestrationId,
     });
     expect(actions).toHaveLength(1);
     expect(actions[0].actionType).toBe("retry");
+    expect(actions[0].status).toBe("pending");
+    expect(actions[0].requestedBy).toBe("web:operator");
+    expect(actions[0].queueActionId).toBeDefined();
 
+    // 2. Queue entry linked back
+    const queueAction = await t.run(async (ctx) => {
+      return await ctx.db.get(actions[0].queueActionId!);
+    });
+    expect(queueAction).not.toBeNull();
+    expect(queueAction!.controlActionId).toBe(actionId);
+    expect(queueAction!.type).toBe("retry");
+
+    // 3. Audit event
     const events = await t.query(api.events.listEvents, {
       orchestrationId,
       eventType: "control_action_requested",
