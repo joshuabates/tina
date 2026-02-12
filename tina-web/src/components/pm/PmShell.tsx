@@ -51,6 +51,10 @@ function PmSidebar() {
         const isDesignsActive =
           isActive && currentPath.startsWith("/pm/designs")
 
+        const launchPath = `/pm/launch?project=${project._id}`
+        const isLaunchActive =
+          isActive && currentPath.startsWith("/pm/launch")
+
         return (
           <div key={project._id} className={styles.projectGroup}>
             <div
@@ -72,6 +76,13 @@ function PmSidebar() {
               aria-current={isDesignsActive ? "page" : undefined}
             >
               Designs
+            </Link>
+            <Link
+              to={launchPath}
+              className={styles.entityRow}
+              aria-current={isLaunchActive ? "page" : undefined}
+            >
+              Launch
             </Link>
           </div>
         )
