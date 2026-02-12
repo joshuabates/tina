@@ -7,6 +7,8 @@ import {
   createLaunchFixture,
   createDesign,
   createProject,
+  seedFeatureFlag,
+  enableAllControlPlaneFlags,
 } from "./test_helpers";
 
 // Worktree module discovery: convex-test resolves modules via node_modules,
@@ -207,6 +209,7 @@ describe("controlPlane:enqueueControlAction", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -234,6 +237,7 @@ describe("controlPlane:enqueueControlAction", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -303,6 +307,7 @@ describe("controlPlane:enqueueControlAction", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     const firstId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -331,6 +336,7 @@ describe("controlPlane:enqueueControlAction", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     // Seed tasks so task_edit/task_set_model can find them
     await t.mutation(api.executionTasks.seedExecutionTasks, {
@@ -391,6 +397,7 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -410,6 +417,7 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -429,6 +437,7 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -448,6 +457,7 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -467,6 +477,7 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -486,6 +497,7 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -505,6 +517,7 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -524,6 +537,7 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -551,6 +565,7 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     // task_edit with empty payload should now be rejected (requires feature, phaseNumber, etc.)
     await expect(
@@ -576,6 +591,7 @@ describe("controlPlane:enqueueControlAction:auditTrail", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -610,6 +626,7 @@ describe("controlPlane:listControlActions", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -644,6 +661,7 @@ describe("controlPlane:listControlActions", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     for (let i = 0; i < 5; i++) {
       await t.mutation(api.controlPlane.enqueueControlAction, {
@@ -762,6 +780,7 @@ describe("controlPlane:launchOrchestration", () => {
   test("creates orchestration, action log, queue, and event", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    await enableAllControlPlaneFlags(t);
 
     const result = await t.mutation(api.controlPlane.launchOrchestration, {
       projectId,
@@ -800,6 +819,7 @@ describe("controlPlane:launchOrchestration", () => {
   test("rejects nonexistent project", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    await enableAllControlPlaneFlags(t);
 
     // Delete the project to make ID invalid
     await t.run(async (ctx) => {
@@ -824,6 +844,7 @@ describe("controlPlane:launchOrchestration", () => {
   test("rejects design not belonging to project", async () => {
     const t = convexTest(schema, modules);
     const { nodeId } = await createLaunchFixture(t);
+    await enableAllControlPlaneFlags(t);
 
     // Create a second project with its own design
     const projectB = await createProject(t, { name: "Other", repoPath: "/other" });
@@ -850,6 +871,7 @@ describe("controlPlane:launchOrchestration", () => {
   test("rejects offline node", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    await enableAllControlPlaneFlags(t);
 
     // Patch lastHeartbeat to old value to simulate offline node
     await t.run(async (ctx) => {
@@ -874,6 +896,7 @@ describe("controlPlane:launchOrchestration", () => {
   test("rejects unknown preset name", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.launchOrchestration, {
@@ -893,6 +916,7 @@ describe("controlPlane:launchOrchestration", () => {
   test("designOnly is false when ticketIds provided", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    await enableAllControlPlaneFlags(t);
 
     // Create a ticket for this project
     const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -924,6 +948,7 @@ describe("controlPlane:launchOrchestration", () => {
   test("idempotency: same key returns same IDs", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    await enableAllControlPlaneFlags(t);
 
     const args = {
       projectId,
@@ -948,6 +973,7 @@ describe("controlPlane:launchOrchestration:integration", () => {
   test("e2e: launch creates orchestration, action-log, queue, and event", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, projectId, designId } = await createLaunchFixture(t);
+    await enableAllControlPlaneFlags(t);
 
     const result = await t.mutation(api.controlPlane.launchOrchestration, {
       projectId,
@@ -1001,6 +1027,7 @@ describe("controlPlane:runtime-controls:integration", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -1044,6 +1071,7 @@ describe("controlPlane:runtime-controls:integration", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -1087,6 +1115,7 @@ describe("controlPlane:runtime-controls:integration", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -1130,6 +1159,7 @@ describe("controlPlane:runtime-controls:integration", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -1335,6 +1365,7 @@ describe("controlPlane:enqueueControlAction:policyValidation", () => {
   test("rejects orchestration_set_policy with invalid JSON", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1351,6 +1382,7 @@ describe("controlPlane:enqueueControlAction:policyValidation", () => {
   test("rejects orchestration_set_policy missing feature", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1367,6 +1399,7 @@ describe("controlPlane:enqueueControlAction:policyValidation", () => {
   test("rejects orchestration_set_policy missing targetRevision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1383,6 +1416,7 @@ describe("controlPlane:enqueueControlAction:policyValidation", () => {
   test("rejects orchestration_set_policy with unknown model role", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1403,6 +1437,7 @@ describe("controlPlane:enqueueControlAction:policyValidation", () => {
   test("rejects orchestration_set_policy with invalid model name", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1423,6 +1458,7 @@ describe("controlPlane:enqueueControlAction:policyValidation", () => {
   test("accepts valid orchestration_set_policy and increments policyRevision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -1449,6 +1485,7 @@ describe("controlPlane:enqueueControlAction:policyValidation", () => {
   test("rejects orchestration_set_policy with stale revision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     // First, successfully set policy at revision 0
     await t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1482,6 +1519,7 @@ describe("controlPlane:enqueueControlAction:policyValidation", () => {
   test("accepts orchestration_set_policy with valid model assignments", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -1504,6 +1542,7 @@ describe("controlPlane:enqueueControlAction:roleModelValidation", () => {
   test("rejects orchestration_set_role_model with invalid JSON", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1520,6 +1559,7 @@ describe("controlPlane:enqueueControlAction:roleModelValidation", () => {
   test("rejects orchestration_set_role_model missing feature", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1536,6 +1576,7 @@ describe("controlPlane:enqueueControlAction:roleModelValidation", () => {
   test("rejects orchestration_set_role_model missing targetRevision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1552,6 +1593,7 @@ describe("controlPlane:enqueueControlAction:roleModelValidation", () => {
   test("rejects orchestration_set_role_model with invalid role", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1573,6 +1615,7 @@ describe("controlPlane:enqueueControlAction:roleModelValidation", () => {
   test("rejects orchestration_set_role_model with invalid model", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1594,6 +1637,7 @@ describe("controlPlane:enqueueControlAction:roleModelValidation", () => {
   test("accepts valid orchestration_set_role_model and increments policyRevision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -1621,6 +1665,7 @@ describe("controlPlane:enqueueControlAction:roleModelValidation", () => {
   test("rejects orchestration_set_role_model with stale revision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     // First, successfully set role model at revision 0
     await t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1660,6 +1705,7 @@ describe("controlPlane:policyReconfiguration:integration", () => {
   test("e2e: set_policy creates action log, queue entry, event, and increments revision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -1703,6 +1749,7 @@ describe("controlPlane:policyReconfiguration:integration", () => {
   test("e2e: set_role_model creates action log and increments revision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -1728,6 +1775,7 @@ describe("controlPlane:policyReconfiguration:integration", () => {
   test("sequential policy updates with correct revisions all succeed", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     // First: set executor to haiku (rev 0 -> 1)
     await t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1773,6 +1821,7 @@ describe("controlPlane:policyReconfiguration:integration", () => {
   test("concurrent requests with same revision: first wins, second fails", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     // First request succeeds
     await t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1802,6 +1851,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit with invalid JSON", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1818,6 +1868,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit missing feature", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1834,6 +1885,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit missing phaseNumber", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1850,6 +1902,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit missing taskNumber", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1866,6 +1919,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit missing revision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1882,6 +1936,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit with no edit fields", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1898,6 +1953,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit with invalid model", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1914,6 +1970,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit when task not found", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -1930,6 +1987,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit when task status is not pending", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -1963,6 +2021,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("rejects task_edit with stale revision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -1996,6 +2055,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("accepts valid task_edit and patches the task", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2035,6 +2095,7 @@ describe("controlPlane:enqueueControlAction:taskEditValidation", () => {
   test("task_edit only updates provided fields", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2071,6 +2132,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("rejects task_insert missing feature", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2087,6 +2149,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("rejects task_insert missing phaseNumber", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2103,6 +2166,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("rejects task_insert missing afterTask", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2119,6 +2183,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("rejects task_insert missing subject", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2135,6 +2200,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("rejects task_insert with invalid model", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2151,6 +2217,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("rejects task_insert with invalid dependsOn type", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2167,6 +2234,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("rejects task_insert when afterTask not found", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2183,6 +2251,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("rejects task_insert when dependency not found", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2205,6 +2274,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("accepts task_insert at beginning (afterTask: 0) with no existing tasks", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
       orchestrationId,
@@ -2232,6 +2302,7 @@ describe("controlPlane:enqueueControlAction:taskInsertValidation", () => {
   test("accepts valid task_insert and assigns max+1 taskNumber", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2282,6 +2353,7 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
   test("rejects task_set_model missing feature", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2298,6 +2370,7 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
   test("rejects task_set_model missing phaseNumber", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2314,6 +2387,7 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
   test("rejects task_set_model missing taskNumber", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2330,6 +2404,7 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
   test("rejects task_set_model missing revision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2346,6 +2421,7 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
   test("rejects task_set_model with invalid model", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2362,6 +2438,7 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
   test("rejects task_set_model when task not found", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await expect(
       t.mutation(api.controlPlane.enqueueControlAction, {
@@ -2378,6 +2455,7 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
   test("rejects task_set_model when task status is not pending", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2410,6 +2488,7 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
   test("rejects task_set_model with stale revision", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2443,6 +2522,7 @@ describe("controlPlane:enqueueControlAction:taskSetModelValidation", () => {
   test("accepts valid task_set_model and patches the task", async () => {
     const t = convexTest(schema, modules);
     const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2478,6 +2558,7 @@ describe("controlPlane:taskReconfiguration:integration", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2542,6 +2623,7 @@ describe("controlPlane:taskReconfiguration:integration", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2596,6 +2678,7 @@ describe("controlPlane:taskReconfiguration:integration", () => {
       t,
       "cp-feature",
     );
+    await enableAllControlPlaneFlags(t);
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
       orchestrationId,
@@ -2694,5 +2777,231 @@ describe("controlPlane:taskReconfiguration:integration", () => {
       eventType: "control_action_requested",
     });
     expect(events).toHaveLength(3);
+  });
+});
+
+describe("controlPlane:featureFlagGuards", () => {
+  describe("launchOrchestration", () => {
+    test("rejects when cp.launch_from_web flag is not set", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, projectId, designId } = await createLaunchFixture(t);
+
+      await expect(
+        t.mutation(api.controlPlane.launchOrchestration, {
+          projectId,
+          designId,
+          nodeId,
+          feature: "gated-feature",
+          branch: "tina/gated-feature",
+          totalPhases: 2,
+          policyPreset: "balanced",
+          requestedBy: "web-ui",
+          idempotencyKey: "flag-gate-launch-1",
+        }),
+      ).rejects.toThrow("cp.launch_from_web");
+    });
+
+    test("rejects when cp.launch_from_web flag is explicitly disabled", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, projectId, designId } = await createLaunchFixture(t);
+      await seedFeatureFlag(t, "cp.launch_from_web", false);
+
+      await expect(
+        t.mutation(api.controlPlane.launchOrchestration, {
+          projectId,
+          designId,
+          nodeId,
+          feature: "gated-feature",
+          branch: "tina/gated-feature",
+          totalPhases: 2,
+          policyPreset: "balanced",
+          requestedBy: "web-ui",
+          idempotencyKey: "flag-gate-launch-2",
+        }),
+      ).rejects.toThrow("cp.launch_from_web");
+    });
+
+    test("succeeds when cp.launch_from_web flag is enabled", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, projectId, designId } = await createLaunchFixture(t);
+      await seedFeatureFlag(t, "cp.launch_from_web", true);
+
+      const result = await t.mutation(api.controlPlane.launchOrchestration, {
+        projectId,
+        designId,
+        nodeId,
+        feature: "gated-feature",
+        branch: "tina/gated-feature",
+        totalPhases: 2,
+        policyPreset: "balanced",
+        requestedBy: "web-ui",
+        idempotencyKey: "flag-gate-launch-3",
+      });
+
+      expect(result.orchestrationId).toBeTruthy();
+      expect(result.actionId).toBeTruthy();
+    });
+  });
+
+  describe("enqueueControlAction runtime controls", () => {
+    test("rejects pause when cp.runtime_controls flag is not set", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-flag-test");
+
+      await expect(
+        t.mutation(api.controlPlane.enqueueControlAction, {
+          orchestrationId,
+          nodeId,
+          actionType: "pause",
+          payload: '{"feature":"test","phase":"1"}',
+          requestedBy: "web-ui",
+          idempotencyKey: "flag-gate-pause-1",
+        }),
+      ).rejects.toThrow("cp.runtime_controls");
+    });
+
+    test("rejects resume when cp.runtime_controls flag is disabled", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-flag-test");
+      await seedFeatureFlag(t, "cp.runtime_controls", false);
+
+      await expect(
+        t.mutation(api.controlPlane.enqueueControlAction, {
+          orchestrationId,
+          nodeId,
+          actionType: "resume",
+          payload: '{"feature":"test"}',
+          requestedBy: "web-ui",
+          idempotencyKey: "flag-gate-resume-1",
+        }),
+      ).rejects.toThrow("cp.runtime_controls");
+    });
+
+    test("succeeds pause when cp.runtime_controls flag is enabled", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-flag-test");
+      await seedFeatureFlag(t, "cp.runtime_controls", true);
+
+      const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "pause",
+        payload: '{"feature":"test","phase":"1"}',
+        requestedBy: "web-ui",
+        idempotencyKey: "flag-gate-pause-2",
+      });
+
+      expect(actionId).toBeTruthy();
+    });
+  });
+
+  describe("enqueueControlAction policy reconfiguration", () => {
+    test("rejects orchestration_set_policy when cp.policy_reconfiguration is not set", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-flag-test");
+
+      await expect(
+        t.mutation(api.controlPlane.enqueueControlAction, {
+          orchestrationId,
+          nodeId,
+          actionType: "orchestration_set_policy",
+          payload: JSON.stringify({ feature: "test", targetRevision: 0 }),
+          requestedBy: "web-ui",
+          idempotencyKey: "flag-gate-policy-1",
+        }),
+      ).rejects.toThrow("cp.policy_reconfiguration");
+    });
+
+    test("succeeds orchestration_set_policy when cp.policy_reconfiguration is enabled", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-flag-test");
+      await seedFeatureFlag(t, "cp.policy_reconfiguration", true);
+
+      const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_policy",
+        payload: JSON.stringify({ feature: "test", targetRevision: 0 }),
+        requestedBy: "web-ui",
+        idempotencyKey: "flag-gate-policy-2",
+      });
+
+      expect(actionId).toBeTruthy();
+    });
+  });
+
+  describe("enqueueControlAction task reconfiguration", () => {
+    test("rejects task_edit when cp.task_reconfiguration is not set", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-flag-test");
+
+      await expect(
+        t.mutation(api.controlPlane.enqueueControlAction, {
+          orchestrationId,
+          nodeId,
+          actionType: "task_edit",
+          payload: JSON.stringify({
+            feature: "test",
+            phaseNumber: "1",
+            taskNumber: 1,
+            revision: 1,
+            subject: "Updated",
+          }),
+          requestedBy: "web-ui",
+          idempotencyKey: "flag-gate-task-edit-1",
+        }),
+      ).rejects.toThrow("cp.task_reconfiguration");
+    });
+
+    test("rejects task_insert when cp.task_reconfiguration is not set", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-flag-test");
+
+      await expect(
+        t.mutation(api.controlPlane.enqueueControlAction, {
+          orchestrationId,
+          nodeId,
+          actionType: "task_insert",
+          payload: JSON.stringify({
+            feature: "test",
+            phaseNumber: "1",
+            afterTask: 0,
+            subject: "New task",
+          }),
+          requestedBy: "web-ui",
+          idempotencyKey: "flag-gate-task-insert-1",
+        }),
+      ).rejects.toThrow("cp.task_reconfiguration");
+    });
+
+    test("succeeds task_edit when cp.task_reconfiguration is enabled", async () => {
+      const t = convexTest(schema, modules);
+      const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-flag-test");
+      await seedFeatureFlag(t, "cp.task_reconfiguration", true);
+
+      // Seed a task so task_edit can find it
+      await t.mutation(api.executionTasks.seedExecutionTasks, {
+        orchestrationId,
+        phaseNumber: "1",
+        tasks: [{ taskNumber: 1, subject: "Task one" }],
+      });
+
+      const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "task_edit",
+        payload: JSON.stringify({
+          feature: "test",
+          phaseNumber: "1",
+          taskNumber: 1,
+          revision: 1,
+          subject: "Updated",
+        }),
+        requestedBy: "web-ui",
+        idempotencyKey: "flag-gate-task-edit-2",
+      });
+
+      expect(actionId).toBeTruthy();
+    });
   });
 });

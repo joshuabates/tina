@@ -1,9 +1,20 @@
 import { query, mutation } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { resolvePolicy, hashPolicy } from "./policyPresets";
 import { HEARTBEAT_TIMEOUT_MS } from "./nodes";
+
+async function checkFeatureFlag(
+  ctx: MutationCtx | QueryCtx,
+  key: string,
+): Promise<boolean> {
+  const flag = await ctx.db
+    .query("featureFlags")
+    .withIndex("by_key", (q: any) => q.eq("key", key))
+    .first();
+  return flag?.enabled ?? false;
+}
 
 const RUNTIME_ACTION_TYPES = [
   "pause",
@@ -398,6 +409,12 @@ export const launchOrchestration = mutation({
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
+    // Feature flag gate
+    const launchEnabled = await checkFeatureFlag(ctx, "cp.launch_from_web");
+    if (!launchEnabled) {
+      throw new Error("Launch from web is not enabled. Set cp.launch_from_web feature flag to enable.");
+    }
+
     // Validate project exists
     const project = await ctx.db.get(args.projectId);
     if (!project) {
@@ -527,6 +544,27 @@ export const enqueueControlAction = mutation({
       throw new Error(
         `Invalid actionType: "${args.actionType}". Allowed: ${RUNTIME_ACTION_TYPES.join(", ")}`,
       );
+    }
+
+    // Feature flag gates per action category
+    const FLAG_MAP: Record<string, string> = {
+      pause: "cp.runtime_controls",
+      resume: "cp.runtime_controls",
+      retry: "cp.runtime_controls",
+      orchestration_set_policy: "cp.policy_reconfiguration",
+      orchestration_set_role_model: "cp.policy_reconfiguration",
+      task_edit: "cp.task_reconfiguration",
+      task_insert: "cp.task_reconfiguration",
+      task_set_model: "cp.task_reconfiguration",
+    };
+    const flagKey = FLAG_MAP[args.actionType];
+    if (flagKey) {
+      const flagEnabled = await checkFeatureFlag(ctx, flagKey);
+      if (!flagEnabled) {
+        throw new Error(
+          `Action "${args.actionType}" is not enabled. Set ${flagKey} feature flag to enable.`,
+        );
+      }
     }
 
     // Validate payload structure per action type
