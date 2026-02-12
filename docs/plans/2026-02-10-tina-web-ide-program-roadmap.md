@@ -26,6 +26,13 @@ Prioritize features that increase Tina's ability to plan and improve itself:
 3. Mechanical review loop (so quality scales with agent throughput)
 4. Deep operator surfaces (terminal/editor embedding) after control/review workflows are reliable
 
+## Current Program Status (As of 2026-02-12)
+
+- Project 1: complete
+- Project 2: complete
+- Project 3: not started (next)
+- Project 4+: not started
+
 ## Program Breakdown (Large Projects)
 
 ## Project 1: Work Graph and Project Management Core
@@ -75,35 +82,23 @@ Start orchestrations from Tina and reconfigure them safely while running.
 ## Project 3: Feedback Fabric (Human + Agent)
 
 **Goal**
-Make feedback first-class, structured, and attachable to any running artifact.
+Make feedback first-class, structured, attachable to running artifacts, and convertible into explicit follow-up execution.
 
 **Includes**
 - Artifact-linked feedback: freeform comments plus typed review artifacts (`comment`, `suggestion`, `ask_for_change`)
 - Targets: ticket, design, plan, task, commit, code range, PR review item
+- Follow-up generation workflow: blocking feedback creates remediation tasks in current phase
+- Triage flow that decides informational vs blocking outcomes and escalates cross-phase/global issues
+- Resolution loop linking feedback -> follow-up task -> completion status
 - Activity stream + subscriptions for agents and humans
 
 **Why third**
 - Required before meaningful mechanical reviews and HITL gates.
 - Enables consistent "give feedback while work runs" loop.
-
-**Exit criteria**
-- Feedback entered in Tina is visible in orchestration context and traceable to resolution.
-
-## Project 3.5: Feedback Triage and Remediation Wiring
-
-**Goal**
-Turn blocking feedback into explicit, phase-safe follow-up execution.
-
-**Includes**
-- Follow-up generation workflow: blocking feedback creates remediation tasks in current phase
-- Triage flow that decides informational vs blocking outcomes and escalates cross-phase/global issues
-- Resolution loop linking feedback -> follow-up task -> completion status
-
-**Why 3.5**
-- Depends on control-plane/runtime task reconfiguration maturity from Project 2.
 - De-risks Project 4 by establishing a reliable closure path for review findings before full review workbench/HITL expansion.
 
 **Exit criteria**
+- Feedback entered in Tina is visible in orchestration context and traceable to resolution.
 - Blocking feedback can trigger explicit follow-up tasks with audit trace.
 - Operators can see whether each blocking artifact is unresolved, in-progress, or resolved.
 
@@ -182,7 +177,7 @@ Mobile experience focused on monitoring, triage, approvals, and short feedback l
 - Start orchestration from Tina -> Project 2
 - Pre-configuration and live reconfiguration -> Project 2
 - Feedback to running orchestration (freeform + edits + commit comments) -> Project 3
-- Blocking feedback -> remediation follow-up tasks in active flow -> Project 3.5
+- Blocking feedback -> remediation follow-up tasks in active flow -> Project 3
 - Mechanical review + PR-like UI + agent review response -> Project 4
 - Embedded terminal to any agent -> Project 5
 - Model controls across orchestration (including Codex) -> Project 2
@@ -190,16 +185,15 @@ Mobile experience focused on monitoring, triage, approvals, and short feedback l
 - Embedded neovim -> Project 6
 - Mobile -> Project 7
 
-## Recommended Execution Order
+## Remaining Execution Order (From Current State)
 
-1. Project 1 (Work Graph and PM Core)
-2. Project 2 (Launch and Control Plane v1)
-3. Project 3 (Feedback Fabric)
-4. Project 3.5 (Feedback Triage and Remediation Wiring)
-5. Project 4 (Mechanical Review Workbench + HITL)
-6. Project 5 (Agent Console)
-7. Project 6 (Source Workspace + Neovim)
-8. Project 7 (Mobile Command Surface)
+Project 1 and Project 2 are complete.
+
+1. Project 3 (Feedback Fabric)
+2. Project 4 (Mechanical Review Workbench + HITL)
+3. Project 5 (Agent Console)
+4. Project 6 (Source Workspace + Neovim)
+5. Project 7 (Mobile Command Surface)
 
 ## Known Wall Risks
 
@@ -211,9 +205,10 @@ Mitigation: finish Projects 1-4 first so Tina remains valuable even if deep IDE 
 
 ## Next Planning Pass (Suggested)
 
-For immediate execution planning, split Projects 1-2 into detailed phases with:
+For immediate execution planning, split Project 3 into detailed phases (feedback capture first, then triage/remediation wiring) with:
 - schema changes
 - API contracts
 - UI routes/components
 - daemon/session integration points
-- migration plan and acceptance tests
+- agent/CLI integration points
+- acceptance tests and rollout gating

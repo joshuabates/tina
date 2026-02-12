@@ -3,16 +3,15 @@
 ## Status
 
 Drafted on 2026-02-12.
+Current state on 2026-02-12: Project 2 complete; Project 3 not started.
 
 ## Context
 
-Project 1 established canonical PM entities and comments for design/ticket workflows. Project 2 is establishing launch/control-plane foundations for orchestration operations. Project 3 introduces first-class feedback for running orchestration artifacts without coupling to mid-flight remediation insertion logic.
+Project 1 established canonical PM entities and comments for design/ticket workflows. Project 2 completed launch/control-plane foundations for orchestration operations. Project 3 introduces first-class feedback for running orchestration artifacts without coupling to mid-flight remediation insertion logic.
 
-The roadmap now splits feedback work into:
-- Project 3: feedback capture, traceability, and realtime visibility
-- Project 3.5: triage/remediation wiring from blocking feedback to follow-up task execution
-
-This document defines Project 3 only.
+The roadmap now treats feedback as one project with internal phases:
+- Phase 1 (this document): feedback capture, traceability, and realtime visibility
+- Phase 2: triage/remediation wiring from blocking feedback to follow-up task execution
 
 ## Locked Scope Decisions
 
@@ -31,7 +30,7 @@ This document defines Project 3 only.
 1. Make feedback on runtime work first-class and queryable.
 2. Keep feedback traceable to concrete orchestration artifacts.
 3. Let humans and agents collaborate on feedback in the same canonical store.
-4. Provide clear unresolved/resolved blocking visibility before Project 3.5.
+4. Provide clear unresolved/resolved blocking visibility before Phase 2 remediation wiring.
 
 ## Non-Goals (Project 3)
 
@@ -184,6 +183,13 @@ Integration tests:
 3. Agent/client wrappers + integration tests
 4. Hardening: index tuning and query profile review
 
+## Phase 2 Scope (Project 3, Next)
+
+- Triage flow that decides informational vs blocking outcomes for newly created feedback.
+- Follow-up generation workflow that creates remediation tasks from open blocking entries.
+- Dependency wiring so follow-up tasks are inserted safely into active orchestration flow.
+- Resolution coupling that links follow-up completion back to feedback closure state.
+
 ## Acceptance Criteria
 
 - Users can add `comment`/`suggestion`/`ask_for_change` against task/commit targets from Tina UI.
@@ -232,12 +238,12 @@ Integration tests:
 
 3. **Index with optional fields**: `by_target_status_created` uses `targetTaskId` (optional). Rows where `targetTaskId` is undefined will be indexed with `undefined` as key. This index only works for task-targeted queries — commit queries must use `by_target_commit_status_created`. This split is intentional and correct, just noting it.
 
-## Project 3 to 3.5 Handoff Boundary
+## Phase 1 to Phase 2 Handoff Boundary
 
-Project 3 output:
+Phase 1 output:
 - Canonical feedback records with blocking visibility and resolution workflow.
 
-Project 3.5 consumes that output to:
+Phase 2 consumes that output to:
 - decide triage outcomes,
 - generate follow-up tasks/remediation wiring,
 - connect feedback closure to orchestration execution controls.

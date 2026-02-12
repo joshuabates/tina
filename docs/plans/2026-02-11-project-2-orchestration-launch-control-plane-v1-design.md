@@ -2,7 +2,8 @@
 
 ## Status
 
-Updated on 2026-02-12 after Project 1 completion.
+Completed on 2026-02-12.
+Retained as the implementation and acceptance baseline for Project 2.
 
 ## Context Update (What Changed Since Last Draft)
 
