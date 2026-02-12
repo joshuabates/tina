@@ -1,5 +1,6 @@
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { TimelineQuery } from "@/services/data/queryDefs"
+import { matchQueryResult } from "@/lib/query-state"
 import { StatPanel } from "@/components/ui/stat-panel"
 import styles from "./ActionTimeline.module.scss"
 
@@ -34,39 +35,43 @@ function badgeClassName(status: string | null): string {
 export function ActionTimeline({ orchestrationId }: ActionTimelineProps) {
   const result = useTypedQuery(TimelineQuery, { orchestrationId, limit: 50 })
 
-  const isLoading = result.status !== "success"
-  const entries = result.status === "success" ? result.data : []
-
   return (
     <StatPanel title="Action Timeline">
-      {isLoading && (
-        <div className="text-[8px] text-muted-foreground animate-pulse">
-          Loading timeline...
-        </div>
-      )}
-
-      {!isLoading && entries.length === 0 && (
-        <div className="text-[8px] text-muted-foreground">No actions recorded</div>
-      )}
-
-      {!isLoading && entries.length > 0 && (
-        <div className={styles.timeline} role="log" aria-label="Action timeline">
-          {entries.map((entry) => (
-            <div
-              key={entry.id}
-              className={`${styles.entry} ${entryClassName(entry.source, entry.category)}`}
-            >
-              <span className={styles.timestamp}>{formatTime(entry.timestamp)}</span>
-              <span className={styles.summary}>{entry.summary}</span>
-              {entry.status && (
-                <span className={`${styles.badge} ${badgeClassName(entry.status)}`}>
-                  {entry.status}
-                </span>
-              )}
+      {matchQueryResult(result, {
+        loading: () => (
+          <div className="text-[8px] text-muted-foreground animate-pulse">
+            Loading timeline...
+          </div>
+        ),
+        error: () => (
+          <div className="text-[8px] text-red-500">Failed to load timeline</div>
+        ),
+        success: (entries) => {
+          if (entries.length === 0) {
+            return (
+              <div className="text-[8px] text-muted-foreground">No actions recorded</div>
+            )
+          }
+          return (
+            <div className={styles.timeline} role="log" aria-label="Action timeline">
+              {entries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className={`${styles.entry} ${entryClassName(entry.source, entry.category)}`}
+                >
+                  <span className={styles.timestamp}>{formatTime(entry.timestamp)}</span>
+                  <span className={styles.summary}>{entry.summary}</span>
+                  {entry.status && (
+                    <span className={`${styles.badge} ${badgeClassName(entry.status)}`}>
+                      {entry.status}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )
+        },
+      })}
     </StatPanel>
   )
 }
