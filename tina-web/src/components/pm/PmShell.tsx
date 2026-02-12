@@ -1,23 +1,74 @@
-import { Outlet, Link, useSearchParams, useLocation } from "react-router-dom"
+import { useState } from "react"
+import { Outlet, useSearchParams, useLocation } from "react-router-dom"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { ProjectListQuery } from "@/services/data/queryDefs"
 import { DataErrorBoundary } from "../DataErrorBoundary"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
+import { TicketListPage } from "./TicketListPage"
+import { DesignListPage } from "./DesignListPage"
 import type { ProjectSummary } from "@/schemas"
 import styles from "./PmShell.module.scss"
 
-function PmSidebar() {
-  const projectsResult = useTypedQuery(ProjectListQuery, {})
+type TabMode = "tickets" | "designs"
+
+function WorkspaceContent({ projectId, projectName }: { projectId: string; projectName: string }) {
+  const [activeTab, setActiveTab] = useState<TabMode>("tickets")
+
+  return (
+    <>
+      <div className={styles.workspaceHeader}>
+        <h2 className={styles.projectTitle}>{projectName}</h2>
+        <div className={styles.segmentedControl} role="tablist" aria-label="PM workspace tabs">
+          <button
+            role="tab"
+            aria-selected={activeTab === "tickets"}
+            className={`${styles.segment}${activeTab === "tickets" ? ` ${styles.segmentActive}` : ""}`}
+            onClick={() => setActiveTab("tickets")}
+          >
+            Tickets
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "designs"}
+            className={`${styles.segment}${activeTab === "designs" ? ` ${styles.segmentActive}` : ""}`}
+            onClick={() => setActiveTab("designs")}
+          >
+            Designs
+          </button>
+        </div>
+      </div>
+      <div role="tabpanel">
+        {activeTab === "tickets" ? <TicketListPage /> : <DesignListPage />}
+      </div>
+    </>
+  )
+}
+
+function PmWorkspace() {
   const [searchParams] = useSearchParams()
   const location = useLocation()
+  const projectId = searchParams.get("project")
 
-  const activeProjectId = searchParams.get("project")
-  const currentPath = location.pathname
+  const projectsResult = useTypedQuery(ProjectListQuery, {})
+
+  // Detail routes render via Outlet
+  const isDetailRoute =
+    location.pathname.startsWith("/pm/designs/") ||
+    location.pathname.startsWith("/pm/tickets/")
+
+  if (isDetailRoute) {
+    return <Outlet />
+  }
+
+  if (!projectId) {
+    return (
+      <div className={styles.noProject}>Select a project from the sidebar</div>
+    )
+  }
 
   if (isAnyQueryLoading(projectsResult)) {
     return (
       <div className={styles.loading}>
-        <div className={styles.skeletonBar} />
         <div className={styles.skeletonBar} />
         <div className={styles.skeletonBar} />
       </div>
@@ -33,83 +84,18 @@ function PmSidebar() {
     return null
   }
 
-  const projects = projectsResult.data
+  const project = projectsResult.data.find((p: ProjectSummary) => p._id === projectId)
+  const projectName = project?.name ?? "Unknown Project"
 
-  if (projects.length === 0) {
-    return <div className={styles.empty}>No projects found</div>
-  }
-
-  return (
-    <div className={styles.projectList}>
-      {projects.map((project: ProjectSummary) => {
-        const isActive = activeProjectId === project._id
-        const ticketsPath = `/pm/tickets?project=${project._id}`
-        const designsPath = `/pm/designs?project=${project._id}`
-
-        const isTicketsActive =
-          isActive && currentPath.startsWith("/pm/tickets")
-        const isDesignsActive =
-          isActive && currentPath.startsWith("/pm/designs")
-
-        const launchPath = `/pm/launch?project=${project._id}`
-        const isLaunchActive =
-          isActive && currentPath.startsWith("/pm/launch")
-
-        return (
-          <div key={project._id} className={styles.projectGroup}>
-            <div
-              className={styles.projectName}
-              data-active={isActive}
-            >
-              {project.name}
-            </div>
-            <Link
-              to={ticketsPath}
-              className={styles.entityRow}
-              aria-current={isTicketsActive ? "page" : undefined}
-            >
-              Tickets
-            </Link>
-            <Link
-              to={designsPath}
-              className={styles.entityRow}
-              aria-current={isDesignsActive ? "page" : undefined}
-            >
-              Designs
-            </Link>
-            <Link
-              to={launchPath}
-              className={styles.entityRow}
-              aria-current={isLaunchActive ? "page" : undefined}
-            >
-              Launch
-            </Link>
-          </div>
-        )
-      })}
-    </div>
-  )
+  return <WorkspaceContent projectId={projectId} projectName={projectName} />
 }
 
 export function PmShell() {
   return (
     <div data-testid="pm-shell" className={styles.pmShell}>
-      <nav
-        className={styles.pmSidebar}
-        role="navigation"
-        aria-label="Project navigation"
-      >
-        <Link to="/" className={styles.orchLink}>Orchestrations</Link>
-        <div className={styles.sidebarHeader}>
-          <span className={styles.sidebarTitle}>Projects</span>
-        </div>
-        <DataErrorBoundary panelName="pm-sidebar">
-          <PmSidebar />
-        </DataErrorBoundary>
-      </nav>
-      <div className={styles.pmContent}>
-        <Outlet />
-      </div>
+      <DataErrorBoundary panelName="pm-workspace">
+        <PmWorkspace />
+      </DataErrorBoundary>
     </div>
   )
 }

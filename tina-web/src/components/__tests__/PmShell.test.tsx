@@ -110,7 +110,8 @@ describe("PmShell - unified workspace", () => {
   it("shows project name in workspace header", () => {
     renderApp("/pm?project=p1")
 
-    expect(screen.getByText("Project Alpha")).toBeInTheDocument()
+    const shell = screen.getByTestId("pm-shell")
+    expect(within(shell).getByRole("heading", { name: "Project Alpha" })).toBeInTheDocument()
   })
 
   it("shows 'select a project' when no project param", () => {
