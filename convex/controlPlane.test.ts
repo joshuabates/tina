@@ -347,8 +347,8 @@ describe("controlPlane:enqueueControlAction", () => {
       pause: '{"feature":"test","phase":"1"}',
       resume: '{"feature":"test"}',
       retry: '{"feature":"test","phase":"2"}',
-      orchestration_set_policy: "{}",
-      orchestration_set_role_model: "{}",
+      orchestration_set_policy: JSON.stringify({ feature: "test", targetRevision: 0 }),
+      orchestration_set_role_model: JSON.stringify({ feature: "test", targetRevision: 1, role: "executor", model: "opus" }),
       task_edit: "{}",
       task_insert: "{}",
       task_set_model: "{}",
@@ -1317,5 +1317,330 @@ describe("controlPlane:getActivePolicy", () => {
     expect(result!.reviewPolicy).toBeNull();
     expect(result!.launchSnapshot).toBeNull();
     expect(result!.presetOrigin).toBeNull();
+  });
+});
+
+describe("controlPlane:enqueueControlAction:policyValidation", () => {
+  test("rejects orchestration_set_policy with invalid JSON", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_policy",
+        payload: "not-json",
+        requestedBy: "web-ui",
+        idempotencyKey: "policy-bad-json",
+      }),
+    ).rejects.toThrow("Invalid payload: must be valid JSON");
+  });
+
+  test("rejects orchestration_set_policy missing feature", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_policy",
+        payload: JSON.stringify({ targetRevision: 0 }),
+        requestedBy: "web-ui",
+        idempotencyKey: "policy-no-feature",
+      }),
+    ).rejects.toThrow('requires "feature"');
+  });
+
+  test("rejects orchestration_set_policy missing targetRevision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_policy",
+        payload: JSON.stringify({ feature: "test" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "policy-no-rev",
+      }),
+    ).rejects.toThrow('requires "targetRevision"');
+  });
+
+  test("rejects orchestration_set_policy with unknown model role", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_policy",
+        payload: JSON.stringify({
+          feature: "test",
+          targetRevision: 0,
+          model: { unknown_role: "opus" },
+        }),
+        requestedBy: "web-ui",
+        idempotencyKey: "policy-bad-role",
+      }),
+    ).rejects.toThrow('Unknown model role: "unknown_role"');
+  });
+
+  test("rejects orchestration_set_policy with invalid model name", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_policy",
+        payload: JSON.stringify({
+          feature: "test",
+          targetRevision: 0,
+          model: { executor: "gpt-4" },
+        }),
+        requestedBy: "web-ui",
+        idempotencyKey: "policy-bad-model",
+      }),
+    ).rejects.toThrow('Invalid model for "executor"');
+  });
+
+  test("accepts valid orchestration_set_policy and increments policyRevision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_policy",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        targetRevision: 0,
+        review: { enforcement: "task_and_phase" },
+      }),
+      requestedBy: "web-ui",
+      idempotencyKey: "policy-valid",
+    });
+
+    expect(actionId).toBeTruthy();
+
+    // Verify policyRevision was incremented
+    const orch = await t.run(async (ctx) => {
+      return await ctx.db.get(orchestrationId);
+    });
+    expect(orch!.policyRevision).toBe(1);
+  });
+
+  test("rejects orchestration_set_policy with stale revision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    // First, successfully set policy at revision 0
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_policy",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        targetRevision: 0,
+      }),
+      requestedBy: "web-ui",
+      idempotencyKey: "policy-first",
+    });
+
+    // Now try with stale revision 0 (should be 1 now)
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_policy",
+        payload: JSON.stringify({
+          feature: "cp-feature",
+          targetRevision: 0,
+        }),
+        requestedBy: "web-ui",
+        idempotencyKey: "policy-stale",
+      }),
+    ).rejects.toThrow("Policy revision conflict");
+  });
+
+  test("accepts orchestration_set_policy with valid model assignments", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_policy",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        targetRevision: 0,
+        model: { executor: "opus", reviewer: "sonnet" },
+      }),
+      requestedBy: "web-ui",
+      idempotencyKey: "policy-models",
+    });
+
+    expect(actionId).toBeTruthy();
+  });
+});
+
+describe("controlPlane:enqueueControlAction:roleModelValidation", () => {
+  test("rejects orchestration_set_role_model with invalid JSON", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_role_model",
+        payload: "not-json",
+        requestedBy: "web-ui",
+        idempotencyKey: "role-bad-json",
+      }),
+    ).rejects.toThrow("Invalid payload: must be valid JSON");
+  });
+
+  test("rejects orchestration_set_role_model missing feature", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_role_model",
+        payload: JSON.stringify({ targetRevision: 0, role: "executor", model: "opus" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "role-no-feature",
+      }),
+    ).rejects.toThrow('requires "feature"');
+  });
+
+  test("rejects orchestration_set_role_model missing targetRevision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_role_model",
+        payload: JSON.stringify({ feature: "test", role: "executor", model: "opus" }),
+        requestedBy: "web-ui",
+        idempotencyKey: "role-no-rev",
+      }),
+    ).rejects.toThrow('requires "targetRevision"');
+  });
+
+  test("rejects orchestration_set_role_model with invalid role", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_role_model",
+        payload: JSON.stringify({
+          feature: "test",
+          targetRevision: 0,
+          role: "manager",
+          model: "opus",
+        }),
+        requestedBy: "web-ui",
+        idempotencyKey: "role-bad-role",
+      }),
+    ).rejects.toThrow('Invalid role: "manager"');
+  });
+
+  test("rejects orchestration_set_role_model with invalid model", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_role_model",
+        payload: JSON.stringify({
+          feature: "test",
+          targetRevision: 0,
+          role: "executor",
+          model: "gpt-4",
+        }),
+        requestedBy: "web-ui",
+        idempotencyKey: "role-bad-model",
+      }),
+    ).rejects.toThrow('Invalid model: "gpt-4"');
+  });
+
+  test("accepts valid orchestration_set_role_model and increments policyRevision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_role_model",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        targetRevision: 0,
+        role: "executor",
+        model: "opus",
+      }),
+      requestedBy: "web-ui",
+      idempotencyKey: "role-valid",
+    });
+
+    expect(actionId).toBeTruthy();
+
+    // Verify policyRevision was incremented
+    const orch = await t.run(async (ctx) => {
+      return await ctx.db.get(orchestrationId);
+    });
+    expect(orch!.policyRevision).toBe(1);
+  });
+
+  test("rejects orchestration_set_role_model with stale revision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    // First, successfully set role model at revision 0
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_role_model",
+      payload: JSON.stringify({
+        feature: "cp-feature",
+        targetRevision: 0,
+        role: "executor",
+        model: "opus",
+      }),
+      requestedBy: "web-ui",
+      idempotencyKey: "role-first",
+    });
+
+    // Now try with stale revision 0 (should be 1 now)
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_role_model",
+        payload: JSON.stringify({
+          feature: "cp-feature",
+          targetRevision: 0,
+          role: "reviewer",
+          model: "haiku",
+        }),
+        requestedBy: "web-ui",
+        idempotencyKey: "role-stale",
+      }),
+    ).rejects.toThrow("Policy revision conflict");
   });
 });
