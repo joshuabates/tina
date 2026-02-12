@@ -2,7 +2,9 @@ import { query, mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
-import { resolvePolicy, hashPolicy } from "./policyPresets";
+import { validateDesignForLaunch } from "./designValidation";
+import { policySnapshotValidator, hashPolicy } from "./policyPresets";
+import type { PolicySnapshot } from "./policyPresets";
 import { HEARTBEAT_TIMEOUT_MS } from "./nodes";
 import { isFeatureFlagEnabled, CP_FLAGS } from "./featureFlags";
 
@@ -388,130 +390,105 @@ export const launchOrchestration = mutation({
   args: {
     projectId: v.id("projects"),
     designId: v.id("designs"),
-    nodeId: v.id("nodes"),
     feature: v.string(),
     branch: v.string(),
-    totalPhases: v.number(),
     ticketIds: v.optional(v.array(v.id("tickets"))),
-    policyPreset: v.string(),
-    policyOverrides: v.optional(v.string()),
+    policySnapshot: policySnapshotValidator,
     requestedBy: v.string(),
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
-    // Feature flag gate
     const launchEnabled = await isFeatureFlagEnabled(ctx, CP_FLAGS.LAUNCH_FROM_WEB);
     if (!launchEnabled) {
       throw new Error(`Launch from web is not enabled. Set ${CP_FLAGS.LAUNCH_FROM_WEB} feature flag to enable.`);
     }
 
-    // Validate project exists
     const project = await ctx.db.get(args.projectId);
-    if (!project) {
-      throw new Error(`Project not found: ${args.projectId}`);
-    }
+    if (!project) throw new Error(`Project not found: ${args.projectId}`);
 
-    // Validate design exists and belongs to project
     const design = await ctx.db.get(args.designId);
-    if (!design) {
-      throw new Error(`Design not found: ${args.designId}`);
-    }
+    if (!design) throw new Error(`Design not found: ${args.designId}`);
     if (design.projectId !== args.projectId) {
-      throw new Error(
-        `Design ${args.designId} does not belong to project ${args.projectId}`,
-      );
+      throw new Error(`Design ${args.designId} does not belong to project ${args.projectId}`);
     }
 
-    // Validate node is online
-    const node = await ctx.db.get(args.nodeId);
-    if (!node) {
-      throw new Error(`Node not found: ${args.nodeId}`);
+    // Design validation gates
+    const validation = validateDesignForLaunch(design);
+    if (!validation.valid) {
+      throw new Error(`Design not ready for launch: ${validation.errors.join("; ")}`);
     }
-    if (Date.now() - node.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
-      throw new Error(`Node "${node.name}" is offline`);
+
+    // Auto-resolve online node
+    const allNodes = await ctx.db.query("nodes").collect();
+    const now = Date.now();
+    const onlineNode = allNodes.find((n) => now - n.lastHeartbeat <= HEARTBEAT_TIMEOUT_MS);
+    if (!onlineNode) {
+      throw new Error("No online nodes available. Ensure a node is running and connected.");
     }
 
     // Validate ticket IDs if provided
     const ticketIds = args.ticketIds ?? [];
     for (const ticketId of ticketIds) {
       const ticket = await ctx.db.get(ticketId);
-      if (!ticket) {
-        throw new Error(`Ticket not found: ${ticketId}`);
-      }
+      if (!ticket) throw new Error(`Ticket not found: ${ticketId}`);
       if (ticket.projectId !== args.projectId) {
-        throw new Error(
-          `Ticket ${ticketId} does not belong to project ${args.projectId}`,
-        );
+        throw new Error(`Ticket ${ticketId} does not belong to project ${args.projectId}`);
       }
     }
 
     const designOnly = ticketIds.length === 0;
+    const totalPhases = design.phaseCount ?? 1;
+    const policyJson = JSON.stringify(args.policySnapshot);
+    const policyHash = await hashPolicy(args.policySnapshot as unknown as PolicySnapshot);
+    const nowIso = new Date().toISOString();
 
-    // Resolve policy snapshot
-    let overrides;
-    if (args.policyOverrides) {
-      try {
-        overrides = JSON.parse(args.policyOverrides);
-      } catch {
-        throw new Error("Invalid policyOverrides: must be valid JSON");
-      }
-    }
-    const policy = resolvePolicy(args.policyPreset, overrides);
-    const policyJson = JSON.stringify(policy);
-    const policyHash = await hashPolicy(policy);
-
-    // Create orchestration stub
-    const now = new Date().toISOString();
     const orchestrationId = await ctx.db.insert("orchestrations", {
-      nodeId: args.nodeId,
+      nodeId: onlineNode._id,
       projectId: args.projectId,
       designId: args.designId,
       featureName: args.feature,
       designDocPath: `convex://${args.designId}`,
       branch: args.branch,
-      totalPhases: args.totalPhases,
+      totalPhases,
       currentPhase: 1,
       status: "launching",
-      startedAt: now,
+      startedAt: nowIso,
       policySnapshot: policyJson,
       policySnapshotHash: policyHash,
-      presetOrigin: args.policyPreset,
       designOnly,
       policyRevision: 1,
     });
 
-    // Build launch payload for daemon
     const launchPayload = JSON.stringify({
       feature: args.feature,
       design_id: args.designId,
       cwd: project.repoPath,
       branch: args.branch,
-      total_phases: args.totalPhases,
-      policy: policy,
+      total_phases: totalPhases,
+      policy: args.policySnapshot,
     });
 
-    // Create control-plane action + inbound queue entry
     const actionId = await insertControlActionWithQueue(ctx, {
       orchestrationId,
-      nodeId: args.nodeId,
+      nodeId: onlineNode._id,
       actionType: "start_orchestration",
       payload: launchPayload,
       requestedBy: args.requestedBy,
       idempotencyKey: args.idempotencyKey,
     });
 
-    // Record launch event
     await ctx.db.insert("orchestrationEvents", {
       orchestrationId,
       eventType: "launch_requested",
       source: "control_plane",
-      summary: `Launch requested for "${args.feature}" on node "${node.name}"`,
+      summary: `Launch requested for "${args.feature}" on node "${onlineNode.name}"`,
       detail: JSON.stringify({
-        preset: args.policyPreset,
         designOnly,
         ticketCount: ticketIds.length,
+        nodeAutoResolved: true,
+        derivedPhases: totalPhases,
       }),
-      recordedAt: now,
+      recordedAt: nowIso,
     });
 
     return { orchestrationId, actionId };
