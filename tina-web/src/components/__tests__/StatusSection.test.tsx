@@ -53,6 +53,19 @@ function renderStatus(overrides: Partial<typeof baseDetail> = {}) {
   )
 }
 
+function renderStatusWithUser(overrides: Partial<typeof baseDetail> = {}) {
+  const user = userEvent.setup()
+  const result = render(
+    <StatusSection
+      detail={{
+        ...baseDetail,
+        ...overrides,
+      }}
+    />,
+  )
+  return { ...result, user }
+}
+
 describe("StatusSection", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -178,10 +191,17 @@ describe("StatusSection", () => {
       expect(screen.getByTestId("control-retry")).toBeDisabled()
     })
 
+    it("shows all buttons disabled when status is complete", () => {
+      renderStatus({ status: "complete" })
+
+      expect(screen.getByTestId("control-pause")).toBeDisabled()
+      expect(screen.getByTestId("control-resume")).toBeDisabled()
+      expect(screen.getByTestId("control-retry")).toBeDisabled()
+    })
+
     it("calls enqueueControlAction on pause click", async () => {
-      const user = userEvent.setup()
+      const { user } = renderStatusWithUser({ status: "executing" })
       mockEnqueue.mockResolvedValue("action-id")
-      renderStatus({ status: "executing" })
 
       await user.click(screen.getByTestId("control-pause"))
 
@@ -196,9 +216,8 @@ describe("StatusSection", () => {
     })
 
     it("calls enqueueControlAction on resume click", async () => {
-      const user = userEvent.setup()
+      const { user } = renderStatusWithUser({ status: "blocked" })
       mockEnqueue.mockResolvedValue("action-id")
-      renderStatus({ status: "blocked" })
 
       await user.click(screen.getByTestId("control-resume"))
 
@@ -213,9 +232,8 @@ describe("StatusSection", () => {
     })
 
     it("includes phase in pause payload", async () => {
-      const user = userEvent.setup()
+      const { user } = renderStatusWithUser({ status: "executing", currentPhase: 3 })
       mockEnqueue.mockResolvedValue("action-id")
-      renderStatus({ status: "executing", currentPhase: 3 })
 
       await user.click(screen.getByTestId("control-pause"))
 
@@ -226,9 +244,8 @@ describe("StatusSection", () => {
     })
 
     it("omits phase in resume payload", async () => {
-      const user = userEvent.setup()
+      const { user } = renderStatusWithUser({ status: "blocked" })
       mockEnqueue.mockResolvedValue("action-id")
-      renderStatus({ status: "blocked" })
 
       await user.click(screen.getByTestId("control-resume"))
 
@@ -239,9 +256,8 @@ describe("StatusSection", () => {
     })
 
     it("shows error message when action fails", async () => {
-      const user = userEvent.setup()
+      const { user } = renderStatusWithUser({ status: "executing" })
       mockEnqueue.mockRejectedValue(new Error("Network error"))
-      renderStatus({ status: "executing" })
 
       await user.click(screen.getByTestId("control-pause"))
 
