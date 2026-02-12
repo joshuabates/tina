@@ -982,3 +982,148 @@ describe("controlPlane:launchOrchestration:integration", () => {
     expect(events[0].summary).toContain("e2e-launch");
   });
 });
+
+describe("controlPlane:runtime-controls:integration", () => {
+  test("e2e: pause creates action log, queue entry, and event", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "pause",
+      payload: '{"feature":"cp-feature","phase":"1"}',
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-pause-001",
+    });
+
+    // 1. Control-plane action log
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionType).toBe("pause");
+    expect(actions[0].status).toBe("pending");
+    expect(actions[0].requestedBy).toBe("web:operator");
+    expect(actions[0].queueActionId).toBeDefined();
+
+    // 2. Queue entry linked back
+    const queueAction = await t.run(async (ctx) => {
+      return await ctx.db.get(actions[0].queueActionId!);
+    });
+    expect(queueAction).not.toBeNull();
+    expect(queueAction!.controlActionId).toBe(actionId);
+    expect(queueAction!.type).toBe("pause");
+
+    // 3. Audit event
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].summary).toContain("pause");
+  });
+
+  test("e2e: resume creates action log, queue entry, and event", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "resume",
+      payload: '{"feature":"cp-feature"}',
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-resume-001",
+    });
+
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionType).toBe("resume");
+
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].summary).toContain("resume");
+  });
+
+  test("e2e: retry creates action log, queue entry, and event", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "retry",
+      payload: '{"feature":"cp-feature","phase":"2"}',
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-retry-001",
+    });
+
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionType).toBe("retry");
+
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].summary).toContain("retry");
+  });
+
+  test("pause + resume sequence maintains correct audit trail", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "pause",
+      payload: '{"feature":"cp-feature","phase":"1"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "seq-pause",
+    });
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "resume",
+      payload: '{"feature":"cp-feature"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "seq-resume",
+    });
+
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    expect(actions).toHaveLength(2);
+    // Most recent first (desc order)
+    expect(actions[0].actionType).toBe("resume");
+    expect(actions[1].actionType).toBe("pause");
+
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(2);
+  });
+});
