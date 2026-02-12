@@ -57,6 +57,7 @@ export function DesignDetailPage() {
   const projectId = searchParams.get("project") || null
 
   const transitionDesign = useMutation(api.designs.transitionDesign)
+  const updateMarkers = useMutation(api.designs.updateDesignMarkers)
 
   const designResult = useTypedQuery(DesignDetailQuery, {
     designId: designId ?? "",
@@ -107,8 +108,6 @@ export function DesignDetailPage() {
   const handleSaved = () => {
     setEditing(false)
   }
-
-  const updateMarkers = useMutation(api.designs.updateDesignMarkers)
 
   const handleToggleMarker = async (marker: string) => {
     const current = Option.getOrElse(() => [] as string[])(design.completedMarkers)
