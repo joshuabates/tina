@@ -41,11 +41,11 @@ export function categoryForCode(code: string): ReasonCategory {
 /** Map daemon DispatchErrorCode strings to reason codes. */
 export function fromDispatchErrorCode(errorCode: string): ReasonCode {
   const mapping: Record<string, ReasonCode> = {
-    PayloadMissingField: REASON_CODES.DISPATCH_PAYLOAD_INVALID,
-    PayloadInvalid: REASON_CODES.DISPATCH_PAYLOAD_INVALID,
-    UnknownActionType: REASON_CODES.DISPATCH_UNKNOWN_TYPE,
-    CliExitNonZero: REASON_CODES.DISPATCH_CLI_EXIT_NONZERO,
-    CliSpawnFailed: REASON_CODES.DISPATCH_CLI_SPAWN_FAILED,
+    payload_missing_field: REASON_CODES.DISPATCH_PAYLOAD_INVALID,
+    payload_invalid: REASON_CODES.DISPATCH_PAYLOAD_INVALID,
+    unknown_action_type: REASON_CODES.DISPATCH_UNKNOWN_TYPE,
+    cli_exit_non_zero: REASON_CODES.DISPATCH_CLI_EXIT_NONZERO,
+    cli_spawn_failed: REASON_CODES.DISPATCH_CLI_SPAWN_FAILED,
   };
   return mapping[errorCode] ?? REASON_CODES.DISPATCH_PAYLOAD_INVALID;
 }
