@@ -3,6 +3,7 @@ import {
   PRESETS,
   resolvePolicy,
   hashPolicy,
+  policySnapshotValidator,
   type ReviewPolicyConfig,
   type ModelPolicyConfig,
 } from "./policyPresets";
@@ -80,6 +81,40 @@ describe("resolvePolicy", () => {
       'Unknown preset: "nonexistent"',
     );
     expect(() => resolvePolicy("nonexistent")).toThrow("Valid: strict");
+  });
+});
+
+describe("policySnapshotValidator", () => {
+  test("is exported and defined", () => {
+    expect(policySnapshotValidator).toBeDefined();
+  });
+
+  test("has review and model fields matching PolicySnapshot structure", () => {
+    // The validator should structurally match what PRESETS produce.
+    // Convex validators expose a `json` property for introspection.
+    const fields = policySnapshotValidator.fields;
+    expect(fields).toHaveProperty("review");
+    expect(fields).toHaveProperty("model");
+  });
+
+  test("review validator has all ReviewPolicyConfig fields", () => {
+    const reviewFields = policySnapshotValidator.fields.review.fields;
+    const expectedKeys = [
+      "enforcement",
+      "detector_scope",
+      "architect_mode",
+      "test_integrity_profile",
+      "hard_block_detectors",
+      "allow_rare_override",
+      "require_fix_first",
+    ];
+    expect(Object.keys(reviewFields).sort()).toEqual(expectedKeys.sort());
+  });
+
+  test("model validator has all ModelPolicyConfig fields", () => {
+    const modelFields = policySnapshotValidator.fields.model.fields;
+    const expectedKeys = ["validator", "planner", "executor", "reviewer"];
+    expect(Object.keys(modelFields).sort()).toEqual(expectedKeys.sort());
   });
 });
 
