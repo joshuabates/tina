@@ -98,7 +98,7 @@ describe("timeline:getUnifiedTimeline", () => {
         requestedBy: "web-ui",
         idempotencyKey: "key-3",
         status: "failed",
-        result: JSON.stringify({ error_code: "node_offline", message: "Node is offline" }),
+        result: JSON.stringify({ success: false, error_code: "cli_exit_non_zero", message: "Process exited non-zero" }),
         createdAt: 1000,
         completedAt: 2000,
       });
@@ -111,7 +111,7 @@ describe("timeline:getUnifiedTimeline", () => {
     const completionEntry = entries.find((e) => e.source === "action_completion");
     expect(completionEntry).toBeDefined();
     expect(completionEntry!.category).toBe("failure");
-    expect(completionEntry!.reasonCode).toBe("node_offline");
+    expect(completionEntry!.reasonCode).toBe("dispatch_cli_exit_nonzero");
     expect(completionEntry!.summary).toBe("retry failed");
   });
 
@@ -139,7 +139,7 @@ describe("timeline:getUnifiedTimeline", () => {
 
     const completionEntry = entries.find((e) => e.source === "action_completion");
     expect(completionEntry).toBeDefined();
-    expect(completionEntry!.reasonCode).toBeNull();
+    expect(completionEntry!.reasonCode).toBe("dispatch_payload_invalid");
     expect(completionEntry!.detail).toBe("raw error string");
   });
 

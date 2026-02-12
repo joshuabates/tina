@@ -1,5 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { extractReasonCode } from "./reasonCodes";
 
 export interface TimelineEntry {
   id: string;
@@ -51,12 +52,7 @@ export const getUnifiedTimeline = query({
       if (action.completedAt && (!args.since || action.completedAt >= args.since)) {
         let reasonCode: string | null = null;
         if (action.status === "failed" && action.result) {
-          try {
-            const parsed = JSON.parse(action.result);
-            reasonCode = parsed.error_code ?? null;
-          } catch {
-            // raw string result, no structured code
-          }
+          reasonCode = extractReasonCode(action.result);
         }
 
         entries.push({
