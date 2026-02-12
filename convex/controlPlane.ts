@@ -75,7 +75,7 @@ interface RoleModelPayload {
   model: string;
 }
 
-function validatePolicyPayload(rawPayload: string): PolicyPayload {
+function parseBasePayload(rawPayload: string, actionType: string): Record<string, unknown> {
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(rawPayload);
@@ -84,11 +84,17 @@ function validatePolicyPayload(rawPayload: string): PolicyPayload {
   }
 
   if (typeof parsed.feature !== "string" || !parsed.feature) {
-    throw new Error('Payload for "orchestration_set_policy" requires "feature" (string)');
+    throw new Error(`Payload for "${actionType}" requires "feature" (string)`);
   }
   if (typeof parsed.targetRevision !== "number") {
-    throw new Error('Payload for "orchestration_set_policy" requires "targetRevision" (number)');
+    throw new Error(`Payload for "${actionType}" requires "targetRevision" (number)`);
   }
+
+  return parsed;
+}
+
+function validatePolicyPayload(rawPayload: string): PolicyPayload {
+  const parsed = parseBasePayload(rawPayload, "orchestration_set_policy");
 
   if (parsed.model && typeof parsed.model === "object") {
     const model = parsed.model as Record<string, unknown>;
@@ -106,19 +112,8 @@ function validatePolicyPayload(rawPayload: string): PolicyPayload {
 }
 
 function validateRoleModelPayload(rawPayload: string): RoleModelPayload {
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(rawPayload);
-  } catch {
-    throw new Error("Invalid payload: must be valid JSON");
-  }
+  const parsed = parseBasePayload(rawPayload, "orchestration_set_role_model");
 
-  if (typeof parsed.feature !== "string" || !parsed.feature) {
-    throw new Error('Payload for "orchestration_set_role_model" requires "feature" (string)');
-  }
-  if (typeof parsed.targetRevision !== "number") {
-    throw new Error('Payload for "orchestration_set_role_model" requires "targetRevision" (number)');
-  }
   if (typeof parsed.role !== "string" || !(ALLOWED_ROLES as readonly string[]).includes(parsed.role)) {
     throw new Error(`Invalid role: "${parsed.role}". Allowed: ${ALLOWED_ROLES.join(", ")}`);
   }
@@ -127,6 +122,22 @@ function validateRoleModelPayload(rawPayload: string): RoleModelPayload {
   }
 
   return parsed as unknown as RoleModelPayload;
+}
+
+async function checkAndIncrementRevision(
+  ctx: MutationCtx,
+  orchestrationId: Id<"orchestrations">,
+  targetRevision: number,
+): Promise<void> {
+  const orch = await ctx.db.get(orchestrationId);
+  if (!orch) throw new Error("Orchestration not found");
+  const currentRevision = orch.policyRevision ?? 0;
+  if (targetRevision !== currentRevision) {
+    throw new Error(
+      `Policy revision conflict: expected ${targetRevision}, current is ${currentRevision}. Reload and retry.`,
+    );
+  }
+  await ctx.db.patch(orchestrationId, { policyRevision: currentRevision + 1 });
 }
 
 async function insertControlActionWithQueue(
@@ -378,26 +389,10 @@ export const enqueueControlAction = mutation({
       validateRuntimePayload(args.actionType, args.payload);
     } else if (args.actionType === "orchestration_set_policy") {
       const policyPayload = validatePolicyPayload(args.payload);
-      const orch = await ctx.db.get(args.orchestrationId);
-      if (!orch) throw new Error("Orchestration not found");
-      const currentRevision = orch.policyRevision ?? 0;
-      if (policyPayload.targetRevision !== currentRevision) {
-        throw new Error(
-          `Policy revision conflict: expected ${policyPayload.targetRevision}, current is ${currentRevision}. Reload and retry.`,
-        );
-      }
-      await ctx.db.patch(args.orchestrationId, { policyRevision: currentRevision + 1 });
+      await checkAndIncrementRevision(ctx, args.orchestrationId, policyPayload.targetRevision);
     } else if (args.actionType === "orchestration_set_role_model") {
       const rolePayload = validateRoleModelPayload(args.payload);
-      const orch = await ctx.db.get(args.orchestrationId);
-      if (!orch) throw new Error("Orchestration not found");
-      const currentRevision = orch.policyRevision ?? 0;
-      if (rolePayload.targetRevision !== currentRevision) {
-        throw new Error(
-          `Policy revision conflict: expected ${rolePayload.targetRevision}, current is ${currentRevision}. Reload and retry.`,
-        );
-      }
-      await ctx.db.patch(args.orchestrationId, { policyRevision: currentRevision + 1 });
+      await checkAndIncrementRevision(ctx, args.orchestrationId, rolePayload.targetRevision);
     }
 
     const actionId = await insertControlActionWithQueue(ctx, {
