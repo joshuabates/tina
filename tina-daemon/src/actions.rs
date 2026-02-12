@@ -25,12 +25,16 @@ pub struct ActionPayload {
     pub role: Option<String>,
     pub model: Option<String>,
     // Task reconfiguration fields
+    #[serde(alias = "phaseNumber")]
     pub phase_number: Option<String>,
+    #[serde(alias = "taskNumber")]
     pub task_number: Option<u32>,
+    #[serde(alias = "afterTask")]
     pub after_task: Option<u32>,
     pub subject: Option<String>,
     pub description: Option<String>,
     pub revision: Option<u32>,
+    #[serde(alias = "dependsOn")]
     pub depends_on: Option<Vec<u32>>,
 }
 
