@@ -353,3 +353,34 @@ export const getLatestPolicySnapshot = query({
     };
   },
 });
+
+export const getActivePolicy = query({
+  args: {
+    orchestrationId: v.id("orchestrations"),
+  },
+  handler: async (ctx, args) => {
+    const orchestration = await ctx.db.get(args.orchestrationId);
+    if (!orchestration) return null;
+
+    // Read the live policy from supervisorStates (updated by tina-session save())
+    const supervisorState = await ctx.db
+      .query("supervisorStates")
+      .withIndex("by_feature", (q) => q.eq("featureName", orchestration.featureName))
+      .first();
+
+    if (!supervisorState) return null;
+
+    try {
+      const state = JSON.parse(supervisorState.stateJson);
+      return {
+        modelPolicy: state.model_policy ?? null,
+        reviewPolicy: state.review_policy ?? null,
+        policyRevision: orchestration.policyRevision ?? 0,
+        launchSnapshot: orchestration.policySnapshot ?? null,
+        presetOrigin: orchestration.presetOrigin ?? null,
+      };
+    } catch {
+      return null;
+    }
+  },
+});

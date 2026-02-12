@@ -1153,3 +1153,169 @@ describe("controlPlane:runtime-controls:integration", () => {
     expect(events).toHaveLength(2);
   });
 });
+
+describe("controlPlane:getActivePolicy", () => {
+  test("returns null for nonexistent orchestration", async () => {
+    const t = convexTest(schema, modules);
+    const { orchestrationId } = await createFeatureFixture(t, "policy-test");
+
+    await t.run(async (ctx) => {
+      await ctx.db.delete(orchestrationId);
+    });
+
+    const result = await t.query(api.controlPlane.getActivePolicy, {
+      orchestrationId,
+    });
+    expect(result).toBeNull();
+  });
+
+  test("returns null when no supervisor state exists", async () => {
+    const t = convexTest(schema, modules);
+    const { orchestrationId } = await createFeatureFixture(t, "policy-test");
+
+    const result = await t.query(api.controlPlane.getActivePolicy, {
+      orchestrationId,
+    });
+    expect(result).toBeNull();
+  });
+
+  test("returns live policy from supervisor state", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "policy-test",
+    );
+
+    // Set policy snapshot on orchestration
+    await t.mutation(api.controlPlane.startOrchestration, {
+      orchestrationId,
+      nodeId,
+      policySnapshot: '{"launch":"snapshot"}',
+      policySnapshotHash: "hash-launch",
+      presetOrigin: "balanced",
+      requestedBy: "web-ui",
+      idempotencyKey: "active-policy-setup",
+    });
+
+    // Insert a supervisor state with live policy
+    await t.run(async (ctx) => {
+      await ctx.db.insert("supervisorStates", {
+        nodeId,
+        featureName: "policy-test",
+        stateJson: JSON.stringify({
+          model_policy: { default_model: "opus" },
+          review_policy: { hard_block_detectors: true },
+        }),
+        updatedAt: Date.now(),
+      });
+    });
+
+    const result = await t.query(api.controlPlane.getActivePolicy, {
+      orchestrationId,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.modelPolicy).toEqual({ default_model: "opus" });
+    expect(result!.reviewPolicy).toEqual({ hard_block_detectors: true });
+    expect(result!.launchSnapshot).toBe('{"launch":"snapshot"}');
+    expect(result!.presetOrigin).toBe("balanced");
+  });
+
+  test("returns policyRevision from orchestration", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "policy-rev-test",
+    );
+
+    // Patch orchestration with a policyRevision
+    await t.run(async (ctx) => {
+      await ctx.db.patch(orchestrationId, { policyRevision: 5 });
+      await ctx.db.insert("supervisorStates", {
+        nodeId,
+        featureName: "policy-rev-test",
+        stateJson: JSON.stringify({
+          model_policy: null,
+          review_policy: null,
+        }),
+        updatedAt: Date.now(),
+      });
+    });
+
+    const result = await t.query(api.controlPlane.getActivePolicy, {
+      orchestrationId,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.policyRevision).toBe(5);
+  });
+
+  test("defaults policyRevision to 0 when not set", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "policy-no-rev",
+    );
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("supervisorStates", {
+        nodeId,
+        featureName: "policy-no-rev",
+        stateJson: JSON.stringify({}),
+        updatedAt: Date.now(),
+      });
+    });
+
+    const result = await t.query(api.controlPlane.getActivePolicy, {
+      orchestrationId,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.policyRevision).toBe(0);
+  });
+
+  test("returns null for invalid stateJson", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "policy-bad-json",
+    );
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("supervisorStates", {
+        nodeId,
+        featureName: "policy-bad-json",
+        stateJson: "not-valid-json{{{",
+        updatedAt: Date.now(),
+      });
+    });
+
+    const result = await t.query(api.controlPlane.getActivePolicy, {
+      orchestrationId,
+    });
+    expect(result).toBeNull();
+  });
+
+  test("defaults missing policy fields to null", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "policy-partial",
+    );
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("supervisorStates", {
+        nodeId,
+        featureName: "policy-partial",
+        stateJson: JSON.stringify({ some_other_field: true }),
+        updatedAt: Date.now(),
+      });
+    });
+
+    const result = await t.query(api.controlPlane.getActivePolicy, {
+      orchestrationId,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.modelPolicy).toBeNull();
+    expect(result!.reviewPolicy).toBeNull();
+    expect(result!.launchSnapshot).toBeNull();
+    expect(result!.presetOrigin).toBeNull();
+  });
+});
