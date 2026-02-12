@@ -3,6 +3,11 @@ pub fn orchestration_team_name(feature: &str) -> String {
     format!("{}-orchestration", feature)
 }
 
+/// Canonical orchestration tmux session name: tina-{feature}-orchestration
+pub fn orchestration_session_name(feature: &str) -> String {
+    format!("tina-{}-orchestration", feature)
+}
+
 /// Extract feature name from an orchestration team name
 pub fn feature_from_team_name(team_name: &str) -> Option<&str> {
     team_name.strip_suffix("-orchestration")
@@ -89,6 +94,18 @@ mod tests {
     fn test_orchestration_team_name() {
         assert_eq!(orchestration_team_name("auth"), "auth-orchestration");
         assert_eq!(orchestration_team_name("api-refactor"), "api-refactor-orchestration");
+    }
+
+    #[test]
+    fn test_orchestration_session_name() {
+        assert_eq!(
+            orchestration_session_name("auth"),
+            "tina-auth-orchestration"
+        );
+        assert_eq!(
+            orchestration_session_name("api-refactor"),
+            "tina-api-refactor-orchestration"
+        );
     }
 
     #[test]

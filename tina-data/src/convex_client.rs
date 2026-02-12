@@ -179,6 +179,12 @@ fn register_team_to_args(team: &RegisterTeamRecord) -> BTreeMap<String, Value> {
         "leadSessionId".into(),
         Value::from(team.lead_session_id.as_str()),
     );
+    if let Some(ref tmux_session_name) = team.tmux_session_name {
+        args.insert(
+            "tmuxSessionName".into(),
+            Value::from(tmux_session_name.as_str()),
+        );
+    }
     if let Some(ref pn) = team.phase_number {
         args.insert("phaseNumber".into(), Value::from(pn.as_str()));
     }
@@ -742,6 +748,7 @@ fn extract_team_record_from_obj(obj: &BTreeMap<String, Value>) -> TeamRecord {
         team_name: value_as_str(obj, "teamName"),
         orchestration_id: value_as_id(obj, "orchestrationId"),
         lead_session_id: value_as_str(obj, "leadSessionId"),
+        tmux_session_name: value_as_opt_str(obj, "tmuxSessionName"),
         phase_number: value_as_opt_str(obj, "phaseNumber"),
         parent_team_id: value_as_opt_str(obj, "parentTeamId"),
         created_at: value_as_f64(obj, "createdAt"),
@@ -769,6 +776,7 @@ fn extract_active_team_list(result: FunctionResult) -> Result<Vec<ActiveTeamReco
                         team_name: value_as_str(&obj, "teamName"),
                         orchestration_id: value_as_id(&obj, "orchestrationId"),
                         lead_session_id: value_as_str(&obj, "leadSessionId"),
+                        tmux_session_name: value_as_opt_str(&obj, "tmuxSessionName"),
                         phase_number: value_as_opt_str(&obj, "phaseNumber"),
                         parent_team_id: value_as_opt_str(&obj, "parentTeamId"),
                         created_at: value_as_f64(&obj, "createdAt"),
@@ -1938,6 +1946,10 @@ mod tests {
         );
         map.insert("orchestrationId".to_string(), Value::from("orch-456"));
         map.insert("leadSessionId".to_string(), Value::from("session-789"));
+        map.insert(
+            "tmuxSessionName".to_string(),
+            Value::from("tina-my-feature-phase-1"),
+        );
         map.insert("phaseNumber".to_string(), Value::from("1"));
         map.insert("parentTeamId".to_string(), Value::from("parent-team-001"));
         map.insert("createdAt".to_string(), Value::from(1706644800000.0f64));
@@ -1948,6 +1960,10 @@ mod tests {
         assert_eq!(team.team_name, "my-feature-orchestration");
         assert_eq!(team.orchestration_id, "orch-456");
         assert_eq!(team.lead_session_id, "session-789");
+        assert_eq!(
+            team.tmux_session_name.as_deref(),
+            Some("tina-my-feature-phase-1")
+        );
         assert_eq!(team.phase_number.as_deref(), Some("1"));
         assert_eq!(team.parent_team_id.as_deref(), Some("parent-team-001"));
         assert_eq!(team.created_at, 1706644800000.0);
@@ -1997,6 +2013,10 @@ mod tests {
         map.insert("teamName".to_string(), Value::from("feature-orchestration"));
         map.insert("orchestrationId".to_string(), Value::from("orch-1"));
         map.insert("leadSessionId".to_string(), Value::from("session-1"));
+        map.insert(
+            "tmuxSessionName".to_string(),
+            Value::from("tina-feature-phase-1"),
+        );
         map.insert("phaseNumber".to_string(), Value::from("1"));
         map.insert("parentTeamId".to_string(), Value::from("parent-team-1"));
         map.insert("createdAt".to_string(), Value::from(1000.0f64));
@@ -2011,6 +2031,10 @@ mod tests {
         assert_eq!(teams[0].team_name, "feature-orchestration");
         assert_eq!(teams[0].orchestration_status, "executing");
         assert_eq!(teams[0].feature_name, "my-feature");
+        assert_eq!(
+            teams[0].tmux_session_name.as_deref(),
+            Some("tina-feature-phase-1")
+        );
         assert_eq!(teams[0].parent_team_id.as_deref(), Some("parent-team-1"));
     }
 

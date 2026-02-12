@@ -306,6 +306,10 @@ enum Commands {
         #[arg(long)]
         lead_session_id: String,
 
+        /// tmux session name used for this team (optional)
+        #[arg(long)]
+        tmux_session_name: Option<String>,
+
         /// Phase number (optional, null for orchestration team)
         #[arg(long)]
         phase_number: Option<String>,
@@ -1105,12 +1109,14 @@ fn run() -> anyhow::Result<u8> {
             orchestration_id,
             team,
             lead_session_id,
+            tmux_session_name,
             phase_number,
             parent_team_id,
         } => commands::register_team::run(
             &orchestration_id,
             &team,
             &lead_session_id,
+            tmux_session_name.as_deref(),
             phase_number.as_deref(),
             parent_team_id.as_deref(),
         ),

@@ -6,6 +6,7 @@ export const registerTeam = mutation({
     teamName: v.string(),
     orchestrationId: v.id("orchestrations"),
     leadSessionId: v.string(),
+    tmuxSessionName: v.optional(v.string()),
     phaseNumber: v.optional(v.string()),
     parentTeamId: v.optional(v.id("teams")),
     createdAt: v.number(),
@@ -27,6 +28,9 @@ export const registerTeam = mutation({
         phaseNumber: args.phaseNumber,
         createdAt: args.createdAt,
       };
+      if (args.tmuxSessionName !== undefined) {
+        patch.tmuxSessionName = args.tmuxSessionName;
+      }
       if (args.parentTeamId !== undefined) {
         patch.parentTeamId = args.parentTeamId;
       }

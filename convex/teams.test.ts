@@ -40,11 +40,38 @@ describe("teams:registerTeam", () => {
       teamName: "auth-feature-phase-1",
       orchestrationId,
       leadSessionId: "session-xyz",
+      tmuxSessionName: "tina-auth-feature-phase-1",
       phaseNumber: "1",
       createdAt: Date.now(),
     });
 
     expect(id2).toBe(id1);
+
+    const team = await t.query(api.teams.getByTeamName, {
+      teamName: "auth-feature-phase-1",
+    });
+    expect(team).not.toBeNull();
+    expect(team!.tmuxSessionName).toBe("tina-auth-feature-phase-1");
+  });
+
+  test("stores tmux session name when provided", async () => {
+    const t = convexTest(schema);
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
+
+    await registerTeam(t, {
+      teamName: "auth-feature-phase-2",
+      orchestrationId,
+      leadSessionId: "session-def",
+      tmuxSessionName: "tina-auth-feature-phase-2",
+      phaseNumber: "2",
+      createdAt: Date.now(),
+    });
+
+    const team = await t.query(api.teams.getByTeamName, {
+      teamName: "auth-feature-phase-2",
+    });
+    expect(team).not.toBeNull();
+    expect(team!.tmuxSessionName).toBe("tina-auth-feature-phase-2");
   });
 
   test("errors when teamName exists with different orchestrationId", async () => {

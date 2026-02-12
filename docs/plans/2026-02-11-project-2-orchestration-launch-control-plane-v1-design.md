@@ -1,204 +1,305 @@
-# Project 2 Design: Orchestration Launch and Control Plane v1
+# Project 2 Plan: Orchestration Launch and Control Plane (Post-Project-1)
 
 ## Status
 
-Validated via brainstorming session on 2026-02-11.
+Updated on 2026-02-12 after Project 1 completion.
 
-## Objective
+## Context Update (What Changed Since Last Draft)
 
-Deliver Project 2's first usable operator slice: launch orchestrations from Tina web with explicit pre-configuration, durable policy snapshots, and reliable daemon bootstrap dispatch. This v1 focuses on launch correctness and traceability, while intentionally deferring broad live reconfiguration controls to follow-on slices.
+Project 1 is now complete, so Project 2 can assume:
 
-## Decisions Locked
+- Canonical work graph exists in Convex (`projects`, `designs`, `tickets`, `workComments`).
+- Launch input is canonical IDs, not markdown files (`designId` required, `ticketIds` optional).
+- `tina-session init --design-id` path is available and should be the default orchestration bootstrap path.
+- PM UI already exposes project-scoped design and ticket workflows; launch can now be integrated directly into that surface.
 
-- First deliverable: `Launch + pre-configuration panel`
-- Configuration depth: full controls plus presets (`Strict`, `Balanced`, `Fast`)
-- Interaction model: full form first, with "apply preset" shortcuts
-- Launch eligibility: design-only is allowed (tickets optional)
-- Dependency assumption: Project 1 canonical work graph is complete
-- Recommended build strategy: control-plane-first contracts and invariants, then richer controls
+This removes migration/compatibility complexity and allows Project 2 to focus on control-plane correctness, action safety, and operator UX.
 
-## Deliverable Scope (v1)
+## Current Baseline (Code Reality)
 
-In scope:
-- Start orchestration from a canonical Convex design record
-- Pre-configuration form with:
-  - Per-role model selection (`planner`, `executor`, `reviewer`)
-  - Review policy
-  - Enabled phases
-  - Human gate checkpoints
-- Preset shortcuts that write into the same full form fields
-- Durable launch writes:
-  - Orchestration record with immutable `policySnapshot`
-  - Launch audit/event row
-  - Single daemon bootstrap action in `inboundActions`
-- Reason-coded launch failures with operator-visible feedback
+- Orchestration persistence exists in `convex/orchestrations.ts` and `convex/schema.ts`.
+- Operator control queue already exists as `inboundActions` with `actions.submitAction/claimAction/completeAction`.
+- Daemon dispatch exists in `tina-daemon/src/actions.rs` for `approve_plan`, `reject_plan`, `pause`, `resume`, `retry`.
+- `tina-session` already supports design-linked initialization via `init --design-id` in `tina-session/src/commands/init.rs`.
+- Tina web currently has read surfaces for orchestrations but no full launch/control mutation UX.
 
-Out of scope for this v1:
-- Mid-flight task mutation (`task.edit`, `task.insert`, etc.)
-- Runtime pause/resume/retry UI controls
-- Full feedback artifact fabric (comments/suggestions/ask-for-change)
-- Review workbench and HITL review gating UX beyond launch-time gate configuration
+## Target Outcomes for Project 2
 
-## UX and Interaction Model
+1. Start orchestrations from Tina web against canonical designs/tickets.
+2. Apply pre-launch policy (model routing, review policy, enabled phases, human gates) with a durable immutable snapshot.
+3. Support safe runtime controls (`pause`, `resume`, `retry`) and then controlled reconfiguration for future/pending work.
+4. Maintain a unified operator-grade audit trail for every control action and outcome.
 
-The launch page centers on a single full configuration form. Preset chips are available near the top and act as field-populating shortcuts, not a separate mode:
+## Phase 1: Control-Plane Contracts and Schema Foundation
 
-- `Strict`: maximum reviews, broad gate coverage, conservative model defaults
-- `Balanced`: default general-purpose profile
-- `Fast`: reduced review/gates for lower-latency execution
+### Goal
 
-Choosing a preset updates form values in place; users can further edit any field before launch. Tina persists both:
+Establish the data contracts and schema needed for launch + runtime control actions with strict traceability and idempotency.
 
-- `policySnapshot`: fully resolved effective configuration
-- `presetOrigin`: preset label or `custom`
+### Technical Work
 
-Launch button behavior:
-- Enabled when `designId` is valid and canonical
-- If no tickets are selected, show non-blocking warning and persist `designOnly: true`
+Convex:
 
-## Architecture and Data Flow
+- Extend `orchestrations` in `convex/schema.ts` with launch metadata:
+  - `policySnapshot` (stringified JSON)
+  - `policySnapshotHash` (string)
+  - `presetOrigin` (optional string)
+  - `designOnly` (optional boolean)
+  - `updatedAt` (string)
+- Add `controlPlaneActions` table in `convex/schema.ts`:
+  - `orchestrationId`, `actionType`, `payload`, `requestedBy`, `idempotencyKey`, `status`, `result`, `createdAt`, `completedAt`
+  - indexes: `by_orchestration_created`, `by_status_created`, `by_idempotency`
+- Extend `inboundActions` with optional linkage fields:
+  - `controlActionId`
+  - `idempotencyKey`
 
-v1 uses existing Convex + daemon architecture and adds a launch service boundary:
+Contracts and shared generated types:
 
-1. UI submits `LaunchOrchestrationRequest`.
-2. Backend normalizes preset + manual edits into resolved policy.
-3. Backend validates policy and model routing compatibility.
-4. Transactionally writes orchestration + launch event.
-5. Enqueues one bootstrap action in `inboundActions`.
+- Update `contracts/orchestration-core.contract.json` for any new orchestration fields that must be read across Convex/web/Rust.
+- Regenerate shared artifacts with `scripts/generate-contracts.mjs`.
 
-Core components:
-- `LaunchForm`: client-side form state, preset application, inline validation display
-- `PolicyNormalizer`: canonical policy resolution (aliases, defaults, normalization)
-- `LaunchService`: ordered durable writes and typed error mapping
-- `DispatchAdapter`: daemon bootstrap enqueue after successful writes
+Control-plane backend entry points:
 
-## API Contract (v1)
+- Add `convex/controlPlane.ts`:
+  - `startOrchestration`
+  - `enqueueControlAction`
+  - `listControlActions`
+  - `getLatestPolicySnapshot`
+- Keep `actions.ts` for queue primitives, but route UI-triggered control requests through `controlPlane.ts` so action log and queue writes are consistent.
 
-### Request
+Tests:
 
-```ts
-type LaunchOrchestrationRequest = {
-  projectId: string;
-  designId: string;
-  ticketIds?: string[];
-  preset?: "strict" | "balanced" | "fast";
-  requestedPolicy: {
-    models: {
-      planner: string;
-      executor: string;
-      reviewer: string;
-    };
-    reviewPolicy: "full" | "spec_only" | "none";
-    phasesEnabled: number[];
-    humanGates: Array<"plan" | "review" | "finalize">;
-  };
-};
-```
+- Add `convex/controlPlane.test.ts` for:
+  - idempotency behavior
+  - action log + queue linkage
+  - policy snapshot immutability
+  - schema validation failures
 
-### Response
+### Exit Criteria
 
-```ts
-type LaunchOrchestrationResponse = {
-  orchestrationId: string;
-  status: "queued";
-  policySnapshotHash: string;
-  designOnly: boolean;
-};
-```
+- Control actions are durable, idempotent, queryable, and linked to queue execution.
+- Launch metadata is persisted on orchestration records.
 
-### Persisted Launch Metadata
+## Phase 2: Launch From Tina Web (Design-First, Node-Explicit)
 
-- `policySnapshot`: resolved immutable policy object
-- `presetOrigin`: `strict|balanced|fast|custom`
-- `designOnly`: boolean
-- `policySnapshotHash`: reproducibility and telemetry key
+### Goal
 
-## Safety Invariants
+Ship the actual start flow from web with full pre-configuration controls and preset shortcuts.
 
-- No launch without a canonical existing design record.
-- Server-side validation is authoritative; UI validation is advisory only.
-- Launch writes must be transactional from orchestration row through event row.
-- Bootstrap action enqueue only occurs after durable launch writes succeed.
-- Every failed launch attempt emits typed audit context with `reasonCode`.
-- Model routing checks must honor `cli-for-model` and kill-switch constraints.
+### Technical Work
 
-## Error Model
+Backend/API (`convex/controlPlane.ts`):
 
-Recoverable reason codes:
-- `STALE_FORM_REVISION`
-- `POLICY_VALIDATION_FAILED`
-- `TEMPORARY_WRITE_FAILURE`
+- Implement `startOrchestration` request validation:
+  - `projectId` exists
+  - `designId` exists and belongs to `projectId`
+  - selected `ticketIds` belong to same project; warn-only if empty (`designOnly = true`)
+  - target `nodeId` is online (required because `orchestrations.nodeId` is required)
+- Resolve policy snapshot:
+  - Apply preset template (`strict|balanced|fast`) then explicit field overrides
+  - Validate model names using routing compatibility expectations
+- Persist in order:
+  1. `controlPlaneActions` row (`start_orchestration`)
+  2. queue row in `inboundActions`
+  3. launch event in `orchestrationEvents`
 
-Terminal reason codes:
-- `DESIGN_NOT_FOUND`
-- `MODEL_ROUTING_DISABLED`
-- `SCHEMA_CONTRACT_MISMATCH`
+Daemon dispatch (`tina-daemon/src/actions.rs`):
 
-Error responses should include:
-- `reasonCode`
-- user-facing message
-- optional field errors for form mapping
+- Add `start_orchestration` action type.
+- Extend payload struct to include:
+  - `project_id`, `design_id`, `ticket_ids`, `node_id`
+  - `feature`, `branch`, `total_phases`
+  - launch policy fields required by `tina-session init`
+- Dispatch sequence:
+  - `tina-session init --feature ... --cwd ... --design-id ... --branch ... --total-phases ...`
+  - apply review-policy flags from snapshot to init args
+  - mark queue action complete/fail with structured result
 
-## Test Strategy
+Session layer (`tina-session`):
 
-Unit tests:
-- Preset application and override precedence
-- Policy normalization and alias resolution
-- Validation edge cases (empty phases, invalid gates/models)
+- Add a helper mapping from launch policy snapshot -> `init` flags for review-policy fields.
+- Keep design source canonical (`--design-id`) and stop introducing markdown-only launch paths in new code.
 
-Integration tests:
-- Launch transaction ordering and rollback semantics
-- Exactly-once bootstrap action enqueue after successful writes
-- Event payload correctness (`orchestration.started` + hash + origin)
+Web UI (`tina-web`):
 
-Contract tests:
-- API request/response decode boundaries
-- Daemon bootstrap action payload compatibility
+- Add `NodeListQuery` (from `api.nodes.listNodes`) in `tina-web/src/services/data/queryDefs.ts`.
+- Add orchestration launch route (under PM shell) with:
+  - full editable form
+  - preset shortcut buttons that mutate the same form state
+  - node selector
+  - non-blocking ticket warning state (`designOnly`)
+- Trigger `startOrchestration` mutation and show request/result states.
 
-UI tests:
-- Full-form-first rendering
-- Preset shortcut field mutation
-- Design-only warning behavior
-- Button enable/disable states
+Tests:
 
-End-to-end test:
-- Select canonical design
-- Apply preset, customize one model
-- Launch
-- Verify stored `policySnapshot` matches resolved form and single queue action exists
+- Web tests for form behavior, preset mutation, node requirement, and design-only warning.
+- Integration test for successful end-to-end launch request creating both action-log and queue rows.
 
-## Delivery Plan
+### Exit Criteria
 
-Track 1: API and schema
-- Add launch contract, policy snapshot persistence, and metadata fields
-- Implement validation and normalization boundary
+- A user can start an orchestration from Tina web using canonical design inputs and an explicit target node.
+- Launch writes a durable policy snapshot and queues exactly one start action.
 
-Track 2: Tina-web launch UI
-- Full form implementation
-- Preset shortcut controls
-- Typed error and warning surfaces
+## Phase 3: Runtime Operator Controls (Pause/Resume/Retry)
 
-Track 3: Dispatch integration
-- Transactional launch writes
-- Bootstrap enqueue via `inboundActions`
-- Audit/event consistency checks
+### Goal
 
-Track 4: Hardening and observability
-- Reason-coded failures
-- Policy hash metrics
-- Launch success/failure dashboards
+Expose existing runtime controls safely through a first-class control plane with end-to-end auditability.
 
-## Exit Criteria
+### Technical Work
 
-- Operator can launch orchestration from Tina using a canonical design only flow.
-- Full pre-config controls are editable, with preset shortcuts available.
-- `policySnapshot` is immutable and matches resolved effective launch config.
-- One start event and one bootstrap action are recorded per successful launch.
-- Failures are typed, visible, and do not create orphan daemon work.
+Backend:
 
-## Follow-On (Project 2.2+)
+- Implement `enqueueControlAction` action types:
+  - `pause`
+  - `resume`
+  - `retry`
+- Require payload validation per type (`feature` required, `phase` required for pause/retry).
+- Log every request and completion/failure in `controlPlaneActions`.
 
-After launch v1 exits, extend the same control-plane foundation to:
-- Runtime pause/resume/retry actions
-- Pending-task reconfiguration (`task.set_model`, `task.edit` unstarted only)
-- Dynamic task insertion with dependency wiring and audit traceability
+Daemon:
+
+- Keep current command mapping logic but move to typed control-plane payload validation.
+- Fix CLI argument construction to match long-form `tina-session` orchestrate contract:
+  - `orchestrate advance --feature ... --phase ... --event ...`
+  - `orchestrate next --feature ...`
+- Ensure queue completion messages include deterministic failure reason codes.
+
+Web:
+
+- Add control buttons in orchestration status surface (`StatusSection`) wired to `enqueueControlAction`.
+- Add action-in-progress states and disabled guards to avoid duplicate clicks.
+
+Tests:
+
+- Unit tests for typed payload decoding and CLI arg generation.
+- Integration tests for queue claim/complete flow with pause/resume/retry action types.
+- UI tests for button states and optimistic feedback.
+
+### Exit Criteria
+
+- Pause/resume/retry works from web and is fully traceable from request -> queue -> daemon result.
+
+## Phase 4: Policy Reconfiguration for Future Work
+
+### Goal
+
+Allow safe model/review policy changes that affect only future work.
+
+### Technical Work
+
+Control-plane API:
+
+- Add action types:
+  - `orchestration_set_policy`
+  - `orchestration_set_role_model`
+- Validate policy updates against routing and allowed enum values.
+- Record `targetRevision` in payload for optimistic concurrency.
+
+Session/state:
+
+- Add `tina-session` control commands to patch `SupervisorState.model_policy` and `SupervisorState.review_policy` in `tina-session/src/state/schema.rs` persisted through existing `save()` flow.
+- Reuse `tina-session config cli-for-model` semantics for model validity checks.
+- Guarantee no retroactive mutation of already completed phases/tasks.
+
+Web:
+
+- Add orchestration config panel for editing active policy.
+- Show "applies to future actions only" guard text and revision conflict errors.
+
+Tests:
+
+- State mutation tests for policy patch commands.
+- Integration tests confirming updated model policy impacts subsequent `next_action` results but not completed work.
+
+### Exit Criteria
+
+- Operators can change model/review policy mid-flight with revision-safe behavior and no silent divergence.
+
+## Phase 5: Pending Task Reconfiguration (Edit/Insert/Model Override)
+
+### Goal
+
+Support safe task-level reconfiguration for pending/unstarted work.
+
+### Technical Work
+
+Data model:
+
+- Add canonical execution task table (e.g. `executionTasks`) in Convex to avoid editing ambiguous projections in `taskEvents`.
+- Keep `taskEvents` append-only as history/projection.
+- Include `revision`, `status`, `phaseNumber`, `model`, and dependency metadata for safe edits.
+
+Control-plane actions:
+
+- Add:
+  - `task_edit`
+  - `task_insert`
+  - `task_set_model`
+- Enforce invariants:
+  - reject edits for `in_progress`/completed tasks
+  - require revision match
+  - insertion must declare dependency wiring
+
+Daemon/session:
+
+- Add typed dispatch handlers for new task action types.
+- Add corresponding `tina-session` commands to mutate canonical task state and emit events.
+
+Web:
+
+- Add pending-task editor surface and insert-task workflow from orchestration view.
+- Show plan diff: original queue vs inserted/edited queue.
+
+Tests:
+
+- Convex tests for revision conflict, invalid state edits, and dependency integrity.
+- End-to-end test: insert remediation task before a pending task and confirm orchestrator consumes new order.
+
+### Exit Criteria
+
+- Operators can edit/insert pending tasks safely with revision checks and complete audit trace.
+
+## Phase 6: Unified Action Timeline, Hardening, and Rollout
+
+### Goal
+
+Make control plane production-ready with observability, gating, and staged rollout.
+
+### Technical Work
+
+- Add read model/query that merges `controlPlaneActions`, `orchestrationEvents`, and action completion signals into one operator timeline.
+- Introduce reason-code taxonomy for launch/control failures.
+- Add dashboards/queries for:
+  - launch success rate
+  - median action latency (queued -> completed)
+  - failure distribution by action type
+- Gate rollout with config flag(s), enabling launch first, then runtime controls, then task reconfiguration.
+
+Tests and validation:
+
+- Regression suite across all existing orchestration flows.
+- Harness scenarios for:
+  - launch from design-only
+  - pause/resume/retry
+  - policy reconfiguration
+  - pending task insert/edit
+
+### Exit Criteria
+
+- Control-plane features are measurable, observable, and can be rolled back safely by feature flag.
+
+## Risks and Mitigations
+
+- Risk: command contract drift between daemon and `tina-session`.
+  - Mitigation: typed payloads + CLI arg contract tests in daemon and session CI.
+- Risk: queue/action-log divergence.
+  - Mitigation: write action log and queue records in one backend transaction boundary.
+- Risk: mid-flight edits causing orchestration divergence.
+  - Mitigation: revision checks + strict immutable history + no in-progress task body edits.
+
+## Final Acceptance Criteria for Project 2
+
+- Launch, pause/resume/retry, policy changes, and pending-task reconfiguration are all operable from Tina web.
+- Every control action is durably logged, attributable, and replay-auditable.
+- Canonical PM entities from Project 1 are the only source of orchestration launch context.

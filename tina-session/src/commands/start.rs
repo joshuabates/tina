@@ -111,6 +111,15 @@ pub fn run(
     // Check if session already exists (resume case)
     if tmux::session_exists(&name) {
         println!("Session '{}' already exists. Resuming.", name);
+        // Ensure phase team registration stores the real tmux session name.
+        register_phase_team(
+            &orchestration.id,
+            &team_name,
+            phase,
+            parent_team_id,
+            &name,
+        )?;
+
         // Session exists, just need to verify Claude is ready
         match claude::wait_for_ready(&name, 10) {
             Ok(_) => {
@@ -168,6 +177,7 @@ pub fn run(
         &team_name,
         phase,
         parent_team_id,
+        &name,
     )?;
 
     // Send the team-lead-init skill command with team_name
@@ -217,14 +227,17 @@ fn register_phase_team(
     team_name: &str,
     phase: &str,
     parent_team_id: Option<&str>,
+    tmux_session_name: &str,
 ) -> anyhow::Result<String> {
     let phase = phase.to_string();
     let parent = parent_team_id.map(|s| s.to_string());
+    let tmux_session_name = tmux_session_name.to_string();
     convex::run_convex(|mut writer| async move {
         let args = convex::RegisterTeamArgs {
             team_name: team_name.to_string(),
             orchestration_id: orchestration_id.to_string(),
             lead_session_id: "pending".to_string(),
+            tmux_session_name: Some(tmux_session_name),
             phase_number: Some(phase),
             parent_team_id: parent,
             created_at: chrono::Utc::now().timestamp_millis() as f64,

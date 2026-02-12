@@ -27,6 +27,7 @@ interface RegisterTeamOptions {
   teamName: string;
   orchestrationId: string;
   leadSessionId?: string;
+  tmuxSessionName?: string;
   phaseNumber?: string;
   parentTeamId?: string;
   createdAt?: number;
@@ -102,6 +103,10 @@ export async function registerTeam(
 
   if (options.phaseNumber !== undefined) {
     args.phaseNumber = options.phaseNumber;
+  }
+
+  if (options.tmuxSessionName !== undefined) {
+    args.tmuxSessionName = options.tmuxSessionName;
   }
 
   if (options.parentTeamId !== undefined) {
