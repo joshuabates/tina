@@ -79,6 +79,17 @@ describe("validateDesignForLaunch", () => {
     expect(result.errors).toContain("Design must have at least one phase");
   });
 
+  test("ignores extra completed markers not in required", () => {
+    const result = validateDesignForLaunch({
+      requiredMarkers: ["objective_defined"],
+      completedMarkers: ["objective_defined", "extra_marker"],
+      phaseCount: 1,
+      phaseStructureValid: true,
+    });
+
+    expect(result.valid).toBe(true);
+  });
+
   test("accumulates multiple errors", () => {
     const result = validateDesignForLaunch({
       requiredMarkers: ["scope", "risks"],
