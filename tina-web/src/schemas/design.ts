@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { convexDocumentFields, optionalString } from "./common"
+import { convexDocumentFields, optionalString, optionalNumber, optionalBoolean, optionalStringArray } from "./common"
 
 export const DesignSummary = Schema.Struct({
   ...convexDocumentFields,
@@ -11,6 +11,12 @@ export const DesignSummary = Schema.Struct({
   createdAt: Schema.String,
   updatedAt: Schema.String,
   archivedAt: optionalString,
+  complexityPreset: optionalString,
+  requiredMarkers: optionalStringArray,
+  completedMarkers: optionalStringArray,
+  phaseCount: optionalNumber,
+  phaseStructureValid: optionalBoolean,
+  validationUpdatedAt: optionalString,
 })
 
 export type DesignSummary = typeof DesignSummary.Type

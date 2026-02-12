@@ -410,6 +410,12 @@ describe("queryDefs", () => {
           createdAt: "2024-01-01T00:00:00Z",
           updatedAt: "2024-01-01T00:00:00Z",
           archivedAt: undefined,
+          complexityPreset: undefined,
+          requiredMarkers: undefined,
+          completedMarkers: undefined,
+          phaseCount: undefined,
+          phaseStructureValid: undefined,
+          validationUpdatedAt: undefined,
         },
       ])
 
@@ -448,6 +454,12 @@ describe("queryDefs", () => {
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-01T00:00:00Z",
         archivedAt: undefined,
+        complexityPreset: undefined,
+        requiredMarkers: undefined,
+        completedMarkers: undefined,
+        phaseCount: undefined,
+        phaseStructureValid: undefined,
+        validationUpdatedAt: undefined,
       })
 
       expect(decoded).not.toBeNull()

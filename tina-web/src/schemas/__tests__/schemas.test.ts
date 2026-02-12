@@ -175,6 +175,31 @@ describe("DesignSummary schema", () => {
     expect(Option.getOrThrow(result.archivedAt)).toBe("2026-02-10T00:00:00Z")
   })
 
+  it("decodes a design with validation fields", () => {
+    const raw = {
+      _id: "design3",
+      _creationTime: 1700000000000,
+      projectId: "proj1",
+      designKey: "DES-3",
+      title: "Validated Design",
+      markdown: "## Phase 1\n\nContent",
+      status: "draft",
+      createdAt: "2026-02-09T00:00:00Z",
+      updatedAt: "2026-02-09T00:00:00Z",
+      complexityPreset: "standard",
+      requiredMarkers: ["objective_defined", "scope_bounded"],
+      completedMarkers: ["objective_defined"],
+      phaseCount: 1,
+      phaseStructureValid: true,
+      validationUpdatedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(DesignSummary)(raw)
+    expect(Option.getOrThrow(result.complexityPreset)).toBe("standard")
+    expect(Option.getOrThrow(result.phaseCount)).toBe(1)
+    expect(Option.getOrThrow(result.phaseStructureValid)).toBe(true)
+  })
+
   it("rejects a design missing required fields", () => {
     const raw = { _id: "design1", _creationTime: 1700000000000 }
     expect(() => Schema.decodeUnknownSync(DesignSummary)(raw)).toThrow()
