@@ -1644,3 +1644,145 @@ describe("controlPlane:enqueueControlAction:roleModelValidation", () => {
     ).rejects.toThrow("Policy revision conflict");
   });
 });
+
+describe("controlPlane:policyReconfiguration:integration", () => {
+  test("e2e: set_policy creates action log, queue entry, event, and increments revision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_policy",
+      payload: '{"feature":"cp-feature","targetRevision":0,"model":{"executor":"haiku"}}',
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-policy-001",
+    });
+
+    // 1. Control-plane action log
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionType).toBe("orchestration_set_policy");
+    expect(actions[0].status).toBe("pending");
+
+    // 2. Queue entry linked back
+    const queueAction = await t.run(async (ctx) => {
+      return await ctx.db.get(actions[0].queueActionId!);
+    });
+    expect(queueAction).not.toBeNull();
+    expect(queueAction!.controlActionId).toBe(actionId);
+
+    // 3. Audit event
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId,
+      eventType: "control_action_requested",
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].summary).toContain("orchestration_set_policy");
+
+    // 4. Revision incremented
+    const orch = await t.run(async (ctx) => {
+      return await ctx.db.get(orchestrationId);
+    });
+    expect(orch!.policyRevision).toBe(1);
+  });
+
+  test("e2e: set_role_model creates action log and increments revision", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_role_model",
+      payload: '{"feature":"cp-feature","targetRevision":0,"role":"executor","model":"haiku"}',
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-role-001",
+    });
+
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionType).toBe("orchestration_set_role_model");
+
+    const orch = await t.run(async (ctx) => {
+      return await ctx.db.get(orchestrationId);
+    });
+    expect(orch!.policyRevision).toBe(1);
+  });
+
+  test("sequential policy updates with correct revisions all succeed", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    // First: set executor to haiku (rev 0 -> 1)
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_role_model",
+      payload: '{"feature":"cp-feature","targetRevision":0,"role":"executor","model":"haiku"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "seq-policy-1",
+    });
+
+    // Second: set reviewer to sonnet (rev 1 -> 2)
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_role_model",
+      payload: '{"feature":"cp-feature","targetRevision":1,"role":"reviewer","model":"sonnet"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "seq-policy-2",
+    });
+
+    // Third: full policy set (rev 2 -> 3)
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_policy",
+      payload: '{"feature":"cp-feature","targetRevision":2,"model":{"executor":"opus","reviewer":"opus"}}',
+      requestedBy: "web-ui",
+      idempotencyKey: "seq-policy-3",
+    });
+
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId,
+    });
+    expect(actions).toHaveLength(3);
+
+    const orch = await t.run(async (ctx) => {
+      return await ctx.db.get(orchestrationId);
+    });
+    expect(orch!.policyRevision).toBe(3);
+  });
+
+  test("concurrent requests with same revision: first wins, second fails", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(t, "cp-feature");
+
+    // First request succeeds
+    await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "orchestration_set_role_model",
+      payload: '{"feature":"cp-feature","targetRevision":0,"role":"executor","model":"haiku"}',
+      requestedBy: "user-a",
+      idempotencyKey: "concurrent-a",
+    });
+
+    // Second request with same revision fails
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "orchestration_set_role_model",
+        payload: '{"feature":"cp-feature","targetRevision":0,"role":"reviewer","model":"sonnet"}',
+        requestedBy: "user-b",
+        idempotencyKey: "concurrent-b",
+      }),
+    ).rejects.toThrow("Policy revision conflict");
+  });
+});
