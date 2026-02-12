@@ -1,29 +1,28 @@
 @use '../../styles/tokens' as *;
 
-.presetButtons {
-  display: flex;
-  gap: 8px;
+.validationStatus {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
 }
 
-.presetButton {
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: 4px;
-  border: 1px solid $border-color;
-  background: $bg-card;
-  color: $text-primary;
-  cursor: pointer;
-  text-transform: capitalize;
+.statusReady {
+  color: hsl(142 71% 45%);
+  border: 1px solid hsl(142 71% 45% / 0.3);
+  background: hsl(142 71% 45% / 0.08);
+}
 
-  &:hover {
-    background: hsl(var(--accent) / 0.08);
-  }
+.statusNotReady {
+  color: hsl(38 92% 50%);
+  border: 1px solid hsl(38 92% 50% / 0.3);
+  background: hsl(38 92% 50% / 0.08);
+}
 
-  &.active {
-    background: $accent;
-    color: $accent-foreground;
-    border-color: $accent;
-  }
+.statusDetail {
+  font-size: 11px;
+  margin-top: 4px;
+  opacity: 0.8;
 }
 
 .hint {
