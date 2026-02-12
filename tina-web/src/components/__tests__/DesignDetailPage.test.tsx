@@ -5,8 +5,8 @@ import App from "../../App"
 import {
   buildProjectSummary,
   buildOrchestrationSummary,
+  buildDesignSummary,
   some,
-  none,
 } from "@/test/builders/domain"
 import {
   queryLoading,
@@ -14,7 +14,6 @@ import {
   type QueryStateMap,
 } from "@/test/builders/query"
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
-import type { DesignSummary } from "@/schemas"
 
 vi.mock("@/hooks/useTypedQuery")
 
@@ -35,28 +34,6 @@ const projects = [
   buildProjectSummary({ _id: "p1", name: "Project Alpha", orchestrationCount: 0 }),
 ]
 
-function buildDesign(overrides: Partial<DesignSummary> = {}): DesignSummary {
-  return {
-    _id: "d1",
-    _creationTime: 1234567890,
-    projectId: "p1",
-    designKey: "ALPHA-D1",
-    title: "Authentication Flow",
-    markdown: "# Auth\nDesign for auth flow",
-    status: "draft",
-    createdAt: "2024-01-01T10:00:00Z",
-    updatedAt: "2024-01-01T12:00:00Z",
-    archivedAt: none<string>(),
-    complexityPreset: none<string>(),
-    requiredMarkers: none<string[]>(),
-    completedMarkers: none<string[]>(),
-    phaseCount: none<number>(),
-    phaseStructureValid: none<boolean>(),
-    validationUpdatedAt: none<string>(),
-    ...overrides,
-  }
-}
-
 const defaultStates: Partial<QueryStateMap> = {
   "projects.list": querySuccess(projects),
   "orchestrations.list": querySuccess([
@@ -67,7 +44,7 @@ const defaultStates: Partial<QueryStateMap> = {
       status: "executing",
     }),
   ]),
-  "designs.get": querySuccess(buildDesign()),
+  "designs.get": querySuccess(buildDesignSummary()),
   "workComments.list": querySuccess([]),
 }
 
@@ -131,7 +108,7 @@ describe("DesignDetailPage", () => {
   it("renders Approve and Return to Draft buttons when status is in_review", () => {
     renderApp("/pm/designs/d1?project=p1", {
       ...defaultStates,
-      "designs.get": querySuccess(buildDesign({ status: "in_review" })),
+      "designs.get": querySuccess(buildDesignSummary({ status: "in_review" })),
     })
 
     expect(screen.getByRole("button", { name: /approve/i })).toBeInTheDocument()
@@ -141,7 +118,7 @@ describe("DesignDetailPage", () => {
   it("renders Archive button when status is approved", () => {
     renderApp("/pm/designs/d1?project=p1", {
       ...defaultStates,
-      "designs.get": querySuccess(buildDesign({ status: "approved" })),
+      "designs.get": querySuccess(buildDesignSummary({ status: "approved" })),
     })
 
     expect(screen.getByRole("button", { name: /archive/i })).toBeInTheDocument()
@@ -150,7 +127,7 @@ describe("DesignDetailPage", () => {
   it("renders Unarchive button when status is archived", () => {
     renderApp("/pm/designs/d1?project=p1", {
       ...defaultStates,
-      "designs.get": querySuccess(buildDesign({ status: "archived" })),
+      "designs.get": querySuccess(buildDesignSummary({ status: "archived" })),
     })
 
     expect(screen.getByRole("button", { name: /unarchive/i })).toBeInTheDocument()
@@ -227,7 +204,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({ complexityPreset: some("standard") }),
+          buildDesignSummary({ complexityPreset: some("standard") }),
         ),
       })
 
@@ -238,7 +215,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({ complexityPreset: some("standard") }),
+          buildDesignSummary({ complexityPreset: some("standard") }),
         ),
       })
 
@@ -249,7 +226,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({
+          buildDesignSummary({
             complexityPreset: some("standard"),
             phaseCount: some(3),
           }),
@@ -263,7 +240,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({
+          buildDesignSummary({
             complexityPreset: some("standard"),
             phaseStructureValid: some(true),
           }),
@@ -277,7 +254,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({
+          buildDesignSummary({
             complexityPreset: some("standard"),
             phaseStructureValid: some(false),
           }),
@@ -291,7 +268,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({
+          buildDesignSummary({
             complexityPreset: some("standard"),
             requiredMarkers: some(["success_criteria", "phase_structure"]),
             completedMarkers: some([]),
@@ -309,7 +286,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({
+          buildDesignSummary({
             complexityPreset: some("standard"),
             requiredMarkers: some(["success_criteria", "phase_structure"]),
             completedMarkers: some(["success_criteria"]),
@@ -326,7 +303,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({
+          buildDesignSummary({
             complexityPreset: some("standard"),
             requiredMarkers: some([]),
           }),
@@ -341,7 +318,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({
+          buildDesignSummary({
             complexityPreset: some("standard"),
             requiredMarkers: some(["success_criteria", "phase_structure"]),
             completedMarkers: some(["success_criteria"]),
@@ -366,7 +343,7 @@ describe("DesignDetailPage", () => {
       renderApp("/pm/designs/d1?project=p1", {
         ...defaultStates,
         "designs.get": querySuccess(
-          buildDesign({
+          buildDesignSummary({
             complexityPreset: some("standard"),
             requiredMarkers: some(["success_criteria", "phase_structure"]),
             completedMarkers: some(["success_criteria"]),

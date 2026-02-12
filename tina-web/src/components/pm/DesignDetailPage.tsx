@@ -109,18 +109,20 @@ export function DesignDetailPage() {
     setEditing(false)
   }
 
+  const actions = getTransitionActions(design.status)
+  const complexityPreset = Option.getOrUndefined(design.complexityPreset)
+  const requiredMarkers = Option.getOrElse(() => [] as string[])(design.requiredMarkers)
+  const completedMarkers = Option.getOrElse(() => [] as string[])(design.completedMarkers)
+
   const handleToggleMarker = async (marker: string) => {
-    const current = Option.getOrElse(() => [] as string[])(design.completedMarkers)
-    const next = current.includes(marker)
-      ? current.filter((m: string) => m !== marker)
-      : [...current, marker]
+    const next = completedMarkers.includes(marker)
+      ? completedMarkers.filter((m: string) => m !== marker)
+      : [...completedMarkers, marker]
     await updateMarkers({
       designId: designId as Id<"designs">,
       completedMarkers: next,
     })
   }
-
-  const actions = getTransitionActions(design.status)
 
   return (
     <div data-testid="design-detail-page" className={styles.detailPage}>
@@ -156,13 +158,13 @@ export function DesignDetailPage() {
 
       <pre className={styles.markdownBody}>{design.markdown}</pre>
 
-      {Option.getOrUndefined(design.complexityPreset) && (
+      {complexityPreset && (
         <div className={styles.section} data-testid="validation-section">
           <h3 className={styles.sectionTitle}>Validation</h3>
           <div className={styles.metadata}>
             <div className={styles.metadataItem}>
               <span className={styles.metadataLabel}>Complexity</span>
-              <span>{Option.getOrUndefined(design.complexityPreset)}</span>
+              <span>{complexityPreset}</span>
             </div>
             <div className={styles.metadataItem}>
               <span className={styles.metadataLabel}>Phases</span>
@@ -173,31 +175,27 @@ export function DesignDetailPage() {
               <span>{Option.getOrElse(() => false)(design.phaseStructureValid) ? "Valid" : "Invalid"}</span>
             </div>
           </div>
-          {(() => {
-            const required = Option.getOrElse(() => [] as string[])(design.requiredMarkers)
-            const completed = Option.getOrElse(() => [] as string[])(design.completedMarkers)
-            return required.length > 0 ? (
-              <div data-testid="marker-checklist">
-                <h4>Markers</h4>
-                <ul style={{ listStyle: "none", padding: 0 }}>
-                  {required.map((marker: string) => (
-                    <li key={marker} style={{ padding: "4px 0" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                        <input
-                          type="checkbox"
-                          checked={completed.includes(marker)}
-                          onChange={() => handleToggleMarker(marker)}
-                        />
-                        <span style={{ textTransform: "capitalize" }}>
-                          {marker.replace(/_/g, " ")}
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null
-          })()}
+          {requiredMarkers.length > 0 && (
+            <div data-testid="marker-checklist">
+              <h4>Markers</h4>
+              <ul className={styles.markerList}>
+                {requiredMarkers.map((marker: string) => (
+                  <li key={marker} className={styles.markerItem}>
+                    <label className={styles.markerLabel}>
+                      <input
+                        type="checkbox"
+                        checked={completedMarkers.includes(marker)}
+                        onChange={() => handleToggleMarker(marker)}
+                      />
+                      <span className={styles.markerText}>
+                        {marker.replace(/_/g, " ")}
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 

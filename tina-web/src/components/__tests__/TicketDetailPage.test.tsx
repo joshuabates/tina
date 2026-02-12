@@ -5,6 +5,7 @@ import App from "../../App"
 import {
   buildProjectSummary,
   buildOrchestrationSummary,
+  buildDesignSummary,
   some,
   none,
 } from "@/test/builders/domain"
@@ -14,7 +15,7 @@ import {
   type QueryStateMap,
 } from "@/test/builders/query"
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
-import type { TicketSummary, DesignSummary } from "@/schemas"
+import type { TicketSummary } from "@/schemas"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("convex/react", async (importOriginal) => {
@@ -54,28 +55,6 @@ function buildTicket(overrides: Partial<TicketSummary> = {}): TicketSummary {
   }
 }
 
-function buildDesign(overrides: Partial<DesignSummary> = {}): DesignSummary {
-  return {
-    _id: "d1",
-    _creationTime: 1234567890,
-    projectId: "p1",
-    designKey: "ALPHA-D1",
-    title: "Auth Flow Design",
-    markdown: "# Auth",
-    status: "approved",
-    createdAt: "2024-01-01T10:00:00Z",
-    updatedAt: "2024-01-01T12:00:00Z",
-    archivedAt: none<string>(),
-    complexityPreset: none<string>(),
-    requiredMarkers: none<string[]>(),
-    completedMarkers: none<string[]>(),
-    phaseCount: none<number>(),
-    phaseStructureValid: none<boolean>(),
-    validationUpdatedAt: none<string>(),
-    ...overrides,
-  }
-}
-
 const defaultTicket = buildTicket()
 
 const defaultStates: Partial<QueryStateMap> = {
@@ -89,7 +68,7 @@ const defaultStates: Partial<QueryStateMap> = {
     }),
   ]),
   "tickets.get": querySuccess(defaultTicket),
-  "designs.list": querySuccess([buildDesign()]),
+  "designs.list": querySuccess([buildDesignSummary({ title: "Auth Flow Design", markdown: "# Auth", status: "approved" })]),
   "workComments.list": querySuccess([]),
 }
 

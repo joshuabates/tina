@@ -163,6 +163,26 @@
   letter-spacing: 0.05em;
 }
 
+.markerList {
+  list-style: none;
+  padding: 0;
+}
+
+.markerItem {
+  padding: 4px 0;
+}
+
+.markerLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.markerText {
+  text-transform: capitalize;
+}
+
 .loading {
   display: flex;
   flex-direction: column;

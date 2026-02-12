@@ -5,6 +5,7 @@ import App from "../../App"
 import {
   buildProjectSummary,
   buildOrchestrationSummary,
+  buildDesignSummary,
   some,
   none,
 } from "@/test/builders/domain"
@@ -14,8 +15,7 @@ import {
   type QueryStateMap,
 } from "@/test/builders/query"
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
-import type { TicketSummary } from "@/schemas"
-import type { DesignSummary } from "@/schemas"
+import type { TicketSummary, DesignSummary } from "@/schemas"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("convex/react", async (importOriginal) => {
@@ -33,28 +33,6 @@ const mockUseTypedQuery = vi.mocked(
 const projects = [
   buildProjectSummary({ _id: "p1", name: "Project Alpha", orchestrationCount: 0 }),
 ]
-
-function buildDesignSummary(overrides: Partial<DesignSummary> = {}): DesignSummary {
-  return {
-    _id: "d1",
-    _creationTime: 1234567890,
-    projectId: "p1",
-    designKey: "ALPHA-D1",
-    title: "Authentication Flow",
-    markdown: "# Auth\nDesign for auth flow",
-    status: "draft",
-    createdAt: "2024-01-01T10:00:00Z",
-    updatedAt: "2024-01-01T12:00:00Z",
-    archivedAt: none<string>(),
-    complexityPreset: none<string>(),
-    requiredMarkers: none<string[]>(),
-    completedMarkers: none<string[]>(),
-    phaseCount: none<number>(),
-    phaseStructureValid: none<boolean>(),
-    validationUpdatedAt: none<string>(),
-    ...overrides,
-  }
-}
 
 function buildTicketSummary(overrides: Partial<TicketSummary> = {}): TicketSummary {
   return {
