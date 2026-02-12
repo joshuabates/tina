@@ -42,6 +42,12 @@ export function buildOrchestrationSummary(
     startedAt: "2024-01-01T10:00:00Z",
     completedAt: none<string>(),
     totalElapsedMins: none<number>(),
+    policySnapshot: none<string>(),
+    policySnapshotHash: none<string>(),
+    presetOrigin: none<string>(),
+    designOnly: none<boolean>(),
+    policyRevision: none<number>(),
+    updatedAt: none<string>(),
     nodeName: "node1",
     ...overrides,
   }

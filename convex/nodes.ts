@@ -1,7 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-const HEARTBEAT_TIMEOUT_MS = 60_000;
+export const HEARTBEAT_TIMEOUT_MS = 60_000;
 
 export const registerNode = mutation({
   args: {

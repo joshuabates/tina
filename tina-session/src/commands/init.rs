@@ -568,6 +568,12 @@ fn write_to_convex(
             started_at: now,
             completed_at: None,
             total_elapsed_mins: None,
+            policy_snapshot: None,
+            policy_snapshot_hash: None,
+            preset_origin: None,
+            design_only: None,
+            policy_revision: None,
+            updated_at: None,
         };
         let orch_id = writer.upsert_orchestration(&orch).await?;
         Ok(orch_id)

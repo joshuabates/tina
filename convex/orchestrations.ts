@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { deduplicateTaskEvents, loadTaskEventsForOrchestration } from "./tasks";
+import { deleteOrchestrationAssociationsStep } from "./deleteHelpers";
 
 function isOrchestratorControlTask(subject: string) {
   const normalized = subject.trim().toLowerCase();
@@ -190,6 +191,39 @@ export const getOrchestrationDetail = query({
       orchestratorTasks,
       phaseTasks,
       teamMembers,
+    };
+  },
+});
+
+export const deleteOrchestration = mutation({
+  args: {
+    orchestrationId: v.id("orchestrations"),
+  },
+  handler: async (ctx, args) => {
+    const orchestration = await ctx.db.get(args.orchestrationId);
+    if (!orchestration) {
+      return {
+        done: true,
+        deleted: false,
+        deletedOrchestrationId: args.orchestrationId,
+      };
+    }
+
+    const stepResult = await deleteOrchestrationAssociationsStep(
+      ctx,
+      args.orchestrationId,
+      orchestration.featureName,
+    );
+
+    if (!stepResult.done) {
+      return { done: false };
+    }
+
+    await ctx.db.delete(args.orchestrationId);
+    return {
+      done: true,
+      deleted: true,
+      deletedOrchestrationId: args.orchestrationId,
     };
   },
 });

@@ -68,6 +68,28 @@ export default defineSchema({
     .index("by_orchestration_task", ["orchestrationId", "taskId"])
     .index("by_orchestration_recorded", ["orchestrationId", "recordedAt"]),
 
+  executionTasks: defineTable({
+    orchestrationId: v.id("orchestrations"),
+    phaseNumber: v.string(),
+    taskNumber: v.number(),
+    subject: v.string(),
+    description: v.optional(v.string()),
+    status: v.string(), // pending, in_progress, completed, skipped
+    model: v.optional(v.string()), // opus, sonnet, haiku
+    dependsOn: v.optional(v.array(v.number())),
+    revision: v.number(),
+    insertedBy: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_orchestration", ["orchestrationId"])
+    .index("by_orchestration_phase", ["orchestrationId", "phaseNumber"])
+    .index("by_orchestration_phase_task", [
+      "orchestrationId",
+      "phaseNumber",
+      "taskNumber",
+    ]),
+
   orchestrationEvents: defineTable({
     orchestrationId: v.id("orchestrations"),
     phaseNumber: v.optional(v.string()),
@@ -291,4 +313,11 @@ export default defineSchema({
     nextValue: v.number(),
   })
     .index("by_project_type", ["projectId", "counterType"]),
+
+  featureFlags: defineTable({
+    key: v.string(),
+    enabled: v.boolean(),
+    description: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 });

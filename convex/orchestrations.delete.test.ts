@@ -4,6 +4,10 @@ import { api } from "./_generated/api";
 import schema from "./schema";
 import { createNode } from "./test_helpers";
 
+// Worktree module discovery: convex-test resolves modules via node_modules,
+// which points to the main repo. Explicit glob ensures worktree modules are used.
+const modules = import.meta.glob("./**/*.*s");
+
 async function deleteOrchestrationUntilDone(
   t: ReturnType<typeof convexTest>,
   orchestrationId: string,
@@ -24,7 +28,7 @@ async function deleteOrchestrationUntilDone(
 
 describe("orchestrations:deleteOrchestration", () => {
   test("deletes orchestration and associated records", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const projectId = await t.mutation(api.projects.createProject, {
       name: "orch-delete-target",
@@ -171,7 +175,7 @@ describe("orchestrations:deleteOrchestration", () => {
   });
 
   test("returns deleted false when orchestration is missing", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const projectId = await t.mutation(api.projects.createProject, {
       name: "orchestration-missing",

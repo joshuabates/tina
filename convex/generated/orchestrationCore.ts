@@ -15,4 +15,10 @@ export const orchestrationCoreTableFields = {
   startedAt: v.string(),
   completedAt: v.optional(v.string()),
   totalElapsedMins: v.optional(v.number()),
+  policySnapshot: v.optional(v.string()),
+  policySnapshotHash: v.optional(v.string()),
+  presetOrigin: v.optional(v.string()),
+  designOnly: v.optional(v.boolean()),
+  policyRevision: v.optional(v.number()),
+  updatedAt: v.optional(v.string()),
 } as const;

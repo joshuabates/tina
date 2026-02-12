@@ -573,6 +573,117 @@ enum OrchestrateCommands {
         #[arg(long)]
         issues: Option<String>,
     },
+
+    /// Update model and/or review policy for future work
+    SetPolicy {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Model policy as JSON (optional, only provided fields are updated)
+        #[arg(long)]
+        model_json: Option<String>,
+
+        /// Review policy as JSON (optional, only provided fields are updated)
+        #[arg(long)]
+        review_json: Option<String>,
+    },
+
+    /// Update the model for a single role
+    SetRoleModel {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Role to update (validator, planner, executor, reviewer)
+        #[arg(long)]
+        role: String,
+
+        /// New model name (opus, sonnet, haiku)
+        #[arg(long)]
+        model: String,
+    },
+
+    /// Edit a pending execution task
+    TaskEdit {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Phase number
+        #[arg(long)]
+        phase: String,
+
+        /// Task number to edit
+        #[arg(long)]
+        task: u32,
+
+        /// Expected revision for optimistic concurrency
+        #[arg(long)]
+        revision: u32,
+
+        /// New subject (optional)
+        #[arg(long)]
+        subject: Option<String>,
+
+        /// New description (optional)
+        #[arg(long)]
+        description: Option<String>,
+
+        /// New model (optional: opus, sonnet, haiku)
+        #[arg(long)]
+        model: Option<String>,
+    },
+
+    /// Insert a new task into the execution plan
+    TaskInsert {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Phase number
+        #[arg(long)]
+        phase: String,
+
+        /// Insert after this task number (0 for beginning)
+        #[arg(long)]
+        after_task: u32,
+
+        /// Task subject
+        #[arg(long)]
+        subject: String,
+
+        /// Model (optional: opus, sonnet, haiku)
+        #[arg(long)]
+        model: Option<String>,
+
+        /// Comma-separated dependency task numbers
+        #[arg(long)]
+        depends_on: Option<String>,
+    },
+
+    /// Override the model for a specific pending task
+    TaskSetModel {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Phase number
+        #[arg(long)]
+        phase: String,
+
+        /// Task number
+        #[arg(long)]
+        task: u32,
+
+        /// Expected revision for optimistic concurrency
+        #[arg(long)]
+        revision: u32,
+
+        /// New model (opus, sonnet, haiku)
+        #[arg(long)]
+        model: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1163,6 +1274,51 @@ fn run() -> anyhow::Result<u8> {
                 git_range.as_deref(),
                 issues.as_deref(),
             ),
+
+            OrchestrateCommands::SetPolicy {
+                feature,
+                model_json,
+                review_json,
+            } => commands::orchestrate::set_policy(&feature, model_json.as_deref(), review_json.as_deref()),
+
+            OrchestrateCommands::SetRoleModel {
+                feature,
+                role,
+                model,
+            } => commands::orchestrate::set_role_model(&feature, &role, &model),
+
+            OrchestrateCommands::TaskEdit {
+                feature,
+                phase,
+                task,
+                revision,
+                subject,
+                description,
+                model,
+            } => commands::orchestrate::task_edit(
+                &feature, &phase, task, revision,
+                subject.as_deref(), description.as_deref(), model.as_deref(),
+            ),
+
+            OrchestrateCommands::TaskInsert {
+                feature,
+                phase,
+                after_task,
+                subject,
+                model,
+                depends_on,
+            } => commands::orchestrate::task_insert(
+                &feature, &phase, after_task, &subject,
+                model.as_deref(), depends_on.as_deref(),
+            ),
+
+            OrchestrateCommands::TaskSetModel {
+                feature,
+                phase,
+                task,
+                revision,
+                model,
+            } => commands::orchestrate::task_set_model(&feature, &phase, task, revision, &model),
         },
 
         Commands::Work { command } => {

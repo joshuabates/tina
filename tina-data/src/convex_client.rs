@@ -494,6 +494,13 @@ fn value_as_u32(map: &BTreeMap<String, Value>, key: &str) -> u32 {
     }
 }
 
+fn value_as_opt_bool(map: &BTreeMap<String, Value>, key: &str) -> Option<bool> {
+    match map.get(key) {
+        Some(Value::Boolean(b)) => Some(*b),
+        _ => None,
+    }
+}
+
 fn value_as_id(map: &BTreeMap<String, Value>, key: &str) -> String {
     match map.get(key) {
         Some(Value::String(s)) => s.clone(),
@@ -516,6 +523,12 @@ fn extract_orchestration_record(obj: &BTreeMap<String, Value>) -> OrchestrationR
         started_at: value_as_str(obj, "startedAt"),
         completed_at: value_as_opt_str(obj, "completedAt"),
         total_elapsed_mins: value_as_opt_f64(obj, "totalElapsedMins"),
+        policy_snapshot: value_as_opt_str(obj, "policySnapshot"),
+        policy_snapshot_hash: value_as_opt_str(obj, "policySnapshotHash"),
+        preset_origin: value_as_opt_str(obj, "presetOrigin"),
+        design_only: value_as_opt_bool(obj, "designOnly"),
+        policy_revision: value_as_opt_f64(obj, "policyRevision"),
+        updated_at: value_as_opt_str(obj, "updatedAt"),
     }
 }
 
@@ -1583,6 +1596,12 @@ mod tests {
             started_at: "2026-02-07T10:00:00Z".to_string(),
             completed_at: Some("2026-02-07T12:00:00Z".to_string()),
             total_elapsed_mins: Some(120.0),
+            policy_snapshot: None,
+            policy_snapshot_hash: None,
+            preset_origin: None,
+            design_only: None,
+            policy_revision: None,
+            updated_at: None,
         };
 
         let args = orchestration_to_args(&orch);
@@ -1629,6 +1648,12 @@ mod tests {
             started_at: "2026-02-07T10:00:00Z".to_string(),
             completed_at: None,
             total_elapsed_mins: None,
+            policy_snapshot: None,
+            policy_snapshot_hash: None,
+            preset_origin: None,
+            design_only: None,
+            policy_revision: None,
+            updated_at: None,
         };
 
         let args = orchestration_to_args(&orch);
@@ -1656,6 +1681,12 @@ mod tests {
             started_at: "2026-02-11T10:00:00Z".to_string(),
             completed_at: None,
             total_elapsed_mins: None,
+            policy_snapshot: None,
+            policy_snapshot_hash: None,
+            preset_origin: None,
+            design_only: None,
+            policy_revision: None,
+            updated_at: None,
         };
 
         let args = orchestration_to_args(&orch);

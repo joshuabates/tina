@@ -4,7 +4,7 @@ import path from "node:path";
 const root = process.cwd();
 const contractPath = path.join(root, "contracts", "orchestration-core.contract.json");
 
-/** @typedef {{name: string, rust: string, kind: "string" | "number" | "id", optional?: boolean, table?: string}} Field */
+/** @typedef {{name: string, rust: string, kind: "string" | "number" | "id" | "boolean", optional?: boolean, table?: string}} Field */
 
 /** @type {{orchestrationCore: Field[]}} */
 const contract = JSON.parse(fs.readFileSync(contractPath, "utf8"));
@@ -20,6 +20,8 @@ function convexValueExpr(field) {
     base = "v.string()";
   } else if (field.kind === "number") {
     base = "v.number()";
+  } else if (field.kind === "boolean") {
+    base = "v.boolean()";
   } else if (field.kind === "id") {
     const table = field.table;
     if (!table) {
@@ -34,6 +36,9 @@ function convexValueExpr(field) {
 }
 
 function webSchemaExpr(field) {
+  if (field.kind === "boolean") {
+    return field.optional ? "optionalBoolean" : "Schema.Boolean";
+  }
   const base = field.kind === "number" ? "Schema.Number" : "Schema.String";
   if (!field.optional) {
     return base;
@@ -42,7 +47,10 @@ function webSchemaExpr(field) {
 }
 
 function rustTypeExpr(field) {
-  const base = field.kind === "number" ? "f64" : "String";
+  let base;
+  if (field.kind === "number") base = "f64";
+  else if (field.kind === "boolean") base = "bool";
+  else base = "String";
   return field.optional ? `Option<${base}>` : base;
 }
 
@@ -69,6 +77,7 @@ const webLines = [
   "",
   "const optionalString = Schema.optionalWith(Schema.String, { as: \"Option\" });",
   "const optionalNumber = Schema.optionalWith(Schema.Number, { as: \"Option\" });",
+  "const optionalBoolean = Schema.optionalWith(Schema.Boolean, { as: \"Option\" });",
   "",
   "export const orchestrationCoreFields = {",
   ...fields.map((f) => `  ${f.name}: ${webSchemaExpr(f)},`),

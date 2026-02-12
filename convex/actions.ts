@@ -51,11 +51,24 @@ export const completeAction = mutation({
     if (!action) {
       throw new Error(`Action ${args.actionId} not found`);
     }
+    const now = Date.now();
     await ctx.db.patch(args.actionId, {
       status: args.success ? "completed" : "failed",
       result: args.result,
-      completedAt: Date.now(),
+      completedAt: now,
     });
+
+    // Propagate completion back to controlPlaneActions if linked
+    if (action.controlActionId) {
+      const controlAction = await ctx.db.get(action.controlActionId);
+      if (controlAction) {
+        await ctx.db.patch(action.controlActionId, {
+          status: args.success ? "completed" : "failed",
+          result: args.result,
+          completedAt: now,
+        });
+      }
+    }
   },
 });
 

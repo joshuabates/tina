@@ -8,6 +8,7 @@ const STATUS_VALUES = [
   "reviewing",
   "pending",
   "in_progress",
+  "launching",
   // Design statuses
   "draft",
   "in_review",
@@ -90,6 +91,13 @@ const statusStyleMap: Record<StatusBadgeStatus, StatusStyleTokens> = {
     textClass: "text-status-executing",
     iconBgClass: "bg-primary phase-glow",
     borderClass: "border-l-status-warning",
+    badgeClass: "text-status-executing border-status-executing/30 bg-status-executing/12",
+  },
+  launching: {
+    label: "Launching",
+    textClass: "text-status-executing",
+    iconBgClass: "bg-primary phase-glow",
+    borderClass: "border-l-status-executing",
     badgeClass: "text-status-executing border-status-executing/30 bg-status-executing/12",
   },
   // Design statuses

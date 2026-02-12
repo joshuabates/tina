@@ -7,6 +7,14 @@ import { renderWithRuntime } from "@/test/harness/render"
 import { installAppRuntimeQueryMock } from "@/test/harness/app-runtime"
 import { querySuccess } from "@/test/builders/query"
 
+vi.mock("convex/react", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("convex/react")>()
+  return {
+    ...mod,
+    useMutation: vi.fn(() => vi.fn()),
+  }
+})
+
 vi.mock("@/hooks/useOrchestrationEvents")
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
