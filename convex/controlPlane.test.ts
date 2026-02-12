@@ -4,9 +4,9 @@ import { api } from "./_generated/api";
 import schema from "./schema";
 import { createFeatureFixture } from "./test_helpers";
 
-// Worktree-aware module discovery: convex-test's default glob resolves to
-// the main repo's convex/ dir (via node_modules). Passing modules explicitly
-// ensures vitest resolves the glob relative to THIS file's location.
+// Worktree module discovery: convex-test resolves modules via node_modules,
+// which points to the main repo. New modules in this worktree (controlPlane.ts)
+// are invisible without an explicit glob rooted here.
 const modules = import.meta.glob("./**/*.*s");
 
 describe("controlPlane:startOrchestration", () => {
