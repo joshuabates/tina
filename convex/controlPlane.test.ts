@@ -702,3 +702,53 @@ describe("controlPlane:launchOrchestration", () => {
     expect(first.actionId).toBe(second.actionId);
   });
 });
+
+describe("controlPlane:launchOrchestration:integration", () => {
+  test("e2e: launch creates orchestration, action-log, queue, and event", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+
+    const result = await t.mutation(api.controlPlane.launchOrchestration, {
+      projectId,
+      designId,
+      nodeId,
+      feature: "e2e-launch",
+      branch: "tina/e2e-launch",
+      totalPhases: 3,
+      policyPreset: "strict",
+      requestedBy: "web:operator",
+      idempotencyKey: "e2e-launch-001",
+    });
+
+    // 1. Orchestration record exists with correct fields
+    const orch = await t.run(async (ctx) => {
+      return await ctx.db.get(result.orchestrationId);
+    });
+    expect(orch).not.toBeNull();
+    expect(orch!.featureName).toBe("e2e-launch");
+    expect(orch!.status).toBe("launching");
+    expect(orch!.totalPhases).toBe(3);
+    expect(orch!.policySnapshot).toBeDefined();
+    const policy = JSON.parse(orch!.policySnapshot as string);
+    expect(policy.review.test_integrity_profile).toBe("max_strict");
+    expect(policy.review.allow_rare_override).toBe(false);
+
+    // 2. Control-plane action log has one entry
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId: result.orchestrationId,
+    });
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionType).toBe("start_orchestration");
+    expect(actions[0].status).toBe("pending");
+    expect(actions[0].queueActionId).toBeDefined();
+
+    // 3. Launch event was recorded
+    const events = await t.query(api.events.listEvents, {
+      orchestrationId: result.orchestrationId,
+      eventType: "launch_requested",
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].source).toBe("control_plane");
+    expect(events[0].summary).toContain("e2e-launch");
+  });
+});
