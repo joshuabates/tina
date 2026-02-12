@@ -7,67 +7,16 @@ import {
   createDesign,
   createProject,
   createNode,
+  createValidatedLaunchFixture,
   seedFeatureFlag,
   enableAllControlPlaneFlags,
 } from "./test_helpers";
-import type { ConvexHarness } from "./test_helpers";
+import { PRESETS } from "./policyPresets";
 
 // Worktree module discovery: convex-test resolves modules via node_modules,
 // which points to the main repo. New modules in this worktree (controlPlane.ts)
 // are invisible without an explicit glob rooted here.
 const modules = import.meta.glob("./**/*.*s");
-
-const BALANCED_POLICY = {
-  review: {
-    enforcement: "task_and_phase" as const,
-    detector_scope: "whole_repo_pattern_index" as const,
-    architect_mode: "manual_plus_auto" as const,
-    test_integrity_profile: "strict_baseline" as const,
-    hard_block_detectors: true,
-    allow_rare_override: true,
-    require_fix_first: true,
-  },
-  model: {
-    validator: "opus",
-    planner: "opus",
-    executor: "opus",
-    reviewer: "opus",
-  },
-};
-
-const STRICT_POLICY = {
-  review: {
-    enforcement: "task_and_phase" as const,
-    detector_scope: "whole_repo_pattern_index" as const,
-    architect_mode: "manual_plus_auto" as const,
-    test_integrity_profile: "max_strict" as const,
-    hard_block_detectors: true,
-    allow_rare_override: false,
-    require_fix_first: true,
-  },
-  model: {
-    validator: "opus",
-    planner: "opus",
-    executor: "opus",
-    reviewer: "opus",
-  },
-};
-
-async function createValidatedLaunchFixture(t: ConvexHarness) {
-  const nodeId = await createNode(t);
-  const projectId = await createProject(t);
-  const designId = await createDesign(t, {
-    projectId,
-    markdown: "# Test Feature\n\n## Phase 1: Build\n\nBuild it\n\n## Phase 2: Test\n\nTest it",
-    complexityPreset: "simple",
-  });
-  // Complete all markers
-  await t.mutation(api.designs.updateDesignMarkers, {
-    designId,
-    completedMarkers: ["objective_defined", "scope_bounded"],
-  });
-  return { nodeId, projectId, designId };
-}
 
 describe("controlPlane:startOrchestration", () => {
   test("creates control action and inbound action with correct fields", async () => {
@@ -840,7 +789,7 @@ describe("controlPlane:launchOrchestration", () => {
       designId,
       feature: "my-feature",
       branch: "tina/my-feature",
-      policySnapshot: BALANCED_POLICY,
+      policySnapshot: PRESETS.balanced,
       requestedBy: "web-ui",
       idempotencyKey: "launch-1",
     });
@@ -884,7 +833,7 @@ describe("controlPlane:launchOrchestration", () => {
         designId,
         feature: "my-feature",
         branch: "tina/my-feature",
-        policySnapshot: BALANCED_POLICY,
+        policySnapshot: PRESETS.balanced,
         requestedBy: "web-ui",
         idempotencyKey: "launch-bad-project",
       }),
@@ -909,7 +858,7 @@ describe("controlPlane:launchOrchestration", () => {
         designId: designB,
         feature: "cross-ref",
         branch: "tina/cross-ref",
-        policySnapshot: BALANCED_POLICY,
+        policySnapshot: PRESETS.balanced,
         requestedBy: "web-ui",
         idempotencyKey: "launch-cross-design",
       }),
@@ -935,7 +884,7 @@ describe("controlPlane:launchOrchestration", () => {
         designId,
         feature: "my-feature",
         branch: "tina/my-feature",
-        policySnapshot: BALANCED_POLICY,
+        policySnapshot: PRESETS.balanced,
         requestedBy: "web-ui",
         idempotencyKey: "launch-no-nodes",
       }),
@@ -960,7 +909,7 @@ describe("controlPlane:launchOrchestration", () => {
         designId,
         feature: "incomplete",
         branch: "tina/incomplete",
-        policySnapshot: BALANCED_POLICY,
+        policySnapshot: PRESETS.balanced,
         requestedBy: "web-ui",
         idempotencyKey: "launch-incomplete",
       }),
@@ -988,7 +937,7 @@ describe("controlPlane:launchOrchestration", () => {
         designId,
         feature: "bad-phases",
         branch: "tina/bad-phases",
-        policySnapshot: BALANCED_POLICY,
+        policySnapshot: PRESETS.balanced,
         requestedBy: "web-ui",
         idempotencyKey: "launch-bad-phases",
       }),
@@ -1005,7 +954,7 @@ describe("controlPlane:launchOrchestration", () => {
       designId,
       feature: "derived-phases",
       branch: "tina/derived-phases",
-      policySnapshot: BALANCED_POLICY,
+      policySnapshot: PRESETS.balanced,
       requestedBy: "web-ui",
       idempotencyKey: "launch-derived",
     });
@@ -1035,7 +984,7 @@ describe("controlPlane:launchOrchestration", () => {
       feature: "ticketed-feature",
       branch: "tina/ticketed-feature",
       ticketIds: [ticketId],
-      policySnapshot: BALANCED_POLICY,
+      policySnapshot: PRESETS.balanced,
       requestedBy: "web-ui",
       idempotencyKey: "launch-with-tickets",
     });
@@ -1056,7 +1005,7 @@ describe("controlPlane:launchOrchestration", () => {
       designId,
       feature: "idem-feature",
       branch: "tina/idem-feature",
-      policySnapshot: BALANCED_POLICY,
+      policySnapshot: PRESETS.balanced,
       requestedBy: "web-ui",
       idempotencyKey: "launch-dedup",
     };
@@ -1079,7 +1028,7 @@ describe("controlPlane:launchOrchestration:integration", () => {
       designId,
       feature: "e2e-launch",
       branch: "tina/e2e-launch",
-      policySnapshot: STRICT_POLICY,
+      policySnapshot: PRESETS.strict,
       requestedBy: "web:operator",
       idempotencyKey: "e2e-launch-001",
     });
@@ -2890,7 +2839,7 @@ describe("controlPlane:featureFlagGuards", () => {
           designId,
           feature: "gated-feature",
           branch: "tina/gated-feature",
-          policySnapshot: BALANCED_POLICY,
+          policySnapshot: PRESETS.balanced,
           requestedBy: "web-ui",
           idempotencyKey: "flag-gate-launch-1",
         }),
@@ -2908,7 +2857,7 @@ describe("controlPlane:featureFlagGuards", () => {
           designId,
           feature: "gated-feature",
           branch: "tina/gated-feature",
-          policySnapshot: BALANCED_POLICY,
+          policySnapshot: PRESETS.balanced,
           requestedBy: "web-ui",
           idempotencyKey: "flag-gate-launch-2",
         }),
@@ -2925,7 +2874,7 @@ describe("controlPlane:featureFlagGuards", () => {
         designId,
         feature: "gated-feature",
         branch: "tina/gated-feature",
-        policySnapshot: BALANCED_POLICY,
+        policySnapshot: PRESETS.balanced,
         requestedBy: "web-ui",
         idempotencyKey: "flag-gate-launch-3",
       });
