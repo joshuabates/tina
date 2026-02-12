@@ -56,7 +56,6 @@ export function DesignDetailPage() {
   const projectId = searchParams.get("project") || null
 
   const transitionDesign = useMutation(api.designs.transitionDesign)
-  const updateDesign = useMutation(api.designs.updateDesign)
 
   const designResult = useTypedQuery(DesignDetailQuery, {
     designId: designId ?? "",
@@ -104,12 +103,7 @@ export function DesignDetailPage() {
     }
   }
 
-  const handleSave = async (title: string, markdown: string) => {
-    await updateDesign({
-      designId: designId as Id<"designs">,
-      title,
-      markdown,
-    })
+  const handleSaved = () => {
     setEditing(false)
   }
 
@@ -152,7 +146,7 @@ export function DesignDetailPage() {
         <EditDesignModal
           design={design}
           onClose={() => setEditing(false)}
-          onSave={handleSave}
+          onSaved={handleSaved}
         />
       )}
 

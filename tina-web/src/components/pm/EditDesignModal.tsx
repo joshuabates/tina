@@ -1,30 +1,51 @@
 import { useState } from "react"
+import { useMutation } from "convex/react"
+import { api } from "@convex/_generated/api"
 import { FormDialog } from "@/components/FormDialog"
 import type { DesignSummary } from "@/schemas"
+import type { Id } from "@convex/_generated/dataModel"
 import styles from "@/components/FormDialog.module.scss"
 
 interface EditDesignModalProps {
   design: DesignSummary
   onClose: () => void
-  onSave: (title: string, markdown: string) => void
+  onSaved: () => void
 }
 
 export function EditDesignModal({
   design,
   onClose,
-  onSave,
+  onSaved,
 }: EditDesignModalProps) {
   const [title, setTitle] = useState(design.title)
   const [markdown, setMarkdown] = useState(design.markdown)
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const updateDesign = useMutation(api.designs.updateDesign)
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    onSave(title.trim(), markdown.trim())
+    if (!title.trim()) return
+
+    setSubmitting(true)
+    setError(null)
+    try {
+      await updateDesign({
+        designId: design._id as Id<"designs">,
+        title: title.trim(),
+        markdown: markdown.trim(),
+      })
+      onSaved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update design")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
     <FormDialog title="Edit Design" onClose={onClose}>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} data-testid="design-edit-form">
         <div className={styles.formField}>
           <label className={styles.formLabel} htmlFor="design-edit-title">
             Title
@@ -49,13 +70,14 @@ export function EditDesignModal({
             onChange={(e) => setMarkdown(e.target.value)}
           />
         </div>
+        {error && <div className={styles.errorMessage}>{error}</div>}
         <div className={styles.formActions}>
           <button
             type="submit"
             className={styles.submitButton}
-            disabled={!title.trim()}
+            disabled={!title.trim() || submitting}
           >
-            Save
+            {submitting ? "Saving..." : "Save"}
           </button>
           <button
             type="button"
