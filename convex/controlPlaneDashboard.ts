@@ -1,5 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { extractReasonCode } from "./reasonCodes";
 
 /**
  * Launch success rate: fraction of start_orchestration actions that completed
@@ -114,12 +115,8 @@ export const failureDistribution = query({
       const actionType = action.actionType;
       let reasonCode = "unknown";
       if (action.result) {
-        try {
-          const parsed = JSON.parse(action.result);
-          reasonCode = parsed.error_code ?? "unclassified";
-        } catch {
-          reasonCode = "unparseable_result";
-        }
+        const extracted = extractReasonCode(action.result);
+        reasonCode = extracted ?? "unclassified";
       }
 
       if (!distribution[actionType]) distribution[actionType] = {};

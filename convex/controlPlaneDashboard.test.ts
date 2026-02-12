@@ -59,7 +59,7 @@ describe("controlPlaneDashboard:launchSuccessRate", () => {
       status: "failed",
       createdAt: 2000,
       completedAt: 3000,
-      result: JSON.stringify({ error_code: "node_offline" }),
+      result: JSON.stringify({ error_code: "cli_exit_non_zero" }),
     });
     await insertAction(t, {
       orchestrationId,
@@ -218,13 +218,14 @@ describe("controlPlaneDashboard:failureDistribution", () => {
     const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "fail-dist");
 
+    // cli_exit_non_zero maps to dispatch_cli_exit_nonzero
     await insertAction(t, {
       orchestrationId,
       actionType: "start_orchestration",
       status: "failed",
       createdAt: 1000,
       completedAt: 2000,
-      result: JSON.stringify({ error_code: "node_offline" }),
+      result: JSON.stringify({ error_code: "cli_exit_non_zero" }),
     });
     await insertAction(t, {
       orchestrationId,
@@ -232,23 +233,25 @@ describe("controlPlaneDashboard:failureDistribution", () => {
       status: "failed",
       createdAt: 2000,
       completedAt: 3000,
-      result: JSON.stringify({ error_code: "node_offline" }),
+      result: JSON.stringify({ error_code: "cli_exit_non_zero" }),
     });
+    // cli_spawn_failed maps to dispatch_cli_spawn_failed
     await insertAction(t, {
       orchestrationId,
       actionType: "start_orchestration",
       status: "failed",
       createdAt: 3000,
       completedAt: 4000,
-      result: JSON.stringify({ error_code: "invalid_payload" }),
+      result: JSON.stringify({ error_code: "cli_spawn_failed" }),
     });
+    // unknown_action_type maps to dispatch_unknown_type
     await insertAction(t, {
       orchestrationId,
       actionType: "pause",
       status: "failed",
       createdAt: 4000,
       completedAt: 5000,
-      result: JSON.stringify({ error_code: "phase_not_found" }),
+      result: JSON.stringify({ error_code: "unknown_action_type" }),
     });
     // Completed action should be excluded
     await insertAction(t, {
@@ -266,11 +269,11 @@ describe("controlPlaneDashboard:failureDistribution", () => {
 
     expect(result.totalFailed).toBe(4);
     expect(result.byActionType.start_orchestration).toEqual({
-      node_offline: 2,
-      invalid_payload: 1,
+      dispatch_cli_exit_nonzero: 2,
+      dispatch_cli_spawn_failed: 1,
     });
     expect(result.byActionType.pause).toEqual({
-      phase_not_found: 1,
+      dispatch_unknown_type: 1,
     });
   });
 
@@ -278,7 +281,7 @@ describe("controlPlaneDashboard:failureDistribution", () => {
     const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "fail-edge");
 
-    // No result field
+    // No result field → "unknown" (no string to extract from)
     await insertAction(t, {
       orchestrationId,
       actionType: "start_orchestration",
@@ -286,7 +289,7 @@ describe("controlPlaneDashboard:failureDistribution", () => {
       createdAt: 1000,
       completedAt: 2000,
     });
-    // Unparseable result
+    // Unparseable result → extractReasonCode returns dispatch_payload_invalid
     await insertAction(t, {
       orchestrationId,
       actionType: "start_orchestration",
@@ -295,7 +298,7 @@ describe("controlPlaneDashboard:failureDistribution", () => {
       completedAt: 3000,
       result: "not-json",
     });
-    // Result without error_code
+    // Result without error_code → extractReasonCode returns dispatch_cli_exit_nonzero
     await insertAction(t, {
       orchestrationId,
       actionType: "start_orchestration",
@@ -312,8 +315,8 @@ describe("controlPlaneDashboard:failureDistribution", () => {
 
     expect(result.totalFailed).toBe(3);
     expect(result.byActionType.start_orchestration.unknown).toBe(1);
-    expect(result.byActionType.start_orchestration.unparseable_result).toBe(1);
-    expect(result.byActionType.start_orchestration.unclassified).toBe(1);
+    expect(result.byActionType.start_orchestration.dispatch_payload_invalid).toBe(1);
+    expect(result.byActionType.start_orchestration.dispatch_cli_exit_nonzero).toBe(1);
   });
 
   test("respects since filter", async () => {
@@ -326,7 +329,7 @@ describe("controlPlaneDashboard:failureDistribution", () => {
       status: "failed",
       createdAt: 1000,
       completedAt: 2000,
-      result: JSON.stringify({ error_code: "node_offline" }),
+      result: JSON.stringify({ error_code: "cli_exit_non_zero" }),
     });
     await insertAction(t, {
       orchestrationId,
@@ -334,7 +337,7 @@ describe("controlPlaneDashboard:failureDistribution", () => {
       status: "failed",
       createdAt: 5000,
       completedAt: 6000,
-      result: JSON.stringify({ error_code: "invalid_payload" }),
+      result: JSON.stringify({ error_code: "cli_spawn_failed" }),
     });
 
     const result = await t.query(
@@ -344,7 +347,7 @@ describe("controlPlaneDashboard:failureDistribution", () => {
 
     expect(result.totalFailed).toBe(1);
     expect(result.byActionType.start_orchestration).toEqual({
-      invalid_payload: 1,
+      dispatch_cli_spawn_failed: 1,
     });
   });
 });
