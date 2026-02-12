@@ -2,7 +2,12 @@ import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
-import { createFeatureFixture } from "./test_helpers";
+import {
+  createFeatureFixture,
+  createLaunchFixture,
+  createDesign,
+  createProject,
+} from "./test_helpers";
 
 // Worktree module discovery: convex-test resolves modules via node_modules,
 // which points to the main repo. New modules in this worktree (controlPlane.ts)
@@ -509,5 +514,191 @@ describe("controlPlane:startOrchestration schema validation", () => {
         idempotencyKey: "stale-id",
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("controlPlane:launchOrchestration", () => {
+  test("creates orchestration, action log, queue, and event", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+
+    const result = await t.mutation(api.controlPlane.launchOrchestration, {
+      projectId,
+      designId,
+      nodeId,
+      feature: "my-feature",
+      branch: "tina/my-feature",
+      totalPhases: 3,
+      policyPreset: "balanced",
+      requestedBy: "web-ui",
+      idempotencyKey: "launch-1",
+    });
+
+    expect(result.orchestrationId).toBeTruthy();
+    expect(result.actionId).toBeTruthy();
+
+    // Verify orchestration was created with correct fields
+    const orchestration = await t.run(async (ctx) => {
+      return await ctx.db.get(result.orchestrationId);
+    });
+    expect(orchestration).not.toBeNull();
+    expect(orchestration!.status).toBe("launching");
+    expect(orchestration!.featureName).toBe("my-feature");
+    expect(orchestration!.policySnapshotHash).toMatch(/^sha256-/);
+    expect(orchestration!.presetOrigin).toBe("balanced");
+    expect(orchestration!.designOnly).toBe(true);
+
+    // Verify control action was created
+    const actions = await t.query(api.controlPlane.listControlActions, {
+      orchestrationId: result.orchestrationId,
+    });
+    expect(actions.length).toBe(1);
+    expect(actions[0].actionType).toBe("start_orchestration");
+  });
+
+  test("rejects nonexistent project", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+
+    // Delete the project to make ID invalid
+    await t.run(async (ctx) => {
+      await ctx.db.delete(projectId);
+    });
+
+    await expect(
+      t.mutation(api.controlPlane.launchOrchestration, {
+        projectId,
+        designId,
+        nodeId,
+        feature: "my-feature",
+        branch: "tina/my-feature",
+        totalPhases: 3,
+        policyPreset: "balanced",
+        requestedBy: "web-ui",
+        idempotencyKey: "launch-bad-project",
+      }),
+    ).rejects.toThrow("Project not found");
+  });
+
+  test("rejects design not belonging to project", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId } = await createLaunchFixture(t);
+
+    // Create a second project with its own design
+    const projectB = await createProject(t, { name: "Other", repoPath: "/other" });
+    const designB = await createDesign(t, { projectId: projectB });
+
+    // Use projectA's fixture but designB from projectB
+    const projectA = await createProject(t, { name: "Main", repoPath: "/main" });
+
+    await expect(
+      t.mutation(api.controlPlane.launchOrchestration, {
+        projectId: projectA,
+        designId: designB,
+        nodeId,
+        feature: "cross-ref",
+        branch: "tina/cross-ref",
+        totalPhases: 2,
+        policyPreset: "balanced",
+        requestedBy: "web-ui",
+        idempotencyKey: "launch-cross-design",
+      }),
+    ).rejects.toThrow("does not belong to project");
+  });
+
+  test("rejects offline node", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+
+    // Patch lastHeartbeat to old value to simulate offline node
+    await t.run(async (ctx) => {
+      await ctx.db.patch(nodeId, { lastHeartbeat: Date.now() - 120_000 });
+    });
+
+    await expect(
+      t.mutation(api.controlPlane.launchOrchestration, {
+        projectId,
+        designId,
+        nodeId,
+        feature: "my-feature",
+        branch: "tina/my-feature",
+        totalPhases: 3,
+        policyPreset: "balanced",
+        requestedBy: "web-ui",
+        idempotencyKey: "launch-offline",
+      }),
+    ).rejects.toThrow("offline");
+  });
+
+  test("rejects unknown preset name", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+
+    await expect(
+      t.mutation(api.controlPlane.launchOrchestration, {
+        projectId,
+        designId,
+        nodeId,
+        feature: "my-feature",
+        branch: "tina/my-feature",
+        totalPhases: 3,
+        policyPreset: "turbo",
+        requestedBy: "web-ui",
+        idempotencyKey: "launch-bad-preset",
+      }),
+    ).rejects.toThrow("Unknown preset");
+  });
+
+  test("designOnly is false when ticketIds provided", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+
+    // Create a ticket for this project
+    const ticketId = await t.mutation(api.tickets.createTicket, {
+      projectId,
+      title: "Implement feature",
+      description: "Build the thing",
+      priority: "medium",
+    });
+
+    const result = await t.mutation(api.controlPlane.launchOrchestration, {
+      projectId,
+      designId,
+      nodeId,
+      feature: "ticketed-feature",
+      branch: "tina/ticketed-feature",
+      totalPhases: 2,
+      ticketIds: [ticketId],
+      policyPreset: "balanced",
+      requestedBy: "web-ui",
+      idempotencyKey: "launch-with-tickets",
+    });
+
+    const orchestration = await t.run(async (ctx) => {
+      return await ctx.db.get(result.orchestrationId);
+    });
+    expect(orchestration!.designOnly).toBe(false);
+  });
+
+  test("idempotency: same key returns same IDs", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, projectId, designId } = await createLaunchFixture(t);
+
+    const args = {
+      projectId,
+      designId,
+      nodeId,
+      feature: "idem-feature",
+      branch: "tina/idem-feature",
+      totalPhases: 3,
+      policyPreset: "balanced",
+      requestedBy: "web-ui",
+      idempotencyKey: "launch-dedup",
+    };
+
+    const first = await t.mutation(api.controlPlane.launchOrchestration, args);
+    const second = await t.mutation(api.controlPlane.launchOrchestration, args);
+
+    expect(first.actionId).toBe(second.actionId);
   });
 });
