@@ -18,6 +18,7 @@ import type * as deleteHelpers from "../deleteHelpers.js";
 import type * as designs from "../designs.js";
 import type * as events from "../events.js";
 import type * as executionTasks from "../executionTasks.js";
+import type * as featureFlags from "../featureFlags.js";
 import type * as generated_orchestrationCore from "../generated/orchestrationCore.js";
 import type * as nodes from "../nodes.js";
 import type * as orchestrations from "../orchestrations.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   designs: typeof designs;
   events: typeof events;
   executionTasks: typeof executionTasks;
+  featureFlags: typeof featureFlags;
   "generated/orchestrationCore": typeof generated_orchestrationCore;
   nodes: typeof nodes;
   orchestrations: typeof orchestrations;

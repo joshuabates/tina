@@ -313,4 +313,11 @@ export default defineSchema({
     nextValue: v.number(),
   })
     .index("by_project_type", ["projectId", "counterType"]),
+
+  featureFlags: defineTable({
+    key: v.string(),
+    enabled: v.boolean(),
+    description: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 });
