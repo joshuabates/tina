@@ -8,7 +8,7 @@ import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import { CommentTimeline } from "./CommentTimeline"
-import type { DesignSummary } from "@/schemas"
+import { EditDesignModal } from "./EditDesignModal"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "./DesignDetailPage.module.scss"
 
@@ -45,69 +45,6 @@ function getTransitionActions(status: string): TransitionAction[] {
     default:
       return []
   }
-}
-
-function EditForm({
-  design,
-  onSave,
-  onCancel,
-}: {
-  design: DesignSummary
-  onSave: (title: string, markdown: string) => void
-  onCancel: () => void
-}) {
-  const [title, setTitle] = useState(design.title)
-  const [markdown, setMarkdown] = useState(design.markdown)
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    onSave(title.trim(), markdown.trim())
-  }
-
-  return (
-    <form className={styles.editForm} onSubmit={handleSubmit}>
-      <div className={styles.formField}>
-        <label className={styles.formLabel} htmlFor="design-edit-title">
-          Title
-        </label>
-        <input
-          id="design-edit-title"
-          className={styles.formInput}
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          autoFocus
-        />
-      </div>
-      <div className={styles.formField}>
-        <label className={styles.formLabel} htmlFor="design-edit-content">
-          Content
-        </label>
-        <textarea
-          id="design-edit-content"
-          className={styles.formTextarea}
-          value={markdown}
-          onChange={(e) => setMarkdown(e.target.value)}
-        />
-      </div>
-      <div className={styles.formActions}>
-        <button
-          type="submit"
-          className={`${styles.actionButton} ${styles.primary}`}
-          disabled={!title.trim()}
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          className={styles.actionButton}
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  )
 }
 
 export function DesignDetailPage() {
@@ -210,14 +147,13 @@ export function DesignDetailPage() {
         )}
       </div>
 
-      {editing ? (
-        <EditForm
+      <pre className={styles.markdownBody}>{design.markdown}</pre>
+      {editing && (
+        <EditDesignModal
           design={design}
+          onClose={() => setEditing(false)}
           onSave={handleSave}
-          onCancel={() => setEditing(false)}
         />
-      ) : (
-        <pre className={styles.markdownBody}>{design.markdown}</pre>
       )}
 
       <div className={styles.section}>
