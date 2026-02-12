@@ -256,19 +256,29 @@ describe("TicketListPage", () => {
     expect(screen.getByRole("heading", { name: "Tickets" })).toBeInTheDocument()
   })
 
-  describe("create form", () => {
-    it("shows design link dropdown with project designs", async () => {
+  describe("create form modal", () => {
+    it("opens modal when Create Ticket button is clicked", async () => {
       const user = userEvent.setup()
       renderApp("/pm?project=p1")
 
       await user.click(screen.getByRole("button", { name: /create ticket/i }))
 
-      const form = screen.getByTestId("ticket-create-form")
-      const designSelect = within(form).getByLabelText(/design/i)
+      const dialog = screen.getByRole("dialog")
+      expect(dialog).toBeInTheDocument()
+      expect(within(dialog).getByRole("heading", { name: "Create Ticket" })).toBeInTheDocument()
+    })
+
+    it("shows design link dropdown with project designs in modal", async () => {
+      const user = userEvent.setup()
+      renderApp("/pm?project=p1")
+
+      await user.click(screen.getByRole("button", { name: /create ticket/i }))
+
+      const dialog = screen.getByRole("dialog")
+      const designSelect = within(dialog).getByLabelText(/design/i)
       expect(designSelect).toBeInTheDocument()
       expect(designSelect.tagName).toBe("SELECT")
 
-      // Should have "None" option plus each design
       const options = within(designSelect as HTMLElement).getAllByRole("option")
       expect(options).toHaveLength(3) // None + 2 designs
       expect(options[0]).toHaveTextContent("None")
@@ -276,16 +286,27 @@ describe("TicketListPage", () => {
       expect(options[2]).toHaveTextContent("ALPHA-D2")
     })
 
-    it("shows assignee text input", async () => {
+    it("shows assignee text input in modal", async () => {
       const user = userEvent.setup()
       renderApp("/pm?project=p1")
 
       await user.click(screen.getByRole("button", { name: /create ticket/i }))
 
-      const form = screen.getByTestId("ticket-create-form")
-      const assigneeInput = within(form).getByLabelText(/assignee/i)
+      const dialog = screen.getByRole("dialog")
+      const assigneeInput = within(dialog).getByLabelText(/assignee/i)
       expect(assigneeInput).toBeInTheDocument()
       expect(assigneeInput).toHaveAttribute("type", "text")
+    })
+
+    it("closes modal when close button is clicked", async () => {
+      const user = userEvent.setup()
+      renderApp("/pm?project=p1")
+
+      await user.click(screen.getByRole("button", { name: /create ticket/i }))
+      expect(screen.getByRole("dialog")).toBeInTheDocument()
+
+      await user.click(screen.getByRole("button", { name: /close/i }))
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
     })
   })
 })
