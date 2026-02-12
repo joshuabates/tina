@@ -21,30 +21,36 @@ export const createDesign = mutation({
     const designKey = `${project.name.toUpperCase()}-D${keyNumber}`;
     const now = new Date().toISOString();
 
-    const insertFields: Record<string, unknown> = {
-      projectId: args.projectId,
-      designKey,
-      title: args.title,
-      markdown: args.markdown,
-      status: "draft",
-      createdAt: now,
-      updatedAt: now,
-    };
-
     if (args.complexityPreset) {
       const preset = args.complexityPreset as ComplexityPreset;
       const requiredMarkers = seedMarkersFromPreset(preset);
       const { phaseCount, phaseStructureValid } = parsePhaseStructure(args.markdown);
-
-      insertFields.complexityPreset = preset;
-      insertFields.requiredMarkers = requiredMarkers;
-      insertFields.completedMarkers = [];
-      insertFields.phaseCount = phaseCount;
-      insertFields.phaseStructureValid = phaseStructureValid;
-      insertFields.validationUpdatedAt = now;
+      return await ctx.db.insert("designs", {
+        projectId: args.projectId,
+        designKey,
+        title: args.title,
+        markdown: args.markdown,
+        status: "draft",
+        createdAt: now,
+        updatedAt: now,
+        complexityPreset: preset,
+        requiredMarkers,
+        completedMarkers: [],
+        phaseCount,
+        phaseStructureValid,
+        validationUpdatedAt: now,
+      });
+    } else {
+      return await ctx.db.insert("designs", {
+        projectId: args.projectId,
+        designKey,
+        title: args.title,
+        markdown: args.markdown,
+        status: "draft",
+        createdAt: now,
+        updatedAt: now,
+      });
     }
-
-    return await ctx.db.insert("designs", insertFields as any);
   },
 });
 
