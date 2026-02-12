@@ -1,0 +1,163 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: auto;
+  outline: none;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid hsl(var(--border));
+  position: sticky;
+  top: 0;
+  background: hsl(var(--background));
+  z-index: 1;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground));
+  }
+
+  &:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+.content {
+  padding: 20px;
+}
+
+.formField {
+  margin-bottom: 8px;
+}
+
+.formLabel {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 4px;
+}
+
+.formInput {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+
+  &:focus {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
+  }
+}
+
+.formTextarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  resize: vertical;
+
+  &:focus {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
+  }
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cancelButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+
+  &:hover {
+    background: hsl(var(--accent) / 0.08);
+  }
+}
+
+.submitButton {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid hsl(var(--primary));
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.errorMessage {
+  margin-top: 8px;
+  font-size: 12px;
+  color: hsl(var(--destructive, 0 84% 60%));
+}

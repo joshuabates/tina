@@ -1,106 +1,24 @@
 import { useState } from "react"
 import { useSearchParams, useNavigate } from "react-router-dom"
-import { useMutation } from "convex/react"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { DesignListQuery } from "@/services/data/queryDefs"
-import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { formatRelativeTimeShort } from "@/lib/time"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus, statusLabel } from "@/components/ui/status-styles"
+import { CreateDesignModal } from "./CreateDesignModal"
 import type { DesignSummary } from "@/schemas"
-import type { Id } from "@convex/_generated/dataModel"
 import styles from "./DesignListPage.module.scss"
-
-function DesignCreateForm({
-  projectId,
-  onCancel,
-  onCreated,
-}: {
-  projectId: string
-  onCancel: () => void
-  onCreated: (designId: string) => void
-}) {
-  const [title, setTitle] = useState("")
-  const [markdown, setMarkdown] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const createDesign = useMutation(api.designs.createDesign)
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!title.trim()) return
-
-    setSubmitting(true)
-    setError(null)
-    try {
-      const designId = await createDesign({
-        projectId: projectId as Id<"projects">,
-        title: title.trim(),
-        markdown: markdown.trim(),
-      })
-      onCreated(designId as unknown as string)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create design")
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <form className={styles.createForm} onSubmit={handleSubmit} data-testid="design-create-form">
-      <div className={styles.formField}>
-        <label className={styles.formLabel} htmlFor="design-title">Title</label>
-        <input
-          id="design-title"
-          className={styles.formInput}
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Design title"
-          autoFocus
-        />
-      </div>
-      <div className={styles.formField}>
-        <label className={styles.formLabel} htmlFor="design-markdown">Content</label>
-        <textarea
-          id="design-markdown"
-          className={styles.formTextarea}
-          value={markdown}
-          onChange={(e) => setMarkdown(e.target.value)}
-          placeholder="Design content (markdown)"
-        />
-      </div>
-      {error && <div className={styles.errorMessage}>{error}</div>}
-      <div className={styles.formActions}>
-        <button
-          type="submit"
-          className={styles.submitButton}
-          disabled={!title.trim() || submitting}
-        >
-          {submitting ? "Creating..." : "Create"}
-        </button>
-        <button
-          type="button"
-          className={styles.cancelButton}
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  )
-}
 
 export function DesignListPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  const projectId = searchParams.get("project")
+  const projectId = searchParams.get("project") || null
 
   const designsResult = useTypedQuery(DesignListQuery, {
-    projectId: projectId ?? "",
+    projectId: projectId as string,
   })
 
   if (!projectId) {
@@ -159,9 +77,9 @@ export function DesignListPage() {
       </div>
 
       {showCreateForm && (
-        <DesignCreateForm
+        <CreateDesignModal
           projectId={projectId}
-          onCancel={() => setShowCreateForm(false)}
+          onClose={() => setShowCreateForm(false)}
           onCreated={handleCreated}
         />
       )}

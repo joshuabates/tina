@@ -269,6 +269,12 @@ export default defineSchema({
     createdAt: v.string(),
     updatedAt: v.string(),
     archivedAt: v.optional(v.string()),
+    complexityPreset: v.optional(v.string()), // simple | standard | complex
+    requiredMarkers: v.optional(v.array(v.string())),
+    completedMarkers: v.optional(v.array(v.string())),
+    phaseCount: v.optional(v.number()),
+    phaseStructureValid: v.optional(v.boolean()),
+    validationUpdatedAt: v.optional(v.string()),
   })
     .index("by_project", ["projectId"])
     .index("by_project_status", ["projectId", "status"])
@@ -282,7 +288,6 @@ export default defineSchema({
     description: v.string(),
     status: v.string(), // todo | in_progress | in_review | blocked | done | canceled
     priority: v.string(), // low | medium | high | urgent
-    assignee: v.optional(v.string()),
     estimate: v.optional(v.string()),
     createdAt: v.string(),
     updatedAt: v.string(),
@@ -291,8 +296,7 @@ export default defineSchema({
     .index("by_project", ["projectId"])
     .index("by_project_status", ["projectId", "status"])
     .index("by_design", ["designId"])
-    .index("by_key", ["ticketKey"])
-    .index("by_assignee", ["assignee"]),
+    .index("by_key", ["ticketKey"]),
 
   workComments: defineTable({
     projectId: v.id("projects"),

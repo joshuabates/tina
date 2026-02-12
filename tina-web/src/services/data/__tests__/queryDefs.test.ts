@@ -410,6 +410,12 @@ describe("queryDefs", () => {
           createdAt: "2024-01-01T00:00:00Z",
           updatedAt: "2024-01-01T00:00:00Z",
           archivedAt: undefined,
+          complexityPreset: undefined,
+          requiredMarkers: undefined,
+          completedMarkers: undefined,
+          phaseCount: undefined,
+          phaseStructureValid: undefined,
+          validationUpdatedAt: undefined,
         },
       ])
 
@@ -448,6 +454,12 @@ describe("queryDefs", () => {
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-01T00:00:00Z",
         archivedAt: undefined,
+        complexityPreset: undefined,
+        requiredMarkers: undefined,
+        completedMarkers: undefined,
+        phaseCount: undefined,
+        phaseStructureValid: undefined,
+        validationUpdatedAt: undefined,
       })
 
       expect(decoded).not.toBeNull()
@@ -475,11 +487,9 @@ describe("queryDefs", () => {
         projectId: "proj123",
         status: "todo",
         designId: "design123",
-        assignee: "alice",
       })
       expect(decoded.status).toBe("todo")
       expect(decoded.designId).toBe("design123")
-      expect(decoded.assignee).toBe("alice")
     })
 
     it("args schema rejects missing projectId", () => {
@@ -498,7 +508,6 @@ describe("queryDefs", () => {
           description: "A test ticket",
           status: "todo",
           priority: "medium",
-          assignee: undefined,
           estimate: undefined,
           createdAt: "2024-01-01T00:00:00Z",
           updatedAt: "2024-01-01T00:00:00Z",
@@ -540,7 +549,6 @@ describe("queryDefs", () => {
         description: "A test ticket",
         status: "todo",
         priority: "medium",
-        assignee: "alice",
         estimate: "3h",
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-01T00:00:00Z",

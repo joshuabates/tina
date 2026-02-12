@@ -1,0 +1,4 @@
+interface:
+  display_name: "Branch/PR Cohesion Review"
+  short_description: "Review large PRs for drift and architecture risk"
+  default_prompt: "Use $branch-pr-cohesion-review to review this branch for code drift, architectural cohesion, and major merge risks."

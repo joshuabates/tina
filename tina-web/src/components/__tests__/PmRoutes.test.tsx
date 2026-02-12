@@ -37,6 +37,8 @@ const defaultStates: Partial<QueryStateMap> = {
       status: "executing",
     }),
   ]),
+  "tickets.list": querySuccess([]),
+  "designs.list": querySuccess([]),
 }
 
 function renderApp(route: string, states: Partial<QueryStateMap> = defaultStates) {
@@ -58,25 +60,11 @@ describe("PM routes", () => {
     expect(screen.getByTestId("pm-shell")).toBeInTheDocument()
   })
 
-  it("renders DesignListPage when navigating to /pm/designs", () => {
-    renderApp("/pm/designs")
-
-    expect(screen.getByTestId("pm-shell")).toBeInTheDocument()
-    expect(screen.getByTestId("design-list-page")).toBeInTheDocument()
-  })
-
   it("renders DesignDetailPage when navigating to /pm/designs/:designId", () => {
     renderApp("/pm/designs/design-123")
 
     expect(screen.getByTestId("pm-shell")).toBeInTheDocument()
     expect(screen.getByTestId("design-detail-page")).toBeInTheDocument()
-  })
-
-  it("renders TicketListPage when navigating to /pm/tickets", () => {
-    renderApp("/pm/tickets")
-
-    expect(screen.getByTestId("pm-shell")).toBeInTheDocument()
-    expect(screen.getByTestId("ticket-list-page")).toBeInTheDocument()
   })
 
   it("renders TicketDetailPage when navigating to /pm/tickets/:ticketId", () => {
@@ -89,15 +77,21 @@ describe("PM routes", () => {
   it("PmShell is nested inside AppShell", () => {
     renderApp("/pm")
 
-    // AppShell provides the header and main content area
     expect(screen.getByRole("banner")).toBeInTheDocument()
     expect(screen.getByRole("main")).toBeInTheDocument()
-    // PmShell renders inside AppShell's outlet
     expect(screen.getByTestId("pm-shell")).toBeInTheDocument()
   })
 
-  it("/pm index renders TicketListPage by default", () => {
-    renderApp("/pm")
+  it("global sidebar remains visible on PM routes", () => {
+    renderApp("/pm?project=p1")
+
+    expect(
+      screen.getByRole("navigation", { name: /main sidebar/i }),
+    ).toBeInTheDocument()
+  })
+
+  it("/pm index renders ticket list content by default", () => {
+    renderApp("/pm?project=p1")
 
     expect(screen.getByTestId("ticket-list-page")).toBeInTheDocument()
   })

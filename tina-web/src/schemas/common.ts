@@ -7,6 +7,8 @@ export type ConvexId = typeof ConvexId.Type
 
 export const optionalString = Schema.optionalWith(Schema.String, { as: "Option" })
 export const optionalNumber = Schema.optionalWith(Schema.Number, { as: "Option" })
+export const optionalBoolean = Schema.optionalWith(Schema.Boolean, { as: "Option" })
+export const optionalStringArray = Schema.optionalWith(Schema.Array(Schema.String), { as: "Option" })
 
 export const convexDocumentFields = {
   _id: Schema.String,

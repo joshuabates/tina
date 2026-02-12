@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Option } from "effect"
 import { api } from "@convex/_generated/api"
 import type { Id } from "@convex/_generated/dataModel"
@@ -38,6 +38,7 @@ function SidebarContent() {
   const projectsResult = useTypedQuery(ProjectListQuery, {})
   const orchestrationsResult = useTypedQuery(OrchestrationListQuery, {})
   const { orchestrationId, selectOrchestration } = useSelection()
+  const navigate = useNavigate()
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
 
   // Flat array of orchestrations for keyboard navigation
@@ -188,7 +189,7 @@ function SidebarContent() {
 
     for (const project of result) {
       project.active = project.items.some((item) => item.active === true)
-      project.onClick = project.items[0]?.onClick
+      project.onClick = () => navigate(`/pm?project=${project.id}`)
     }
 
     // Add ungrouped section if there are ungrouped orchestrations
@@ -210,6 +211,7 @@ function SidebarContent() {
     orchestrationId,
     selectOrchestration,
     getItemProps,
+    navigate,
   ])
 
   if (isAnyQueryLoading(projectsResult, orchestrationsResult)) {

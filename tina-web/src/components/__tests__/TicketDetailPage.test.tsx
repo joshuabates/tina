@@ -5,6 +5,7 @@ import App from "../../App"
 import {
   buildProjectSummary,
   buildOrchestrationSummary,
+  buildDesignSummary,
   some,
   none,
 } from "@/test/builders/domain"
@@ -14,7 +15,7 @@ import {
   type QueryStateMap,
 } from "@/test/builders/query"
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
-import type { TicketSummary, DesignSummary } from "@/schemas"
+import type { TicketSummary } from "@/schemas"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("convex/react", async (importOriginal) => {
@@ -46,27 +47,10 @@ function buildTicket(overrides: Partial<TicketSummary> = {}): TicketSummary {
     description: "Add a login form with email and password fields",
     status: "todo",
     priority: "high",
-    assignee: none<string>(),
     estimate: none<string>(),
     createdAt: "2024-01-01T10:00:00Z",
     updatedAt: "2024-01-01T12:00:00Z",
     closedAt: none<string>(),
-    ...overrides,
-  }
-}
-
-function buildDesign(overrides: Partial<DesignSummary> = {}): DesignSummary {
-  return {
-    _id: "d1",
-    _creationTime: 1234567890,
-    projectId: "p1",
-    designKey: "ALPHA-D1",
-    title: "Auth Flow Design",
-    markdown: "# Auth",
-    status: "approved",
-    createdAt: "2024-01-01T10:00:00Z",
-    updatedAt: "2024-01-01T12:00:00Z",
-    archivedAt: none<string>(),
     ...overrides,
   }
 }
@@ -84,7 +68,7 @@ const defaultStates: Partial<QueryStateMap> = {
     }),
   ]),
   "tickets.get": querySuccess(defaultTicket),
-  "designs.list": querySuccess([buildDesign()]),
+  "designs.list": querySuccess([buildDesignSummary({ title: "Auth Flow Design", markdown: "# Auth", status: "approved" })]),
   "workComments.list": querySuccess([]),
 }
 
@@ -153,22 +137,6 @@ describe("TicketDetailPage", () => {
     expect(priorityLabel).toBeInTheDocument()
   })
 
-  it("renders assignee metadata when present", () => {
-    renderApp("/pm/tickets/t1?project=p1", {
-      ...defaultStates,
-      "tickets.get": querySuccess(buildTicket({ assignee: some("alice") })),
-    })
-
-    expect(screen.getByText("alice")).toBeInTheDocument()
-  })
-
-  it("renders unassigned when no assignee", () => {
-    renderApp("/pm/tickets/t1?project=p1")
-
-    const assigneeSection = screen.getByTestId("meta-assignee")
-    expect(within(assigneeSection).getByText("Unassigned")).toBeInTheDocument()
-  })
-
   it("renders estimate when present", () => {
     renderApp("/pm/tickets/t1?project=p1", {
       ...defaultStates,
@@ -193,6 +161,19 @@ describe("TicketDetailPage", () => {
     renderApp("/pm/tickets/t1?project=p1")
 
     expect(screen.getByTestId("comment-timeline")).toBeInTheDocument()
+  })
+
+  it("falls back to ticket project when project query param is empty", () => {
+    renderApp("/pm/tickets/t1?project=")
+
+    expect(screen.getByTestId("ticket-detail-page")).toBeInTheDocument()
+
+    const designsListCall = mockUseTypedQuery.mock.calls.find(
+      ([def]) => def.key === "designs.list",
+    )
+
+    expect(designsListCall).toBeDefined()
+    expect(designsListCall?.[1]).toEqual({ projectId: "p1" })
   })
 
   describe("status transitions", () => {
@@ -289,7 +270,7 @@ describe("TicketDetailPage", () => {
       expect(screen.getByTestId("ticket-edit-form")).toBeInTheDocument()
     })
 
-    it("edit form has title, description, priority, assignee, estimate, design fields", async () => {
+    it("edit form has title, description, priority, estimate, design fields", async () => {
       const user = userEvent.setup()
       renderApp("/pm/tickets/t1?project=p1")
 
@@ -298,7 +279,6 @@ describe("TicketDetailPage", () => {
       expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/description/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/priority/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/assignee/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/estimate/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/design/i)).toBeInTheDocument()
     })
@@ -308,7 +288,7 @@ describe("TicketDetailPage", () => {
       renderApp("/pm/tickets/t1?project=p1", {
         ...defaultStates,
         "tickets.get": querySuccess(
-          buildTicket({ assignee: some("alice"), estimate: some("2h") }),
+          buildTicket({ estimate: some("2h") }),
         ),
       })
 
@@ -319,7 +299,6 @@ describe("TicketDetailPage", () => {
         "Add a login form with email and password fields",
       )
       expect(screen.getByLabelText(/priority/i)).toHaveValue("high")
-      expect(screen.getByLabelText(/assignee/i)).toHaveValue("alice")
       expect(screen.getByLabelText(/estimate/i)).toHaveValue("2h")
     })
 

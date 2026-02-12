@@ -3,6 +3,7 @@
  * Each preset defines ReviewPolicy + ModelPolicy defaults.
  * The web form can apply a preset then override individual fields.
  */
+import { v } from "convex/values";
 
 export interface ReviewPolicyConfig {
   enforcement: "task_and_phase" | "task_only" | "phase_only";
@@ -28,6 +29,25 @@ export interface PolicySnapshot {
   review: ReviewPolicyConfig;
   model: ModelPolicyConfig;
 }
+
+/** Convex validator for PolicySnapshot — use in mutation args instead of stringified JSON. */
+export const policySnapshotValidator = v.object({
+  review: v.object({
+    enforcement: v.string(),
+    detector_scope: v.string(),
+    architect_mode: v.string(),
+    test_integrity_profile: v.string(),
+    hard_block_detectors: v.boolean(),
+    allow_rare_override: v.boolean(),
+    require_fix_first: v.boolean(),
+  }),
+  model: v.object({
+    validator: v.string(),
+    planner: v.string(),
+    executor: v.string(),
+    reviewer: v.string(),
+  }),
+});
 
 export const PRESETS: Record<string, PolicySnapshot> = {
   strict: {

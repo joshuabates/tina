@@ -17,6 +17,13 @@ import { renderWithAppRuntime } from "@/test/harness/app-runtime"
 import { expectStatusLabelVisible } from "@/test/harness/status"
 
 vi.mock("@/hooks/useTypedQuery")
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom")
+  return {
+    ...actual,
+    useNavigate: vi.fn(),
+  }
+})
 vi.mock("@/convex", () => ({
   convex: {
     mutation: vi.fn(),
@@ -26,6 +33,9 @@ vi.mock("@/convex", () => ({
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
+const mockUseNavigate = vi.mocked(
+  (await import("react-router-dom")).useNavigate,
+)
 const mockConvexMutation = vi.mocked(
   (await import("@/convex")).convex.mutation as any,
 )
@@ -84,6 +94,7 @@ function itemContainer(label: string): HTMLElement {
 describe("Sidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseNavigate.mockReturnValue(vi.fn())
     mockConvexMutation.mockResolvedValue(undefined as any)
   })
 
@@ -155,13 +166,15 @@ describe("Sidebar", () => {
     expect(itemContainer("feature-two")).toHaveClass("bg-muted/50")
   })
 
-  it("clicking a project header selects that project's first orchestration", async () => {
+  it("clicking a project header navigates to PM workspace with project", async () => {
+    const navigate = vi.fn()
+    mockUseNavigate.mockReturnValue(navigate)
     const user = userEvent.setup()
     renderSidebar()
 
     await user.click(itemContainer("Project Beta"))
 
-    expect(itemContainer("feature-three")).toHaveClass("bg-muted/50")
+    expect(navigate).toHaveBeenCalledWith("/pm?project=p2")
   })
 
   it("clicking project delete does not trigger project header selection", async () => {

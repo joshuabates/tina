@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { useMutation } from "convex/react"
+import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { DesignDetailQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
@@ -8,7 +9,7 @@ import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import { CommentTimeline } from "./CommentTimeline"
-import type { DesignSummary } from "@/schemas"
+import { EditDesignModal } from "./EditDesignModal"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "./DesignDetailPage.module.scss"
 
@@ -47,79 +48,16 @@ function getTransitionActions(status: string): TransitionAction[] {
   }
 }
 
-function EditForm({
-  design,
-  onSave,
-  onCancel,
-}: {
-  design: DesignSummary
-  onSave: (title: string, markdown: string) => void
-  onCancel: () => void
-}) {
-  const [title, setTitle] = useState(design.title)
-  const [markdown, setMarkdown] = useState(design.markdown)
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    onSave(title.trim(), markdown.trim())
-  }
-
-  return (
-    <form className={styles.editForm} onSubmit={handleSubmit}>
-      <div className={styles.formField}>
-        <label className={styles.formLabel} htmlFor="design-edit-title">
-          Title
-        </label>
-        <input
-          id="design-edit-title"
-          className={styles.formInput}
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          autoFocus
-        />
-      </div>
-      <div className={styles.formField}>
-        <label className={styles.formLabel} htmlFor="design-edit-content">
-          Content
-        </label>
-        <textarea
-          id="design-edit-content"
-          className={styles.formTextarea}
-          value={markdown}
-          onChange={(e) => setMarkdown(e.target.value)}
-        />
-      </div>
-      <div className={styles.formActions}>
-        <button
-          type="submit"
-          className={`${styles.actionButton} ${styles.primary}`}
-          disabled={!title.trim()}
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          className={styles.actionButton}
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  )
-}
-
 export function DesignDetailPage() {
   const { designId } = useParams<{ designId: string }>()
   const [searchParams] = useSearchParams()
   const [editing, setEditing] = useState(false)
   const [transitioning, setTransitioning] = useState(false)
 
-  const projectId = searchParams.get("project")
+  const projectId = searchParams.get("project") || null
 
   const transitionDesign = useMutation(api.designs.transitionDesign)
-  const updateDesign = useMutation(api.designs.updateDesign)
+  const updateMarkers = useMutation(api.designs.updateDesignMarkers)
 
   const designResult = useTypedQuery(DesignDetailQuery, {
     designId: designId ?? "",
@@ -167,16 +105,24 @@ export function DesignDetailPage() {
     }
   }
 
-  const handleSave = async (title: string, markdown: string) => {
-    await updateDesign({
-      designId: designId as Id<"designs">,
-      title,
-      markdown,
-    })
+  const handleSaved = () => {
     setEditing(false)
   }
 
   const actions = getTransitionActions(design.status)
+  const complexityPreset = Option.getOrUndefined(design.complexityPreset)
+  const requiredMarkers = Option.getOrElse(() => [] as string[])(design.requiredMarkers)
+  const completedMarkers = Option.getOrElse(() => [] as string[])(design.completedMarkers)
+
+  const handleToggleMarker = async (marker: string) => {
+    const next = completedMarkers.includes(marker)
+      ? completedMarkers.filter((m: string) => m !== marker)
+      : [...completedMarkers, marker]
+    await updateMarkers({
+      designId: designId as Id<"designs">,
+      completedMarkers: next,
+    })
+  }
 
   return (
     <div data-testid="design-detail-page" className={styles.detailPage}>
@@ -210,20 +156,61 @@ export function DesignDetailPage() {
         )}
       </div>
 
-      {editing ? (
-        <EditForm
+      <pre className={styles.markdownBody}>{design.markdown}</pre>
+
+      {complexityPreset && (
+        <div className={styles.section} data-testid="validation-section">
+          <h3 className={styles.sectionTitle}>Validation</h3>
+          <div className={styles.metadata}>
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Complexity</span>
+              <span>{complexityPreset}</span>
+            </div>
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Phases</span>
+              <span>{Option.getOrElse(() => 0)(design.phaseCount)}</span>
+            </div>
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Phase Structure</span>
+              <span>{Option.getOrElse(() => false)(design.phaseStructureValid) ? "Valid" : "Invalid"}</span>
+            </div>
+          </div>
+          {requiredMarkers.length > 0 && (
+            <div data-testid="marker-checklist">
+              <h4>Markers</h4>
+              <ul className={styles.markerList}>
+                {requiredMarkers.map((marker: string) => (
+                  <li key={marker} className={styles.markerItem}>
+                    <label className={styles.markerLabel}>
+                      <input
+                        type="checkbox"
+                        checked={completedMarkers.includes(marker)}
+                        onChange={() => handleToggleMarker(marker)}
+                      />
+                      <span className={styles.markerText}>
+                        {marker.replace(/_/g, " ")}
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {editing && (
+        <EditDesignModal
           design={design}
-          onSave={handleSave}
-          onCancel={() => setEditing(false)}
+          onClose={() => setEditing(false)}
+          onSaved={handleSaved}
         />
-      ) : (
-        <pre className={styles.markdownBody}>{design.markdown}</pre>
       )}
 
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Comments</h3>
         <CommentTimeline
-          projectId={projectId ?? design.projectId}
+          projectId={projectId || design.projectId}
           targetType="design"
           targetId={designId ?? ""}
         />

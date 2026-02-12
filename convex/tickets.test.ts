@@ -27,7 +27,6 @@ describe("tickets", () => {
       expect(ticket?.description).toBe("Add JWT authentication");
       expect(ticket?.priority).toBe("high");
       expect(ticket?.status).toBe("todo");
-      expect(ticket?.assignee).toBeUndefined();
       expect(ticket?.estimate).toBeUndefined();
       expect(ticket?.designId).toBeUndefined();
       expect(ticket?.closedAt).toBeUndefined();
@@ -359,45 +358,6 @@ describe("tickets", () => {
       expect(leaked).toHaveLength(0);
     });
 
-    test("filters by assignee", async () => {
-      const t = convexTest(schema);
-      const projectId = await createProject(t, {
-        name: "ASGN",
-        repoPath: "/Users/joshua/Projects/asgn",
-      });
-
-      const ticket1Id = await t.mutation(api.tickets.createTicket, {
-        projectId,
-        title: "Alice's task",
-        description: "For Alice",
-        priority: "high",
-        assignee: "alice",
-      });
-
-      const ticket2Id = await t.mutation(api.tickets.createTicket, {
-        projectId,
-        title: "Bob's task",
-        description: "For Bob",
-        priority: "high",
-        assignee: "bob",
-      });
-
-      const unassignedId = await t.mutation(api.tickets.createTicket, {
-        projectId,
-        title: "Unassigned",
-        description: "No owner",
-        priority: "medium",
-      });
-
-      const aliceTickets = await t.query(api.tickets.listTickets, {
-        projectId,
-        assignee: "alice",
-      });
-
-      expect(aliceTickets).toHaveLength(1);
-      expect(aliceTickets[0]?.title).toBe("Alice's task");
-    });
-
     test("returns empty array when no tickets exist", async () => {
       const t = convexTest(schema);
       const projectId = await createProject(t, {
@@ -481,7 +441,7 @@ describe("tickets", () => {
       expect(afterUpdate?.updatedAt).not.toBe(beforeTime);
     });
 
-    test("updates priority and assignee", async () => {
+    test("updates priority and estimate", async () => {
       const t = convexTest(schema);
       const projectId = await createProject(t);
 
@@ -495,13 +455,11 @@ describe("tickets", () => {
       await t.mutation(api.tickets.updateTicket, {
         ticketId,
         priority: "urgent",
-        assignee: "dev-team",
         estimate: "5d",
       });
 
       const ticket = await t.query(api.tickets.getTicket, { ticketId });
       expect(ticket?.priority).toBe("urgent");
-      expect(ticket?.assignee).toBe("dev-team");
       expect(ticket?.estimate).toBe("5d");
     });
 
@@ -514,7 +472,6 @@ describe("tickets", () => {
         title: "Original",
         description: "Desc",
         priority: "high",
-        assignee: "alice",
       });
 
       await t.mutation(api.tickets.updateTicket, {
@@ -524,7 +481,6 @@ describe("tickets", () => {
 
       const ticket = await t.query(api.tickets.getTicket, { ticketId });
       expect(ticket?.title).toBe("Original");
-      expect(ticket?.assignee).toBe("alice");
       expect(ticket?.priority).toBe("low");
     });
 

@@ -26,7 +26,6 @@ export type TicketRecord = {
   title: string;
   status: TicketStatus;
   priority: TicketPriority;
-  assignee: string;
   designKey?: string;
   updatedAgo: string;
 };
@@ -108,7 +107,6 @@ export const ticketRecords: TicketRecord[] = [
     title: "Add Convex tables for designs and tickets",
     status: "in_progress",
     priority: "urgent",
-    assignee: "agent-platform",
     designKey: "TINA-D12",
     updatedAgo: "3m ago",
   },
@@ -119,7 +117,6 @@ export const ticketRecords: TicketRecord[] = [
     title: "Build PM routes under /pm",
     status: "todo",
     priority: "high",
-    assignee: "agent-ui",
     designKey: "TINA-D13",
     updatedAgo: "14m ago",
   },
@@ -130,7 +127,6 @@ export const ticketRecords: TicketRecord[] = [
     title: "Implement tina-session work design commands",
     status: "in_review",
     priority: "high",
-    assignee: "agent-platform",
     designKey: "TINA-D14",
     updatedAgo: "11m ago",
   },
@@ -141,7 +137,6 @@ export const ticketRecords: TicketRecord[] = [
     title: "Atomic counter mutation for project-scoped keys",
     status: "blocked",
     priority: "urgent",
-    assignee: "joshua",
     designKey: "TINA-D15",
     updatedAgo: "26m ago",
   },
@@ -152,7 +147,6 @@ export const ticketRecords: TicketRecord[] = [
     title: "Design detail markdown editor shell",
     status: "todo",
     priority: "medium",
-    assignee: "agent-ui",
     designKey: "TINA-D13",
     updatedAgo: "39m ago",
   },

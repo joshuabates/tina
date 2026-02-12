@@ -131,25 +131,39 @@ interface CreateDesignOptions {
   projectId: string;
   title?: string;
   markdown?: string;
+  complexityPreset?: string;
 }
 
 export async function createDesign(
   t: ConvexHarness,
   options: CreateDesignOptions,
 ) {
-  return await t.mutation(api.designs.createDesign, {
+  const args: Record<string, unknown> = {
     projectId: options.projectId as any,
     title: options.title ?? "Test Design",
     markdown: options.markdown ?? "# Test Design\n\nTest content.",
-  });
+  };
+
+  if (options.complexityPreset !== undefined) {
+    args.complexityPreset = options.complexityPreset;
+  }
+
+  return await t.mutation(api.designs.createDesign, args as any);
 }
 
-export async function createLaunchFixture(
-  t: ConvexHarness,
-) {
+export async function createValidatedLaunchFixture(t: ConvexHarness) {
   const nodeId = await createNode(t);
   const projectId = await createProject(t);
-  const designId = await createDesign(t, { projectId });
+  const designId = await createDesign(t, {
+    projectId,
+    markdown: "# Test Feature\n\n## Phase 1: Build\n\nBuild it\n\n## Phase 2: Test\n\nTest it",
+    complexityPreset: "simple",
+  });
+  // Complete all markers
+  await t.mutation(api.designs.updateDesignMarkers, {
+    designId,
+    completedMarkers: ["objective_defined", "scope_bounded"],
+  });
   return { nodeId, projectId, designId };
 }
 

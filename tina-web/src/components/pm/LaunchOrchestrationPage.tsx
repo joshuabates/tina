@@ -1,43 +1,42 @@
 import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useMutation } from "convex/react"
+import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { DesignListQuery, NodeListQuery } from "@/services/data/queryDefs"
+import { useDesignValidation } from "@/hooks/useDesignValidation"
+import { DesignListQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
-import { generateIdempotencyKey } from "@/lib/utils"
+import { generateIdempotencyKey, kebabCase } from "@/lib/utils"
+import { PRESETS } from "@convex/policyPresets"
+import type { PolicySnapshot } from "@convex/policyPresets"
 import type { Id } from "@convex/_generated/dataModel"
+import { PolicyEditor } from "./PolicyEditor"
 import styles from "./LaunchOrchestrationPage.module.scss"
-
-type PolicyPreset = "balanced" | "strict" | "fast"
-
-function kebabCase(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-}
 
 export function LaunchOrchestrationPage() {
   const [searchParams] = useSearchParams()
-  const projectIdParam = searchParams.get("project")
+  const projectIdParam = searchParams.get("project") || null
 
   const [selectedDesignId, setSelectedDesignId] = useState<string>("")
-  const [selectedNodeId, setSelectedNodeId] = useState<string>("")
   const [featureName, setFeatureName] = useState<string>("")
-  const [totalPhases, setTotalPhases] = useState<string>("3")
-  const [selectedPreset, setSelectedPreset] = useState<PolicyPreset>("balanced")
+  const [policySnapshot, setPolicySnapshot] = useState<PolicySnapshot>(
+    () => structuredClone(PRESETS.balanced),
+  )
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<{ orchestrationId: string } | null>(null)
 
   const designsResult = useTypedQuery(DesignListQuery, {
-    projectId: projectIdParam ?? "",
+    projectId: projectIdParam as string,
     status: undefined,
   })
-  const nodesResult = useTypedQuery(NodeListQuery, {})
 
   const launch = useMutation(api.controlPlane.launchOrchestration)
+
+  const designs = designsResult.status === "success" ? designsResult.data : []
+  const selectedDesign = designs.find((d) => d._id === selectedDesignId)
+  const validation = useDesignValidation(selectedDesign)
 
   if (!projectIdParam) {
     return (
@@ -48,7 +47,7 @@ export function LaunchOrchestrationPage() {
     )
   }
 
-  if (isAnyQueryLoading(designsResult, nodesResult)) {
+  if (isAnyQueryLoading(designsResult)) {
     return (
       <div className={styles.page}>
         <h2 className={styles.title}>Launch Orchestration</h2>
@@ -61,20 +60,22 @@ export function LaunchOrchestrationPage() {
     )
   }
 
-  const queryError = firstQueryError(designsResult, nodesResult)
+  const queryError = firstQueryError(designsResult)
   if (queryError) {
     throw queryError
   }
 
-  if (designsResult.status !== "success" || nodesResult.status !== "success") {
+  if (designsResult.status !== "success") {
     return null
   }
 
-  const designs = designsResult.data
-  const allNodes = nodesResult.data
-  const onlineNodes = allNodes.filter((n) => n.status === "online")
-
   const branchName = featureName ? `tina/${kebabCase(featureName)}` : ""
+
+  const canSubmit =
+    featureName.trim().length > 0 &&
+    selectedDesignId.length > 0 &&
+    validation.valid &&
+    !submitting
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -88,14 +89,14 @@ export function LaunchOrchestrationPage() {
       return
     }
 
-    if (!selectedDesignId || !selectedNodeId) {
-      setError("Please select a design and node")
+    if (!selectedDesignId) {
+      setError("Please select a design")
       setSubmitting(false)
       return
     }
 
-    if (!totalPhases || Number(totalPhases) < 1) {
-      setError("Total phases must be at least 1")
+    if (!validation.valid) {
+      setError("Design validation must pass before launching")
       setSubmitting(false)
       return
     }
@@ -105,28 +106,22 @@ export function LaunchOrchestrationPage() {
       const { orchestrationId } = await launch({
         projectId: projectIdParam as Id<"projects">,
         designId: selectedDesignId as Id<"designs">,
-        nodeId: selectedNodeId as Id<"nodes">,
         feature: featureName.trim(),
         branch: branchName.trim(),
-        totalPhases: Number(totalPhases),
-        policyPreset: selectedPreset,
+        policySnapshot,
         requestedBy: "web-ui",
         idempotencyKey,
       })
       setResult({ orchestrationId: orchestrationId as string })
       setFeatureName("")
-      setTotalPhases("3")
-      setSelectedPreset("balanced")
+      setPolicySnapshot(structuredClone(PRESETS.balanced))
       setSelectedDesignId("")
-      setSelectedNodeId("")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to launch orchestration")
     } finally {
       setSubmitting(false)
     }
   }
-
-  const presets: PolicyPreset[] = ["balanced", "strict", "fast"]
 
   return (
     <div className={styles.page} data-testid="launch-orchestration-page">
@@ -160,24 +155,19 @@ export function LaunchOrchestrationPage() {
           </select>
         </div>
 
-        <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="node-select">
-            Node
-          </label>
-          <select
-            id="node-select"
-            className={styles.formInput}
-            value={selectedNodeId}
-            onChange={(e) => setSelectedNodeId(e.target.value)}
-          >
-            <option value="">Select a node</option>
-            {onlineNodes.map((node) => (
-              <option key={node._id} value={node._id}>
-                {node.name} ({node.os})
-              </option>
+        {selectedDesign && (
+          <div className={`${styles.validationStatus} ${validation.valid ? styles.statusReady : styles.statusNotReady}`}>
+            <span>{validation.valid ? "Ready for launch" : "Not ready for launch"}</span>
+            {!validation.valid && validation.errors.map((err, i) => (
+              <div key={i} className={styles.statusDetail}>{err}</div>
             ))}
-          </select>
-        </div>
+            {validation.valid && Option.isSome(selectedDesign.phaseCount) && (
+              <div className={styles.statusDetail}>
+                {Option.getOrUndefined(selectedDesign.phaseCount)} phase{Option.getOrUndefined(selectedDesign.phaseCount) !== 1 ? "s" : ""} detected
+              </div>
+            )}
+          </div>
+        )}
 
         <div className={styles.formField}>
           <label className={styles.formLabel} htmlFor="feature-name">
@@ -196,41 +186,15 @@ export function LaunchOrchestrationPage() {
         </div>
 
         <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="total-phases">
-            Total Phases
-          </label>
-          <input
-            id="total-phases"
-            className={styles.formInput}
-            type="number"
-            min="1"
-            max="10"
-            value={totalPhases}
-            onChange={(e) => setTotalPhases(e.target.value)}
-          />
-        </div>
-
-        <div className={styles.formField}>
-          <label className={styles.formLabel}>Policy Preset</label>
-          <div className={styles.presetButtons}>
-            {presets.map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                className={`${styles.presetButton} ${selectedPreset === preset ? styles.active : ""}`}
-                onClick={() => setSelectedPreset(preset)}
-              >
-                {preset.charAt(0).toUpperCase() + preset.slice(1)}
-              </button>
-            ))}
-          </div>
+          <label className={styles.formLabel}>Policy</label>
+          <PolicyEditor value={policySnapshot} onChange={setPolicySnapshot} />
         </div>
 
         <div className={styles.formActions}>
           <button
             type="submit"
             className={`${styles.actionButton} ${styles.primary}`}
-            disabled={!featureName.trim() || !selectedDesignId || !selectedNodeId || submitting}
+            disabled={!canSubmit}
           >
             {submitting ? "Launching..." : "Launch"}
           </button>
