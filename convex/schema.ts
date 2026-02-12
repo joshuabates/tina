@@ -119,9 +119,27 @@ export default defineSchema({
     createdAt: v.number(),
     claimedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
+    controlActionId: v.optional(v.id("controlPlaneActions")),
+    idempotencyKey: v.optional(v.string()),
   })
     .index("by_node_status", ["nodeId", "status"])
     .index("by_orchestration", ["orchestrationId"]),
+
+  controlPlaneActions: defineTable({
+    orchestrationId: v.id("orchestrations"),
+    actionType: v.string(),
+    payload: v.string(),
+    requestedBy: v.string(),
+    idempotencyKey: v.string(),
+    status: v.string(),
+    result: v.optional(v.string()),
+    queueActionId: v.optional(v.id("inboundActions")),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_orchestration_created", ["orchestrationId", "createdAt"])
+    .index("by_status_created", ["status", "createdAt"])
+    .index("by_idempotency", ["idempotencyKey"]),
 
   commits: defineTable({
     orchestrationId: v.id("orchestrations"),

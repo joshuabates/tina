@@ -65,7 +65,9 @@ mod tests {
 
     #[test]
     fn test_is_claude_ready_bypass() {
-        assert!(is_claude_ready("bypass permissions on (shift+Tab to cycle)"));
+        assert!(is_claude_ready(
+            "bypass permissions on (shift+Tab to cycle)"
+        ));
         assert!(is_claude_ready(">> bypass permissions on"));
     }
 

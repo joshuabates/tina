@@ -540,8 +540,7 @@ impl SupervisorState {
 
         // Keep a local copy for teammates/tools that read supervisor-state.json directly.
         let local_dir = self.worktree_path.join(".claude").join("tina");
-        fs::create_dir_all(&local_dir)
-            .map_err(|e| SessionError::IoError(e.to_string()))?;
+        fs::create_dir_all(&local_dir).map_err(|e| SessionError::IoError(e.to_string()))?;
         fs::write(local_dir.join("supervisor-state.json"), &json)
             .map_err(|e| SessionError::IoError(e.to_string()))?;
 
@@ -578,9 +577,18 @@ mod tests {
 
     #[test]
     fn test_phase_status_from_str() {
-        assert_eq!("planning".parse::<PhaseStatus>().unwrap(), PhaseStatus::Planning);
-        assert_eq!("executing".parse::<PhaseStatus>().unwrap(), PhaseStatus::Executing);
-        assert_eq!("complete".parse::<PhaseStatus>().unwrap(), PhaseStatus::Complete);
+        assert_eq!(
+            "planning".parse::<PhaseStatus>().unwrap(),
+            PhaseStatus::Planning
+        );
+        assert_eq!(
+            "executing".parse::<PhaseStatus>().unwrap(),
+            PhaseStatus::Executing
+        );
+        assert_eq!(
+            "complete".parse::<PhaseStatus>().unwrap(),
+            PhaseStatus::Complete
+        );
         assert!("invalid".parse::<PhaseStatus>().is_err());
     }
 
@@ -714,9 +722,18 @@ mod tests {
 
     #[test]
     fn test_task_status_serializes() {
-        assert_eq!(serde_json::to_string(&TaskStatus::Pending).unwrap(), "\"pending\"");
-        assert_eq!(serde_json::to_string(&TaskStatus::InProgress).unwrap(), "\"in_progress\"");
-        assert_eq!(serde_json::to_string(&TaskStatus::Completed).unwrap(), "\"completed\"");
+        assert_eq!(
+            serde_json::to_string(&TaskStatus::Pending).unwrap(),
+            "\"pending\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TaskStatus::InProgress).unwrap(),
+            "\"in_progress\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TaskStatus::Completed).unwrap(),
+            "\"completed\""
+        );
     }
 
     #[test]
@@ -826,7 +843,10 @@ mod tests {
         );
         assert_eq!(state.model_policy.validator, "opus");
         assert_eq!(state.model_policy.executor, "opus");
-        assert_eq!(state.review_policy.enforcement, ReviewEnforcement::TaskAndPhase);
+        assert_eq!(
+            state.review_policy.enforcement,
+            ReviewEnforcement::TaskAndPhase
+        );
     }
 
     #[test]
@@ -887,7 +907,10 @@ mod tests {
             "convex_design_123",
         );
         assert_eq!(state.design_id, Some("convex_design_123".to_string()));
-        assert_eq!(state.design_doc, PathBuf::from("convex://convex_design_123"));
+        assert_eq!(
+            state.design_doc,
+            PathBuf::from("convex://convex_design_123")
+        );
     }
 
     #[test]

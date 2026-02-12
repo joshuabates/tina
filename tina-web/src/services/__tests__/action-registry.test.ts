@@ -34,6 +34,38 @@ describe('ActionRegistry', () => {
     expect(resolved).toBe(action)
   })
 
+  it('treats undefined and "global" scopes as equivalent for keybindings', () => {
+    const registry = createActionRegistry()
+    const action: ActionDescriptor = {
+      id: 'test.global',
+      label: 'Global Action',
+      key: 'Space',
+      execute: () => {},
+    }
+
+    registry.register(action)
+
+    expect(registry.resolve('Space', 'global')).toBe(action)
+    expect(registry.resolve('Space')).toBe(action)
+  })
+
+  it('normalizes space aliases for keybinding resolution', () => {
+    const registry = createActionRegistry()
+    const action: ActionDescriptor = {
+      id: 'test.space-alias',
+      label: 'Space Alias Action',
+      key: ' ',
+      when: 'sidebar.focused',
+      execute: () => {},
+    }
+
+    registry.register(action)
+
+    expect(registry.resolve('Space', 'sidebar.focused')).toBe(action)
+    expect(registry.resolve(' ', 'sidebar.focused')).toBe(action)
+    expect(registry.resolve('Spacebar', 'sidebar.focused')).toBe(action)
+  })
+
   it('throws error on duplicate (scope, key) registration', () => {
     const registry = createActionRegistry()
     const action1: ActionDescriptor = {

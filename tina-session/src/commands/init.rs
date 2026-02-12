@@ -193,9 +193,7 @@ fn resolve_design_source(
     } else {
         let did = design_id.expect("validated: exactly one source must be set");
         // Fetch design from Convex (used for both validation and writing to worktree)
-        let design = convex::run_convex(|mut writer| async move {
-            writer.get_design(did).await
-        })?;
+        let design = convex::run_convex(|mut writer| async move { writer.get_design(did).await })?;
         match design {
             Some(d) => Ok((
                 std::path::PathBuf::from(format!("convex://{}", did)),
@@ -307,7 +305,13 @@ fn apply_review_policy_overrides(
 /// Ensure a path is listed in .gitignore. Adds it if not already present.
 fn ensure_gitignored(repo_root: &Path, entry: &str) -> anyhow::Result<()> {
     let output = Command::new("git")
-        .args(["-C", &repo_root.to_string_lossy(), "check-ignore", "-q", entry])
+        .args([
+            "-C",
+            &repo_root.to_string_lossy(),
+            "check-ignore",
+            "-q",
+            entry,
+        ])
         .output()?;
 
     if !output.status.success() {
@@ -441,7 +445,13 @@ fn extract_sections(contents: &str) -> Vec<(String, String)> {
     ];
 
     // Orchestration-internal keywords to filter out of extracted content
-    let internal_keywords = ["worktree", "supervisor state", "tmux", "tina-session", "tina-daemon"];
+    let internal_keywords = [
+        "worktree",
+        "supervisor state",
+        "tmux",
+        "tina-session",
+        "tina-daemon",
+    ];
 
     let mut sections = Vec::new();
     let mut current_heading: Option<String> = None;
@@ -512,9 +522,7 @@ fn register_orchestration_team(orchestration_id: &str, team_name: &str) -> anyho
 fn check_existing_orchestration(
     feature: &str,
 ) -> anyhow::Result<Option<convex::OrchestrationRecord>> {
-    convex::run_convex(|mut writer| async move {
-        writer.get_by_feature(feature).await
-    })
+    convex::run_convex(|mut writer| async move { writer.get_by_feature(feature).await })
 }
 
 /// Write orchestration record to Convex via tina-data types.
@@ -593,7 +601,14 @@ mod tests {
 
         // Need at least one commit for worktree to work
         Command::new("git")
-            .args(["-C", &cwd.to_string_lossy(), "commit", "--allow-empty", "-m", "init"])
+            .args([
+                "-C",
+                &cwd.to_string_lossy(),
+                "commit",
+                "--allow-empty",
+                "-m",
+                "init",
+            ])
             .output()
             .unwrap();
 
@@ -649,7 +664,14 @@ mod tests {
 
         // Clean up worktree
         let _ = Command::new("git")
-            .args(["-C", &cwd.to_string_lossy(), "worktree", "remove", "--force", &worktree_path.to_string_lossy()])
+            .args([
+                "-C",
+                &cwd.to_string_lossy(),
+                "worktree",
+                "remove",
+                "--force",
+                &worktree_path.to_string_lossy(),
+            ])
             .output();
     }
 
@@ -689,12 +711,22 @@ mod tests {
         let gitignore = cwd.join(".gitignore");
         assert!(gitignore.exists(), ".gitignore should exist");
         let contents = fs::read_to_string(&gitignore).unwrap();
-        assert!(contents.contains(".worktrees"), ".gitignore should contain .worktrees");
+        assert!(
+            contents.contains(".worktrees"),
+            ".gitignore should contain .worktrees"
+        );
 
         // Clean up worktree
         let worktree_path = cwd.join(".worktrees").join(&feature);
         let _ = Command::new("git")
-            .args(["-C", &cwd.to_string_lossy(), "worktree", "remove", "--force", &worktree_path.to_string_lossy()])
+            .args([
+                "-C",
+                &cwd.to_string_lossy(),
+                "worktree",
+                "remove",
+                "--force",
+                &worktree_path.to_string_lossy(),
+            ])
             .output();
     }
 
@@ -712,7 +744,12 @@ mod tests {
 
         // Create a branch that will collide
         Command::new("git")
-            .args(["-C", &cwd.to_string_lossy(), "branch", "tina/collision-test"])
+            .args([
+                "-C",
+                &cwd.to_string_lossy(),
+                "branch",
+                "tina/collision-test",
+            ])
             .output()
             .unwrap();
 
@@ -738,11 +775,21 @@ mod tests {
 
         // Verify worktree was still created (with unique branch)
         let worktree_path = cwd.join(".worktrees").join(&feature);
-        assert!(worktree_path.exists(), "Worktree should exist despite branch collision");
+        assert!(
+            worktree_path.exists(),
+            "Worktree should exist despite branch collision"
+        );
 
         // Clean up worktree
         let _ = Command::new("git")
-            .args(["-C", &cwd.to_string_lossy(), "worktree", "remove", "--force", &worktree_path.to_string_lossy()])
+            .args([
+                "-C",
+                &cwd.to_string_lossy(),
+                "worktree",
+                "remove",
+                "--force",
+                &worktree_path.to_string_lossy(),
+            ])
             .output();
     }
 
@@ -820,7 +867,10 @@ mod tests {
         ensure_gitignored(path, ".worktrees").unwrap();
 
         let contents = fs::read_to_string(path.join(".gitignore")).unwrap();
-        let count = contents.lines().filter(|l| l.trim() == ".worktrees").count();
+        let count = contents
+            .lines()
+            .filter(|l| l.trim() == ".worktrees")
+            .count();
         assert_eq!(count, 1, "Should only have one .worktrees entry");
     }
 
@@ -873,7 +923,10 @@ Mixed Rust/TypeScript monorepo.
         // No CLAUDE.md exists
         let result = generate_agents_md(worktree);
         assert!(result.is_ok(), "Should succeed silently");
-        assert!(!worktree.join("AGENTS.md").exists(), "AGENTS.md should not be created");
+        assert!(
+            !worktree.join("AGENTS.md").exists(),
+            "AGENTS.md should not be created"
+        );
     }
 
     #[test]
@@ -895,7 +948,10 @@ Not relevant.
         generate_agents_md(worktree).unwrap();
 
         let agents_md = worktree.join("AGENTS.md");
-        assert!(agents_md.exists(), "AGENTS.md should be created with partial content");
+        assert!(
+            agents_md.exists(),
+            "AGENTS.md should be created with partial content"
+        );
 
         let content = fs::read_to_string(&agents_md).unwrap();
         assert!(content.contains("## Project Overview"));
@@ -929,11 +985,23 @@ Supervisor state tracks progress.
         assert!(agents_md.exists());
 
         let content = fs::read_to_string(&agents_md).unwrap();
-        assert!(!content.contains("worktree"), "Should not contain 'worktree'");
+        assert!(
+            !content.contains("worktree"),
+            "Should not contain 'worktree'"
+        );
         assert!(!content.contains("tmux"), "Should not contain 'tmux'");
-        assert!(!content.contains("tina-session"), "Should not contain 'tina-session'");
-        assert!(!content.contains("tina-daemon"), "Should not contain 'tina-daemon'");
-        assert!(!content.contains("Supervisor state"), "Should not contain 'supervisor state'");
+        assert!(
+            !content.contains("tina-session"),
+            "Should not contain 'tina-session'"
+        );
+        assert!(
+            !content.contains("tina-daemon"),
+            "Should not contain 'tina-daemon'"
+        );
+        assert!(
+            !content.contains("Supervisor state"),
+            "Should not contain 'supervisor state'"
+        );
         assert!(content.contains("Clean line about the project"));
         assert!(content.contains("Clean architecture description"));
     }
@@ -984,7 +1052,10 @@ Supervisor state tracks progress.
             state.review_policy.detector_scope,
             DetectorScope::TouchedAreaOnly
         );
-        assert_eq!(state.review_policy.architect_mode, ArchitectMode::ManualOnly);
+        assert_eq!(
+            state.review_policy.architect_mode,
+            ArchitectMode::ManualOnly
+        );
         assert_eq!(
             state.review_policy.test_integrity_profile,
             TestIntegrityProfile::Minimal
@@ -1019,7 +1090,11 @@ Supervisor state tracks progress.
         write_design_to_worktree(worktree, "# Test").unwrap();
 
         assert!(worktree.join(".claude").join("tina").exists());
-        assert!(worktree.join(".claude").join("tina").join("design.md").exists());
+        assert!(worktree
+            .join(".claude")
+            .join("tina")
+            .join("design.md")
+            .exists());
     }
 
     #[test]
@@ -1028,8 +1103,7 @@ Supervisor state tracks progress.
         let doc = temp.path().join("design.md");
         fs::write(&doc, "# Design").unwrap();
 
-        let (path, design_id, markdown) =
-            resolve_design_source(Some(doc.as_path()), None).unwrap();
+        let (path, design_id, markdown) = resolve_design_source(Some(doc.as_path()), None).unwrap();
 
         assert_eq!(path, fs::canonicalize(&doc).unwrap());
         assert!(design_id.is_none());
@@ -1072,7 +1146,11 @@ Supervisor state tracks progress.
             None,
         );
 
-        assert!(result.is_ok(), "init with --design-doc should still work: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "init with --design-doc should still work: {:?}",
+            result.err()
+        );
 
         // Verify worktree was created
         let worktree_path = cwd.join(".worktrees").join(&feature);
@@ -1087,18 +1165,27 @@ Supervisor state tracks progress.
         let state_json = fs::read_to_string(&state_path).unwrap();
         let state: serde_json::Value = serde_json::from_str(&state_json).unwrap();
         assert!(
-            state.get("design_id").is_none()
-                || state["design_id"].is_null(),
+            state.get("design_id").is_none() || state["design_id"].is_null(),
             "design_id should be absent or null for --design-doc path"
         );
 
         // Verify no design.md was written (only happens with --design-id)
         let design_md = worktree_path.join(".claude").join("tina").join("design.md");
-        assert!(!design_md.exists(), "design.md should NOT be written when using --design-doc");
+        assert!(
+            !design_md.exists(),
+            "design.md should NOT be written when using --design-doc"
+        );
 
         // Clean up worktree
         let _ = Command::new("git")
-            .args(["-C", &cwd.to_string_lossy(), "worktree", "remove", "--force", &worktree_path.to_string_lossy()])
+            .args([
+                "-C",
+                &cwd.to_string_lossy(),
+                "worktree",
+                "remove",
+                "--force",
+                &worktree_path.to_string_lossy(),
+            ])
             .output();
     }
 
@@ -1140,7 +1227,11 @@ Supervisor state tracks progress.
             None,
         );
 
-        assert!(result.is_ok(), "init with --design-id should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "init with --design-id should succeed: {:?}",
+            result.err()
+        );
 
         // Verify worktree was created
         let worktree_path = cwd.join(".worktrees").join(&feature);
@@ -1148,7 +1239,10 @@ Supervisor state tracks progress.
 
         // Verify design.md was written to worktree
         let design_md = worktree_path.join(".claude").join("tina").join("design.md");
-        assert!(design_md.exists(), "design.md should be written when using --design-id");
+        assert!(
+            design_md.exists(),
+            "design.md should be written when using --design-id"
+        );
         let design_content = fs::read_to_string(&design_md).unwrap();
         assert!(!design_content.is_empty(), "design.md should have content");
 
@@ -1175,7 +1269,14 @@ Supervisor state tracks progress.
 
         // Clean up worktree
         let _ = Command::new("git")
-            .args(["-C", &cwd.to_string_lossy(), "worktree", "remove", "--force", &worktree_path.to_string_lossy()])
+            .args([
+                "-C",
+                &cwd.to_string_lossy(),
+                "worktree",
+                "remove",
+                "--force",
+                &worktree_path.to_string_lossy(),
+            ])
             .output();
     }
 

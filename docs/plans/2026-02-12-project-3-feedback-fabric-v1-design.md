@@ -101,11 +101,26 @@ Primary UI integrates into existing quicklook dialogs and RightPanel:
 
 - Add `FeedbackSection` inside `TaskQuicklook` and `CommitQuicklook` dialogs (context-scoped).
 - Each section shows feedback entries filtered to the selected target, with a composer for all three entry types.
-- Realtime feed shows newest-first entries with filter controls.
+- Realtime feed shows newest-first entries in a right-rail companion stream.
 - Entry actions include resolve/reopen.
 - Add `FeedbackSummarySection` to `RightPanel` showing blocking badge/counter for open `ask_for_change` across the orchestration.
 
 Project 3 does not block user actions in the control plane. It only exposes blocking state and unresolved counts.
+
+## Selected Wireframe Direction
+
+Chosen direction: `Option D` from interactive mockups (hybrid of A + B).
+
+Reference:
+- Design set: `/Users/joshua/Projects/tina/designs/src/designSets/project3-feedback-fabric-v1/index.tsx`
+- Route: `/sets/project3-feedback-fabric-v1` (select `Option D`)
+
+Locked UX constraints from selected wireframe:
+- Left rail target scope switcher (`task` / `commit` contexts)
+- Center quicklook composer + target-scoped feedback feed
+- Right rail realtime stream + selected event detail + blocking summary
+- Defer global filter controls for initial implementation
+- Defer top summary badges/chips for initial implementation
 
 ## Activity Stream
 
@@ -226,4 +241,3 @@ Project 3.5 consumes that output to:
 - decide triage outcomes,
 - generate follow-up tasks/remediation wiring,
 - connect feedback closure to orchestration execution controls.
-

@@ -184,7 +184,11 @@ fn resolve_workspace_daemon_bin_from(start: &Path) -> Option<PathBuf> {
     let mut dir = start.to_path_buf();
 
     loop {
-        let debug_bin = dir.join("tina-daemon").join("target").join("debug").join("tina-daemon");
+        let debug_bin = dir
+            .join("tina-daemon")
+            .join("target")
+            .join("debug")
+            .join("tina-daemon");
         if debug_bin.exists() {
             return Some(debug_bin);
         }

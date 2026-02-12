@@ -19,11 +19,22 @@ export function createActionRegistry() {
   const actions = new Map<string, ActionDescriptor>()
   const keyBindings = new Map<KeyBindingKey, ActionDescriptor>()
 
+  function normalizeScope(scope: string | undefined): string | undefined {
+    return scope === "global" ? undefined : scope
+  }
+
+  function normalizeKey(key: string): string {
+    if (key === " " || key === "Spacebar") {
+      return "Space"
+    }
+    return key
+  }
+
   function makeKeyBindingKey(
     key: string,
     scope: string | undefined
   ): KeyBindingKey {
-    return `${scope ?? ''}::${key}`
+    return `${normalizeScope(scope) ?? ''}::${normalizeKey(key)}`
   }
 
   function register(action: ActionDescriptor): () => void {
@@ -73,8 +84,9 @@ export function createActionRegistry() {
   }
 
   function listForScope(scope: string): ActionDescriptor[] {
+    const normalizedScope = normalizeScope(scope)
     return Array.from(actions.values()).filter(
-      (action) => action.when === scope
+      (action) => normalizeScope(action.when) === normalizedScope
     )
   }
 

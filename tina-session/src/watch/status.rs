@@ -323,7 +323,12 @@ struct TaskFile {
 /// Returns (completed, total, current_task_subject, tasks_in_progress).
 pub fn get_task_progress(
     team_name: Option<&str>,
-) -> (Option<u32>, Option<u32>, Option<String>, Option<Vec<String>>) {
+) -> (
+    Option<u32>,
+    Option<u32>,
+    Option<String>,
+    Option<Vec<String>>,
+) {
     let team = match team_name {
         Some(t) => t,
         None => return (None, None, None, None),
@@ -335,10 +340,7 @@ pub fn get_task_progress(
         Err(_) => return (None, None, None, None),
     };
 
-    let task_dir = Path::new(&home)
-        .join(".claude")
-        .join("tasks")
-        .join(team);
+    let task_dir = Path::new(&home).join(".claude").join("tasks").join(team);
 
     get_task_progress_from_dir(&task_dir)
 }
@@ -347,7 +349,12 @@ pub fn get_task_progress(
 /// Returns (completed, total, current_task_subject, tasks_in_progress).
 pub fn get_task_progress_from_dir(
     task_dir: &Path,
-) -> (Option<u32>, Option<u32>, Option<String>, Option<Vec<String>>) {
+) -> (
+    Option<u32>,
+    Option<u32>,
+    Option<String>,
+    Option<Vec<String>>,
+) {
     if !task_dir.exists() {
         return (None, None, None, None);
     }
@@ -393,7 +400,12 @@ pub fn get_task_progress_from_dir(
         } else {
             Some(in_progress_subjects)
         };
-        (Some(completed), Some(total), current_task, tasks_in_progress)
+        (
+            Some(completed),
+            Some(total),
+            current_task,
+            tasks_in_progress,
+        )
     }
 }
 

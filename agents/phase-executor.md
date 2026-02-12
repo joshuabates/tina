@@ -16,8 +16,9 @@ Your spawn prompt contains: `task_id: <id>`
 
 1. Parse task_id from spawn prompt
 2. Resolve the task reference:
-   - Try TaskGet directly with the parsed value
-   - If not found, call TaskList and match `subject == <task_id value>`, then TaskGet by numeric id
+   - `task_id` MUST be a numeric task id
+   - Resolve with TaskGet directly using that id
+   - If TaskGet fails, report an error and exit
 3. Extract from task.metadata:
    - `feature_name`: Feature name (e.g., "tina-monitor-rebuild")
    - `phase_num`: Phase number (e.g., "4" or "2.5")
@@ -29,6 +30,9 @@ If parsing with shell/jq, extract `worktree_path` explicitly:
 ```bash
 WORKTREE_PATH=$(echo "$TASK_JSON" | jq -r '.metadata.worktree_path')
 ```
+
+Do NOT use TaskList subject matching fallback. Subject values like `execute-phase-3`
+are not globally unique and can resolve to the wrong orchestration.
 
 ## Boundaries
 

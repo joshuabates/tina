@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use tina_session::state::orchestrate::{advance_state, next_action, Action, AdvanceEvent};
 use tina_session::telemetry::TelemetryContext;
@@ -40,6 +40,16 @@ pub fn advance(
 ) -> anyhow::Result<u8> {
     let mut state = tina_session::state::schema::SupervisorState::load(feature)?;
 
+    // For plan completion, normalize and validate the plan path against the
+    // orchestration worktree before state transitions are applied.
+    let normalized_plan_path = if event == "plan_complete" {
+        let raw = plan_path
+            .ok_or_else(|| anyhow::anyhow!("--plan-path is required for plan_complete event"))?;
+        Some(resolve_plan_path(raw, &state.worktree_path)?)
+    } else {
+        None
+    };
+
     // Create telemetry context for this operation
     let phase_number = if phase == "validation" {
         None
@@ -53,18 +63,54 @@ pub fn advance(
         phase_number.clone(),
     );
 
-    let event = parse_event(event, plan_path, git_range, issues)?;
+    let event = parse_event(event, normalized_plan_path.as_deref(), git_range, issues)?;
     let action = advance_state(&mut state, phase, event.clone())?;
 
     state.save()?;
 
     // Sync to Convex and record telemetry (non-fatal)
-    if let Err(e) = sync_to_convex_with_telemetry(&ctx, feature, &state, phase, &action, Some(&event)) {
+    if let Err(e) =
+        sync_to_convex_with_telemetry(&ctx, feature, &state, phase, &action, Some(&event))
+    {
         eprintln!("Warning: Failed to sync to Convex: {}", e);
     }
 
     println!("{}", serde_json::to_string(&action)?);
     Ok(0)
+}
+
+fn resolve_plan_path(plan_path: &Path, worktree_path: &Path) -> anyhow::Result<PathBuf> {
+    let candidate = if plan_path.is_absolute() {
+        plan_path.to_path_buf()
+    } else {
+        worktree_path.join(plan_path)
+    };
+
+    let canonical = std::fs::canonicalize(&candidate)
+        .map_err(|e| anyhow::anyhow!("Invalid --plan-path '{}': {}", candidate.display(), e))?;
+
+    let canonical_worktree = std::fs::canonicalize(worktree_path).map_err(|e| {
+        anyhow::anyhow!("Invalid worktree path '{}': {}", worktree_path.display(), e)
+    })?;
+
+    if !canonical.starts_with(&canonical_worktree) {
+        anyhow::bail!(
+            "Invalid --plan-path '{}': path is outside orchestration worktree '{}'",
+            canonical.display(),
+            canonical_worktree.display()
+        );
+    }
+
+    let plans_dir = canonical_worktree.join("docs").join("plans");
+    if !canonical.starts_with(&plans_dir) {
+        anyhow::bail!(
+            "Invalid --plan-path '{}': path must be under '{}'",
+            canonical.display(),
+            plans_dir.display()
+        );
+    }
+
+    Ok(canonical)
 }
 
 fn parse_event(
@@ -127,7 +173,6 @@ fn parse_event(
         ),
     }
 }
-
 
 fn event_from_action(
     phase: &str,
@@ -224,10 +269,7 @@ fn record_next_telemetry(
 ) -> anyhow::Result<()> {
     convex::run_convex_write(|mut writer| async move {
         // Get orchestration ID from Convex (or None if not yet created)
-        let orchestration_id = writer
-            .get_by_feature(&state.feature)
-            .await?
-            .map(|o| o.id);
+        let orchestration_id = writer.get_by_feature(&state.feature).await?.map(|o| o.id);
 
         // Create a context with the resolved orchestration ID
         let ctx_with_id = if orchestration_id.is_some() {
@@ -243,10 +285,14 @@ fn record_next_telemetry(
 
         // Record span
         let status = match action {
-            Action::Error { .. } | Action::Stopped { .. } | Action::ConsensusDisagreement { .. } => "error",
+            Action::Error { .. }
+            | Action::Stopped { .. }
+            | Action::ConsensusDisagreement { .. } => "error",
             _ => "ok",
         };
-        ctx_with_id.record_span(&mut writer, status, None, None).await?;
+        ctx_with_id
+            .record_span(&mut writer, status, None, None)
+            .await?;
 
         Ok(())
     })
@@ -301,35 +347,107 @@ fn sync_to_convex_with_telemetry(
 
         // Record span
         let span_status = match action {
-            Action::Error { .. } | Action::Stopped { .. } | Action::ConsensusDisagreement { .. } => "error",
+            Action::Error { .. }
+            | Action::Stopped { .. }
+            | Action::ConsensusDisagreement { .. } => "error",
             _ => "ok",
         };
-        if let Err(e) = ctx_with_id.record_span(&mut writer, span_status, None, None).await {
+        if let Err(e) = ctx_with_id
+            .record_span(&mut writer, span_status, None, None)
+            .await
+        {
             eprintln!("Warning: Failed to record telemetry span: {}", e);
         }
 
         // Record state.transition event
         let severity = match action {
-            Action::Error { .. } | Action::Stopped { .. } | Action::ConsensusDisagreement { .. } => "error",
+            Action::Error { .. }
+            | Action::Stopped { .. }
+            | Action::ConsensusDisagreement { .. } => "error",
             Action::Wait { .. } => "info",
             _ => "info",
         };
         let transition_attrs = serde_json::json!({
             "from_status": state.status,
             "action": serde_json::to_value(action).unwrap_or(serde_json::Value::Null),
-        }).to_string();
+        })
+        .to_string();
 
-        if let Err(e) = ctx_with_id.record_event(
-            &mut writer,
-            "state.transition",
-            severity,
-            summary,
-            Some(span_status.to_string()),
-            Some(transition_attrs),
-        ).await {
+        if let Err(e) = ctx_with_id
+            .record_event(
+                &mut writer,
+                "state.transition",
+                severity,
+                summary,
+                Some(span_status.to_string()),
+                Some(transition_attrs),
+            )
+            .await
+        {
             eprintln!("Warning: Failed to record telemetry event: {}", e);
         }
 
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_plan_path;
+    use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn resolve_plan_path_accepts_relative_path_in_worktree_plans_dir() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let worktree = tmp.path().join("worktree");
+        let plans_dir = worktree.join("docs").join("plans");
+        fs::create_dir_all(&plans_dir).expect("create plans dir");
+        let plan = plans_dir.join("phase-1.md");
+        fs::write(&plan, "# plan").expect("write plan");
+
+        let resolved = resolve_plan_path(Path::new("docs/plans/phase-1.md"), &worktree)
+            .expect("resolved path");
+        assert_eq!(resolved, plan.canonicalize().expect("canonical plan"));
+    }
+
+    #[test]
+    fn resolve_plan_path_rejects_missing_file() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let worktree = tmp.path().join("worktree");
+        fs::create_dir_all(worktree.join("docs").join("plans")).expect("create plans dir");
+
+        let err = resolve_plan_path(Path::new("docs/plans/missing.md"), &worktree)
+            .expect_err("expected missing file error");
+        assert!(err.to_string().contains("Invalid --plan-path"));
+    }
+
+    #[test]
+    fn resolve_plan_path_rejects_path_outside_worktree() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let worktree = tmp.path().join("worktree");
+        let outside_root = tmp.path().join("outside");
+        fs::create_dir_all(worktree.join("docs").join("plans")).expect("create plans dir");
+        fs::create_dir_all(outside_root.join("docs").join("plans")).expect("create outside dir");
+        let outside_plan = outside_root.join("docs").join("plans").join("phase-1.md");
+        fs::write(&outside_plan, "# plan").expect("write outside plan");
+
+        let err = resolve_plan_path(&outside_plan, &worktree)
+            .expect_err("expected outside-worktree error");
+        assert!(err.to_string().contains("outside orchestration worktree"));
+    }
+
+    #[test]
+    fn resolve_plan_path_rejects_non_plan_file_inside_worktree() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let worktree = tmp.path().join("worktree");
+        let other_dir = worktree.join(".claude").join("tina");
+        fs::create_dir_all(&other_dir).expect("create other dir");
+        let file = other_dir.join("not-a-plan.md");
+        fs::write(&file, "# nope").expect("write file");
+
+        let err =
+            resolve_plan_path(&file, &worktree).expect_err("expected non-plan path rejection");
+        assert!(err.to_string().contains("must be under"));
+    }
 }

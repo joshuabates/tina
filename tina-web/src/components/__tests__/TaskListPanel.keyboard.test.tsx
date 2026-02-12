@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, within, waitFor, act } from "@testing-library/react"
+import { render, screen, within, waitFor, act, fireEvent } from "@testing-library/react"
 import { TaskListPanel } from "../TaskListPanel"
 import { buildTaskListDetail } from "@/test/builders/domain"
 import { assertRovingFocus } from "@/test/harness/roving"
@@ -53,10 +53,10 @@ function renderTaskListView({
   return { detail, ...render(<TaskListPanel detail={detail} />) }
 }
 
-function taskById(container: HTMLElement, id: string) {
+function taskById(container: HTMLElement, id: string): HTMLElement {
   const task = container.querySelector(`[id="task-${id}"]`)
   expect(task).toBeTruthy()
-  return task
+  return task as HTMLElement
 }
 
 describe("TaskListPanel - Keyboard Navigation", () => {
@@ -182,6 +182,94 @@ describe("TaskListPanel - Keyboard Navigation", () => {
   })
 
   describe("Quicklook sync", () => {
+    it("opens hovered task via global fallback when task section is not focused", () => {
+      const actions = new Map<string, { key?: string; execute: (ctx: ActionContext) => void }>()
+      mockUseActionRegistration.mockImplementation((action) => {
+        actions.set(action.id, {
+          key: action.key,
+          execute: action.execute,
+        })
+      })
+
+      const { container } = renderTaskListView({
+        isSectionFocused: false,
+        activeIndex: -1,
+      })
+
+      fireEvent.mouseEnter(taskById(container, "task3"))
+
+      const hoverAction = actions.get("task-list-quicklook-hover")
+      expect(hoverAction?.key).toBe(" ")
+
+      act(() => {
+        hoverAction?.execute({} as ActionContext)
+      })
+
+      expect(screen.getByRole("dialog")).toBeInTheDocument()
+      expect(
+        within(screen.getByRole("dialog")).getByRole("heading", {
+          name: "Review implementation",
+        }),
+      ).toBeInTheDocument()
+    })
+
+    it("quicklooks hovered task when Space is triggered", () => {
+      let openQuicklook: ((ctx: ActionContext) => void) | undefined
+      mockUseActionRegistration.mockImplementation((action) => {
+        if (action.id === "task-list-quicklook") {
+          openQuicklook = action.execute
+        }
+      })
+
+      const { container } = renderTaskListView({
+        isSectionFocused: true,
+        activeIndex: 0,
+      })
+
+      expect(openQuicklook).toBeTypeOf("function")
+
+      fireEvent.mouseEnter(taskById(container, "task3"))
+
+      act(() => {
+        openQuicklook?.({} as ActionContext)
+      })
+
+      expect(screen.getByRole("dialog")).toBeInTheDocument()
+      expect(
+        within(screen.getByRole("dialog")).getByRole("heading", {
+          name: "Review implementation",
+        }),
+      ).toBeInTheDocument()
+    })
+
+    it("clears hover target immediately on mouse leave", () => {
+      const actions = new Map<string, { key?: string; execute: (ctx: ActionContext) => void }>()
+      mockUseActionRegistration.mockImplementation((action) => {
+        actions.set(action.id, {
+          key: action.key,
+          execute: action.execute,
+        })
+      })
+
+      const { container } = renderTaskListView({
+        isSectionFocused: false,
+        activeIndex: -1,
+      })
+
+      const hoveredTask = taskById(container, "task3")
+      fireEvent.mouseEnter(hoveredTask)
+      fireEvent.mouseLeave(hoveredTask)
+
+      const hoverAction = actions.get("task-list-quicklook-hover")
+      expect(hoverAction?.key).toBeUndefined()
+
+      act(() => {
+        hoverAction?.execute({} as ActionContext)
+      })
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    })
+
     it("updates modal task when keyboard selection changes while quicklook is open", async () => {
       let openQuicklook: ((ctx: ActionContext) => void) | undefined
       mockUseActionRegistration.mockImplementation((action) => {

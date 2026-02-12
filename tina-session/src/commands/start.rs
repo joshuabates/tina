@@ -13,8 +13,8 @@ const CLAUDE_READY_TIMEOUT_SECS: u64 = 60;
 
 /// Detect a working claude executable and return an absolute path.
 fn detect_claude_binary() -> anyhow::Result<PathBuf> {
-    let claude_path =
-        find_executable("claude").ok_or_else(|| anyhow::anyhow!("claude binary not found in PATH"))?;
+    let claude_path = find_executable("claude")
+        .ok_or_else(|| anyhow::anyhow!("claude binary not found in PATH"))?;
 
     let is_working = Command::new(&claude_path)
         .arg("--version")
@@ -43,7 +43,10 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     }
 
     if let Some(home) = dirs::home_dir() {
-        for candidate in [home.join(".local/bin").join(name), home.join("bin").join(name)] {
+        for candidate in [
+            home.join(".local/bin").join(name),
+            home.join("bin").join(name),
+        ] {
             if candidate.is_file() {
                 return Some(candidate);
             }
@@ -61,10 +64,7 @@ fn find_executable(name: &str) -> Option<PathBuf> {
 }
 
 fn shell_quote(arg: &str) -> String {
-    format!(
-        "\"{}\"",
-        arg.replace('\\', "\\\\").replace('"', "\\\"")
-    )
+    format!("\"{}\"", arg.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 pub fn run(
@@ -112,13 +112,7 @@ pub fn run(
     if tmux::session_exists(&name) {
         println!("Session '{}' already exists. Resuming.", name);
         // Ensure phase team registration stores the real tmux session name.
-        register_phase_team(
-            &orchestration.id,
-            &team_name,
-            phase,
-            parent_team_id,
-            &name,
-        )?;
+        register_phase_team(&orchestration.id, &team_name, phase, parent_team_id, &name)?;
 
         // Session exists, just need to verify Claude is ready
         match claude::wait_for_ready(&name, 10) {
@@ -172,13 +166,7 @@ pub fn run(
 
     // Register the phase execution team in Convex so the daemon can sync
     // phase-level tasks and team members.
-    register_phase_team(
-        &orchestration.id,
-        &team_name,
-        phase,
-        parent_team_id,
-        &name,
-    )?;
+    register_phase_team(&orchestration.id, &team_name, phase, parent_team_id, &name)?;
 
     // Send the team-lead-init skill command with team_name
     let skill_cmd = format!(
@@ -316,15 +304,17 @@ mod tests {
     #[test]
     fn resolve_working_dir_requires_path_source() {
         let err = resolve_working_dir(None, None).expect_err("expected error");
-        assert!(
-            err.to_string()
-                .contains("Orchestration has no worktree_path and --cwd was not provided")
-        );
+        assert!(err
+            .to_string()
+            .contains("Orchestration has no worktree_path and --cwd was not provided"));
     }
 
     #[test]
     fn shell_quote_wraps_and_escapes() {
-        assert_eq!(shell_quote("/usr/local/bin/claude"), "\"/usr/local/bin/claude\"");
+        assert_eq!(
+            shell_quote("/usr/local/bin/claude"),
+            "\"/usr/local/bin/claude\""
+        );
         assert_eq!(shell_quote("a\"b"), "\"a\\\"b\"");
     }
 }

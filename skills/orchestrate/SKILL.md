@@ -208,24 +208,28 @@ Note: Worktree creation is handled by `tina-session init` in STEP 1c. There is n
 
 Use TaskCreate for each, then TaskUpdate to set dependencies.
 
+Capture and store the returned numeric task IDs as you create tasks.
+Treat these IDs as canonical; do not use task subjects as IDs in spawn prompts
+or metadata lookups because subjects collide across orchestration teams.
+
 Example for 2-phase design:
 ```
-TaskCreate: validate-design
-TaskCreate: plan-phase-1
-TaskCreate: execute-phase-1
-TaskCreate: review-phase-1
-TaskCreate: plan-phase-2
-TaskCreate: execute-phase-2
-TaskCreate: review-phase-2
-TaskCreate: finalize
+VALIDATE_TASK_ID=$(TaskCreate: validate-design)
+PLAN_1_TASK_ID=$(TaskCreate: plan-phase-1)
+EXECUTE_1_TASK_ID=$(TaskCreate: execute-phase-1)
+REVIEW_1_TASK_ID=$(TaskCreate: review-phase-1)
+PLAN_2_TASK_ID=$(TaskCreate: plan-phase-2)
+EXECUTE_2_TASK_ID=$(TaskCreate: execute-phase-2)
+REVIEW_2_TASK_ID=$(TaskCreate: review-phase-2)
+FINALIZE_TASK_ID=$(TaskCreate: finalize)
 
-TaskUpdate: plan-phase-1, addBlockedBy: [validate-design]
-TaskUpdate: execute-phase-1, addBlockedBy: [plan-phase-1]
-TaskUpdate: review-phase-1, addBlockedBy: [execute-phase-1]
-TaskUpdate: plan-phase-2, addBlockedBy: [review-phase-1]
-TaskUpdate: execute-phase-2, addBlockedBy: [plan-phase-2]
-TaskUpdate: review-phase-2, addBlockedBy: [execute-phase-2]
-TaskUpdate: finalize, addBlockedBy: [review-phase-2]
+TaskUpdate: $PLAN_1_TASK_ID, addBlockedBy: [$VALIDATE_TASK_ID]
+TaskUpdate: $EXECUTE_1_TASK_ID, addBlockedBy: [$PLAN_1_TASK_ID]
+TaskUpdate: $REVIEW_1_TASK_ID, addBlockedBy: [$EXECUTE_1_TASK_ID]
+TaskUpdate: $PLAN_2_TASK_ID, addBlockedBy: [$REVIEW_1_TASK_ID]
+TaskUpdate: $EXECUTE_2_TASK_ID, addBlockedBy: [$PLAN_2_TASK_ID]
+TaskUpdate: $REVIEW_2_TASK_ID, addBlockedBy: [$EXECUTE_2_TASK_ID]
+TaskUpdate: $FINALIZE_TASK_ID, addBlockedBy: [$REVIEW_2_TASK_ID]
 ```
 
 ---
@@ -236,8 +240,8 @@ TaskUpdate: finalize, addBlockedBy: [review-phase-2]
 The design has `## Architectural Context` (added by `tina:architect` on approval). Skip validation:
 1. Auto-complete the validate-design task:
    ```
-   TaskUpdate: validate-design, status: completed
-   TaskUpdate: validate-design, metadata: { validation_status: "pre-approved", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID" }
+   TaskUpdate: $VALIDATE_TASK_ID, status: completed
+   TaskUpdate: $VALIDATE_TASK_ID, metadata: { validation_status: "pre-approved", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID" }
    ```
 2. Print: `"Design pre-approved (has Architectural Context). Skipping validation."`
 3. Check for `## Prerequisites` section in the design content (file or resolved markdown). If present, record them in task metadata and continue automatically (no user prompt unless HITL is explicitly enabled for this run).
@@ -252,7 +256,7 @@ Use Task tool:
   "subagent_type": "tina:design-validator",
   "team_name": "<feature-name>-orchestration",
   "name": "validator",
-  "prompt": "task_id: validate-design"
+  "prompt": "task_id: <validate-task-id>"
 }
 ```
 
@@ -371,6 +375,10 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 | `stopped` | Report validation failure and exit |
 | `error` | If `.can_retry`, retry once. If retries are exhausted and no explicit HITL gate is enabled, create remediation work automatically instead of requesting manual input. |
 | `remediate` | Create remediation tasks and spawn planner for `.remediation_phase` |
+
+Before spawning any teammate for an action, resolve the numeric task ID from the
+current orchestration team's TaskList (team-scoped), then pass that numeric ID in
+`task_id:`. Never pass task subjects as task IDs.
 
 ### Handling Each Message
 
@@ -681,7 +689,7 @@ TaskUpdate: { taskId: "finalize", addBlockedBy: ["review-phase-<TOTAL_PHASES>"] 
 **Task metadata storage:**
 When teammates complete, store results in task metadata. The `worktree_path` is stored in validate-design metadata from STEP 1c. Later tasks read it from there:
 ```json
-TaskGet { "taskId": "validate-design" }
+TaskGet { "taskId": "<validate-task-id>" }
 // metadata.worktree_path = "/path/to/.worktrees/feature"
 ```
 
@@ -691,18 +699,21 @@ When a task becomes unblocked (all blockedBy tasks complete), spawn the appropri
 
 **Spawn principle:** Tasks carry WHAT (metadata), agent definitions carry HOW (methodology), spawn prompts are minimal (just task ID).
 
+`task_id` must always be the numeric task ID returned by TaskCreate/TaskList.
+Never pass task subjects like `plan-phase-3` as `task_id`.
+
 **Before spawning, update task metadata:**
 
 Propagate data from completed tasks to the task being spawned. This way the spawned agent can read everything from its own task:
 
 ```bash
 # Example: Before spawning executor, update its task with paths from earlier tasks
-WORKTREE_PATH=$(TaskGet { taskId: "validate-design" }).metadata.worktree_path
-TEAM_ID=$(TaskGet { taskId: "validate-design" }).metadata.team_id
-PLAN_PATH=$(TaskGet { taskId: "plan-phase-$N" }).metadata.plan_path
+WORKTREE_PATH=$(TaskGet { taskId: "<validate-task-id>" }).metadata.worktree_path
+TEAM_ID=$(TaskGet { taskId: "<validate-task-id>" }).metadata.team_id
+PLAN_PATH=$(TaskGet { taskId: "<plan-task-id-N>" }).metadata.plan_path
 
 TaskUpdate {
-  taskId: "execute-phase-$N",
+  taskId: "<execute-task-id-N>",
   metadata: { worktree_path: WORKTREE_PATH, plan_path: PLAN_PATH, parent_team_id: TEAM_ID }
 }
 ```
@@ -722,7 +733,7 @@ If `CLI == "claude"` (or no model specified):
   "subagent_type": "tina:design-validator",
   "team_name": "<TEAM_NAME>",
   "name": "validator",
-  "prompt": "task_id: validate-design"
+  "prompt": "task_id: <validate-task-id>"
 }
 ```
 
@@ -732,7 +743,7 @@ If `CLI == "codex"`:
   "subagent_type": "tina:codex-cli",
   "team_name": "<TEAM_NAME>",
   "name": "validator",
-  "prompt": "feature: <FEATURE_NAME>\nphase: validation\ntask_id: validate-design\nrole: validator\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <design doc content>"
+  "prompt": "feature: <FEATURE_NAME>\nphase: validation\ntask_id: <validate-task-id>\nrole: validator\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <design doc content>"
 }
 ```
 
@@ -750,7 +761,7 @@ if [ -f "$PLAN_FILE" ]; then
     # If tina:plan-validator agent exists, spawn it with the plan path.
     # On Pass/Warning: proceed to executor
     # On Stop: discard stale plan, spawn planner normally
-    TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: "$PLAN_FILE" }
+    TaskUpdate: <plan-task-id-N>, status: completed, metadata: { plan_path: "$PLAN_FILE" }
     # Proceed to spawning executor for phase N
 else
     # Spawn planner as normal
@@ -765,7 +776,7 @@ If `CLI == "claude"` (or no model):
   "subagent_type": "tina:phase-planner",
   "team_name": "<TEAM_NAME>",
   "name": "planner-<N>",
-  "prompt": "task_id: plan-phase-<N>"
+  "prompt": "task_id: <plan-task-id-N>"
 }
 ```
 
@@ -775,7 +786,7 @@ If `CLI == "codex"`:
   "subagent_type": "tina:codex-cli",
   "team_name": "<TEAM_NAME>",
   "name": "planner-<N>",
-  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: plan-phase-<N>\nrole: planner\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <design doc and phase context>"
+  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: <plan-task-id-N>\nrole: planner\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <design doc and phase context>"
 }
 ```
 
@@ -794,7 +805,7 @@ If `CLI == "claude"` (or no model):
   "subagent_type": "tina:phase-executor",
   "team_name": "<TEAM_NAME>",
   "name": "executor-<N>",
-  "prompt": "task_id: execute-phase-<N>"
+  "prompt": "task_id: <execute-task-id-N>"
 }
 ```
 
@@ -804,7 +815,7 @@ If `CLI == "codex"`:
   "subagent_type": "tina:codex-cli",
   "team_name": "<TEAM_NAME>",
   "name": "executor-<N>",
-  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: execute-phase-<N>\nrole: executor\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <plan content and execution context>"
+  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: <execute-task-id-N>\nrole: executor\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <plan content and execution context>"
 }
 ```
 
@@ -823,7 +834,7 @@ If `CLI == "claude"` (or no model):
   "subagent_type": "tina:phase-reviewer",
   "team_name": "<TEAM_NAME>",
   "name": "reviewer-<N>",
-  "prompt": "task_id: review-phase-<N>"
+  "prompt": "task_id: <review-task-id-N>"
 }
 ```
 
@@ -833,7 +844,7 @@ If `CLI == "codex"`:
   "subagent_type": "tina:codex-cli",
   "team_name": "<TEAM_NAME>",
   "name": "reviewer-<N>",
-  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: review-phase-<N>\nrole: reviewer\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <review context, git range, design doc path>"
+  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: <review-task-id-N>\nrole: reviewer\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <review context, git range, design doc path>"
 }
 ```
 
@@ -856,14 +867,14 @@ For each reviewer, if its model routes to codex, spawn `tina:codex-cli` with rol
   "team_name": "<TEAM_NAME>",
   "name": "reviewer-<N>",
   "model": "<model from action, if present>",
-  "prompt": "task_id: review-phase-<N>"
+  "prompt": "task_id: <review-task-id-N>"
 }
 // If codex:
 {
   "subagent_type": "tina:codex-cli",
   "team_name": "<TEAM_NAME>",
   "name": "reviewer-<N>",
-  "prompt": "feature: ...\nphase: <N>\ntask_id: review-phase-<N>\nrole: reviewer\ncwd: ...\nmodel: <model>\nprompt_content: |\n  <review context>"
+  "prompt": "feature: ...\nphase: <N>\ntask_id: <review-task-id-N>\nrole: reviewer\ncwd: ...\nmodel: <model>\nprompt_content: |\n  <review context>"
 }
 
 // Secondary reviewer (after routing check on .secondary_model)
@@ -888,7 +899,7 @@ If the action response includes a `model` field, pass it to the spawn:
   "team_name": "<TEAM_NAME>",
   "name": "planner-<N>",
   "model": "<model from action>",
-  "prompt": "task_id: plan-phase-<N>"
+  "prompt": "task_id: <plan-task-id-N>"
 }
 ```
 
@@ -1000,15 +1011,15 @@ if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
 
     # Advance state via CLI
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase validation --event $EVENT
-    TaskUpdate: validate-design, status: completed
-    TaskUpdate: validate-design, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID", output_path: "$WORKTREE_PATH/.claude/tina/reports/design-validation.md" }
+    TaskUpdate: <validate-task-id>, status: completed
+    TaskUpdate: <validate-task-id>, metadata: { validation_status: "pass", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID", output_path: "$WORKTREE_PATH/.claude/tina/reports/design-validation.md" }
     SendMessage: { type: "shutdown_request", recipient: "validator", content: "Validation complete" }
     Wait up to 30s for validator shutdown acknowledgment
     # Dispatch NEXT_ACTION (see Action Dispatch table above)
 
 if message contains "VALIDATION_STATUS: Stop":
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase validation --event validation_stop
-    TaskUpdate: validate-design, status: completed, metadata: { validation_status: "stop" }
+    TaskUpdate: <validate-task-id>, status: completed, metadata: { validation_status: "stop" }
     SendMessage: { type: "shutdown_request", recipient: "validator", content: "Validation stopped" }
     Wait up to 30s for validator shutdown acknowledgment
     Print: "Design validation FAILED."
@@ -1020,8 +1031,25 @@ if message contains "VALIDATION_STATUS: Stop":
 if message contains "plan-phase-N complete":
     Parse: PLAN_PATH from "PLAN_PATH: X"
     if PLAN_PATH is relative: PLAN_PATH="$WORKTREE_PATH/$PLAN_PATH"
+    if [ ! -f "$PLAN_PATH" ]; then
+        NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "planner returned missing plan path: $PLAN_PATH"
+        SendMessage: { type: "shutdown_request", recipient: "planner-N", content: "Invalid plan path; shutting down" }
+        Wait up to 30s for planner-N shutdown acknowledgment
+        # Dispatch NEXT_ACTION (retry/escalate)
+        continue
+    fi
+    PLAN_PATH=$(cd "$WORKTREE_PATH" && realpath "$PLAN_PATH")
+    case "$PLAN_PATH" in
+      "$WORKTREE_PATH"/*) ;;
+      *)
+        NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "planner returned plan outside worktree: $PLAN_PATH"
+        SendMessage: { type: "shutdown_request", recipient: "planner-N", content: "Invalid plan path; shutting down" }
+        Wait up to 30s for planner-N shutdown acknowledgment
+        continue
+        ;;
+    esac
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event plan_complete --plan-path $PLAN_PATH
-    TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: $PLAN_PATH }
+    TaskUpdate: <plan-task-id-N>, status: completed, metadata: { plan_path: $PLAN_PATH }
     SendMessage: { type: "shutdown_request", recipient: "planner-N", content: "Plan complete" }
     Wait up to 30s for planner-N shutdown acknowledgment
     # Dispatch NEXT_ACTION (spawn executor)
@@ -1030,8 +1058,25 @@ if message contains "plan-phase-N complete":
 if message contains "Phase N plan created and committed" and message contains "Plan path:":
     Parse: PLAN_PATH from "Plan path: X"
     if PLAN_PATH is relative: PLAN_PATH="$WORKTREE_PATH/$PLAN_PATH"
+    if [ ! -f "$PLAN_PATH" ]; then
+        NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "planner returned missing plan path: $PLAN_PATH"
+        SendMessage: { type: "shutdown_request", recipient: "planner-N", content: "Invalid plan path; shutting down" }
+        Wait up to 30s for planner-N shutdown acknowledgment
+        # Dispatch NEXT_ACTION (retry/escalate)
+        continue
+    fi
+    PLAN_PATH=$(cd "$WORKTREE_PATH" && realpath "$PLAN_PATH")
+    case "$PLAN_PATH" in
+      "$WORKTREE_PATH"/*) ;;
+      *)
+        NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event error --issues "planner returned plan outside worktree: $PLAN_PATH"
+        SendMessage: { type: "shutdown_request", recipient: "planner-N", content: "Invalid plan path; shutting down" }
+        Wait up to 30s for planner-N shutdown acknowledgment
+        continue
+        ;;
+    esac
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event plan_complete --plan-path $PLAN_PATH
-    TaskUpdate: plan-phase-N, status: completed, metadata: { plan_path: $PLAN_PATH }
+    TaskUpdate: <plan-task-id-N>, status: completed, metadata: { plan_path: $PLAN_PATH }
     SendMessage: { type: "shutdown_request", recipient: "planner-N", content: "Plan complete" }
     Wait up to 30s for planner-N shutdown acknowledgment
     # Dispatch NEXT_ACTION (spawn executor)
@@ -1048,7 +1093,7 @@ if message contains "error":
 if message contains "execute-N complete":
     Parse: git_range from "Git range: X..Y"
     NEXT_ACTION = tina-session orchestrate advance --feature $FEATURE_NAME --phase N --event execute_complete --git-range $GIT_RANGE
-    TaskUpdate: execute-phase-N, status: completed, metadata: { git_range: $GIT_RANGE }
+    TaskUpdate: <execute-task-id-N>, status: completed, metadata: { git_range: $GIT_RANGE }
     SendMessage: { type: "shutdown_request", recipient: "executor-N", content: "Execution complete" }
     Wait up to 30s for executor-N shutdown acknowledgment
     # Dispatch NEXT_ACTION (spawn reviewer)
@@ -1078,7 +1123,7 @@ if message contains "review-N complete (pass)":
     # If NEXT_ACTION is "wait": do nothing, wait for second reviewer
     # Otherwise: mark review-phase-N complete and dispatch NEXT_ACTION
     if NEXT_ACTION.action != "wait":
-        TaskUpdate: review-phase-N, status: completed, metadata: { status: "pass", output_path: "$WORKTREE_PATH/.claude/tina/reports/phase-$N-review.md" }
+        TaskUpdate: <review-task-id-N>, status: completed, metadata: { status: "pass", output_path: "$WORKTREE_PATH/.claude/tina/reports/phase-$N-review.md" }
         # Dispatch NEXT_ACTION (spawn next planner, finalize, or complete)
 
 if message contains "review-N complete (gaps)":
@@ -1088,7 +1133,7 @@ if message contains "review-N complete (gaps)":
     Wait up to 30s for reviewer shutdown acknowledgment
     # If NEXT_ACTION is "wait": do nothing, wait for second reviewer
     if NEXT_ACTION.action != "wait":
-        TaskUpdate: review-phase-N, status: completed, metadata: { status: "gaps", issues: [...], output_path: "$WORKTREE_PATH/.claude/tina/reports/phase-$N-review.md" }
+        TaskUpdate: <review-task-id-N>, status: completed, metadata: { status: "gaps", issues: [...], output_path: "$WORKTREE_PATH/.claude/tina/reports/phase-$N-review.md" }
 
         # If NEXT_ACTION is "remediate":
         #   Create remediation tasks (plan/execute/review for .remediation_phase)
@@ -1119,7 +1164,7 @@ if NEXT_ACTION is "consensus_disagreement":
 Track retries in task metadata:
 ```json
 TaskUpdate {
-  "taskId": "execute-phase-1",
+  "taskId": "<execute-task-id-1>",
   "metadata": { "retry_count": 1 }
 }
 ```
@@ -1208,17 +1253,17 @@ TaskCreate {
 3. **Set up remediation dependencies:**
 ```
 # Internal dependencies for remediation phase
-TaskUpdate: execute-phase-N.5, addBlockedBy: [plan-phase-N.5]
-TaskUpdate: review-phase-N.5, addBlockedBy: [execute-phase-N.5]
+TaskUpdate: <execute-task-id-N.5>, addBlockedBy: [<plan-task-id-N.5>]
+TaskUpdate: <review-task-id-N.5>, addBlockedBy: [<execute-task-id-N.5>]
 
 # Remediation blocks the next phase (or finalize)
 if N < TOTAL_PHASES:
     # Update plan-phase-(N+1) to depend on remediation review
-    TaskUpdate: plan-phase-(N+1), addBlockedBy: [review-phase-N.5]
+    TaskUpdate: <plan-task-id-(N+1)>, addBlockedBy: [<review-task-id-N.5>]
     # Note: plan-phase-(N+1) was blocked by review-phase-N, now also by review-phase-N.5
 else:
     # Last phase - finalize waits for remediation
-    TaskUpdate: finalize, addBlockedBy: [review-phase-N.5]
+    TaskUpdate: <finalize-task-id>, addBlockedBy: [<review-task-id-N.5>]
 ```
 
 4. **Spawn remediation planner** (metadata already set during TaskCreate):
@@ -1227,7 +1272,7 @@ else:
   "subagent_type": "tina:phase-planner",
   "team_name": "<TEAM_NAME>",
   "name": "planner-<N>.5",
-  "prompt": "task_id: plan-phase-<N>.5"
+  "prompt": "task_id: <plan-task-id-N.5>"
 }
 ```
 
@@ -1253,7 +1298,7 @@ If remediation review also finds gaps, create another remediation (N.5.5). After
 **Remediation limit tracking:**
 ```json
 TaskUpdate {
-  "taskId": "review-phase-N.5",
+  "taskId": "<review-task-id-N.5>",
   "metadata": { "remediation_depth": 1 }
 }
 ```

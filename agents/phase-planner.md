@@ -11,12 +11,18 @@ model: opus
 Your spawn prompt contains a task ID. Extract it and get your task details:
 
 ```
-# Parse task_id from spawn prompt (format: "task_id: <id>")
+# Parse task_id from spawn prompt (format: "task_id: <numeric-id>")
 TASK_REF=$(echo "$SPAWN_PROMPT" | grep -oP 'task_id:\s*\K\S+')
 
-# Resolve task reference to a real task id
-# 1) Try direct TaskGet by id
-# 2) If not found, TaskList and match subject == TASK_REF, then use that id
+# Task IDs MUST be numeric and globally unique for this run.
+# Do not fall back to TaskList subject matching (subject names collide across teams).
+if ! echo "$TASK_REF" | grep -Eq '^[0-9]+$'; then
+  echo "plan-phase-N error: invalid task_id '$TASK_REF' (expected numeric task id)"
+  exit 1
+fi
+
+# Resolve task by ID only.
+# If TaskGet fails, report an error and exit.
 ```
 
 **Required parameters from task.metadata:**

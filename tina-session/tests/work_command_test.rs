@@ -22,10 +22,15 @@ fn design_create_requires_fields() {
 fn design_create_with_markdown() {
     Command::new(tina_session_bin())
         .args([
-            "work", "design", "create",
-            "--project-id", "proj1",
-            "--title", "Design Title",
-            "--markdown", "# Content",
+            "work",
+            "design",
+            "create",
+            "--project-id",
+            "proj1",
+            "--title",
+            "Design Title",
+            "--markdown",
+            "# Content",
         ])
         .assert()
         .success();
@@ -39,10 +44,15 @@ fn design_create_with_markdown_file() {
 
     Command::new(tina_session_bin())
         .args([
-            "work", "design", "create",
-            "--project-id", "proj1",
-            "--title", "Design Title",
-            "--markdown-file", temp_file,
+            "work",
+            "design",
+            "create",
+            "--project-id",
+            "proj1",
+            "--title",
+            "Design Title",
+            "--markdown-file",
+            temp_file,
         ])
         .assert()
         .success();
@@ -97,9 +107,13 @@ fn design_update_requires_id() {
 fn design_update() {
     Command::new(tina_session_bin())
         .args([
-            "work", "design", "update",
-            "--id", "design1",
-            "--title", "New Title",
+            "work",
+            "design",
+            "update",
+            "--id",
+            "design1",
+            "--title",
+            "New Title",
         ])
         .assert()
         .success();
@@ -110,9 +124,13 @@ fn design_update() {
 fn design_transition() {
     Command::new(tina_session_bin())
         .args([
-            "work", "design", "transition",
-            "--id", "design1",
-            "--status", "approved",
+            "work",
+            "design",
+            "transition",
+            "--id",
+            "design1",
+            "--status",
+            "approved",
         ])
         .assert()
         .success();
@@ -150,10 +168,15 @@ fn ticket_create_requires_fields() {
 fn ticket_create() {
     Command::new(tina_session_bin())
         .args([
-            "work", "ticket", "create",
-            "--project-id", "proj1",
-            "--title", "Task",
-            "--description", "Do something",
+            "work",
+            "ticket",
+            "create",
+            "--project-id",
+            "proj1",
+            "--title",
+            "Task",
+            "--description",
+            "Do something",
         ])
         .assert()
         .success();
@@ -248,9 +271,13 @@ fn ticket_update_json_wraps_validation_error() {
 fn ticket_update() {
     Command::new(tina_session_bin())
         .args([
-            "work", "ticket", "update",
-            "--id", "ticket1",
-            "--title", "New Title",
+            "work",
+            "ticket",
+            "update",
+            "--id",
+            "ticket1",
+            "--title",
+            "New Title",
         ])
         .assert()
         .success();
@@ -261,9 +288,13 @@ fn ticket_update() {
 fn ticket_transition() {
     Command::new(tina_session_bin())
         .args([
-            "work", "ticket", "transition",
-            "--id", "ticket1",
-            "--status", "done",
+            "work",
+            "ticket",
+            "transition",
+            "--id",
+            "ticket1",
+            "--status",
+            "done",
         ])
         .assert()
         .success();
@@ -284,13 +315,21 @@ fn comment_add_requires_fields() {
 fn comment_add() {
     Command::new(tina_session_bin())
         .args([
-            "work", "comment", "add",
-            "--project-id", "proj1",
-            "--target-type", "design",
-            "--target-id", "design1",
-            "--author-type", "human",
-            "--author-name", "alice",
-            "--body", "Comment text",
+            "work",
+            "comment",
+            "add",
+            "--project-id",
+            "proj1",
+            "--target-type",
+            "design",
+            "--target-id",
+            "design1",
+            "--author-type",
+            "human",
+            "--author-name",
+            "alice",
+            "--body",
+            "Comment text",
         ])
         .assert()
         .success();
@@ -309,9 +348,13 @@ fn comment_list_requires_fields() {
 fn comment_list() {
     Command::new(tina_session_bin())
         .args([
-            "work", "comment", "list",
-            "--target-type", "design",
-            "--target-id", "design1",
+            "work",
+            "comment",
+            "list",
+            "--target-type",
+            "design",
+            "--target-id",
+            "design1",
         ])
         .assert()
         .success();
@@ -372,28 +415,42 @@ fn design_create_rejects_both_markdown_sources() {
 
     Command::new(tina_session_bin())
         .args([
-            "work", "design", "create",
-            "--project-id", "proj-123",
-            "--title", "Test Design",
-            "--markdown", "# Inline",
-            "--markdown-file", markdown_file.to_str().unwrap(),
+            "work",
+            "design",
+            "create",
+            "--project-id",
+            "proj-123",
+            "--title",
+            "Test Design",
+            "--markdown",
+            "# Inline",
+            "--markdown-file",
+            markdown_file.to_str().unwrap(),
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Cannot specify both --markdown and --markdown-file"));
+        .stderr(predicate::str::contains(
+            "Cannot specify both --markdown and --markdown-file",
+        ));
 }
 
 #[test]
 fn design_create_requires_markdown_or_file() {
     Command::new(tina_session_bin())
         .args([
-            "work", "design", "create",
-            "--project-id", "proj-123",
-            "--title", "Test Design",
+            "work",
+            "design",
+            "create",
+            "--project-id",
+            "proj-123",
+            "--title",
+            "Test Design",
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Must specify either --markdown or --markdown-file"));
+        .stderr(predicate::str::contains(
+            "Must specify either --markdown or --markdown-file",
+        ));
 }
 
 #[test]
@@ -404,50 +461,74 @@ fn design_update_rejects_both_markdown_sources() {
 
     Command::new(tina_session_bin())
         .args([
-            "work", "design", "update",
-            "--id", "design-123",
-            "--markdown", "# Inline",
-            "--markdown-file", markdown_file.to_str().unwrap(),
+            "work",
+            "design",
+            "update",
+            "--id",
+            "design-123",
+            "--markdown",
+            "# Inline",
+            "--markdown-file",
+            markdown_file.to_str().unwrap(),
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Cannot specify both --markdown and --markdown-file"));
+        .stderr(predicate::str::contains(
+            "Cannot specify both --markdown and --markdown-file",
+        ));
 }
 
 #[test]
 fn design_get_rejects_both_id_and_key() {
     Command::new(tina_session_bin())
         .args([
-            "work", "design", "get",
-            "--id", "design-123",
-            "--key", "DESIGN-1",
+            "work",
+            "design",
+            "get",
+            "--id",
+            "design-123",
+            "--key",
+            "DESIGN-1",
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Cannot specify both --id and --key"));
+        .stderr(predicate::str::contains(
+            "Cannot specify both --id and --key",
+        ));
 }
 
 #[test]
 fn ticket_get_rejects_both_id_and_key() {
     Command::new(tina_session_bin())
         .args([
-            "work", "ticket", "get",
-            "--id", "ticket-123",
-            "--key", "TICKET-1",
+            "work",
+            "ticket",
+            "get",
+            "--id",
+            "ticket-123",
+            "--key",
+            "TICKET-1",
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Cannot specify both --id and --key"));
+        .stderr(predicate::str::contains(
+            "Cannot specify both --id and --key",
+        ));
 }
 
 #[test]
 fn design_create_rejects_nonexistent_markdown_file() {
     Command::new(tina_session_bin())
         .args([
-            "work", "design", "create",
-            "--project-id", "proj-123",
-            "--title", "Test Design",
-            "--markdown-file", "/nonexistent/path/to/file.md",
+            "work",
+            "design",
+            "create",
+            "--project-id",
+            "proj-123",
+            "--title",
+            "Test Design",
+            "--markdown-file",
+            "/nonexistent/path/to/file.md",
         ])
         .assert()
         .failure();

@@ -7,9 +7,10 @@ use crate::error::{Result, SessionError};
 pub fn create_session(name: &str, cwd: &Path, command: Option<&str>) -> Result<()> {
     let mut args = vec![
         "new-session",
-        "-d",        // detached
-        "-s", name,  // session name
-        "-c",        // start directory
+        "-d", // detached
+        "-s",
+        name, // session name
+        "-c", // start directory
     ];
     let cwd_str = cwd.to_string_lossy();
     args.push(&cwd_str);

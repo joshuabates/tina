@@ -21,7 +21,13 @@ pub struct ValidationIssue {
 
 impl std::fmt::Display for ValidationIssue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {} - {}", self.path.display(), self.field, self.message)
+        write!(
+            f,
+            "{}: {} - {}",
+            self.path.display(),
+            self.field,
+            self.message
+        )
     }
 }
 
@@ -112,7 +118,11 @@ pub fn validate_supervisor_state(path: &Path) -> ValidationResult {
     }
 
     if state.current_phase == 0 {
-        result.add_error(path, "current_phase", "Current phase is 0 (phases are 1-indexed)");
+        result.add_error(
+            path,
+            "current_phase",
+            "Current phase is 0 (phases are 1-indexed)",
+        );
     }
 
     if state.current_phase > state.total_phases {
@@ -140,7 +150,10 @@ pub fn validate_supervisor_state(path: &Path) -> ValidationResult {
         result.add_warning(
             path,
             "worktree_path",
-            &format!("Worktree path does not exist: {}", state.worktree_path.display()),
+            &format!(
+                "Worktree path does not exist: {}",
+                state.worktree_path.display()
+            ),
         );
     }
 
@@ -148,11 +161,7 @@ pub fn validate_supervisor_state(path: &Path) -> ValidationResult {
     for (key, phase) in &state.phases {
         // Validate phase key format (integers like "1" or remediation decimals like "1.5", "1.5.5")
         if let Err(msg) = naming::validate_phase(key) {
-            result.add_error(
-                path,
-                &format!("phases.{}", key),
-                &msg,
-            );
+            result.add_error(path, &format!("phases.{}", key), &msg);
         }
 
         // Check plan_path exists if set
@@ -217,11 +226,7 @@ pub fn validate_team(path: &Path) -> ValidationResult {
             );
         }
         if member.name.is_empty() {
-            result.add_error(
-                path,
-                &format!("members[{}].name", i),
-                "Agent name is empty",
-            );
+            result.add_error(path, &format!("members[{}].name", i), "Agent name is empty");
         }
         if member.model.is_empty() {
             result.add_warning(
@@ -443,8 +448,16 @@ mod tests {
         }"#;
         fs::write(&path, json).unwrap();
         let result = validate_supervisor_state(&path);
-        let phase_errors: Vec<_> = result.errors.iter().filter(|e| e.field.starts_with("phases.")).collect();
-        assert!(phase_errors.is_empty(), "Integer keys should be valid: {:?}", phase_errors);
+        let phase_errors: Vec<_> = result
+            .errors
+            .iter()
+            .filter(|e| e.field.starts_with("phases."))
+            .collect();
+        assert!(
+            phase_errors.is_empty(),
+            "Integer keys should be valid: {:?}",
+            phase_errors
+        );
     }
 
     #[test]
@@ -465,8 +478,16 @@ mod tests {
         }"#;
         fs::write(&path, json).unwrap();
         let result = validate_supervisor_state(&path);
-        let phase_errors: Vec<_> = result.errors.iter().filter(|e| e.field.starts_with("phases.")).collect();
-        assert!(phase_errors.is_empty(), "Remediation keys '1.5' and '1.5.5' should be valid: {:?}", phase_errors);
+        let phase_errors: Vec<_> = result
+            .errors
+            .iter()
+            .filter(|e| e.field.starts_with("phases."))
+            .collect();
+        assert!(
+            phase_errors.is_empty(),
+            "Remediation keys '1.5' and '1.5.5' should be valid: {:?}",
+            phase_errors
+        );
     }
 
     #[test]
@@ -485,7 +506,11 @@ mod tests {
         }"#;
         fs::write(&path, json).unwrap();
         let result = validate_supervisor_state(&path);
-        let phase_errors: Vec<_> = result.errors.iter().filter(|e| e.field.starts_with("phases.")).collect();
+        let phase_errors: Vec<_> = result
+            .errors
+            .iter()
+            .filter(|e| e.field.starts_with("phases."))
+            .collect();
         assert!(!phase_errors.is_empty(), "Key 'abc' should be invalid");
     }
 
@@ -505,7 +530,11 @@ mod tests {
         }"#;
         fs::write(&path, json).unwrap();
         let result = validate_supervisor_state(&path);
-        let phase_errors: Vec<_> = result.errors.iter().filter(|e| e.field.starts_with("phases.")).collect();
+        let phase_errors: Vec<_> = result
+            .errors
+            .iter()
+            .filter(|e| e.field.starts_with("phases."))
+            .collect();
         assert!(!phase_errors.is_empty(), "Empty key should be invalid");
     }
 

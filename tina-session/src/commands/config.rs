@@ -54,7 +54,10 @@ pub fn cli_for_model(model: &str, env: Option<&str>) -> anyhow::Result<u8> {
     let cli = routing::cli_for_model(resolved, &cfg.cli_routing);
 
     if cli == routing::AgentCli::Codex && !cfg.codex.enabled {
-        eprintln!("error: model '{}' routes to codex, but codex is disabled in config", model);
+        eprintln!(
+            "error: model '{}' routes to codex, but codex is disabled in config",
+            model
+        );
         return Ok(1);
     }
 
@@ -92,6 +95,9 @@ mod tests {
     fn test_empty_model_rejected() {
         let result = cli_for_model("", None);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("must not be empty"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must not be empty"));
     }
 }

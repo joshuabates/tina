@@ -1,9 +1,8 @@
 use tina_session::convex;
 
 pub fn run() -> anyhow::Result<u8> {
-    let orchestrations = convex::run_convex(|mut writer| async move {
-        writer.list_orchestrations().await
-    })?;
+    let orchestrations =
+        convex::run_convex(|mut writer| async move { writer.list_orchestrations().await })?;
 
     if orchestrations.is_empty() {
         println!("No active orchestrations.");

@@ -1,5 +1,5 @@
-use tina_session::convex;
 use serde_json::json;
+use tina_session::convex;
 
 pub fn create(
     project_id: &str,
@@ -26,10 +26,13 @@ pub fn create(
     })?;
 
     if json {
-        println!("{}", json!({
-            "ok": true,
-            "ticketId": ticket_id,
-        }));
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "ticketId": ticket_id,
+            })
+        );
     } else {
         println!("Created ticket: {}", ticket_id);
     }
@@ -55,21 +58,24 @@ pub fn get(id: Option<&str>, key: Option<&str>, json: bool) -> Result<u8, anyhow
     match ticket {
         Some(t) => {
             if json {
-                println!("{}", json!({
-                    "ok": true,
-                    "id": t.id,
-                    "ticketKey": t.ticket_key,
-                    "title": t.title,
-                    "description": t.description,
-                    "status": t.status,
-                    "priority": t.priority,
-                    "designId": t.design_id,
-                    "assignee": t.assignee,
-                    "estimate": t.estimate,
-                    "createdAt": t.created_at,
-                    "updatedAt": t.updated_at,
-                    "closedAt": t.closed_at,
-                }));
+                println!(
+                    "{}",
+                    json!({
+                        "ok": true,
+                        "id": t.id,
+                        "ticketKey": t.ticket_key,
+                        "title": t.title,
+                        "description": t.description,
+                        "status": t.status,
+                        "priority": t.priority,
+                        "designId": t.design_id,
+                        "assignee": t.assignee,
+                        "estimate": t.estimate,
+                        "createdAt": t.created_at,
+                        "updatedAt": t.updated_at,
+                        "closedAt": t.closed_at,
+                    })
+                );
             } else {
                 println!("{} ({}): {} [{}]", t.ticket_key, t.id, t.title, t.status);
             }
@@ -77,10 +83,13 @@ pub fn get(id: Option<&str>, key: Option<&str>, json: bool) -> Result<u8, anyhow
         }
         None => {
             if json {
-                eprintln!("{}", json!({
-                    "ok": false,
-                    "error": "Ticket not found"
-                }));
+                eprintln!(
+                    "{}",
+                    json!({
+                        "ok": false,
+                        "error": "Ticket not found"
+                    })
+                );
             } else {
                 eprintln!("Ticket not found");
             }
@@ -97,22 +106,27 @@ pub fn list(
     json: bool,
 ) -> Result<u8, anyhow::Error> {
     let tickets = convex::run_convex(|mut writer| async move {
-        writer.list_tickets(project_id, status, design_id, assignee).await
+        writer
+            .list_tickets(project_id, status, design_id, assignee)
+            .await
     })?;
 
     if json {
-        println!("{}", json!({
-            "ok": true,
-            "tickets": tickets.iter().map(|t| json!({
-                "id": t.id,
-                "ticketKey": t.ticket_key,
-                "title": t.title,
-                "status": t.status,
-                "priority": t.priority,
-                "createdAt": t.created_at,
-                "updatedAt": t.updated_at,
-            })).collect::<Vec<_>>(),
-        }));
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "tickets": tickets.iter().map(|t| json!({
+                    "id": t.id,
+                    "ticketKey": t.ticket_key,
+                    "title": t.title,
+                    "status": t.status,
+                    "priority": t.priority,
+                    "createdAt": t.created_at,
+                    "updatedAt": t.updated_at,
+                })).collect::<Vec<_>>(),
+            })
+        );
     } else {
         for t in tickets {
             println!("{} ({}): {} [{}]", t.ticket_key, t.id, t.title, t.status);
@@ -152,10 +166,13 @@ pub fn update(
     })?;
 
     if json {
-        println!("{}", json!({
-            "ok": true,
-            "ticketId": ticket_id,
-        }));
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "ticketId": ticket_id,
+            })
+        );
     } else {
         println!("Updated ticket: {}", ticket_id);
     }
@@ -163,15 +180,17 @@ pub fn update(
 }
 
 pub fn transition(id: &str, status: &str, json: bool) -> Result<u8, anyhow::Error> {
-    let ticket_id = convex::run_convex(|mut writer| async move {
-        writer.transition_ticket(id, status).await
-    })?;
+    let ticket_id =
+        convex::run_convex(|mut writer| async move { writer.transition_ticket(id, status).await })?;
 
     if json {
-        println!("{}", json!({
-            "ok": true,
-            "ticketId": ticket_id,
-        }));
+        println!(
+            "{}",
+            json!({
+                "ok": true,
+                "ticketId": ticket_id,
+            })
+        );
     } else {
         println!("Transitioned ticket {} to status: {}", ticket_id, status);
     }

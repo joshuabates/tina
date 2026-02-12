@@ -26,10 +26,7 @@ fn resolve_optional_markdown(
 }
 
 /// Resolve markdown content from either inline or file source (required).
-fn resolve_markdown(
-    inline: Option<String>,
-    file: Option<PathBuf>,
-) -> anyhow::Result<String> {
+fn resolve_markdown(inline: Option<String>, file: Option<PathBuf>) -> anyhow::Result<String> {
     resolve_optional_markdown(inline, file)?
         .ok_or_else(|| anyhow::anyhow!("Must specify either --markdown or --markdown-file"))
 }
@@ -1201,7 +1198,12 @@ fn run() -> anyhow::Result<u8> {
                         json,
                     } => {
                         let final_md = resolve_optional_markdown(markdown, markdown_file)?;
-                        commands::work::design::update(&id, title.as_deref(), final_md.as_deref(), json)
+                        commands::work::design::update(
+                            &id,
+                            title.as_deref(),
+                            final_md.as_deref(),
+                            json,
+                        )
                     }
 
                     DesignCommands::Transition { id, status, json } => {
@@ -1212,9 +1214,11 @@ fn run() -> anyhow::Result<u8> {
                         commands::work::design::resolve(&design_id, json)
                     }
 
-                    DesignCommands::ResolveToFile { design_id, output, json } => {
-                        commands::work::design::resolve_to_file(&design_id, &output, json)
-                    }
+                    DesignCommands::ResolveToFile {
+                        design_id,
+                        output,
+                        json,
+                    } => commands::work::design::resolve_to_file(&design_id, &output, json),
                 },
 
                 WorkCommands::Ticket { command } => match command {
@@ -1313,14 +1317,17 @@ fn run() -> anyhow::Result<u8> {
             match result {
                 Ok(code) => Ok(code),
                 Err(e) if json_mode => {
-                    eprintln!("{}", serde_json::json!({
-                        "ok": false,
-                        "error": format!("{:#}", e),
-                    }));
+                    eprintln!(
+                        "{}",
+                        serde_json::json!({
+                            "ok": false,
+                            "error": format!("{:#}", e),
+                        })
+                    );
                     Ok(1)
                 }
                 Err(e) => Err(e),
             }
-        },
+        }
     }
 }

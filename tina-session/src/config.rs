@@ -22,12 +22,24 @@ pub struct CodexConfig {
     pub max_output_bytes: usize,
 }
 
-fn default_codex_enabled() -> bool { true }
-fn default_codex_binary() -> String { "codex".to_string() }
-fn default_codex_model() -> String { "gpt-5.3-codex".to_string() }
-fn default_codex_sandbox() -> String { "workspace-write".to_string() }
-fn default_codex_timeout() -> u64 { 1800 }
-fn default_codex_max_output() -> usize { 200_000 }
+fn default_codex_enabled() -> bool {
+    true
+}
+fn default_codex_binary() -> String {
+    "codex".to_string()
+}
+fn default_codex_model() -> String {
+    "gpt-5.3-codex".to_string()
+}
+fn default_codex_sandbox() -> String {
+    "workspace-write".to_string()
+}
+fn default_codex_timeout() -> u64 {
+    1800
+}
+fn default_codex_max_output() -> usize {
+    200_000
+}
 
 impl Default for CodexConfig {
     fn default() -> Self {

@@ -52,7 +52,10 @@ fn extract_rust_function_lengths(code: &str) -> Vec<(String, u32)> {
 
 /// Check all Rust files for functions exceeding max_lines.
 /// Returns vector of (file_path, function_name, line_count) tuples.
-fn check_function_lengths(dir: &Path, max_lines: u32) -> anyhow::Result<Vec<(String, String, u32)>> {
+fn check_function_lengths(
+    dir: &Path,
+    max_lines: u32,
+) -> anyhow::Result<Vec<(String, String, u32)>> {
     let mut violations = Vec::new();
     check_function_lengths_recursive(dir, max_lines, &mut violations)?;
     Ok(violations)
@@ -163,7 +166,11 @@ pub fn complexity(
     Ok(0)
 }
 
-fn check_file_sizes(dir: &Path, max_lines: u32, violations: &mut Vec<(String, u32)>) -> anyhow::Result<()> {
+fn check_file_sizes(
+    dir: &Path,
+    max_lines: u32,
+    violations: &mut Vec<(String, u32)>,
+) -> anyhow::Result<()> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -259,9 +266,7 @@ pub fn verify(cwd: &Path) -> anyhow::Result<u8> {
 
         // Run pytest
         println!("Running pytest...");
-        let test_status = Command::new("pytest")
-            .current_dir(cwd)
-            .status()?;
+        let test_status = Command::new("pytest").current_dir(cwd).status()?;
 
         if !test_status.success() {
             println!("FAIL: Tests failed");
@@ -270,10 +275,7 @@ pub fn verify(cwd: &Path) -> anyhow::Result<u8> {
 
         // Run flake8
         println!("Running flake8...");
-        let lint_status = Command::new("flake8")
-            .arg(".")
-            .current_dir(cwd)
-            .status();
+        let lint_status = Command::new("flake8").arg(".").current_dir(cwd).status();
 
         if let Ok(status) = lint_status {
             if !status.success() {
@@ -352,10 +354,18 @@ impl Foo {
 "#;
         let functions = extract_rust_function_lengths(code);
         assert_eq!(functions.len(), 4);
-        assert!(functions.iter().any(|(name, len)| name == "short_function" && *len == 3));
-        assert!(functions.iter().any(|(name, len)| name == "longer_function" && *len == 6));
-        assert!(functions.iter().any(|(name, len)| name == "method_one" && *len == 3));
-        assert!(functions.iter().any(|(name, len)| name == "method_two" && *len == 5));
+        assert!(functions
+            .iter()
+            .any(|(name, len)| name == "short_function" && *len == 3));
+        assert!(functions
+            .iter()
+            .any(|(name, len)| name == "longer_function" && *len == 6));
+        assert!(functions
+            .iter()
+            .any(|(name, len)| name == "method_one" && *len == 3));
+        assert!(functions
+            .iter()
+            .any(|(name, len)| name == "method_two" && *len == 5));
     }
 
     #[test]
@@ -626,13 +636,19 @@ fn has_complexity_budget_table(contents: &str) -> bool {
         let trimmed = line.trim();
 
         // Start of Complexity Budget section
-        if trimmed.starts_with("### Complexity Budget") || trimmed.starts_with("## Complexity Budget") {
+        if trimmed.starts_with("### Complexity Budget")
+            || trimmed.starts_with("## Complexity Budget")
+        {
             in_budget_section = true;
             continue;
         }
 
         // End of section (next heading)
-        if in_budget_section && (trimmed.starts_with("### ") || trimmed.starts_with("## ") || trimmed.starts_with("# ")) {
+        if in_budget_section
+            && (trimmed.starts_with("### ")
+                || trimmed.starts_with("## ")
+                || trimmed.starts_with("# "))
+        {
             break;
         }
 

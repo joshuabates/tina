@@ -7,6 +7,7 @@ interface UseIndexedActionOptions<T> {
   when: string
   items: readonly T[]
   activeIndex: number
+  resolveIndex?: () => number | null | undefined
   execute: (item: T, index: number) => void
 }
 
@@ -17,6 +18,7 @@ export function useIndexedAction<T>({
   when,
   items,
   activeIndex,
+  resolveIndex,
   execute,
 }: UseIndexedActionOptions<T>) {
   useActionRegistration({
@@ -25,9 +27,17 @@ export function useIndexedAction<T>({
     key,
     when,
     execute: () => {
-      const item = items[activeIndex]
+      const resolvedIndex = resolveIndex?.()
+      const index =
+        typeof resolvedIndex === "number" && Number.isInteger(resolvedIndex)
+          ? resolvedIndex
+          : activeIndex
+
+      if (index < 0 || index >= items.length) return
+
+      const item = items[index]
       if (!item) return
-      execute(item, activeIndex)
+      execute(item, index)
     },
   })
 }

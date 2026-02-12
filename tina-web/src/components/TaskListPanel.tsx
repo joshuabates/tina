@@ -4,6 +4,7 @@ import { LoaderCircle, Square, SquareCheck } from "lucide-react"
 import { useSelection } from "@/hooks/useSelection"
 import { useIndexedAction } from "@/hooks/useIndexedAction"
 import { useRovingSection } from "@/hooks/useRovingSection"
+import { useActionRegistration } from "@/hooks/useActionRegistration"
 import { TaskQuicklook } from "@/components/TaskQuicklook"
 import type { StatusBadgeStatus } from "@/components/ui/status-badge"
 import {
@@ -209,6 +210,8 @@ function TaskStatusIndicator({ status }: { status: StatusBadgeStatus }) {
 export function TaskListPanel({ detail }: TaskListPanelProps) {
   const { phaseId } = useSelection()
   const [quicklookTaskId, setQuicklookTaskId] = useState<string | null>(null)
+  const [quicklookTracksKeyboardSelection, setQuicklookTracksKeyboardSelection] = useState(true)
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const focusedElementRef = useRef<HTMLElement | null>(null)
 
   // Find the selected phase
@@ -233,6 +236,20 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
     },
   })
 
+  const toggleQuicklookForTask = (taskId: string, openedFromHover: boolean) => {
+    if (quicklookTaskId === taskId) {
+      // Closing quicklook
+      setQuicklookTracksKeyboardSelection(true)
+      setQuicklookTaskId(null)
+      return
+    }
+
+    // Opening quicklook - save current focused element
+    focusedElementRef.current = document.activeElement as HTMLElement
+    setQuicklookTracksKeyboardSelection(!openedFromHover)
+    setQuicklookTaskId(taskId)
+  }
+
   // Register Space key action for quicklook
   useIndexedAction({
     id: "task-list-quicklook",
@@ -241,20 +258,35 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
     when: "taskList",
     items: tasks,
     activeIndex,
+    resolveIndex: () => hoveredIndex,
     execute: (task) => {
-      if (quicklookTaskId === task._id) {
-        // Closing quicklook
-        setQuicklookTaskId(null)
-      } else {
-        // Opening quicklook - save current focused element
-        focusedElementRef.current = document.activeElement as HTMLElement
-        setQuicklookTaskId(task._id)
-      }
+      toggleQuicklookForTask(task._id, hoveredIndex !== null)
+    },
+  })
+
+  // Hover fallback: allow Space to quicklook the hovered task even when taskList
+  // is not the active keyboard section. This does not retarget focus.
+  useActionRegistration({
+    id: "task-list-quicklook-hover",
+    label: "View Hovered Task Details",
+    key: hoveredIndex === null ? undefined : " ",
+    execute: () => {
+      if (hoveredIndex === null) return
+      const hoveredTask = tasks[hoveredIndex]
+      if (!hoveredTask) return
+      toggleQuicklookForTask(hoveredTask._id, true)
     },
   })
 
   useEffect(() => {
+    if (hoveredIndex === null) return
+    if (hoveredIndex >= 0 && hoveredIndex < tasks.length) return
+    setHoveredIndex(null)
+  }, [hoveredIndex, tasks.length])
+
+  useEffect(() => {
     if (quicklookTaskId === null) return
+    if (!quicklookTracksKeyboardSelection) return
 
     const activeTask = tasks[activeIndex]
     if (!activeTask) return
@@ -262,9 +294,10 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
     if (activeTask._id !== quicklookTaskId) {
       setQuicklookTaskId(activeTask._id)
     }
-  }, [quicklookTaskId, tasks, activeIndex])
+  }, [quicklookTaskId, quicklookTracksKeyboardSelection, tasks, activeIndex])
 
   const handleQuicklookClose = () => {
+    setQuicklookTracksKeyboardSelection(true)
     setQuicklookTaskId(null)
     // Restore focus to the previously focused task element
     if (focusedElementRef.current) {
@@ -328,6 +361,10 @@ export function TaskListPanel({ detail }: TaskListPanelProps) {
                       styles.row,
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1 focus-visible:ring-offset-background data-[focused=true]:ring-2 data-[focused=true]:bg-primary/5",
                     )}
+                    onMouseEnter={() => setHoveredIndex(index)}
+                    onMouseLeave={() => {
+                      setHoveredIndex((current) => (current === index ? null : current))
+                    }}
                     {...rovingProps}
                   >
                     <div className={cn(styles.cell, styles.statusCell)} role="gridcell">

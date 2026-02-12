@@ -93,7 +93,10 @@ mod tests {
     #[test]
     fn test_orchestration_team_name() {
         assert_eq!(orchestration_team_name("auth"), "auth-orchestration");
-        assert_eq!(orchestration_team_name("api-refactor"), "api-refactor-orchestration");
+        assert_eq!(
+            orchestration_team_name("api-refactor"),
+            "api-refactor-orchestration"
+        );
     }
 
     #[test]
@@ -111,7 +114,10 @@ mod tests {
     #[test]
     fn test_feature_from_team_name() {
         assert_eq!(feature_from_team_name("auth-orchestration"), Some("auth"));
-        assert_eq!(feature_from_team_name("api-refactor-orchestration"), Some("api-refactor"));
+        assert_eq!(
+            feature_from_team_name("api-refactor-orchestration"),
+            Some("api-refactor")
+        );
         assert_eq!(feature_from_team_name("random-team"), None);
         assert_eq!(feature_from_team_name("orchestration"), None);
     }
@@ -119,13 +125,19 @@ mod tests {
     #[test]
     fn test_session_name() {
         assert_eq!(session_name("auth", "1"), "tina-auth-phase-1");
-        assert_eq!(session_name("api-refactor", "3"), "tina-api-refactor-phase-3");
+        assert_eq!(
+            session_name("api-refactor", "3"),
+            "tina-api-refactor-phase-3"
+        );
     }
 
     #[test]
     fn test_session_name_decimal() {
         assert_eq!(session_name("auth", "1.5"), "tina-auth-phase-1.5");
-        assert_eq!(session_name("api-refactor", "2.5"), "tina-api-refactor-phase-2.5");
+        assert_eq!(
+            session_name("api-refactor", "2.5"),
+            "tina-api-refactor-phase-2.5"
+        );
     }
 
     #[test]

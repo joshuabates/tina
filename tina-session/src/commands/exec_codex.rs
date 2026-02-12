@@ -102,7 +102,14 @@ pub fn run(
     let timeout_secs = timeout_override.unwrap_or(codex.timeout_secs);
 
     // Emit start event to Convex
-    emit_start_event(feature, phase, task_id, model, &run_id, resolved_prompt.len())?;
+    emit_start_event(
+        feature,
+        phase,
+        task_id,
+        model,
+        &run_id,
+        resolved_prompt.len(),
+    )?;
 
     // Spawn codex subprocess
     let start = Instant::now();
@@ -218,10 +225,7 @@ fn spawn_codex(
                     // Kill the process on timeout
                     let _ = child.kill();
                     let _ = child.wait();
-                    bail!(
-                        "codex process timed out after {} seconds",
-                        timeout_secs
-                    );
+                    bail!("codex process timed out after {} seconds", timeout_secs);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(250));
             }
@@ -246,7 +250,8 @@ fn emit_start_event(
 
     tina_session::convex::run_convex_write(|mut writer| async move {
         let orch = writer.get_by_feature(feature).await?;
-        let orch = orch.ok_or_else(|| anyhow::anyhow!("no orchestration found for feature '{}'", feature))?;
+        let orch = orch
+            .ok_or_else(|| anyhow::anyhow!("no orchestration found for feature '{}'", feature))?;
         writer
             .record_event(&tina_session::convex::EventArgs {
                 orchestration_id: orch.id,
@@ -291,7 +296,8 @@ fn emit_terminal_event(
 
     tina_session::convex::run_convex_write(|mut writer| async move {
         let orch = writer.get_by_feature(feature).await?;
-        let orch = orch.ok_or_else(|| anyhow::anyhow!("no orchestration found for feature '{}'", feature))?;
+        let orch = orch
+            .ok_or_else(|| anyhow::anyhow!("no orchestration found for feature '{}'", feature))?;
         writer
             .record_event(&tina_session::convex::EventArgs {
                 orchestration_id: orch.id,
@@ -315,7 +321,8 @@ fn upsert_team_member(
 ) -> anyhow::Result<()> {
     tina_session::convex::run_convex_write(|mut writer| async move {
         let orch = writer.get_by_feature(feature).await?;
-        let orch = orch.ok_or_else(|| anyhow::anyhow!("no orchestration found for feature '{}'", feature))?;
+        let orch = orch
+            .ok_or_else(|| anyhow::anyhow!("no orchestration found for feature '{}'", feature))?;
         writer
             .upsert_team_member(&tina_session::convex::UpsertTeamMemberArgs {
                 orchestration_id: orch.id,
@@ -338,12 +345,26 @@ mod tests {
     #[test]
     fn run_id_format() {
         let id = generate_run_id();
-        assert!(id.starts_with("codex_"), "run_id should start with 'codex_': {}", id);
+        assert!(
+            id.starts_with("codex_"),
+            "run_id should start with 'codex_': {}",
+            id
+        );
         // Format: codex_YYYYMMDD_xxxxxxxx
         let parts: Vec<&str> = id.split('_').collect();
         assert_eq!(parts.len(), 3);
-        assert_eq!(parts[1].len(), 8, "date part should be 8 chars: {}", parts[1]);
-        assert_eq!(parts[2].len(), 8, "random part should be 8 chars: {}", parts[2]);
+        assert_eq!(
+            parts[1].len(),
+            8,
+            "date part should be 8 chars: {}",
+            parts[1]
+        );
+        assert_eq!(
+            parts[2].len(),
+            8,
+            "random part should be 8 chars: {}",
+            parts[2]
+        );
     }
 
     #[test]
