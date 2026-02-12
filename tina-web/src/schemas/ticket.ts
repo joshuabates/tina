@@ -10,7 +10,6 @@ export const TicketSummary = Schema.Struct({
   description: Schema.String,
   status: Schema.String,
   priority: Schema.String,
-  assignee: optionalString,
   estimate: optionalString,
   createdAt: Schema.String,
   updatedAt: Schema.String,

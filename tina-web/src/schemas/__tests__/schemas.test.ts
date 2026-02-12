@@ -200,7 +200,6 @@ describe("TicketSummary schema", () => {
     expect(result.ticketKey).toBe("TK-1")
     expect(result.priority).toBe("high")
     expect(Option.isNone(result.designId)).toBe(true)
-    expect(Option.isNone(result.assignee)).toBe(true)
     expect(Option.isNone(result.estimate)).toBe(true)
     expect(Option.isNone(result.closedAt)).toBe(true)
   })
@@ -216,7 +215,6 @@ describe("TicketSummary schema", () => {
       description: "Fix the login bug",
       status: "done",
       priority: "urgent",
-      assignee: "worker-1",
       estimate: "2h",
       createdAt: "2026-02-09T00:00:00Z",
       updatedAt: "2026-02-10T00:00:00Z",
@@ -225,7 +223,6 @@ describe("TicketSummary schema", () => {
 
     const result = Schema.decodeUnknownSync(TicketSummary)(raw)
     expect(Option.getOrThrow(result.designId)).toBe("design1")
-    expect(Option.getOrThrow(result.assignee)).toBe("worker-1")
     expect(Option.getOrThrow(result.estimate)).toBe("2h")
     expect(Option.getOrThrow(result.closedAt)).toBe("2026-02-10T00:00:00Z")
   })

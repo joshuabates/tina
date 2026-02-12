@@ -145,7 +145,6 @@ export const TicketListQuery = queryDef({
     projectId: Schema.String,
     status: Schema.optional(Schema.String),
     designId: Schema.optional(Schema.String),
-    assignee: Schema.optional(Schema.String),
   }),
   schema: Schema.Array(TicketSummary),
 })
