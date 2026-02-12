@@ -1,4 +1,4 @@
-# Project 3 Design: Feedback Fabric v1 (Orchestration-First)
+# Feedback Fabric v1
 
 ## Status
 
@@ -9,9 +9,9 @@ Current state on 2026-02-12: Project 2 complete; Project 3 not started.
 
 Project 1 established canonical PM entities and comments for design/ticket workflows. Project 2 completed launch/control-plane foundations for orchestration operations. Project 3 introduces first-class feedback for running orchestration artifacts without coupling to mid-flight remediation insertion logic.
 
-The roadmap now treats feedback as one project with internal phases:
-- Phase 1 (this document): feedback capture, traceability, and realtime visibility
-- Phase 2: triage/remediation wiring from blocking feedback to follow-up task execution
+The roadmap now treats feedback as one project with internal versions:
+- v1 (this document): feedback capture, traceability, and realtime visibility
+- v2: triage/remediation wiring from blocking feedback to follow-up task execution
 
 ## Locked Scope Decisions
 
@@ -30,7 +30,7 @@ The roadmap now treats feedback as one project with internal phases:
 1. Make feedback on runtime work first-class and queryable.
 2. Keep feedback traceable to concrete orchestration artifacts.
 3. Let humans and agents collaborate on feedback in the same canonical store.
-4. Provide clear unresolved/resolved blocking visibility before Phase 2 remediation wiring.
+4. Provide clear unresolved/resolved blocking visibility before v2 remediation wiring.
 
 ## Non-Goals (Project 3)
 
@@ -176,14 +176,75 @@ Integration tests:
 - realtime query behavior for panel scopes
 - consistent counts between stream and summary endpoints
 
-## Delivery Phases (Project 3)
+## Phase 1: Schema + Convex APIs
 
-1. Schema + Convex APIs + tests
-2. Web feedback panel + queries/mutations + tests
-3. Agent/client wrappers + integration tests
-4. Hardening: index tuning and query profile review
+Add the `feedbackEntries` table to `convex/schema.ts` with all fields and indexes from the Data Model section above.
 
-## Phase 2 Scope (Project 3, Next)
+Create `convex/feedbackEntries.ts` implementing the full API Contract:
+- `createFeedbackEntry` mutation with strict target validation (task via `loadTaskEventsForOrchestration` + `deduplicateTaskEvents`; commit via `getCommit` + orchestrationId match check)
+- `resolveFeedbackEntry` mutation (set resolved status, resolvedBy, resolvedAt, updatedAt)
+- `reopenFeedbackEntry` mutation (clear resolution metadata, set open, updatedAt)
+- `listFeedbackEntriesByOrchestration` query with filters (targetType, entryType, status, authorType)
+- `listFeedbackEntriesByTarget` query (by taskId or commitSha within orchestration)
+- `getBlockingFeedbackSummary` query (count open `ask_for_change` entries per orchestration)
+
+Implement all error handling from the Error Handling section (invalid target, unknown target, orchestration mismatch, invalid state transitions, invalid enums, staleness guard on updatedAt).
+
+Tests (`convex/feedbackEntries.test.ts`):
+- create/list for each `entryType`
+- target validation for both `task` and `commit`
+- status transitions and conflict behavior
+- filtering and ordering
+- blocking summary correctness
+
+## Phase 2: Web Feedback Panel
+
+Add frontend Effect Schema (`tina-web/src/schemas/feedbackEntry.ts`) and query defs (`FeedbackEntryListQuery`, `FeedbackEntryByTargetQuery`, `BlockingFeedbackSummaryQuery`).
+
+Build UI components following the Selected Wireframe Direction (Option D):
+- `FeedbackSection` component: composer for all three entry types + target-scoped feedback feed (newest-first), with resolve/reopen actions. Adapt from `CommentTimeline.tsx` pattern.
+- Integrate `FeedbackSection` inside `TaskQuicklook` (before closing `</QuicklookDialog>`) and `CommitQuicklook` (inside content div — note: CommitQuicklook uses raw modal, not QuicklookDialog).
+- `FeedbackSummarySection` in `RightPanel`: blocking badge/counter for open `ask_for_change` across the orchestration.
+- Realtime updates via Convex reactive queries.
+- Filter by `targetType`, `targetRef`, `entryType`, `status`.
+
+Tests (`tina-web`):
+- panel render/loading/error states
+- compose submit for each entry type
+- filter and scoped target behavior
+- resolve/reopen UI state transitions
+- blocking badge/counter visibility
+
+## Phase 3: Agent/CLI Wrappers
+
+Expose feedback APIs through `tina-data` Rust wrappers (`tina-data/src/convex_client.rs`) so agent-side tools can create and resolve entries with the same semantics as UI users.
+
+Wrappers to add:
+- `create_feedback_entry` — calls `feedbackEntries:createFeedbackEntry`
+- `resolve_feedback_entry` — calls `feedbackEntries:resolveFeedbackEntry`
+- `reopen_feedback_entry` — calls `feedbackEntries:reopenFeedbackEntry`
+- `list_feedback_entries` — calls `feedbackEntries:listFeedbackEntriesByOrchestration` with filter args
+- `list_feedback_entries_by_target` — calls `feedbackEntries:listFeedbackEntriesByTarget`
+- `get_blocking_feedback_summary` — calls `feedbackEntries:getBlockingFeedbackSummary`
+
+Follow existing arg-builder pattern (`BTreeMap<String, Value>`).
+
+Integration tests:
+- orchestration fixture with tasks + commits + mixed entries
+- realtime query behavior for panel scopes
+- consistent counts between stream and summary endpoints
+
+## Phase 4: Hardening
+
+Index tuning and query profile review:
+- Verify all 6 `feedbackEntries` indexes are exercised by actual query patterns
+- Profile query performance under realistic data volumes (100+ entries per orchestration)
+- Remove any unused indexes
+- Check Convex function read limits for `listFeedbackEntriesByOrchestration` with large result sets (add pagination if needed)
+- Verify `loadTaskEventsForOrchestration` scan cost is acceptable for feedback entry creation
+- End-to-end smoke test: full orchestration with mixed feedback entries, verify realtime updates, blocking summary, and resolution workflow
+
+## v2 Scope (Next)
 
 - Triage flow that decides informational vs blocking outcomes for newly created feedback.
 - Follow-up generation workflow that creates remediation tasks from open blocking entries.
@@ -241,12 +302,12 @@ Integration tests:
 
 4. **Index with optional fields**: `by_target_status_created` uses `targetTaskId` (optional). Rows where `targetTaskId` is undefined will be indexed with `undefined` as key. This index only works for task-targeted queries — commit queries must use `by_target_commit_status_created`. This split is intentional and correct.
 
-## Phase 1 to Phase 2 Handoff Boundary
+## v1 to v2 Handoff Boundary
 
-Phase 1 output:
+v1 output:
 - Canonical feedback records with blocking visibility and resolution workflow.
 
-Phase 2 consumes that output to:
+v2 consumes that output to:
 - decide triage outcomes,
 - generate follow-up tasks/remediation wiring,
 - connect feedback closure to orchestration execution controls.
