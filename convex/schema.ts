@@ -269,6 +269,12 @@ export default defineSchema({
     createdAt: v.string(),
     updatedAt: v.string(),
     archivedAt: v.optional(v.string()),
+    complexityPreset: v.optional(v.string()), // simple | standard | complex
+    requiredMarkers: v.optional(v.array(v.string())),
+    completedMarkers: v.optional(v.array(v.string())),
+    phaseCount: v.optional(v.number()),
+    phaseStructureValid: v.optional(v.boolean()),
+    validationUpdatedAt: v.optional(v.string()),
   })
     .index("by_project", ["projectId"])
     .index("by_project_status", ["projectId", "status"])
