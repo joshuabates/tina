@@ -210,19 +210,25 @@ export function TicketDetailPage() {
   const { ticketId } = useParams<{ ticketId: string }>()
   const [searchParams] = useSearchParams()
   const [editing, setEditing] = useState(false)
-  const projectId = searchParams.get("project") ?? ""
+  const projectIdParam = searchParams.get("project") || null
 
   const ticketResult = useTypedQuery(TicketDetailQuery, {
     ticketId: ticketId ?? "",
   })
 
+  const resolvedProjectId =
+    projectIdParam ??
+    (ticketResult.status === "success" && ticketResult.data
+      ? ticketResult.data.projectId
+      : null)
+
   const designsResult = useTypedQuery(DesignListQuery, {
-    projectId,
+    projectId: resolvedProjectId as string,
   })
 
   const transitionTicket = useMutation(api.tickets.transitionTicket)
 
-  if (isAnyQueryLoading(ticketResult, designsResult)) {
+  if (isAnyQueryLoading(ticketResult)) {
     return (
       <div data-testid="ticket-detail-page" className={styles.ticketDetail}>
         <div data-testid="ticket-detail-loading" className={styles.loading}>
@@ -234,17 +240,16 @@ export function TicketDetailPage() {
     )
   }
 
-  const queryError = firstQueryError(ticketResult, designsResult)
-  if (queryError) {
-    throw queryError
+  const ticketQueryError = firstQueryError(ticketResult)
+  if (ticketQueryError) {
+    throw ticketQueryError
   }
 
-  if (ticketResult.status !== "success" || designsResult.status !== "success") {
+  if (ticketResult.status !== "success") {
     return null
   }
 
   const ticket = ticketResult.data
-  const designs = designsResult.data
 
   if (!ticket) {
     return (
@@ -253,6 +258,30 @@ export function TicketDetailPage() {
       </div>
     )
   }
+
+  if (isAnyQueryLoading(designsResult)) {
+    return (
+      <div data-testid="ticket-detail-page" className={styles.ticketDetail}>
+        <div data-testid="ticket-detail-loading" className={styles.loading}>
+          <div className={styles.skeletonRow} />
+          <div className={styles.skeletonRow} />
+          <div className={styles.skeletonRow} />
+        </div>
+      </div>
+    )
+  }
+
+  const designsQueryError = firstQueryError(designsResult)
+  if (designsQueryError) {
+    throw designsQueryError
+  }
+
+  if (designsResult.status !== "success") {
+    return null
+  }
+
+  const designs = designsResult.data
+  const projectId = projectIdParam ?? ticket.projectId
 
   const designMap = new Map(designs.map((d) => [d._id, d]))
   const rawDesignId = Option.isSome(ticket.designId) ? ticket.designId.value : undefined

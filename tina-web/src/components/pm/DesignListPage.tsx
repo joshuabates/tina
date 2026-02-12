@@ -97,10 +97,10 @@ export function DesignListPage() {
   const navigate = useNavigate()
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  const projectId = searchParams.get("project")
+  const projectId = searchParams.get("project") || null
 
   const designsResult = useTypedQuery(DesignListQuery, {
-    projectId: projectId ?? "",
+    projectId: projectId as string,
   })
 
   if (!projectId) {

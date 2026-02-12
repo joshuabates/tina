@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { Outlet } from "react-router-dom"
+import { Outlet, useLocation } from "react-router-dom"
 import { Option } from "effect"
 import { AppHeader } from "./ui/app-header"
 import { AppStatusBar } from "./ui/app-status-bar"
@@ -13,6 +13,8 @@ import styles from "./AppShell.module.scss"
 
 export function AppShell() {
   const { orchestrationId } = useSelection()
+  const location = useLocation()
+  const isPmRoute = location.pathname === "/pm" || location.pathname.startsWith("/pm/")
 
   const orchestrationsResult = useTypedQuery(OrchestrationListQuery, {})
   const projectsResult = useTypedQuery(ProjectListQuery, {})
@@ -51,18 +53,20 @@ export function AppShell() {
   }, [orchestrationId, orchestrationsResult, projectsResult])
 
   return (
-    <div className={styles.appShell}>
+    <div className={`${styles.appShell}${isPmRoute ? ` ${styles.noSidebar}` : ""}`}>
       <div className={styles.header}>
         <AppHeader version="0.1.0" />
       </div>
 
-      <div
-        className={styles.sidebar}
-        role="navigation"
-        aria-label="Main sidebar"
-      >
-        <Sidebar />
-      </div>
+      {!isPmRoute && (
+        <div
+          className={styles.sidebar}
+          role="navigation"
+          aria-label="Main sidebar"
+        >
+          <Sidebar />
+        </div>
+      )}
 
       <main className={styles.main} aria-label="Page content">
         <Outlet />

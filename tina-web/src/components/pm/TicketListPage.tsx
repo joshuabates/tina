@@ -147,14 +147,14 @@ export function TicketListPage() {
   const navigate = useNavigate()
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  const projectId = searchParams.get("project")
+  const projectId = searchParams.get("project") || null
 
   const ticketsResult = useTypedQuery(TicketListQuery, {
-    projectId: projectId ?? "",
+    projectId: projectId as string,
   })
 
   const designsResult = useTypedQuery(DesignListQuery, {
-    projectId: projectId ?? "",
+    projectId: projectId as string,
   })
 
   if (!projectId) {

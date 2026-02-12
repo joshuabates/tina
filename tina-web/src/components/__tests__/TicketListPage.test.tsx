@@ -244,6 +244,24 @@ describe("TicketListPage", () => {
     expect(screen.getByText(/select a project/i)).toBeInTheDocument()
   })
 
+  it("treats an empty project param as no project and skips invalid ID args", () => {
+    renderApp("/pm/tickets?project=")
+
+    expect(screen.getByText(/select a project/i)).toBeInTheDocument()
+
+    const ticketsListCall = mockUseTypedQuery.mock.calls.find(
+      ([def]) => def.key === "tickets.list",
+    )
+    const designsListCall = mockUseTypedQuery.mock.calls.find(
+      ([def]) => def.key === "designs.list",
+    )
+
+    expect(ticketsListCall).toBeDefined()
+    expect(designsListCall).toBeDefined()
+    expect(ticketsListCall?.[1]).toEqual({ projectId: null })
+    expect(designsListCall?.[1]).toEqual({ projectId: null })
+  })
+
   it("renders page title", () => {
     renderApp("/pm/tickets?project=p1")
 

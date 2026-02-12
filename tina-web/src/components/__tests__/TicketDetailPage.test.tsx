@@ -195,6 +195,19 @@ describe("TicketDetailPage", () => {
     expect(screen.getByTestId("comment-timeline")).toBeInTheDocument()
   })
 
+  it("falls back to ticket project when project query param is empty", () => {
+    renderApp("/pm/tickets/t1?project=")
+
+    expect(screen.getByTestId("ticket-detail-page")).toBeInTheDocument()
+
+    const designsListCall = mockUseTypedQuery.mock.calls.find(
+      ([def]) => def.key === "designs.list",
+    )
+
+    expect(designsListCall).toBeDefined()
+    expect(designsListCall?.[1]).toEqual({ projectId: "p1" })
+  })
+
   describe("status transitions", () => {
     it("shows Start and Block and Cancel buttons for todo status", () => {
       renderApp("/pm/tickets/t1?project=p1", {

@@ -116,7 +116,7 @@ export function DesignDetailPage() {
   const [editing, setEditing] = useState(false)
   const [transitioning, setTransitioning] = useState(false)
 
-  const projectId = searchParams.get("project")
+  const projectId = searchParams.get("project") || null
 
   const transitionDesign = useMutation(api.designs.transitionDesign)
   const updateDesign = useMutation(api.designs.updateDesign)
@@ -223,7 +223,7 @@ export function DesignDetailPage() {
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Comments</h3>
         <CommentTimeline
-          projectId={projectId ?? design.projectId}
+          projectId={projectId || design.projectId}
           targetType="design"
           targetId={designId ?? ""}
         />

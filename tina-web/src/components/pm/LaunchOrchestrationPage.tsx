@@ -20,7 +20,7 @@ function kebabCase(str: string): string {
 
 export function LaunchOrchestrationPage() {
   const [searchParams] = useSearchParams()
-  const projectIdParam = searchParams.get("project")
+  const projectIdParam = searchParams.get("project") || null
 
   const [selectedDesignId, setSelectedDesignId] = useState<string>("")
   const [selectedNodeId, setSelectedNodeId] = useState<string>("")
@@ -32,7 +32,7 @@ export function LaunchOrchestrationPage() {
   const [result, setResult] = useState<{ orchestrationId: string } | null>(null)
 
   const designsResult = useTypedQuery(DesignListQuery, {
-    projectId: projectIdParam ?? "",
+    projectId: projectIdParam as string,
     status: undefined,
   })
   const nodesResult = useTypedQuery(NodeListQuery, {})

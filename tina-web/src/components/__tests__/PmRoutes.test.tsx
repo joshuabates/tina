@@ -96,6 +96,17 @@ describe("PM routes", () => {
     expect(screen.getByTestId("pm-shell")).toBeInTheDocument()
   })
 
+  it("hides global sidebar on PM routes to avoid duplicate sidebars", () => {
+    renderApp("/pm/designs")
+
+    expect(
+      screen.queryByRole("navigation", { name: /main sidebar/i }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("navigation", { name: /project navigation/i }),
+    ).toBeInTheDocument()
+  })
+
   it("/pm index renders TicketListPage by default", () => {
     renderApp("/pm")
 

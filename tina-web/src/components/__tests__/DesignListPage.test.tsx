@@ -163,6 +163,19 @@ describe("DesignListPage", () => {
     expect(screen.getByText(/select a project/i)).toBeInTheDocument()
   })
 
+  it("treats an empty project param as no project and skips invalid ID args", () => {
+    renderApp("/pm/designs?project=")
+
+    expect(screen.getByText(/select a project/i)).toBeInTheDocument()
+
+    const designsListCall = mockUseTypedQuery.mock.calls.find(
+      ([def]) => def.key === "designs.list",
+    )
+
+    expect(designsListCall).toBeDefined()
+    expect(designsListCall?.[1]).toEqual({ projectId: null })
+  })
+
   it("renders page title", () => {
     renderApp("/pm/designs?project=p1")
 
