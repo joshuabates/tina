@@ -127,40 +127,6 @@ export async function createProject(
   });
 }
 
-interface CreateFeedbackEntryOptions {
-  orchestrationId: string;
-  targetType: "task" | "commit";
-  targetTaskId?: string;
-  targetCommitSha?: string;
-  entryType?: "comment" | "suggestion" | "ask_for_change";
-  body?: string;
-  authorType?: "human" | "agent";
-  authorName?: string;
-}
-
-export async function createFeedbackEntry(
-  t: ConvexHarness,
-  options: CreateFeedbackEntryOptions,
-) {
-  const args: Record<string, unknown> = {
-    orchestrationId: options.orchestrationId as any,
-    targetType: options.targetType,
-    entryType: options.entryType ?? "comment",
-    body: options.body ?? "Test feedback entry",
-    authorType: options.authorType ?? "human",
-    authorName: options.authorName ?? "test-user",
-  };
-
-  if (options.targetTaskId !== undefined) {
-    args.targetTaskId = options.targetTaskId;
-  }
-  if (options.targetCommitSha !== undefined) {
-    args.targetCommitSha = options.targetCommitSha;
-  }
-
-  return await t.mutation(api.feedbackEntries.createFeedbackEntry, args as any);
-}
-
 interface CreateDesignOptions {
   projectId: string;
   title?: string;
