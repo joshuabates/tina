@@ -971,7 +971,8 @@ Orchestration tasks store metadata for monitoring and recovery:
 | `plan-phase-N` | `plan_path`, `design_id` (if ID-based) |
 | `execute-phase-N` | `phase_team_name`, `parent_team_id`, `started_at` |
 | `execute-phase-N` (on complete) | `git_range`, `completed_at` |
-| `review-phase-N` | `status: "pass"\|"gaps"`, `issues[]` (if gaps), `output_path` |
+| `review-phase-N` | `phase_num`, `design_doc_path`, `design_id` (if ID-based), `feature_name`, `output_path` |
+| `review-phase-N` (on complete) | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
 
 The `phase_team_name` field links the orchestrator's task to the phase execution team. This enables:
 - TUI to show nested task progress
