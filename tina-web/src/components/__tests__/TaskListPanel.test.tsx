@@ -255,7 +255,7 @@ describe("TaskListPanel", () => {
     expect(screen.queryByText("Task 2 must complete first")).not.toBeInTheDocument()
   })
 
-  it("orders tasks by dependency and moves completed tasks below active work", () => {
+  it("orders tasks into running, next-by-dependency, and completed sections", () => {
     setPanelSelection(mockUseSelection, { phaseId: "phase1" })
 
     const detail = buildTaskListDetail({
@@ -272,7 +272,7 @@ describe("TaskListPanel", () => {
             description: none<string>(),
             owner: none<string>(),
             metadata: none<string>(),
-            recordedAt: "2024-01-01T10:10:00Z",
+            recordedAt: "2024-01-01T10:12:00Z",
           }),
           buildTaskEvent({
             _id: "task1",
@@ -280,7 +280,7 @@ describe("TaskListPanel", () => {
             orchestrationId: "orch1",
             phaseNumber: some("1"),
             taskId: "1",
-            subject: "Draft implementation plan",
+            subject: "First completed task",
             status: "completed",
             blockedBy: none<string>(),
             description: none<string>(),
@@ -300,7 +300,7 @@ describe("TaskListPanel", () => {
             description: none<string>(),
             owner: none<string>(),
             metadata: none<string>(),
-            recordedAt: "2024-01-01T10:12:00Z",
+            recordedAt: "2024-01-01T10:15:00Z",
           }),
           buildTaskEvent({
             _id: "task2",
@@ -316,6 +316,48 @@ describe("TaskListPanel", () => {
             metadata: none<string>(),
             recordedAt: "2024-01-01T10:05:00Z",
           }),
+          buildTaskEvent({
+            _id: "task5",
+            _creationTime: 1234567894,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "5",
+            subject: "Older running task",
+            status: "executing",
+            blockedBy: none<string>(),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:07:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task6",
+            _creationTime: 1234567895,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "6",
+            subject: "Ship changes",
+            status: "pending",
+            blockedBy: some("[\"2\"]"),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:16:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task7",
+            _creationTime: 1234567896,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "7",
+            subject: "Last completed task",
+            status: "completed",
+            blockedBy: none<string>(),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:20:00Z",
+          }),
         ],
       },
     })
@@ -327,10 +369,13 @@ describe("TaskListPanel", () => {
       .map((node) => node.textContent)
 
     expect(orderedSubjects).toEqual([
+      "Older running task",
+      "Review implementation",
       "Parallel prep work",
       "Implement API endpoints",
-      "Review implementation",
-      "Draft implementation plan",
+      "Ship changes",
+      "First completed task",
+      "Last completed task",
     ])
   })
 

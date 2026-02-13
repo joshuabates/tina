@@ -2,6 +2,14 @@ import { Option } from "effect"
 import type { TaskEvent } from "@/schemas"
 
 const COMPLETED_STATUSES = new Set(["completed", "complete", "done"])
+const IN_PROGRESS_STATUSES = new Set([
+  "in_progress",
+  "in progress",
+  "executing",
+  "active",
+  "reviewing",
+  "running",
+])
 
 function normalizeStatus(status: string): string {
   return status.trim().toLowerCase()
@@ -13,6 +21,10 @@ function isDependencyToken(token: string): boolean {
 
 export function isTaskCompleted(status: string): boolean {
   return COMPLETED_STATUSES.has(normalizeStatus(status))
+}
+
+export function isTaskInProgress(status: string): boolean {
+  return IN_PROGRESS_STATUSES.has(normalizeStatus(status))
 }
 
 export function parseBlockedByDependencies(rawBlockedBy: string): string[] | null {
@@ -107,6 +119,49 @@ export function orderTasksByDependency(tasks: readonly TaskEvent[]): TaskEvent[]
     }
   })
 
+  const orderedUniqueTasks = Array.from(taskById.values())
+
+  const runningTasks = orderedUniqueTasks
+    .filter((task) => isTaskInProgress(task.status))
+    .sort((a, b) => compareByRecordedAtAsc(a, b, indexByTaskId))
+
+  const nextTasks = topologicalOrderTasks(
+    orderedUniqueTasks.filter(
+      (task) => !isTaskInProgress(task.status) && !isTaskCompleted(task.status),
+    ),
+    indexByTaskId,
+  )
+
+  const completedTasks = orderedUniqueTasks
+    .filter((task) => isTaskCompleted(task.status))
+    .sort((a, b) => compareByRecordedAtAsc(a, b, indexByTaskId))
+
+  return [...runningTasks, ...nextTasks, ...completedTasks]
+}
+
+function compareByRecordedAtAsc(
+  a: TaskEvent,
+  b: TaskEvent,
+  indexByTaskId: ReadonlyMap<string, number>,
+): number {
+  if (a.recordedAt < b.recordedAt) return -1
+  if (a.recordedAt > b.recordedAt) return 1
+
+  return (
+    (indexByTaskId.get(a.taskId) ?? Number.MAX_SAFE_INTEGER) -
+    (indexByTaskId.get(b.taskId) ?? Number.MAX_SAFE_INTEGER)
+  )
+}
+
+function topologicalOrderTasks(
+  tasks: readonly TaskEvent[],
+  indexByTaskId: ReadonlyMap<string, number>,
+): TaskEvent[] {
+  if (tasks.length <= 1) {
+    return [...tasks]
+  }
+
+  const taskById = new Map(tasks.map((task) => [task.taskId, task]))
   const indegree = new Map<string, number>()
   const dependents = new Map<string, string[]>()
   const taskIds = Array.from(taskById.keys())
@@ -116,7 +171,7 @@ export function orderTasksByDependency(tasks: readonly TaskEvent[]): TaskEvent[]
     dependents.set(taskId, [])
   }
 
-  for (const task of taskById.values()) {
+  for (const task of tasks) {
     const blockedBy = Option.getOrUndefined(task.blockedBy)
     const parsed = blockedBy ? parseBlockedByDependencies(blockedBy) : []
     const dependencyIds = parsed ?? []
@@ -164,12 +219,7 @@ export function orderTasksByDependency(tasks: readonly TaskEvent[]): TaskEvent[]
     }
   }
 
-  const orderedTasks = orderedTaskIds
+  return orderedTaskIds
     .map((taskId) => taskById.get(taskId))
     .filter((task): task is TaskEvent => task !== undefined)
-
-  const incompleteTasks = orderedTasks.filter((task) => !isTaskCompleted(task.status))
-  const completedTasks = orderedTasks.filter((task) => isTaskCompleted(task.status))
-
-  return [...incompleteTasks, ...completedTasks]
 }
