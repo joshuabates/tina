@@ -9,6 +9,7 @@ import { HEARTBEAT_TIMEOUT_MS } from "./nodes";
 import { isFeatureFlagEnabled, CP_FLAGS } from "./featureFlags";
 
 const RUNTIME_ACTION_TYPES = [
+  "start_execution",
   "pause",
   "resume",
   "retry",
@@ -54,6 +55,26 @@ function validateRuntimePayload(actionType: string, rawPayload: string): void {
     if (typeof parsed.phase !== "string" || !parsed.phase) {
       throw new Error(`Payload for "${actionType}" requires "phase" (string)`);
     }
+  }
+}
+
+function validateStartExecutionPayload(rawPayload: string): void {
+  const parsed = parseJsonWithFeature(rawPayload, "start_execution");
+
+  if (typeof parsed.phase !== "string" || !parsed.phase) {
+    throw new Error('Payload for "start_execution" requires "phase" (string)');
+  }
+
+  const hasPlan =
+    (typeof parsed.plan === "string" && parsed.plan.length > 0) ||
+    (typeof parsed.planPath === "string" && parsed.planPath.length > 0);
+  const hasDesignId =
+    (typeof parsed.design_id === "string" && parsed.design_id.length > 0) ||
+    (typeof parsed.designId === "string" && parsed.designId.length > 0);
+  if (!hasPlan && !hasDesignId) {
+    throw new Error(
+      'Payload for "start_execution" requires "plan"/"planPath" or "design_id"/"designId"',
+    );
   }
 }
 
@@ -398,11 +419,6 @@ export const launchOrchestration = mutation({
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
-    const launchEnabled = await isFeatureFlagEnabled(ctx, CP_FLAGS.LAUNCH_FROM_WEB);
-    if (!launchEnabled) {
-      throw new Error(`Launch from web is not enabled. Set ${CP_FLAGS.LAUNCH_FROM_WEB} feature flag to enable.`);
-    }
-
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error(`Project not found: ${args.projectId}`);
 
@@ -476,6 +492,18 @@ export const launchOrchestration = mutation({
       requestedBy: args.requestedBy,
       idempotencyKey: args.idempotencyKey,
     });
+    await insertControlActionWithQueue(ctx, {
+      orchestrationId,
+      nodeId: onlineNode._id,
+      actionType: "start_execution",
+      payload: JSON.stringify({
+        feature: args.feature,
+        phase: "1",
+        design_id: args.designId,
+      }),
+      requestedBy: args.requestedBy,
+      idempotencyKey: `${args.idempotencyKey}-start-execution`,
+    });
 
     await ctx.db.insert("orchestrationEvents", {
       orchestrationId,
@@ -515,6 +543,7 @@ export const enqueueControlAction = mutation({
 
     // Feature flag gates per action category
     const FLAG_MAP: Record<string, string> = {
+      start_execution: CP_FLAGS.RUNTIME_CONTROLS,
       pause: CP_FLAGS.RUNTIME_CONTROLS,
       resume: CP_FLAGS.RUNTIME_CONTROLS,
       retry: CP_FLAGS.RUNTIME_CONTROLS,
@@ -537,6 +566,8 @@ export const enqueueControlAction = mutation({
     // Validate payload structure per action type
     if (["pause", "resume", "retry"].includes(args.actionType)) {
       validateRuntimePayload(args.actionType, args.payload);
+    } else if (args.actionType === "start_execution") {
+      validateStartExecutionPayload(args.payload);
     } else if (args.actionType === "orchestration_set_policy") {
       const policyPayload = validatePolicyPayload(args.payload);
       await checkAndIncrementRevision(ctx, args.orchestrationId, policyPayload.targetRevision);

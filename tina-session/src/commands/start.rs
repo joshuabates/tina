@@ -70,7 +70,8 @@ fn shell_quote(arg: &str) -> String {
 pub fn run(
     feature: &str,
     phase: &str,
-    plan: &Path,
+    plan: Option<&Path>,
+    design_id: Option<&str>,
     cwd_override: Option<&Path>,
     install_deps: bool,
     parent_team_id: Option<&str>,
@@ -81,11 +82,7 @@ pub fn run(
 
     let cwd = resolve_working_dir(cwd_override, orchestration.worktree_path.as_deref())?;
 
-    // Validate plan exists and resolve to absolute path
-    if !plan.exists() {
-        anyhow::bail!(SessionError::FileNotFound(plan.display().to_string()));
-    }
-    let plan_abs = fs::canonicalize(plan)?;
+    let plan_abs = resolve_plan_file(feature, phase, &cwd, plan, design_id)?;
 
     // Load state to validate phase (only for integer phases)
     let state = SupervisorState::load(feature)?;
@@ -179,6 +176,63 @@ pub fn run(
 
     println!("Started phase {} execution in session '{}'", phase, name);
     Ok(0)
+}
+
+fn resolve_plan_file(
+    feature: &str,
+    phase: &str,
+    cwd: &Path,
+    plan: Option<&Path>,
+    design_id: Option<&str>,
+) -> anyhow::Result<PathBuf> {
+    if let Some(plan_path) = plan {
+        let candidate = if plan_path.is_absolute() {
+            plan_path.to_path_buf()
+        } else {
+            cwd.join(plan_path)
+        };
+        if !candidate.exists() {
+            anyhow::bail!(SessionError::FileNotFound(candidate.display().to_string()));
+        }
+        return Ok(fs::canonicalize(candidate)?);
+    }
+
+    if let Some(design_id) = design_id {
+        return materialize_plan_from_design(feature, phase, cwd, design_id);
+    }
+
+    anyhow::bail!("Must specify either --plan or --design-id");
+}
+
+fn materialize_plan_from_design(
+    feature: &str,
+    phase: &str,
+    cwd: &Path,
+    design_id: &str,
+) -> anyhow::Result<PathBuf> {
+    let design_id_owned = design_id.to_string();
+    let design = convex::run_convex(
+        |mut writer| async move { writer.get_design(&design_id_owned).await },
+    )?
+    .ok_or_else(|| anyhow::anyhow!("Design not found in Convex: {}", design_id))?;
+
+    let plans_dir = cwd.join("docs").join("plans");
+    fs::create_dir_all(&plans_dir)?;
+
+    let safe_feature = feature.replace('/', "-");
+    let filename = format!(
+        "{}-{}-phase-{}.md",
+        chrono::Utc::now().format("%Y-%m-%d"),
+        safe_feature,
+        phase
+    );
+    let plan_path = plans_dir.join(filename);
+
+    if !plan_path.exists() {
+        fs::write(&plan_path, design.markdown)?;
+    }
+
+    Ok(fs::canonicalize(plan_path)?)
 }
 
 fn resolve_working_dir(
@@ -284,7 +338,9 @@ fn install_dependencies(cwd: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_working_dir, shell_quote};
+    use std::path::Path;
+
+    use super::{resolve_plan_file, resolve_working_dir, shell_quote};
 
     #[test]
     fn resolve_working_dir_prefers_override() {
@@ -307,6 +363,34 @@ mod tests {
         assert!(err
             .to_string()
             .contains("Orchestration has no worktree_path and --cwd was not provided"));
+    }
+
+    #[test]
+    fn resolve_plan_file_supports_relative_paths_from_worktree() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let plans_dir = tmp.path().join("docs").join("plans");
+        std::fs::create_dir_all(&plans_dir).expect("plans dir");
+        let plan = plans_dir.join("phase-1.md");
+        std::fs::write(&plan, "# plan").expect("write plan");
+
+        let resolved = resolve_plan_file(
+            "auth",
+            "1",
+            tmp.path(),
+            Some(Path::new("docs/plans/phase-1.md")),
+            None,
+        )
+        .expect("resolve plan");
+        assert_eq!(resolved, std::fs::canonicalize(plan).expect("canonicalize"));
+    }
+
+    #[test]
+    fn resolve_plan_file_requires_plan_or_design_id() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let err = resolve_plan_file("auth", "1", tmp.path(), None, None).expect_err("error");
+        assert!(err
+            .to_string()
+            .contains("Must specify either --plan or --design-id"));
     }
 
     #[test]
