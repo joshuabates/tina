@@ -21,6 +21,10 @@ const STATUS_VALUES = [
   "open",
   "changes_requested",
   "superseded",
+  // Check statuses
+  "running",
+  "passed",
+  "failed",
 ] as const
 
 export type StatusBadgeStatus = (typeof STATUS_VALUES)[number]
@@ -154,6 +158,28 @@ const statusStyleMap: Record<StatusBadgeStatus, StatusStyleTokens> = {
     iconBgClass: "bg-card",
     borderClass: "border-l-muted",
     badgeClass: "text-muted-foreground border-muted bg-transparent",
+  },
+  // Check statuses
+  running: {
+    label: "Running",
+    textClass: "text-status-executing",
+    iconBgClass: "bg-primary phase-glow",
+    borderClass: "border-l-status-executing",
+    badgeClass: "text-status-executing border-status-executing/30 bg-status-executing/12",
+  },
+  passed: {
+    label: "Passed",
+    textClass: "text-status-complete",
+    iconBgClass: "bg-status-complete",
+    borderClass: "border-l-status-complete",
+    badgeClass: "text-status-complete border-status-complete/30 bg-status-complete/8",
+  },
+  failed: {
+    label: "Failed",
+    textClass: "text-status-blocked",
+    iconBgClass: "bg-status-blocked/10",
+    borderClass: "border-l-status-blocked",
+    badgeClass: "text-status-blocked border-status-blocked/30 bg-status-blocked/8",
   },
   // Ticket statuses
   todo: {

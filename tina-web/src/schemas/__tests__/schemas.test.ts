@@ -9,6 +9,7 @@ import { WorkComment } from "../workComment"
 import { ReviewSummary } from "../review"
 import { ReviewThread } from "../reviewThread"
 import { ReviewGate } from "../reviewGate"
+import { ReviewCheck } from "../reviewCheck"
 
 describe("OrchestrationSummary schema", () => {
   it("decodes a valid orchestration payload", () => {
@@ -452,5 +453,62 @@ describe("ReviewGate schema", () => {
   it("rejects a gate missing required fields", () => {
     const raw = { _id: "gate1", _creationTime: 1700000000000 }
     expect(() => Schema.decodeUnknownSync(ReviewGate)(raw)).toThrow()
+  })
+})
+
+describe("ReviewCheck schema", () => {
+  it("decodes a valid check payload", () => {
+    const raw = {
+      _id: "check1",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      reviewId: "review1",
+      name: "lint",
+      kind: "analysis",
+      status: "passed",
+      startedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewCheck)(raw)
+    expect(result.reviewId).toBe("review1")
+    expect(result.name).toBe("lint")
+    expect(result.kind).toBe("analysis")
+    expect(result.status).toBe("passed")
+    expect(Option.isNone(result.command)).toBe(true)
+    expect(Option.isNone(result.comment)).toBe(true)
+    expect(Option.isNone(result.output)).toBe(true)
+    expect(Option.isNone(result.completedAt)).toBe(true)
+    expect(Option.isNone(result.durationMs)).toBe(true)
+  })
+
+  it("decodes a check with optional fields present", () => {
+    const raw = {
+      _id: "check2",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      reviewId: "review1",
+      name: "test",
+      kind: "execution",
+      command: "npm test",
+      status: "failed",
+      comment: "Tests failed",
+      output: "test output",
+      startedAt: "2026-02-09T00:00:00Z",
+      completedAt: "2026-02-09T00:05:00Z",
+      durationMs: 300000,
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewCheck)(raw)
+    expect(result.status).toBe("failed")
+    expect(Option.getOrThrow(result.command)).toBe("npm test")
+    expect(Option.getOrThrow(result.comment)).toBe("Tests failed")
+    expect(Option.getOrThrow(result.output)).toBe("test output")
+    expect(Option.getOrThrow(result.completedAt)).toBe("2026-02-09T00:05:00Z")
+    expect(Option.getOrThrow(result.durationMs)).toBe(300000)
+  })
+
+  it("rejects a check missing required fields", () => {
+    const raw = { _id: "check1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(ReviewCheck)(raw)).toThrow()
   })
 })

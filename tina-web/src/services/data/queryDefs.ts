@@ -18,6 +18,7 @@ import {
   ReviewSummary,
   ReviewThread,
   ReviewGate,
+  ReviewCheck,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -218,5 +219,12 @@ export const ReviewGateListQuery = queryDef({
   query: api.reviewGates.listGatesByOrchestration,
   args: Schema.Struct({ orchestrationId: Schema.String }),
   schema: Schema.Array(ReviewGate),
+})
+
+export const ReviewCheckListQuery = queryDef({
+  key: "reviewChecks.list",
+  query: api.reviewChecks.listChecksByReview,
+  args: Schema.Struct({ reviewId: Schema.String }),
+  schema: Schema.Array(ReviewCheck),
 })
 
