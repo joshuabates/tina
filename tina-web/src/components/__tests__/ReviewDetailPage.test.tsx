@@ -28,6 +28,9 @@ vi.mock("../ConversationTab", () => ({
     <div data-testid="conversation-tab">ConversationTab</div>
   ),
 }))
+vi.mock("../ChecksTab", () => ({
+  ChecksTab: () => <div data-testid="checks-tab">ChecksTab</div>,
+}))
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
@@ -138,7 +141,7 @@ describe("ReviewDetailPage", () => {
     expect(screen.getByTestId("conversation-tab")).toBeInTheDocument()
   })
 
-  it("shows placeholder when switching to Checks tab", async () => {
+  it("shows ChecksTab when switching to Checks tab", async () => {
     const user = userEvent.setup()
     installAppRuntimeQueryMock(mockUseTypedQuery, {
       states: {
@@ -150,7 +153,7 @@ describe("ReviewDetailPage", () => {
     renderPage()
 
     await user.click(screen.getByText("Checks"))
-    expect(screen.getByText(/Checks tab/)).toBeInTheDocument()
+    expect(screen.getByTestId("checks-tab")).toBeInTheDocument()
     expect(screen.queryByTestId("conversation-tab")).not.toBeInTheDocument()
   })
 

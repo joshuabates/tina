@@ -12,6 +12,7 @@ import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import { DataErrorBoundary } from "./DataErrorBoundary"
 import { CommitListPanel } from "./CommitListPanel"
 import { ConversationTab } from "./ConversationTab"
+import { ChecksTab } from "./ChecksTab"
 import type { ReviewGate } from "@/schemas"
 import styles from "./ReviewDetailPage.module.scss"
 
@@ -151,9 +152,7 @@ function ReviewDetailContent() {
           </div>
         )}
         {activeTab === "checks" && (
-          <div className={styles.placeholder}>
-            Checks tab — coming in Phase 5
-          </div>
+          <ChecksTab reviewId={reviewId ?? ""} />
         )}
         {activeTab === "changes" && (
           <div className={styles.placeholder}>
