@@ -92,12 +92,45 @@ Rare overrides are fallback only after fix attempts, and must include explicit j
 
 ## Report Format
 
-When done, report:
+When done, report using v2 structured headers followed by a freeform body:
+
+**v2 Headers (required):**
+```
+role: worker
+task_id: <TaskCreate UUID>
+status: pass|gaps|error
+git_range: <base>..<head>  (required when status=pass)
+files_changed: <comma-separated list>
+issues: <semicolon-separated list>  (required when status=gaps or error)
+```
+
+**Freeform body (required):**
 - What you implemented
 - What you tested and results
-- Files changed
 - Self-review findings (if any)
 - Open issues/risks
+
+**Example (pass):**
+```
+role: worker
+task_id: abc-123-def
+status: pass
+git_range: a1b2c3d..e4f5g6h
+files_changed: src/auth.ts, src/auth.test.ts
+
+Implemented JWT authentication middleware with refresh token support.
+Tests: 12/12 passing. Self-review: clean.
+```
+
+**Example (gaps):**
+```
+role: worker
+task_id: abc-123-def
+status: gaps
+issues: test for edge case X is flaky; dependency Y not available in worktree
+
+Implemented core logic but blocked on missing dependency.
+```
 
 ## Team Mode Behavior (Ephemeral)
 
@@ -119,20 +152,20 @@ Your spawn prompt contains:
 
 ### Review Notification
 
-After implementation, notify reviewers:
+After implementation, notify reviewers with v2 headers:
 
 ```json
 SendMessage({
   type: "message",
   recipient: "spec-reviewer",
-  content: "Task complete. Files: [list]. Git range: [base]..[head]. Please review.",
+  content: "role: worker\ntask_id: <id>\nstatus: pass\ngit_range: <base>..<head>\nfiles_changed: <list>\n\nTask complete. Please review.",
   summary: "Implementation complete, requesting spec review"
 })
 
 SendMessage({
   type: "message",
   recipient: "code-quality-reviewer",
-  content: "Task complete. Files: [list]. Git range: [base]..[head]. Please review.",
+  content: "role: worker\ntask_id: <id>\nstatus: pass\ngit_range: <base>..<head>\nfiles_changed: <list>\n\nTask complete. Please review.",
   summary: "Implementation complete, requesting code quality review"
 })
 ```

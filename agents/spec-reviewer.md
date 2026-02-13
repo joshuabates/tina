@@ -54,12 +54,47 @@ In `manual_plus_auto` mode, if the task introduces a new public interface/module
 
 ## Report Format
 
-Return one of:
+Return v2 structured headers followed by a freeform body:
+
+**v2 Headers (required):**
+```
+role: spec-reviewer
+task_id: <TaskCreate UUID>
+status: pass|gaps|error
+confidence: high|medium|low  (optional)
+issues: <semicolon-separated list>  (required when status=gaps or error)
+```
+
+**Freeform body (required):**
+One of:
 - **Spec compliant**: requirements met, no detector/precondition issues.
 - **Precondition failure**: list unmet preconditions.
 - **Issues found**: list missing/extra/misinterpreted behavior with file:line refs.
 
 Any issue blocks approval.
+
+**Example (pass):**
+```
+role: spec-reviewer
+task_id: abc-123-def
+status: pass
+confidence: high
+
+Spec compliant — all 5 requirements met, no extra behavior, preconditions satisfied.
+```
+
+**Example (gaps):**
+```
+role: spec-reviewer
+task_id: abc-123-def
+status: gaps
+confidence: high
+issues: missing progress reporting (spec says "report every 100 items"); extra --json flag not requested
+
+Issues found:
+- Missing: Progress reporting (spec requirement 3) — src/recovery.ts:45
+- Extra: --json flag (not in spec) — src/recovery.ts:12
+```
 
 ## Team Mode Behavior (Ephemeral)
 
@@ -81,7 +116,7 @@ PASS:
 SendMessage({
   type: "message",
   recipient: "worker",
-  content: "Spec review passed.",
+  content: "role: spec-reviewer\ntask_id: <id>\nstatus: pass\nconfidence: high\n\nSpec review passed.",
   summary: "Spec review passed"
 })
 ```
@@ -91,7 +126,7 @@ FAIL:
 SendMessage({
   type: "message",
   recipient: "worker",
-  content: "Spec review FAILED. Issues:\n- [Issue 1]\n- [Issue 2]",
+  content: "role: spec-reviewer\ntask_id: <id>\nstatus: gaps\nissues: <issue1>; <issue2>\n\nSpec review FAILED. Issues:\n- [Issue 1]\n- [Issue 2]",
   summary: "Spec review failed with issues"
 })
 ```
