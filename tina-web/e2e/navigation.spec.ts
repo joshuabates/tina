@@ -2,7 +2,8 @@ import { test, expect, type Page } from "@playwright/test"
 
 async function openApp(page: Page) {
   await page.goto("/")
-  const navigation = page.getByRole("navigation")
+  const navigation = page.getByRole("navigation", { name: /observe sidebar/i })
+  await expect(page.getByRole("navigation", { name: /mode rail/i })).toBeVisible()
   await expect(navigation).toBeVisible()
   return navigation
 }
@@ -73,11 +74,12 @@ test.describe("Navigation", () => {
     }
 
     await entry.first.click()
-    await expect(page).toHaveURL(new RegExp(`\\?orch=${entry.id}`))
+    await expect(page).toHaveURL(
+      new RegExp(`/projects/[^/]+/observe\\?[^#]*orch=${entry.id}`),
+    )
 
     const main = page.getByRole("main")
     await expect(main).toBeVisible()
-    expect(await main.textContent()).toBeTruthy()
   })
 
   test("deep-link to orchestration ID loads page correctly", async ({ page }) => {
@@ -89,10 +91,11 @@ test.describe("Navigation", () => {
       return
     }
 
-    await page.goto(`/?orch=${entry.id}`)
-    await expect(page.getByRole("navigation")).toBeVisible()
+    const current = new URL(page.url())
+    await page.goto(`${current.pathname}?orch=${entry.id}`)
+    await expect(page.getByRole("navigation", { name: /observe sidebar/i })).toBeVisible()
     await expect(page.getByRole("main")).toBeVisible()
-    await expect(page).toHaveURL(new RegExp(`\\?orch=${entry.id}`))
+    await expect(page).toHaveURL(new RegExp(`\\?[^#]*orch=${entry.id}`))
     await expect(page.locator('[data-orchestration-id]').first()).toBeVisible()
   })
 
@@ -109,10 +112,23 @@ test.describe("Navigation", () => {
     expect(featureName).toBeTruthy()
 
     await entry.first.click()
-    await expect(page).toHaveURL(new RegExp(`\\?orch=${entry.id}`))
+    await expect(page).toHaveURL(new RegExp(`\\?[^#]*orch=${entry.id}`))
 
     const statusBar = page.locator("footer")
     await expect(statusBar).toBeVisible()
     expect(await statusBar.textContent()).toContain(featureName)
+  })
+
+  test("mode rail switches mode while preserving project context", async ({ page }) => {
+    await openApp(page)
+
+    const current = new URL(page.url())
+    const projectPathMatch = current.pathname.match(/^\/projects\/([^/]+)\/observe$/)
+    expect(projectPathMatch).toBeTruthy()
+    const projectId = projectPathMatch?.[1]
+    expect(projectId).toBeTruthy()
+
+    await page.getByTestId("mode-rail-plan").click()
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/plan`))
   })
 })

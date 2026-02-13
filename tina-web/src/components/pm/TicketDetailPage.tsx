@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Option } from "effect"
-import { useParams, useSearchParams, Link } from "react-router-dom"
+import { useParams, Link } from "react-router-dom"
 import { useMutation } from "convex/react"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { TicketDetailQuery, DesignListQuery } from "@/services/data/queryDefs"
@@ -50,17 +50,18 @@ const STATUS_TRANSITIONS: Record<string, TransitionAction[]> = {
 }
 
 export function TicketDetailPage() {
-  const { ticketId } = useParams<{ ticketId: string }>()
-  const [searchParams] = useSearchParams()
+  const { ticketId, projectId: routeProjectId } = useParams<{
+    ticketId: string
+    projectId: string
+  }>()
   const [editing, setEditing] = useState(false)
-  const projectIdParam = searchParams.get("project") || null
 
   const ticketResult = useTypedQuery(TicketDetailQuery, {
     ticketId: ticketId ?? "",
   })
 
   const resolvedProjectId =
-    projectIdParam ??
+    routeProjectId ??
     (ticketResult.status === "success" && ticketResult.data
       ? ticketResult.data.projectId
       : null)
@@ -124,7 +125,7 @@ export function TicketDetailPage() {
   }
 
   const designs = designsResult.data
-  const projectId = projectIdParam ?? ticket.projectId
+  const projectId = routeProjectId ?? ticket.projectId
 
   const designMap = new Map(designs.map((d) => [d._id, d]))
   const rawDesignId = Option.isSome(ticket.designId) ? ticket.designId.value : undefined
@@ -209,7 +210,7 @@ export function TicketDetailPage() {
           <div className={styles.metadataValue}>
             {linkedDesign && rawDesignId ? (
               <Link
-                to={`/pm/designs/${rawDesignId}?project=${projectId}`}
+                to={`/projects/${projectId}/plan/designs/${rawDesignId}`}
                 className={styles.designLink}
               >
                 {linkedDesign.designKey}: {linkedDesign.title}

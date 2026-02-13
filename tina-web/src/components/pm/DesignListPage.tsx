@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useSearchParams, useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { DesignListQuery } from "@/services/data/queryDefs"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
@@ -11,11 +11,11 @@ import type { DesignSummary } from "@/schemas"
 import styles from "./DesignListPage.module.scss"
 
 export function DesignListPage() {
-  const [searchParams] = useSearchParams()
+  const { projectId: projectIdParam } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  const projectId = searchParams.get("project") || null
+  const projectId = projectIdParam ?? null
 
   const designsResult = useTypedQuery(DesignListQuery, {
     projectId: projectId as string,
@@ -56,12 +56,12 @@ export function DesignListPage() {
   const designs = designsResult.data
 
   const handleRowClick = (design: DesignSummary) => {
-    navigate(`/pm/designs/${design._id}?project=${projectId}`)
+    navigate(`/projects/${projectId}/plan/designs/${design._id}`)
   }
 
   const handleCreated = (designId: string) => {
     setShowCreateForm(false)
-    navigate(`/pm/designs/${designId}?project=${projectId}`)
+    navigate(`/projects/${projectId}/plan/designs/${designId}`)
   }
 
   return (

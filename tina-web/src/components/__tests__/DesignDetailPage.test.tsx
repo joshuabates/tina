@@ -63,7 +63,7 @@ beforeEach(() => {
 
 describe("DesignDetailPage", () => {
   it("renders loading state", () => {
-    renderApp("/pm/designs/d1?project=p1", {
+    renderApp("/projects/p1/plan/designs/d1", {
       ...defaultStates,
       "designs.get": queryLoading(),
     })
@@ -72,7 +72,7 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders not found when design is null", () => {
-    renderApp("/pm/designs/d1?project=p1", {
+    renderApp("/projects/p1/plan/designs/d1", {
       ...defaultStates,
       "designs.get": querySuccess(null),
     })
@@ -81,33 +81,33 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders design key and title", () => {
-    renderApp("/pm/designs/d1?project=p1")
+    renderApp("/projects/p1/plan/designs/d1")
 
     expect(screen.getByText("ALPHA-D1")).toBeInTheDocument()
     expect(screen.getByText("Authentication Flow")).toBeInTheDocument()
   })
 
   it("renders status badge", () => {
-    renderApp("/pm/designs/d1?project=p1")
+    renderApp("/projects/p1/plan/designs/d1")
 
     expect(screen.getByText("Draft")).toBeInTheDocument()
   })
 
   it("renders markdown body", () => {
-    renderApp("/pm/designs/d1?project=p1")
+    renderApp("/projects/p1/plan/designs/d1")
 
     expect(screen.getByRole("heading", { level: 1, name: "Auth" })).toBeInTheDocument()
     expect(screen.getByText(/Design for auth flow/)).toBeInTheDocument()
   })
 
   it("renders Submit for Review button when status is draft", () => {
-    renderApp("/pm/designs/d1?project=p1")
+    renderApp("/projects/p1/plan/designs/d1")
 
     expect(screen.getByRole("button", { name: /submit for review/i })).toBeInTheDocument()
   })
 
   it("renders Approve and Return to Draft buttons when status is in_review", () => {
-    renderApp("/pm/designs/d1?project=p1", {
+    renderApp("/projects/p1/plan/designs/d1", {
       ...defaultStates,
       "designs.get": querySuccess(buildDesignSummary({ status: "in_review" })),
     })
@@ -117,7 +117,7 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders Archive button when status is approved", () => {
-    renderApp("/pm/designs/d1?project=p1", {
+    renderApp("/projects/p1/plan/designs/d1", {
       ...defaultStates,
       "designs.get": querySuccess(buildDesignSummary({ status: "approved" })),
     })
@@ -126,7 +126,7 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders Unarchive button when status is archived", () => {
-    renderApp("/pm/designs/d1?project=p1", {
+    renderApp("/projects/p1/plan/designs/d1", {
       ...defaultStates,
       "designs.get": querySuccess(buildDesignSummary({ status: "archived" })),
     })
@@ -136,7 +136,7 @@ describe("DesignDetailPage", () => {
 
   it("calls transitionDesign when transition button is clicked", async () => {
     const user = userEvent.setup()
-    renderApp("/pm/designs/d1?project=p1")
+    renderApp("/projects/p1/plan/designs/d1")
 
     await user.click(screen.getByRole("button", { name: /submit for review/i }))
 
@@ -150,7 +150,7 @@ describe("DesignDetailPage", () => {
 
   it("enters edit mode when Edit button is clicked", async () => {
     const user = userEvent.setup()
-    renderApp("/pm/designs/d1?project=p1")
+    renderApp("/projects/p1/plan/designs/d1")
 
     await user.click(screen.getByRole("button", { name: /^edit$/i }))
 
@@ -160,7 +160,7 @@ describe("DesignDetailPage", () => {
 
   it("saves edits when Save button is clicked", async () => {
     const user = userEvent.setup()
-    renderApp("/pm/designs/d1?project=p1")
+    renderApp("/projects/p1/plan/designs/d1")
 
     await user.click(screen.getByRole("button", { name: /^edit$/i }))
 
@@ -179,7 +179,7 @@ describe("DesignDetailPage", () => {
 
   it("exits edit mode when Cancel button is clicked", async () => {
     const user = userEvent.setup()
-    renderApp("/pm/designs/d1?project=p1")
+    renderApp("/projects/p1/plan/designs/d1")
 
     await user.click(screen.getByRole("button", { name: /^edit$/i }))
     expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
@@ -189,20 +189,20 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders comment timeline", () => {
-    renderApp("/pm/designs/d1?project=p1")
+    renderApp("/projects/p1/plan/designs/d1")
 
     expect(screen.getByText(/no comments/i)).toBeInTheDocument()
   })
 
   describe("validation section", () => {
     it("does not render when complexityPreset is none", () => {
-      renderApp("/pm/designs/d1?project=p1")
+      renderApp("/projects/p1/plan/designs/d1")
 
       expect(screen.queryByTestId("validation-section")).not.toBeInTheDocument()
     })
 
     it("renders when complexityPreset is present", () => {
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({ complexityPreset: some("standard") }),
@@ -213,7 +213,7 @@ describe("DesignDetailPage", () => {
     })
 
     it("displays complexity preset value", () => {
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({ complexityPreset: some("standard") }),
@@ -224,7 +224,7 @@ describe("DesignDetailPage", () => {
     })
 
     it("displays phase count", () => {
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({
@@ -238,7 +238,7 @@ describe("DesignDetailPage", () => {
     })
 
     it("displays phase structure validity as Valid", () => {
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({
@@ -252,7 +252,7 @@ describe("DesignDetailPage", () => {
     })
 
     it("displays phase structure validity as Invalid", () => {
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({
@@ -266,7 +266,7 @@ describe("DesignDetailPage", () => {
     })
 
     it("renders marker checklist with required markers", () => {
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({
@@ -284,7 +284,7 @@ describe("DesignDetailPage", () => {
     })
 
     it("shows completed markers as checked", () => {
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({
@@ -301,7 +301,7 @@ describe("DesignDetailPage", () => {
     })
 
     it("does not render marker checklist when requiredMarkers is empty", () => {
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({
@@ -316,7 +316,7 @@ describe("DesignDetailPage", () => {
 
     it("calls updateDesignMarkers when marker is toggled", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({
@@ -341,7 +341,7 @@ describe("DesignDetailPage", () => {
 
     it("calls updateDesignMarkers to remove marker when toggled off", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/designs/d1?project=p1", {
+      renderApp("/projects/p1/plan/designs/d1", {
         ...defaultStates,
         "designs.get": querySuccess(
           buildDesignSummary({

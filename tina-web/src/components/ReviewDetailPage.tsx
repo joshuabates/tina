@@ -59,7 +59,8 @@ function GateIndicator({ gate }: { gate: ReviewGate }) {
 }
 
 function ReviewDetailContent() {
-  const { orchestrationId, reviewId } = useParams<{
+  const { projectId, orchestrationId, reviewId } = useParams<{
+    projectId: string
     orchestrationId: string
     reviewId: string
   }>()
@@ -110,6 +111,9 @@ function ReviewDetailContent() {
   const phaseLabel = phaseNumber
     ? `Phase ${phaseNumber}`
     : "Orchestration Review"
+  const orchestrationPath = projectId
+    ? `/projects/${projectId}/observe?orch=${orchestrationId}`
+    : "/"
   const phase = phaseNumber
     ? orchResult.status === "success"
       ? orchResult.data?.phases.find((p) => p.phaseNumber === phaseNumber)
@@ -123,7 +127,9 @@ function ReviewDetailContent() {
     <div data-testid="review-detail-page" className={styles.reviewPage}>
       <div className={styles.header}>
         <div className={styles.breadcrumb}>
-          <Link to={`/?orch=${orchestrationId}`}>Orchestration</Link>
+          <Link to={orchestrationPath}>
+            Orchestration
+          </Link>
           {" / "}
           <span>{phaseLabel}</span>
         </div>

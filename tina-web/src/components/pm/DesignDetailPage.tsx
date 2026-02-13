@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useParams, useSearchParams } from "react-router-dom"
+import { useParams } from "react-router-dom"
 import { useMutation } from "convex/react"
 import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
@@ -51,12 +51,12 @@ function getTransitionActions(status: string): TransitionAction[] {
 }
 
 export function DesignDetailPage() {
-  const { designId } = useParams<{ designId: string }>()
-  const [searchParams] = useSearchParams()
+  const { designId, projectId: routeProjectId } = useParams<{
+    designId: string
+    projectId: string
+  }>()
   const [editing, setEditing] = useState(false)
   const [transitioning, setTransitioning] = useState(false)
-
-  const projectId = searchParams.get("project") || null
 
   const transitionDesign = useMutation(api.designs.transitionDesign)
   const updateMarkers = useMutation(api.designs.updateDesignMarkers)
@@ -214,7 +214,7 @@ export function DesignDetailPage() {
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Comments</h3>
         <CommentTimeline
-          projectId={projectId || design.projectId}
+          projectId={routeProjectId || design.projectId}
           targetType="design"
           targetId={designId ?? ""}
         />

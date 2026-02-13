@@ -64,7 +64,10 @@ const defaultStates: Partial<QueryStateMap> = {
   "designs.list": querySuccess(designs),
 }
 
-function renderApp(route: string, states: Partial<QueryStateMap> = defaultStates) {
+function renderApp(
+  route: string,
+  states: Partial<QueryStateMap> = defaultStates,
+) {
   return renderWithAppRuntime(<App />, {
     route,
     mockUseTypedQuery,
@@ -77,110 +80,75 @@ beforeEach(() => {
 })
 
 describe("DesignListPage", () => {
-  it("renders loading state when query is loading", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1", {
+  it("renders loading state when query is loading", () => {
+    renderApp("/projects/p1/plan/designs", {
       ...defaultStates,
       "designs.list": queryLoading(),
     })
-
-    await user.click(screen.getByRole("tab", { name: /designs/i }))
 
     expect(screen.getByTestId("design-list-page")).toBeInTheDocument()
     expect(screen.getByTestId("design-list-loading")).toBeInTheDocument()
   })
 
-  it("renders empty state when no designs exist", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1", {
+  it("renders empty state when no designs exist", () => {
+    renderApp("/projects/p1/plan/designs", {
       ...defaultStates,
       "designs.list": querySuccess([]),
     })
 
-    await user.click(screen.getByRole("tab", { name: /designs/i }))
     expect(screen.getByText(/no designs/i)).toBeInTheDocument()
   })
 
-  it("renders table with design rows when designs exist", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1")
+  it("renders table with design rows when designs exist", () => {
+    renderApp("/projects/p1/plan/designs")
 
-    await user.click(screen.getByRole("tab", { name: /designs/i }))
     const table = screen.getByRole("table")
     expect(table).toBeInTheDocument()
 
     const rows = within(table).getAllByRole("row")
-    // header row + 2 data rows
     expect(rows).toHaveLength(3)
   })
 
-  it("displays design key and title", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1")
+  it("displays design key and title", () => {
+    renderApp("/projects/p1/plan/designs")
 
-    await user.click(screen.getByRole("tab", { name: /designs/i }))
     expect(screen.getByText("ALPHA-D1")).toBeInTheDocument()
     expect(screen.getByText("Authentication Flow")).toBeInTheDocument()
     expect(screen.getByText("ALPHA-D2")).toBeInTheDocument()
     expect(screen.getByText("Data Model")).toBeInTheDocument()
   })
 
-  it("renders status badges for each design", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1")
-
-    await user.click(screen.getByRole("tab", { name: /designs/i }))
-    // StatusBadge renders status labels
+  it("renders status badges for each design", () => {
+    renderApp("/projects/p1/plan/designs")
     expect(screen.getByText("Draft")).toBeInTheDocument()
     expect(screen.getByText("Approved")).toBeInTheDocument()
   })
 
   it("clicking a design row navigates to detail page", async () => {
     const user = userEvent.setup()
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/designs")
 
-    await user.click(screen.getByRole("tab", { name: /designs/i }))
     const rows = screen.getAllByRole("row")
-    // Click the first data row (skip header)
     await user.click(rows[1])
 
     expect(screen.getByTestId("design-detail-page")).toBeInTheDocument()
   })
 
-  it("shows create design button", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1")
-
-    await user.click(screen.getByRole("tab", { name: /designs/i }))
+  it("shows create design button", () => {
+    renderApp("/projects/p1/plan/designs")
     expect(screen.getByRole("button", { name: /create design/i })).toBeInTheDocument()
   })
 
-  it("shows no project selected message when no project param", () => {
-    renderApp("/pm")
-
-    expect(screen.getByText(/select a project/i)).toBeInTheDocument()
-  })
-
-  it("treats an empty project param as no project and skips invalid ID args", () => {
-    renderApp("/pm?project=")
-
-    expect(screen.getByText(/select a project/i)).toBeInTheDocument()
-  })
-
-  it("renders page title", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1")
-
-    await user.click(screen.getByRole("tab", { name: /designs/i }))
+  it("renders page title", () => {
+    renderApp("/projects/p1/plan/designs")
     expect(screen.getByRole("heading", { name: "Designs" })).toBeInTheDocument()
   })
 
   describe("create form modal", () => {
     it("opens modal when Create Design button is clicked", async () => {
       const user = userEvent.setup()
-      renderApp("/pm?project=p1")
+      renderApp("/projects/p1/plan/designs")
 
-      await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
       const dialog = screen.getByRole("dialog")
@@ -190,9 +158,8 @@ describe("DesignListPage", () => {
 
     it("shows title and content inputs in modal", async () => {
       const user = userEvent.setup()
-      renderApp("/pm?project=p1")
+      renderApp("/projects/p1/plan/designs")
 
-      await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
       const dialog = screen.getByRole("dialog")
@@ -202,9 +169,8 @@ describe("DesignListPage", () => {
 
     it("submit button disabled when title is empty", async () => {
       const user = userEvent.setup()
-      renderApp("/pm?project=p1")
+      renderApp("/projects/p1/plan/designs")
 
-      await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
       const dialog = screen.getByRole("dialog")
@@ -213,9 +179,8 @@ describe("DesignListPage", () => {
 
     it("closes modal on cancel", async () => {
       const user = userEvent.setup()
-      renderApp("/pm?project=p1")
+      renderApp("/projects/p1/plan/designs")
 
-      await user.click(screen.getByRole("tab", { name: /designs/i }))
       await user.click(screen.getByRole("button", { name: /create design/i }))
       expect(screen.getByRole("dialog")).toBeInTheDocument()
 

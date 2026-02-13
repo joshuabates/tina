@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useLocation, useSearchParams } from "react-router-dom"
 import { useServices } from "@/providers/RuntimeProvider"
 import type { SelectionService } from "@/services/selection-service"
 
@@ -30,6 +30,8 @@ function getSelectionUrlSyncState(
 export function useSelection() {
   const { selectionService } = useServices()
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
+  const isObserveRoute = location.pathname.includes("/observe")
   const syncState = getSelectionUrlSyncState(
     selectionService,
     searchParams.toString(),
@@ -37,6 +39,12 @@ export function useSelection() {
 
   // Keep service state in sync with URL query params.
   useEffect(() => {
+    if (!isObserveRoute) {
+      syncState.pendingUrl = null
+      syncState.lastSeenUrl = searchParams.toString()
+      return
+    }
+
     const currentQuery = searchParams.toString()
     const pendingQuery = syncState.pendingUrl
 
@@ -58,10 +66,14 @@ export function useSelection() {
 
     syncState.lastSeenUrl = currentQuery
     selectionService.syncFromUrl(searchParams)
-  }, [searchParams, selectionService, syncState])
+  }, [isObserveRoute, searchParams, selectionService, syncState])
 
   // Keep URL query params in sync with service state.
   useEffect(() => {
+    if (!isObserveRoute) {
+      return undefined
+    }
+
     return selectionService.subscribe(() => {
       const params = selectionService.toUrlParams()
       const nextQuery = params.toString()
@@ -75,7 +87,7 @@ export function useSelection() {
       syncState.pendingUrl = nextQuery
       setSearchParams(params, { replace: true })
     })
-  }, [selectionService, setSearchParams, syncState])
+  }, [isObserveRoute, selectionService, setSearchParams, syncState])
 
   const state = useSyncExternalStore(
     selectionService.subscribe,

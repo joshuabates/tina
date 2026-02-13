@@ -7,7 +7,6 @@ import { TelemetryTimeline } from "./TelemetryTimeline"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { OrchestrationDetailQuery } from "@/services/data/queryDefs"
-import { NotFoundError } from "@/services/errors"
 import { matchQueryResult } from "@/lib/query-state"
 import styles from "./OrchestrationPage.module.scss"
 
@@ -27,7 +26,7 @@ interface OrchestrationPageContentProps {
 
 function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentProps) {
   const [showTelemetry, setShowTelemetry] = useState(false)
-  const { phaseId, selectPhase } = useSelection()
+  const { phaseId, selectOrchestration, selectPhase } = useSelection()
 
   // No orchestration selected - show empty state
   if (!orchestrationId) {
@@ -45,6 +44,21 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
     orchestrationId,
   })
   const loadedDetail = result.status === "success" ? result.data : null
+
+  useEffect(() => {
+    if (!orchestrationId) return
+    if (result.status !== "success") return
+    if (loadedDetail !== null) return
+
+    selectOrchestration(null)
+    selectPhase(null)
+  }, [
+    loadedDetail,
+    orchestrationId,
+    result.status,
+    selectOrchestration,
+    selectPhase,
+  ])
 
   useEffect(() => {
     if (phaseId) return
@@ -101,10 +115,13 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
     success: (orchestration) => {
       // Not found state - orchestration was deleted or doesn't exist
       if (orchestration === null) {
-        throw new NotFoundError({
-          resource: "orchestration",
-          id: orchestrationId,
-        })
+        return (
+          <div className={styles.orchestrationPage}>
+            <div className={styles.empty}>
+              Select an orchestration from the sidebar
+            </div>
+          </div>
+        )
       }
 
       return (

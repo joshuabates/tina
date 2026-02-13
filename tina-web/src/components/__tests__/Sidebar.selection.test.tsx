@@ -72,7 +72,7 @@ function setSelection(orchestrationId: string | null) {
 }
 
 function renderSidebar(route = "/") {
-  return renderWithRouter(<Sidebar />, route)
+  return renderWithRouter(<Sidebar projectId="p1" />, route)
 }
 
 describe("Sidebar - Selection Flow", () => {
@@ -86,7 +86,7 @@ describe("Sidebar - Selection Flow", () => {
   it("URL ?orch=abc123 highlights matching sidebar item", () => {
     setSelection("abc123")
 
-    const { container } = renderSidebar("/?orch=abc123")
+    const { container } = renderSidebar("/projects/p1/observe?orch=abc123")
 
     expect(within(container).getByText("feature-one").closest("div")).toHaveClass("bg-muted/50")
   })
@@ -103,13 +103,13 @@ describe("Sidebar - Selection Flow", () => {
   it("browser back restores previous selection", () => {
     setSelection("abc123")
 
-    const { container, rerender } = renderSidebar("/?orch=abc123")
+    const { container, rerender } = renderSidebar("/projects/p1/observe?orch=abc123")
     expect(within(container).getByText("feature-one").closest("div")).toHaveClass("bg-muted/50")
 
     setSelection("xyz789")
     rerender(
-      <MemoryRouter initialEntries={["/?orch=xyz789"]}>
-        <Sidebar />
+      <MemoryRouter initialEntries={["/projects/p1/observe?orch=xyz789"]}>
+        <Sidebar projectId="p1" />
       </MemoryRouter>,
     )
 
@@ -117,14 +117,17 @@ describe("Sidebar - Selection Flow", () => {
   })
 
   it.each([
-    { label: "invalid orch ID", route: "/?orch=invalid-id-999", selection: "invalid-id-999" },
-    { label: "missing orch ID", route: "/", selection: null },
+    {
+      label: "invalid orch ID",
+      route: "/projects/p1/observe?orch=invalid-id-999",
+      selection: "invalid-id-999",
+    },
+    { label: "missing orch ID", route: "/projects/p1/observe", selection: null },
   ])("shows sidebar without highlighted selection for $label", ({ route, selection }) => {
     setSelection(selection)
 
     const { container } = renderSidebar(route)
 
-    expect(screen.getAllByText("Project Alpha").length).toBeGreaterThan(0)
     expect(screen.getAllByText("feature-one").length).toBeGreaterThan(0)
     expect(screen.getAllByText("feature-two").length).toBeGreaterThan(0)
     expect(container.querySelectorAll(".bg-muted\\/50")).toHaveLength(0)

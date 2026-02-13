@@ -3,25 +3,29 @@
   flex-direction: column;
   height: 100%;
   background-color: hsl(var(--sidebar));
-  transition: width 0.2s ease;
-
 }
 
-
-.pmLink {
-  display: block;
-  padding: 8px 12px;
-  font-size: 11px;
-  font-weight: 600;
+.modeHeader {
+  padding: 0.6rem 0.75rem;
+  font-size: 0.65rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   color: hsl(var(--muted-foreground));
-  text-decoration: none;
   border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
 
-  &:hover {
-    color: hsl(var(--foreground));
-  }
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.orchestrationItem {
+  font-size: 0.8rem;
 }
 
 .loading {
@@ -40,13 +44,9 @@
 }
 
 .empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 1rem;
   color: hsl(var(--muted-foreground));
-  font-size: 0.875rem;
-  text-align: center;
+  font-size: 0.85rem;
 }
 
 @keyframes pulse {

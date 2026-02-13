@@ -117,7 +117,7 @@ beforeEach(() => {
 
 describe("TicketListPage", () => {
   it("renders loading state when query is loading", () => {
-    renderApp("/pm?project=p1", {
+    renderApp("/projects/p1/plan/tickets", {
       ...defaultStates,
       "tickets.list": queryLoading(),
     })
@@ -127,7 +127,7 @@ describe("TicketListPage", () => {
   })
 
   it("renders empty state when no tickets exist", () => {
-    renderApp("/pm?project=p1", {
+    renderApp("/projects/p1/plan/tickets", {
       ...defaultStates,
       "tickets.list": querySuccess([]),
     })
@@ -136,7 +136,7 @@ describe("TicketListPage", () => {
   })
 
   it("renders table with ticket rows when tickets exist", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     const table = screen.getByRole("table")
     expect(table).toBeInTheDocument()
@@ -147,7 +147,7 @@ describe("TicketListPage", () => {
   })
 
   it("displays ticket key and title", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     expect(screen.getByText("ALPHA-T1")).toBeInTheDocument()
     expect(screen.getByText("Implement login")).toBeInTheDocument()
@@ -156,7 +156,7 @@ describe("TicketListPage", () => {
   })
 
   it("renders correct status labels for ticket statuses", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     // "todo" should render as "Todo", "in_progress" as "In Progress"
     expect(screen.getByText("Todo")).toBeInTheDocument()
@@ -164,30 +164,33 @@ describe("TicketListPage", () => {
   })
 
   it("renders priority badges", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     expect(screen.getByText("High")).toBeInTheDocument()
     expect(screen.getByText("Medium")).toBeInTheDocument()
   })
 
   it("renders Design Link column header", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     const table = screen.getByRole("table")
     expect(within(table).getByText("Design Link")).toBeInTheDocument()
   })
 
   it("displays design key as link when ticket has designId", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     // Ticket t1 has designId "d1" which maps to design with key "ALPHA-D1"
     const link = screen.getByRole("link", { name: /ALPHA-D1/i })
     expect(link).toBeInTheDocument()
-    expect(link).toHaveAttribute("href", expect.stringContaining("/pm/designs/d1"))
+    expect(link).toHaveAttribute(
+      "href",
+      expect.stringContaining("/projects/p1/plan/designs/d1"),
+    )
   })
 
   it("displays dash when ticket has no designId", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     const table = screen.getByRole("table")
     const rows = within(table).getAllByRole("row")
@@ -198,7 +201,7 @@ describe("TicketListPage", () => {
 
   it("clicking a ticket row navigates to detail page", async () => {
     const user = userEvent.setup()
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     const rows = screen.getAllByRole("row")
     // Click the first data row (skip header)
@@ -208,25 +211,13 @@ describe("TicketListPage", () => {
   })
 
   it("shows create ticket button", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     expect(screen.getByRole("button", { name: /create ticket/i })).toBeInTheDocument()
   })
 
-  it("shows no project selected message when no project param", () => {
-    renderApp("/pm")
-
-    expect(screen.getByText(/select a project/i)).toBeInTheDocument()
-  })
-
-  it("treats an empty project param as no project and skips invalid ID args", () => {
-    renderApp("/pm?project=")
-
-    expect(screen.getByText(/select a project/i)).toBeInTheDocument()
-  })
-
   it("renders page title", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan/tickets")
 
     expect(screen.getByRole("heading", { name: "Tickets" })).toBeInTheDocument()
   })
@@ -234,7 +225,7 @@ describe("TicketListPage", () => {
   describe("create form modal", () => {
     it("opens modal when Create Ticket button is clicked", async () => {
       const user = userEvent.setup()
-      renderApp("/pm?project=p1")
+      renderApp("/projects/p1/plan/tickets")
 
       await user.click(screen.getByRole("button", { name: /create ticket/i }))
 
@@ -245,7 +236,7 @@ describe("TicketListPage", () => {
 
     it("shows design link dropdown with project designs in modal", async () => {
       const user = userEvent.setup()
-      renderApp("/pm?project=p1")
+      renderApp("/projects/p1/plan/tickets")
 
       await user.click(screen.getByRole("button", { name: /create ticket/i }))
 
@@ -263,7 +254,7 @@ describe("TicketListPage", () => {
 
     it("closes modal when close button is clicked", async () => {
       const user = userEvent.setup()
-      renderApp("/pm?project=p1")
+      renderApp("/projects/p1/plan/tickets")
 
       await user.click(screen.getByRole("button", { name: /create ticket/i }))
       expect(screen.getByRole("dialog")).toBeInTheDocument()

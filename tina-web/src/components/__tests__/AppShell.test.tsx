@@ -1,17 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { screen } from "@testing-library/react"
+import { Route, Routes } from "react-router-dom"
 import { AppShell } from "../AppShell"
-import styles from "../AppShell.module.scss"
 import {
   buildOrchestrationSummary,
   buildProjectSummary,
   some,
 } from "@/test/builders/domain"
-import {
-  queryLoading,
-  querySuccess,
-  type QueryStateMap,
-} from "@/test/builders/query"
+import { queryLoading, querySuccess, type QueryStateMap } from "@/test/builders/query"
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
 import { expectContainerToContainStatusLabel } from "@/test/harness/status"
 
@@ -26,18 +22,29 @@ const mockUseTypedQuery = vi.mocked(
 
 const defaultStates: Partial<QueryStateMap> = {
   "orchestrations.list": queryLoading(),
-  "projects.list": queryLoading(),
+  "projects.list": querySuccess([
+    buildProjectSummary({
+      _id: "p1",
+      name: "Project Alpha",
+      orchestrationCount: 1,
+    }),
+  ]),
 }
 
 function renderShell(
-  route = "/",
+  route = "/projects/p1/observe",
   states: Partial<QueryStateMap> = defaultStates,
 ) {
-  return renderWithAppRuntime(<AppShell />, {
-    route,
-    states,
-    mockUseTypedQuery,
-  })
+  return renderWithAppRuntime(
+    <Routes>
+      <Route path="/projects/:projectId/observe" element={<AppShell />} />
+    </Routes>,
+    {
+      route,
+      states,
+      mockUseTypedQuery,
+    },
+  )
 }
 
 describe("AppShell", () => {
@@ -45,23 +52,18 @@ describe("AppShell", () => {
     vi.clearAllMocks()
   })
 
-  it("renders header, sidebar, content outlet, and footer", () => {
+  it("renders mode rail, sidebar, content outlet, and footer", () => {
     renderShell()
 
-    expect(screen.getByRole("banner")).toBeInTheDocument()
-    expect(screen.getByRole("navigation")).toBeInTheDocument()
+    expect(screen.getByRole("navigation", { name: /mode rail/i })).toBeInTheDocument()
+    expect(screen.getByRole("navigation", { name: /observe sidebar/i })).toBeInTheDocument()
     expect(screen.getByRole("main")).toBeInTheDocument()
     expect(screen.getByRole("contentinfo")).toBeInTheDocument()
   })
 
-  it("passes aria-label for landmark regions", () => {
+  it("renders project picker at the top of the left sidebar", () => {
     renderShell()
-
-    expect(screen.getByRole("navigation")).toHaveAttribute(
-      "aria-label",
-      "Main sidebar",
-    )
-    expect(screen.getByRole("main")).toHaveAttribute("aria-label", "Page content")
+    expect(screen.getByTestId("project-picker")).toBeInTheDocument()
   })
 
   it("uses semantic main element without redundant role attribute", () => {
@@ -73,75 +75,46 @@ describe("AppShell", () => {
     expect(main).not.toHaveAttribute("role")
   })
 
-  it("sidebar starts expanded by default", () => {
+  it("footer shows 'Connected' when no orchestration is selected", () => {
     renderShell()
-
-    const sidebar = screen.getByRole("navigation")
-    expect(sidebar.className).toContain(styles.sidebar)
-    expect(sidebar.className).not.toContain(styles.collapsed)
+    expect(screen.getByText(/connected/i)).toBeInTheDocument()
   })
 
-  describe("Header and Footer Integration", () => {
-    it("header omits product title text", () => {
-      renderShell()
-      expect(screen.queryByText("ORCHESTRATOR")).not.toBeInTheDocument()
+  it("footer shows project/feature breadcrumb when orchestration selected", () => {
+    renderShell("/projects/p1/observe?orch=orch-123", {
+      ...defaultStates,
+      "orchestrations.list": querySuccess([
+        buildOrchestrationSummary({
+          _id: "orch-123",
+          _creationTime: 123,
+          nodeId: "node-1",
+          projectId: some("p1"),
+          featureName: "my-feature",
+          designDocPath: "/path/to/doc",
+          branch: "tina/my-feature",
+          currentPhase: 2,
+          status: "executing",
+          startedAt: "2024-01-01",
+        }),
+      ]),
+      "projects.list": querySuccess([
+        buildProjectSummary({
+          _id: "p1",
+          _creationTime: 123,
+          name: "my-project",
+          repoPath: "/path",
+          createdAt: "2024-01-01",
+          orchestrationCount: 1,
+          latestFeature: "my-feature",
+          latestStatus: "executing",
+        }),
+      ]),
     })
 
-    it("header renders version", () => {
-      renderShell()
-      expect(screen.getByRole("banner")).toBeInTheDocument()
-    })
-
-    it("footer shows 'Connected' when no selection", () => {
-      renderShell()
-
-      expect(screen.getByText(/connected/i)).toBeInTheDocument()
-    })
-
-    it("footer shows project/feature breadcrumb when orchestration selected", () => {
-      renderShell("/?orch=orch-123", {
-        ...defaultStates,
-        "orchestrations.list": querySuccess([
-          buildOrchestrationSummary({
-            _id: "orch-123",
-            _creationTime: 123,
-            nodeId: "node-1",
-            projectId: some("proj-1"),
-            featureName: "my-feature",
-            designDocPath: "/path/to/doc",
-            branch: "tina/my-feature",
-            currentPhase: 2,
-            status: "executing",
-            startedAt: "2024-01-01",
-          }),
-        ]),
-        "projects.list": querySuccess([
-          buildProjectSummary({
-            _id: "proj-1",
-            _creationTime: 123,
-            name: "my-project",
-            repoPath: "/path",
-            createdAt: "2024-01-01",
-            orchestrationCount: 1,
-            latestFeature: "my-feature",
-            latestStatus: "executing",
-          }),
-        ]),
-      })
-
-      expect(screen.getByText(/my-project/i)).toBeInTheDocument()
-      expect(screen.getByText(/my-feature/i)).toBeInTheDocument()
-      expect(screen.getByText(/P2/i)).toBeInTheDocument()
-      expectContainerToContainStatusLabel(
-        screen.getByRole("contentinfo"),
-        "executing",
-      )
-    })
-
-    it("footer renders status region", () => {
-      renderShell()
-
-      expect(screen.getByRole("contentinfo")).toBeInTheDocument()
-    })
+    const statusRegion = screen.getByRole("contentinfo")
+    expect(statusRegion).toHaveTextContent(/my-project/i)
+    expect(statusRegion).toHaveTextContent(/my-feature/i)
+    expect(statusRegion).toHaveTextContent(/P2/i)
+    expectContainerToContainStatusLabel(statusRegion, "executing")
   })
 })

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Option } from "effect"
-import { useSearchParams, useNavigate, Link } from "react-router-dom"
+import { useNavigate, Link, useParams } from "react-router-dom"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { TicketListQuery, DesignListQuery } from "@/services/data/queryDefs"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
@@ -11,11 +11,11 @@ import type { TicketSummary } from "@/schemas"
 import styles from "./TicketListPage.module.scss"
 
 export function TicketListPage() {
-  const [searchParams] = useSearchParams()
+  const { projectId: projectIdParam } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [showCreateForm, setShowCreateForm] = useState(false)
 
-  const projectId = searchParams.get("project") || null
+  const projectId = projectIdParam ?? null
 
   const ticketsResult = useTypedQuery(TicketListQuery, {
     projectId: projectId as string,
@@ -63,12 +63,12 @@ export function TicketListPage() {
   const designMap = new Map(designs.map((d) => [d._id, d]))
 
   const handleRowClick = (ticket: TicketSummary) => {
-    navigate(`/pm/tickets/${ticket._id}?project=${projectId}`)
+    navigate(`/projects/${projectId}/plan/tickets/${ticket._id}`)
   }
 
   const handleCreated = (ticketId: string) => {
     setShowCreateForm(false)
-    navigate(`/pm/tickets/${ticketId}?project=${projectId}`)
+    navigate(`/projects/${projectId}/plan/tickets/${ticketId}`)
   }
 
   return (
@@ -136,7 +136,7 @@ export function TicketListPage() {
                   <td>
                     {design && rawDesignId ? (
                       <Link
-                        to={`/pm/designs/${rawDesignId}?project=${projectId}`}
+                        to={`/projects/${projectId}/plan/designs/${rawDesignId}`}
                         className={styles.designLink}
                         onClick={(e) => e.stopPropagation()}
                       >

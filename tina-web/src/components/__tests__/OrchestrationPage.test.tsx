@@ -48,7 +48,7 @@ type DetailQueryResult =
   | ReturnType<typeof querySuccess<OrchestrationDetail | null>>
 
 function renderScenario({
-  route = "/?orch=o1",
+  route = "/projects/p1/observe?orch=o1",
   detailResults = {
     o1: querySuccess<OrchestrationDetail | null>(baseOrchestration),
   },
@@ -114,7 +114,7 @@ describe("OrchestrationPage", () => {
   })
 
   it("renders empty state when no orchestration selected", () => {
-    renderScenario({ route: "/" })
+    renderScenario({ route: "/projects/p1/observe" })
     expect(screen.getByText(/select an orchestration from the sidebar/i)).toBeInTheDocument()
   })
 
@@ -161,16 +161,14 @@ describe("OrchestrationPage", () => {
     })
   })
 
-  it("shows not-found state when OrchestrationDetailQuery returns null", async () => {
-    await withSuppressedConsoleError(() => {
-      const { container } = renderScenario({
-        detailResults: {
-          o1: querySuccess<OrchestrationDetail | null>(null),
-        },
-      })
-
-      expect(container.textContent).toContain("orchestration not found")
+  it("clears invalid orchestration selection when detail query returns null", () => {
+    renderScenario({
+      detailResults: {
+        o1: querySuccess<OrchestrationDetail | null>(null),
+      },
     })
+
+    expect(screen.getByText(/select an orchestration from the sidebar/i)).toBeInTheDocument()
   })
 
   it("resets error boundary when selected orchestration changes", async () => {
@@ -192,7 +190,7 @@ describe("OrchestrationPage", () => {
         },
       })
 
-      expect(container.textContent).toContain("orchestration not found")
+      expect(container.textContent).toContain("Select an orchestration from the sidebar")
 
       await user.click(screen.getByRole("button", { name: "select o2" }))
       expectPanels("next-feature")
@@ -218,7 +216,7 @@ describe("OrchestrationPage", () => {
         <SelectionProbe />
       </>,
       {
-        route: "/?orch=o1",
+        route: "/projects/p1/observe?orch=o1",
         detailResults: {
           o1: querySuccess<OrchestrationDetail | null>(detail),
         },

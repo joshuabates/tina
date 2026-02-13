@@ -5,7 +5,7 @@ import { RuntimeProvider } from "@/providers/RuntimeProvider"
 import { useSelection } from "../useSelection"
 import type { ReactNode } from "react"
 
-function createWrapper(initialUrl = "/") {
+function createWrapper(initialUrl = "/projects/p1/observe") {
   return function wrapper({ children }: { children: ReactNode }) {
     return (
       <MemoryRouter initialEntries={[initialUrl]}>
@@ -27,7 +27,7 @@ describe("useSelection", () => {
 
   it("syncs from URL params on mount", () => {
     const { result } = renderHook(() => useSelection(), {
-      wrapper: createWrapper("/?orch=orch-123&phase=phase-456"),
+      wrapper: createWrapper("/projects/p1/observe?orch=orch-123&phase=phase-456"),
     })
 
     expect(result.current.orchestrationId).toBe("orch-123")
@@ -49,7 +49,7 @@ describe("useSelection", () => {
 
   it("selectPhase updates state and URL", () => {
     const { result } = renderHook(() => useSelection(), {
-      wrapper: createWrapper("/?orch=orch-123"),
+      wrapper: createWrapper("/projects/p1/observe?orch=orch-123"),
     })
 
     act(() => {
@@ -62,7 +62,7 @@ describe("useSelection", () => {
 
   it("selectOrchestration clears phaseId", () => {
     const { result } = renderHook(() => useSelection(), {
-      wrapper: createWrapper("/?orch=orch-123&phase=phase-456"),
+      wrapper: createWrapper("/projects/p1/observe?orch=orch-123&phase=phase-456"),
     })
 
     expect(result.current.phaseId).toBe("phase-456")
@@ -77,7 +77,7 @@ describe("useSelection", () => {
 
   it("selectOrchestration with null clears selection", () => {
     const { result } = renderHook(() => useSelection(), {
-      wrapper: createWrapper("/?orch=orch-123&phase=phase-456"),
+      wrapper: createWrapper("/projects/p1/observe?orch=orch-123&phase=phase-456"),
     })
 
     act(() => {
@@ -90,7 +90,7 @@ describe("useSelection", () => {
 
   it("selectPhase with null clears phase", () => {
     const { result } = renderHook(() => useSelection(), {
-      wrapper: createWrapper("/?orch=orch-123&phase=phase-456"),
+      wrapper: createWrapper("/projects/p1/observe?orch=orch-123&phase=phase-456"),
     })
 
     act(() => {

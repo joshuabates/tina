@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { screen, within } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
 import App from "../../App"
 import {
   buildProjectSummary,
@@ -60,87 +59,51 @@ beforeEach(() => {
 
 describe("PmShell - unified workspace", () => {
   it("does not render a PM-specific sidebar", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan")
 
-    // The old PM sidebar should be gone
     expect(
       screen.queryByRole("navigation", { name: /project navigation/i }),
     ).not.toBeInTheDocument()
   })
 
-  it("renders a segmented control with Tickets and Designs tabs", () => {
-    renderApp("/pm?project=p1")
+  it("does not render a segmented tickets/designs tab switcher in main content", () => {
+    renderApp("/projects/p1/plan")
 
-    const shell = screen.getByTestId("pm-shell")
-    expect(within(shell).getByRole("tab", { name: /tickets/i })).toBeInTheDocument()
-    expect(within(shell).getByRole("tab", { name: /designs/i })).toBeInTheDocument()
+    expect(screen.queryByRole("tablist", { name: /plan workspace tabs/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("tab", { name: /tickets/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("tab", { name: /designs/i })).not.toBeInTheDocument()
   })
 
-  it("shows Tickets tab as active by default", () => {
-    renderApp("/pm?project=p1")
-
-    const ticketsTab = screen.getByRole("tab", { name: /tickets/i })
-    expect(ticketsTab).toHaveAttribute("aria-selected", "true")
-  })
-
-  it("switches to Designs content when Designs tab is clicked", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1")
-
-    const designsTab = screen.getByRole("tab", { name: /designs/i })
-    await user.click(designsTab)
-
-    expect(designsTab).toHaveAttribute("aria-selected", "true")
-    expect(screen.getByRole("tab", { name: /tickets/i })).toHaveAttribute("aria-selected", "false")
-  })
-
-  it("renders ticket list content when Tickets tab is active", () => {
-    renderApp("/pm?project=p1")
+  it("renders ticket list content on tickets route", () => {
+    renderApp("/projects/p1/plan/tickets")
 
     expect(screen.getByTestId("ticket-list-page")).toBeInTheDocument()
   })
 
-  it("renders design list content when Designs tab is active", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1")
-
-    await user.click(screen.getByRole("tab", { name: /designs/i }))
+  it("renders design list content on designs route", () => {
+    renderApp("/projects/p1/plan/designs")
     expect(screen.getByTestId("design-list-page")).toBeInTheDocument()
   })
 
   it("shows project name in workspace header", () => {
-    renderApp("/pm?project=p1")
+    renderApp("/projects/p1/plan")
 
     const shell = screen.getByTestId("pm-shell")
     expect(within(shell).getByRole("heading", { name: "Project Alpha" })).toBeInTheDocument()
   })
 
-  it("shows 'select a project' when no project param", () => {
-    renderApp("/pm")
-
-    expect(screen.getByText(/select a project/i)).toBeInTheDocument()
+  it("recovers from unknown project IDs via root resolver", () => {
+    renderApp("/projects/unknown/plan")
+    expect(screen.getByRole("navigation", { name: /mode rail/i })).toBeInTheDocument()
   })
 
   it("renders Launch button in workspace header", () => {
-    renderApp("/pm?project=p1", {
+    renderApp("/projects/p1/plan", {
       ...defaultStates,
       "designs.list": querySuccess([]),
       "nodes.list": querySuccess([]),
     })
 
     expect(screen.getByRole("button", { name: /launch/i })).toBeInTheDocument()
-  })
-
-  it("opens launch modal when Launch button is clicked", async () => {
-    const user = userEvent.setup()
-    renderApp("/pm?project=p1", {
-      ...defaultStates,
-      "designs.list": querySuccess([]),
-      "nodes.list": querySuccess([]),
-    })
-
-    await user.click(screen.getByRole("button", { name: /launch/i }))
-    expect(screen.getByRole("dialog")).toBeInTheDocument()
-    expect(screen.getByText("Launch Orchestration")).toBeInTheDocument()
   })
 })

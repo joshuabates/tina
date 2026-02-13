@@ -1,257 +1,57 @@
 import { useMemo, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
 import { Option } from "effect"
 import { api } from "@convex/_generated/api"
 import type { Id } from "@convex/_generated/dataModel"
 import { DataErrorBoundary } from "./DataErrorBoundary"
-import { SidebarNav, type SidebarProject } from "./ui/sidebar-nav"
-import type { SidebarItemProps } from "./ui/sidebar-item"
+import { SidebarItem } from "./ui/sidebar-item"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { useSelection } from "@/hooks/useSelection"
 import { useIndexedAction } from "@/hooks/useIndexedAction"
 import { useRovingSection } from "@/hooks/useRovingSection"
-import { ProjectListQuery, OrchestrationListQuery } from "@/services/data/queryDefs"
-import {
-  toStatusBadgeStatus,
-  statusIconBgClass,
-} from "@/components/ui/status-styles"
+import { OrchestrationListQuery } from "@/services/data/queryDefs"
+import { toStatusBadgeStatus, statusIconBgClass } from "@/components/ui/status-styles"
 import { firstQueryError, isAnyQueryLoading } from "@/lib/query-state"
+import type { OrchestrationSummary } from "@/schemas"
 import styles from "./Sidebar.module.scss"
 
-function normalizeLookupKey(value: string): string {
-  return value.trim().replace(/\/+$/, "").toLowerCase()
+interface SidebarProps {
+  projectId: string
 }
 
-function basenameFromPath(path: string): string {
-  const normalized = path.replace(/\/+$/, "")
-  const segments = normalized.split("/")
-  return segments[segments.length - 1] ?? normalized
-}
-
-function branchSuffix(branch: string): string {
-  const segments = branch.split("/")
-  return segments[segments.length - 1] ?? branch
-}
-
-function SidebarContent() {
-  const projectsResult = useTypedQuery(ProjectListQuery, {})
+function SidebarContent({ projectId }: SidebarProps) {
   const orchestrationsResult = useTypedQuery(OrchestrationListQuery, {})
   const { orchestrationId, selectOrchestration } = useSelection()
-  const navigate = useNavigate()
-  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
   const [deletingOrchestrationId, setDeletingOrchestrationId] = useState<string | null>(null)
 
-  // Flat array of orchestrations for keyboard navigation
-  const orchestrations = useMemo(() => {
-    if (orchestrationsResult.status === "success") {
-      return [...orchestrationsResult.data] // Spread to make mutable copy
+  const projectOrchestrations = useMemo(() => {
+    if (orchestrationsResult.status !== "success") {
+      return []
     }
-    return []
-  }, [orchestrationsResult])
 
-  // Calculate total orchestrations for focus registration
-  const orchestrationCount = orchestrations.length
+    return orchestrationsResult.data.filter((orchestration: OrchestrationSummary) => {
+      return Option.getOrUndefined(orchestration.projectId) === projectId
+    })
+  }, [orchestrationsResult, projectId])
 
   const { activeIndex, getItemProps, activeDescendantId } = useRovingSection({
-    sectionId: "sidebar",
-    itemCount: orchestrationCount,
-    getItemDomId: (index) => `sidebar-item-${index}`,
+    sectionId: "observe-sidebar",
+    itemCount: projectOrchestrations.length,
+    getItemDomId: (index) => `observe-sidebar-item-${index}`,
   })
 
-  // Register Enter action for selecting orchestration
   useIndexedAction({
-    id: "sidebar.select",
+    id: "observe-sidebar.select",
     label: "Select Orchestration",
     key: "Enter",
     when: "sidebar.focused",
-    items: orchestrations,
+    items: projectOrchestrations,
     activeIndex,
     execute: (orchestration) => {
       selectOrchestration(orchestration._id)
     },
   })
 
-  // Group orchestrations by project with keyboard navigation data
-  const projects = useMemo<SidebarProject[]>(() => {
-    if (
-      projectsResult.status !== "success" ||
-      orchestrationsResult.status !== "success"
-    ) {
-      return []
-    }
-
-    const projectMap = new Map<string, SidebarProject>()
-    const projectLookup = new Map<string, SidebarProject>()
-    const ungroupedItems: SidebarItemProps[] = []
-
-    const registerProjectAlias = (alias: string | undefined, project: SidebarProject) => {
-      if (!alias) return
-      const normalized = normalizeLookupKey(alias)
-      if (!normalized) return
-      if (!projectLookup.has(normalized)) {
-        projectLookup.set(normalized, project)
-      }
-    }
-
-    const resolveProject = (
-      projectId: string,
-      worktreePath: string | undefined,
-      branch: string,
-    ): SidebarProject | undefined => {
-      const candidates = [
-        projectId,
-        basenameFromPath(projectId),
-        worktreePath,
-        worktreePath ? basenameFromPath(worktreePath) : undefined,
-        branch,
-        branchSuffix(branch),
-      ]
-
-      for (const candidate of candidates) {
-        if (!candidate) continue
-        const project = projectLookup.get(normalizeLookupKey(candidate))
-        if (project) return project
-      }
-      return undefined
-    }
-
-    // Initialize projects
-    for (const project of projectsResult.data) {
-      const sidebarProject: SidebarProject = {
-        id: project._id,
-        name: project.name,
-        active: false,
-        deleting: deletingProjectId === project._id,
-        onDelete: () => {
-          if (deletingProjectId !== null) return
-          const shouldClearSelection = sidebarProject.items.some((item) => item.active === true)
-          setDeletingProjectId(project._id)
-          void (async () => {
-            try {
-              const { convex } = await import("@/convex")
-              await convex.mutation(api.projects.deleteProject, {
-                projectId: project._id as Id<"projects">,
-              })
-              if (shouldClearSelection) {
-                selectOrchestration(null)
-              }
-            } catch (error) {
-              console.error("Failed to delete project", error)
-            } finally {
-              setDeletingProjectId((current) => (current === project._id ? null : current))
-            }
-          })()
-        },
-        items: [],
-      }
-      projectMap.set(project._id, sidebarProject)
-      registerProjectAlias(project._id, sidebarProject)
-      registerProjectAlias(project.name, sidebarProject)
-      registerProjectAlias(project.repoPath, sidebarProject)
-      registerProjectAlias(basenameFromPath(project.repoPath), sidebarProject)
-    }
-
-    // Group orchestrations (with index for keyboard navigation)
-    let globalIndex = 0
-    for (const orchestration of orchestrationsResult.data) {
-      const itemIndex = globalIndex++
-      const rovingProps = getItemProps(itemIndex, `sidebar-item-${itemIndex}`)
-
-      const item: SidebarItemProps = {
-        label: orchestration.featureName,
-        active: orchestration._id === orchestrationId,
-        statusIndicatorClass: statusIconBgClass(
-          toStatusBadgeStatus(orchestration.status),
-        ).replace("phase-glow", ""),
-        onClick: () => selectOrchestration(orchestration._id),
-        onDelete: () => {
-          if (deletingOrchestrationId !== null) return
-          const shouldClearSelection = orchestration._id === orchestrationId
-          setDeletingOrchestrationId(orchestration._id)
-
-          void (async () => {
-            try {
-              const { convex } = await import("@/convex")
-              let done = false
-              let attempts = 0
-              const maxAttempts = 25
-
-              while (!done && attempts < maxAttempts) {
-                attempts += 1
-                const result = await convex.mutation(api.orchestrations.deleteOrchestration, {
-                  orchestrationId: orchestration._id as Id<"orchestrations">,
-                })
-                done = result.done
-              }
-
-              if (!done) {
-                throw new Error("Deletion did not complete")
-              }
-
-              if (shouldClearSelection) {
-                selectOrchestration(null)
-              }
-            } catch (error) {
-              console.error("Failed to delete orchestration", error)
-            } finally {
-              setDeletingOrchestrationId((current) => (current === orchestration._id ? null : current))
-            }
-          })()
-        },
-        deleting: deletingOrchestrationId === orchestration._id,
-        "data-orchestration-id": orchestration._id,
-        ...rovingProps,
-        className: undefined,
-      }
-
-      if (Option.isSome(orchestration.projectId)) {
-        const projectId = orchestration.projectId.value
-        const project = resolveProject(
-          projectId,
-          Option.getOrUndefined(orchestration.worktreePath),
-          orchestration.branch,
-        )
-        if (project) {
-          project.items.push(item)
-        } else {
-          ungroupedItems.push(item)
-        }
-      } else {
-        ungroupedItems.push(item)
-      }
-    }
-
-    const result = Array.from(projectMap.values())
-
-    for (const project of result) {
-      project.active = project.items.some((item) => item.active === true)
-      project.onClick = () => navigate(`/pm?project=${project.id}`)
-    }
-
-    // Add ungrouped section if there are ungrouped orchestrations
-    if (ungroupedItems.length > 0) {
-      result.push({
-        id: "ungrouped",
-        name: "Ungrouped",
-        active: ungroupedItems.some((item) => item.active === true),
-        onClick: ungroupedItems[0]?.onClick,
-        items: ungroupedItems,
-      })
-    }
-
-    return result
-  }, [
-    deletingProjectId,
-    deletingOrchestrationId,
-    projectsResult,
-    orchestrationsResult,
-    orchestrationId,
-    selectOrchestration,
-    getItemProps,
-    navigate,
-  ])
-
-  if (isAnyQueryLoading(projectsResult, orchestrationsResult)) {
+  if (isAnyQueryLoading(orchestrationsResult)) {
     return (
       <div className={styles.sidebar}>
         <div className={styles.loading}>
@@ -264,31 +64,94 @@ function SidebarContent() {
     )
   }
 
-  const queryError = firstQueryError(projectsResult, orchestrationsResult)
+  const queryError = firstQueryError(orchestrationsResult)
   if (queryError) {
     throw queryError
   }
 
-  if (projects.length === 0 && orchestrationCount === 0) {
+  if (orchestrationsResult.status !== "success") {
+    return null
+  }
+
+  if (projectOrchestrations.length === 0) {
     return (
       <div className={styles.sidebar}>
-        <div className={styles.empty}>No orchestrations found</div>
+        <div className={styles.modeHeader}>Observe</div>
+        <div className={styles.empty}>No orchestrations for this project.</div>
       </div>
     )
   }
 
   return (
     <div className={styles.sidebar}>
-      <Link to="/pm" className={styles.pmLink}>Work Graph</Link>
-      <SidebarNav projects={projects} activeDescendantId={activeDescendantId} />
+      <div className={styles.modeHeader}>Observe</div>
+      <div className={styles.list} role="list" aria-activedescendant={activeDescendantId}>
+        {projectOrchestrations.map((orchestration: OrchestrationSummary, index) => {
+          const rovingProps = getItemProps(index, `observe-sidebar-item-${index}`)
+          const active = orchestration._id === orchestrationId
+
+          return (
+            <SidebarItem
+              key={orchestration._id}
+              label={orchestration.featureName}
+              active={active}
+              statusIndicatorClass={statusIconBgClass(
+                toStatusBadgeStatus(orchestration.status),
+              ).replace("phase-glow", "")}
+              onClick={() => selectOrchestration(orchestration._id)}
+              onDelete={() => {
+                if (deletingOrchestrationId !== null) return
+                const shouldClearSelection = orchestration._id === orchestrationId
+                setDeletingOrchestrationId(orchestration._id)
+
+                void (async () => {
+                  try {
+                    const { convex } = await import("@/convex")
+                    let done = false
+                    let attempts = 0
+                    const maxAttempts = 25
+
+                    while (!done && attempts < maxAttempts) {
+                      attempts += 1
+                      const result = await convex.mutation(api.orchestrations.deleteOrchestration, {
+                        orchestrationId: orchestration._id as Id<"orchestrations">,
+                      })
+                      done = result.done
+                    }
+
+                    if (!done) {
+                      throw new Error("Deletion did not complete")
+                    }
+
+                    if (shouldClearSelection) {
+                      selectOrchestration(null)
+                    }
+                  } catch (error) {
+                    console.error("Failed to delete orchestration", error)
+                  } finally {
+                    setDeletingOrchestrationId((current) =>
+                      current === orchestration._id ? null : current,
+                    )
+                  }
+                })()
+              }}
+              deleting={deletingOrchestrationId === orchestration._id}
+              data-orchestration-id={orchestration._id}
+              data-sidebar-action={index === 0 ? "true" : undefined}
+              {...rovingProps}
+              className={styles.orchestrationItem}
+            />
+          )
+        })}
+      </div>
     </div>
   )
 }
 
-export function Sidebar() {
+export function Sidebar({ projectId }: SidebarProps) {
   return (
-    <DataErrorBoundary panelName="sidebar">
-      <SidebarContent />
+    <DataErrorBoundary panelName="observe-sidebar">
+      <SidebarContent projectId={projectId} />
     </DataErrorBoundary>
   )
 }

@@ -152,23 +152,23 @@ describe("App - runtime-backed URL and selection flow", () => {
     (route) => {
       renderApp(route)
 
-      expect(screen.getByRole("banner")).toBeInTheDocument()
-      expect(screen.getByRole("navigation")).toBeInTheDocument()
+      expect(screen.getByRole("navigation", { name: /mode rail/i })).toBeInTheDocument()
+      expect(screen.getByRole("navigation", { name: /observe sidebar/i })).toBeInTheDocument()
       expect(screen.getByRole("main")).toBeInTheDocument()
       expect(screen.getByText(/select an orchestration/i)).toBeInTheDocument()
     },
   )
 
   it("shows orchestration page when URL contains orchestration selection", () => {
-    renderApp("/?orch=abc123")
+    renderApp("/projects/p1/observe?orch=abc123")
 
     expectFeaturePage("my-feature", "tina/my-feature")
     expectPhaseTimeline()
   })
 
   it("shows not found state for unknown orchestration ID", () => {
-    renderApp("/?orch=invalid-999")
-    expect(screen.getByText(/not found/i)).toBeInTheDocument()
+    renderApp("/projects/p1/observe?orch=invalid-999")
+    expect(screen.getByText(/select an orchestration/i)).toBeInTheDocument()
   })
 
   it("clicking sidebar item updates selected orchestration content", async () => {
@@ -185,7 +185,7 @@ describe("App - runtime-backed URL and selection flow", () => {
   })
 
   it("deep-link with orch and phase selects phase-specific task view", () => {
-    renderApp("/?orch=abc123&phase=phase2")
+    renderApp("/projects/p1/observe?orch=abc123&phase=phase2")
 
     expectFeaturePage("my-feature", "tina/my-feature")
     expect(screen.queryByText(/no phase selected/i)).not.toBeInTheDocument()
@@ -194,7 +194,7 @@ describe("App - runtime-backed URL and selection flow", () => {
 
   it("switching orchestrations auto-selects phase of new orchestration", async () => {
     const user = userEvent.setup()
-    renderApp("/?orch=abc123&phase=phase1")
+    renderApp("/projects/p1/observe?orch=abc123&phase=phase1")
 
     const otherItem = screen.getByText("my-other-feature")
     await user.click(otherItem)

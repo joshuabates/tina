@@ -61,7 +61,7 @@ function setQueryStates(overrides: Partial<QueryStateMap> = {}) {
   installQueryStates(mockUseTypedQuery, defaultQueryStates, overrides)
 }
 
-function renderSidebar(ui: ReactNode = <Sidebar />) {
+function renderSidebar(ui: ReactNode = <Sidebar projectId="p1" />) {
   return renderWithRuntime(ui)
 }
 
@@ -75,11 +75,11 @@ function SidebarHarness({
 
   return (
     <>
-      <Sidebar />
+      <Sidebar projectId="p1" />
       <button onClick={() => services.focusService.moveItem(1)} data-testid="move-next" />
       <button
         onClick={() => {
-          services.actionRegistry.get("sidebar.select")?.execute({})
+          services.actionRegistry.get("observe-sidebar.select")?.execute({})
         }}
         data-testid="execute-select-action"
       />
@@ -107,8 +107,8 @@ describe("Sidebar Keyboard Navigation", () => {
     assertRovingFocus({
       container,
       listRole: "list",
-      itemIds: ["sidebar-item-0", "sidebar-item-1"],
-      activeId: "sidebar-item-0",
+      itemIds: ["observe-sidebar-item-0", "observe-sidebar-item-1"],
+      activeId: "observe-sidebar-item-0",
       focusedAttr: "data-focused",
     })
   })
@@ -117,7 +117,7 @@ describe("Sidebar Keyboard Navigation", () => {
     const { container, getByTestId } = renderSidebar(<SidebarHarness />)
 
     const list = container.querySelector('[role="list"]')
-    expect(list).toHaveAttribute("aria-activedescendant", "sidebar-item-0")
+    expect(list).toHaveAttribute("aria-activedescendant", "observe-sidebar-item-0")
 
     act(() => {
       getByTestId("move-next").click()
@@ -125,7 +125,7 @@ describe("Sidebar Keyboard Navigation", () => {
 
     expect(container.querySelector('[role="list"]')).toHaveAttribute(
       "aria-activedescendant",
-      "sidebar-item-1",
+      "observe-sidebar-item-1",
     )
   })
 
@@ -136,7 +136,7 @@ describe("Sidebar Keyboard Navigation", () => {
     }} />)
 
     await waitFor(() => {
-      const action = registry?.get("sidebar.select")
+      const action = registry?.get("observe-sidebar.select")
       expect(action).toBeDefined()
       expect(action?.label).toBe("Select Orchestration")
       expect(action?.key).toBe("Enter")

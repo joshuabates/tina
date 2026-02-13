@@ -87,7 +87,7 @@ beforeEach(() => {
 
 describe("TicketDetailPage", () => {
   it("renders loading state when ticket query is loading", () => {
-    renderApp("/pm/tickets/t1?project=p1", {
+    renderApp("/projects/p1/plan/tickets/t1", {
       ...defaultStates,
       "tickets.get": queryLoading(),
     })
@@ -96,7 +96,7 @@ describe("TicketDetailPage", () => {
   })
 
   it("renders not found when ticket is null", () => {
-    renderApp("/pm/tickets/t1?project=p1", {
+    renderApp("/projects/p1/plan/tickets/t1", {
       ...defaultStates,
       "tickets.get": querySuccess(null),
     })
@@ -105,33 +105,33 @@ describe("TicketDetailPage", () => {
   })
 
   it("renders ticket key and title in header", () => {
-    renderApp("/pm/tickets/t1?project=p1")
+    renderApp("/projects/p1/plan/tickets/t1")
 
     expect(screen.getByText("ALPHA-T1")).toBeInTheDocument()
     expect(screen.getByText("Implement login")).toBeInTheDocument()
   })
 
   it("renders status badge", () => {
-    renderApp("/pm/tickets/t1?project=p1")
+    renderApp("/projects/p1/plan/tickets/t1")
 
     expect(screen.getByText("Todo")).toBeInTheDocument()
   })
 
   it("renders priority badge", () => {
-    renderApp("/pm/tickets/t1?project=p1")
+    renderApp("/projects/p1/plan/tickets/t1")
 
     const allHigh = screen.getAllByText("High")
     expect(allHigh.length).toBeGreaterThanOrEqual(1)
   })
 
   it("renders ticket description", () => {
-    renderApp("/pm/tickets/t1?project=p1")
+    renderApp("/projects/p1/plan/tickets/t1")
 
     expect(screen.getByText("Add a login form with email and password fields")).toBeInTheDocument()
   })
 
   it("renders ticket description as markdown with headings", () => {
-    renderApp("/pm/tickets/t1?project=p1", {
+    renderApp("/projects/p1/plan/tickets/t1", {
       ...defaultStates,
       "tickets.get": querySuccess(buildTicket({
         description: "## Login details\n\nUse **email** and *password*.",
@@ -144,14 +144,14 @@ describe("TicketDetailPage", () => {
   })
 
   it("renders metadata fields for priority", () => {
-    renderApp("/pm/tickets/t1?project=p1")
+    renderApp("/projects/p1/plan/tickets/t1")
 
     const priorityLabel = screen.getByText("Priority")
     expect(priorityLabel).toBeInTheDocument()
   })
 
   it("renders estimate when present", () => {
-    renderApp("/pm/tickets/t1?project=p1", {
+    renderApp("/projects/p1/plan/tickets/t1", {
       ...defaultStates,
       "tickets.get": querySuccess(buildTicket({ estimate: some("2h") })),
     })
@@ -160,24 +160,24 @@ describe("TicketDetailPage", () => {
   })
 
   it("renders design link when ticket has designId", () => {
-    renderApp("/pm/tickets/t1?project=p1", {
+    renderApp("/projects/p1/plan/tickets/t1", {
       ...defaultStates,
       "tickets.get": querySuccess(buildTicket({ designId: some("d1") })),
     })
 
     const link = screen.getByRole("link", { name: /ALPHA-D1/i })
     expect(link).toBeInTheDocument()
-    expect(link).toHaveAttribute("href", expect.stringContaining("/pm/designs/d1"))
+    expect(link).toHaveAttribute("href", expect.stringContaining("/projects/p1/plan/designs/d1"))
   })
 
   it("renders comment timeline", () => {
-    renderApp("/pm/tickets/t1?project=p1")
+    renderApp("/projects/p1/plan/tickets/t1")
 
     expect(screen.getByTestId("comment-timeline")).toBeInTheDocument()
   })
 
   it("falls back to ticket project when project query param is empty", () => {
-    renderApp("/pm/tickets/t1?project=")
+    renderApp("/projects/p1/plan/tickets/t1")
 
     expect(screen.getByTestId("ticket-detail-page")).toBeInTheDocument()
 
@@ -191,7 +191,7 @@ describe("TicketDetailPage", () => {
 
   describe("status transitions", () => {
     it("shows Start and Block and Cancel buttons for todo status", () => {
-      renderApp("/pm/tickets/t1?project=p1", {
+      renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
         "tickets.get": querySuccess(buildTicket({ status: "todo" })),
       })
@@ -202,7 +202,7 @@ describe("TicketDetailPage", () => {
     })
 
     it("shows Submit for Review and Block and Cancel for in_progress", () => {
-      renderApp("/pm/tickets/t1?project=p1", {
+      renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
         "tickets.get": querySuccess(buildTicket({ status: "in_progress" })),
       })
@@ -213,7 +213,7 @@ describe("TicketDetailPage", () => {
     })
 
     it("shows Done and Rework for in_review", () => {
-      renderApp("/pm/tickets/t1?project=p1", {
+      renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
         "tickets.get": querySuccess(buildTicket({ status: "in_review" })),
       })
@@ -223,7 +223,7 @@ describe("TicketDetailPage", () => {
     })
 
     it("shows Unblock options and Cancel for blocked", () => {
-      renderApp("/pm/tickets/t1?project=p1", {
+      renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
         "tickets.get": querySuccess(buildTicket({ status: "blocked" })),
       })
@@ -234,7 +234,7 @@ describe("TicketDetailPage", () => {
     })
 
     it("shows Reopen for done", () => {
-      renderApp("/pm/tickets/t1?project=p1", {
+      renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
         "tickets.get": querySuccess(buildTicket({ status: "done" })),
       })
@@ -243,7 +243,7 @@ describe("TicketDetailPage", () => {
     })
 
     it("shows Reopen for canceled", () => {
-      renderApp("/pm/tickets/t1?project=p1", {
+      renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
         "tickets.get": querySuccess(buildTicket({ status: "canceled" })),
       })
@@ -253,7 +253,7 @@ describe("TicketDetailPage", () => {
 
     it("calls transitionTicket mutation on transition button click", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/tickets/t1?project=p1", {
+      renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
         "tickets.get": querySuccess(buildTicket({ status: "todo" })),
       })
@@ -269,14 +269,14 @@ describe("TicketDetailPage", () => {
 
   describe("edit mode", () => {
     it("shows edit button", () => {
-      renderApp("/pm/tickets/t1?project=p1")
+      renderApp("/projects/p1/plan/tickets/t1")
 
       expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument()
     })
 
     it("shows edit form when edit button is clicked", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/tickets/t1?project=p1")
+      renderApp("/projects/p1/plan/tickets/t1")
 
       await user.click(screen.getByRole("button", { name: /^edit$/i }))
 
@@ -285,20 +285,21 @@ describe("TicketDetailPage", () => {
 
     it("edit form has title, description, priority, estimate, design fields", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/tickets/t1?project=p1")
+      renderApp("/projects/p1/plan/tickets/t1")
 
       await user.click(screen.getByRole("button", { name: /^edit$/i }))
 
+      const form = screen.getByTestId("ticket-edit-form")
       expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/description/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/priority/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/estimate/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/design/i)).toBeInTheDocument()
+      expect(within(form).getByLabelText(/design/i)).toBeInTheDocument()
     })
 
     it("edit form pre-fills current ticket values", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/tickets/t1?project=p1", {
+      renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
         "tickets.get": querySuccess(
           buildTicket({ estimate: some("2h") }),
@@ -317,7 +318,7 @@ describe("TicketDetailPage", () => {
 
     it("cancel button exits edit mode", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/tickets/t1?project=p1")
+      renderApp("/projects/p1/plan/tickets/t1")
 
       await user.click(screen.getByRole("button", { name: /^edit$/i }))
       const form = screen.getByTestId("ticket-edit-form")
@@ -330,7 +331,7 @@ describe("TicketDetailPage", () => {
 
     it("save calls updateTicket mutation", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/tickets/t1?project=p1")
+      renderApp("/projects/p1/plan/tickets/t1")
 
       await user.click(screen.getByRole("button", { name: /^edit$/i }))
 
@@ -350,14 +351,15 @@ describe("TicketDetailPage", () => {
 
     it("save sends clearDesignId when linked design is changed to None", async () => {
       const user = userEvent.setup()
-      renderApp("/pm/tickets/t1?project=p1", {
+      renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
         "tickets.get": querySuccess(buildTicket({ designId: some("d1") })),
       })
 
       await user.click(screen.getByRole("button", { name: /^edit$/i }))
 
-      const designSelect = screen.getByLabelText(/design/i)
+      const form = screen.getByTestId("ticket-edit-form")
+      const designSelect = within(form).getByLabelText(/design/i)
       await user.selectOptions(designSelect, "")
       await user.click(screen.getByRole("button", { name: /^save$/i }))
 
