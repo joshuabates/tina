@@ -16,6 +16,8 @@ import type * as controlPlaneDashboard from "../controlPlaneDashboard.js";
 import type * as cron from "../cron.js";
 import type * as crons from "../crons.js";
 import type * as deleteHelpers from "../deleteHelpers.js";
+import type * as designPresets from "../designPresets.js";
+import type * as designValidation from "../designValidation.js";
 import type * as designs from "../designs.js";
 import type * as events from "../events.js";
 import type * as executionTasks from "../executionTasks.js";
@@ -54,6 +56,8 @@ declare const fullApi: ApiFromModules<{
   cron: typeof cron;
   crons: typeof crons;
   deleteHelpers: typeof deleteHelpers;
+  designPresets: typeof designPresets;
+  designValidation: typeof designValidation;
   designs: typeof designs;
   events: typeof events;
   executionTasks: typeof executionTasks;
