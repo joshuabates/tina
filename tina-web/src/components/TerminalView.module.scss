@@ -88,11 +88,11 @@
 }
 
 .statusDotConnected {
-  background: hsl(142 76% 36%);
+  background: hsl(var(--status-complete));
 }
 
 .statusDotConnecting {
-  background: hsl(48 96% 53%);
+  background: hsl(var(--status-warning));
 }
 
 .statusDotDisconnected {
