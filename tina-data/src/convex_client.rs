@@ -1557,6 +1557,169 @@ impl TinaConvexClient {
         extract_comment_list(result)
     }
 
+    // --- Review methods ---
+
+    /// Create a review record.
+    pub async fn create_review(
+        &mut self,
+        orchestration_id: &str,
+        phase_number: Option<&str>,
+        reviewer_agent: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        if let Some(pn) = phase_number {
+            args.insert("phaseNumber".into(), Value::from(pn));
+        }
+        args.insert("reviewerAgent".into(), Value::from(reviewer_agent));
+        let result = self
+            .client
+            .mutation("reviews:createReview", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Complete a review.
+    pub async fn complete_review(
+        &mut self,
+        review_id: &str,
+        state: &str,
+    ) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("reviewId".into(), Value::from(review_id));
+        args.insert("state".into(), Value::from(state));
+        let result = self
+            .client
+            .mutation("reviews:completeReview", args)
+            .await?;
+        extract_unit(result)
+    }
+
+    /// Create a review thread (finding).
+    pub async fn create_review_thread(
+        &mut self,
+        review_id: &str,
+        orchestration_id: &str,
+        file_path: &str,
+        line: i64,
+        commit_sha: &str,
+        summary: &str,
+        body: &str,
+        severity: &str,
+        source: &str,
+        author: &str,
+        gate_impact: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("reviewId".into(), Value::from(review_id));
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        args.insert("filePath".into(), Value::from(file_path));
+        args.insert("line".into(), Value::from(line));
+        args.insert("commitSha".into(), Value::from(commit_sha));
+        args.insert("summary".into(), Value::from(summary));
+        args.insert("body".into(), Value::from(body));
+        args.insert("severity".into(), Value::from(severity));
+        args.insert("source".into(), Value::from(source));
+        args.insert("author".into(), Value::from(author));
+        args.insert("gateImpact".into(), Value::from(gate_impact));
+        let result = self
+            .client
+            .mutation("reviewThreads:createThread", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Resolve a review thread.
+    pub async fn resolve_review_thread(
+        &mut self,
+        thread_id: &str,
+        resolved_by: &str,
+    ) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("threadId".into(), Value::from(thread_id));
+        args.insert("resolvedBy".into(), Value::from(resolved_by));
+        let result = self
+            .client
+            .mutation("reviewThreads:resolveThread", args)
+            .await?;
+        extract_unit(result)
+    }
+
+    /// Start a review check.
+    pub async fn start_review_check(
+        &mut self,
+        review_id: &str,
+        orchestration_id: &str,
+        name: &str,
+        kind: &str,
+        command: Option<&str>,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("reviewId".into(), Value::from(review_id));
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        args.insert("name".into(), Value::from(name));
+        args.insert("kind".into(), Value::from(kind));
+        if let Some(cmd) = command {
+            args.insert("command".into(), Value::from(cmd));
+        }
+        let result = self
+            .client
+            .mutation("reviewChecks:startCheck", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Complete a review check.
+    pub async fn complete_review_check(
+        &mut self,
+        review_id: &str,
+        name: &str,
+        status: &str,
+        comment: Option<&str>,
+        output: Option<&str>,
+    ) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("reviewId".into(), Value::from(review_id));
+        args.insert("name".into(), Value::from(name));
+        args.insert("status".into(), Value::from(status));
+        if let Some(c) = comment {
+            args.insert("comment".into(), Value::from(c));
+        }
+        if let Some(o) = output {
+            args.insert("output".into(), Value::from(o));
+        }
+        let result = self
+            .client
+            .mutation("reviewChecks:completeCheck", args)
+            .await?;
+        extract_unit(result)
+    }
+
+    /// Upsert a review gate.
+    pub async fn upsert_review_gate(
+        &mut self,
+        orchestration_id: &str,
+        gate_id: &str,
+        status: &str,
+        owner: &str,
+        decided_by: Option<&str>,
+        summary: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        args.insert("gateId".into(), Value::from(gate_id));
+        args.insert("status".into(), Value::from(status));
+        args.insert("owner".into(), Value::from(owner));
+        if let Some(db) = decided_by {
+            args.insert("decidedBy".into(), Value::from(db));
+        }
+        args.insert("summary".into(), Value::from(summary));
+        let result = self
+            .client
+            .mutation("reviewGates:upsertGate", args)
+            .await?;
+        extract_id(result)
+    }
 }
 
 #[cfg(test)]
