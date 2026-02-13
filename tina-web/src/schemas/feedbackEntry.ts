@@ -21,6 +21,11 @@ export type FeedbackEntry = typeof FeedbackEntry.Type
 
 export const BlockingFeedbackSummary = Schema.Struct({
   openAskForChangeCount: Schema.Number,
+  totalBlocking: Schema.optional(Schema.Number),
+  byTargetType: Schema.optional(Schema.Struct({
+    task: Schema.Number,
+    commit: Schema.Number,
+  })),
   entries: Schema.Array(FeedbackEntry),
 })
 
