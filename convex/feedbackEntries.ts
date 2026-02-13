@@ -89,8 +89,30 @@ export const resolveFeedbackEntry = mutation({
     resolvedBy: v.string(),
     expectedUpdatedAt: v.optional(v.string()),
   },
-  handler: async () => {
-    throw new Error("Not implemented yet");
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.entryId);
+    if (!entry) {
+      throw new Error(`Feedback entry not found: ${args.entryId}`);
+    }
+    if (entry.status === "resolved") {
+      throw new Error("Feedback entry is already resolved");
+    }
+    if (
+      args.expectedUpdatedAt !== undefined &&
+      entry.updatedAt !== args.expectedUpdatedAt
+    ) {
+      throw new Error(
+        `Stale update: expected updatedAt ${args.expectedUpdatedAt}, got ${entry.updatedAt}`,
+      );
+    }
+
+    const now = new Date().toISOString();
+    await ctx.db.patch(args.entryId, {
+      status: "resolved",
+      resolvedBy: args.resolvedBy,
+      resolvedAt: now,
+      updatedAt: now,
+    });
   },
 });
 
@@ -99,8 +121,30 @@ export const reopenFeedbackEntry = mutation({
     entryId: v.id("feedbackEntries"),
     expectedUpdatedAt: v.optional(v.string()),
   },
-  handler: async () => {
-    throw new Error("Not implemented yet");
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.entryId);
+    if (!entry) {
+      throw new Error(`Feedback entry not found: ${args.entryId}`);
+    }
+    if (entry.status === "open") {
+      throw new Error("Feedback entry is already open");
+    }
+    if (
+      args.expectedUpdatedAt !== undefined &&
+      entry.updatedAt !== args.expectedUpdatedAt
+    ) {
+      throw new Error(
+        `Stale update: expected updatedAt ${args.expectedUpdatedAt}, got ${entry.updatedAt}`,
+      );
+    }
+
+    const now = new Date().toISOString();
+    await ctx.db.patch(args.entryId, {
+      status: "open",
+      resolvedBy: undefined,
+      resolvedAt: undefined,
+      updatedAt: now,
+    });
   },
 });
 
