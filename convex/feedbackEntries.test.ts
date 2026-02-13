@@ -2,7 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
-import { createFeatureFixture } from "./test_helpers";
+import { createFeedbackEntry, createFeatureFixture } from "./test_helpers";
 
 const modules = import.meta.glob("./**/*.*s");
 
@@ -258,18 +258,14 @@ describe("feedbackEntries", () => {
       );
       await seedTaskEvent(t, orchestrationId, "1");
 
-      const entryId = await t.mutation(
-        api.feedbackEntries.createFeedbackEntry,
-        {
-          orchestrationId: orchestrationId as any,
-          targetType: "task",
-          targetTaskId: "1",
-          entryType: "ask_for_change",
-          body: "Fix this",
-          authorType: "human",
-          authorName: "alice",
-        },
-      );
+      const entryId = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        entryType: "ask_for_change",
+        body: "Fix this",
+        authorName: "alice",
+      });
 
       await t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
         entryId: entryId as any,
@@ -293,18 +289,13 @@ describe("feedbackEntries", () => {
       );
       await seedTaskEvent(t, orchestrationId, "1");
 
-      const entryId = await t.mutation(
-        api.feedbackEntries.createFeedbackEntry,
-        {
-          orchestrationId: orchestrationId as any,
-          targetType: "task",
-          targetTaskId: "1",
-          entryType: "comment",
-          body: "Double resolve test",
-          authorType: "human",
-          authorName: "alice",
-        },
-      );
+      const entryId = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Double resolve test",
+        authorName: "alice",
+      });
 
       await t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
         entryId: entryId as any,
@@ -327,18 +318,13 @@ describe("feedbackEntries", () => {
       );
       await seedTaskEvent(t, orchestrationId, "1");
 
-      const entryId = await t.mutation(
-        api.feedbackEntries.createFeedbackEntry,
-        {
-          orchestrationId: orchestrationId as any,
-          targetType: "task",
-          targetTaskId: "1",
-          entryType: "comment",
-          body: "Stale test",
-          authorType: "human",
-          authorName: "alice",
-        },
-      );
+      const entryId = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Stale test",
+        authorName: "alice",
+      });
 
       await expect(
         t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
@@ -359,18 +345,14 @@ describe("feedbackEntries", () => {
       );
       await seedTaskEvent(t, orchestrationId, "1");
 
-      const entryId = await t.mutation(
-        api.feedbackEntries.createFeedbackEntry,
-        {
-          orchestrationId: orchestrationId as any,
-          targetType: "task",
-          targetTaskId: "1",
-          entryType: "ask_for_change",
-          body: "Reopen test",
-          authorType: "human",
-          authorName: "alice",
-        },
-      );
+      const entryId = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        entryType: "ask_for_change",
+        body: "Reopen test",
+        authorName: "alice",
+      });
 
       await t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
         entryId: entryId as any,
@@ -398,18 +380,13 @@ describe("feedbackEntries", () => {
       );
       await seedTaskEvent(t, orchestrationId, "1");
 
-      const entryId = await t.mutation(
-        api.feedbackEntries.createFeedbackEntry,
-        {
-          orchestrationId: orchestrationId as any,
-          targetType: "task",
-          targetTaskId: "1",
-          entryType: "comment",
-          body: "Double reopen test",
-          authorType: "human",
-          authorName: "alice",
-        },
-      );
+      const entryId = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Double reopen test",
+        authorName: "alice",
+      });
 
       await expect(
         t.mutation(api.feedbackEntries.reopenFeedbackEntry, {
@@ -426,18 +403,13 @@ describe("feedbackEntries", () => {
       );
       await seedTaskEvent(t, orchestrationId, "1");
 
-      const entryId = await t.mutation(
-        api.feedbackEntries.createFeedbackEntry,
-        {
-          orchestrationId: orchestrationId as any,
-          targetType: "task",
-          targetTaskId: "1",
-          entryType: "comment",
-          body: "Stale reopen test",
-          authorType: "human",
-          authorName: "alice",
-        },
-      );
+      const entryId = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Stale reopen test",
+        authorName: "alice",
+      });
 
       await t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
         entryId: entryId as any,
@@ -460,18 +432,16 @@ describe("feedbackEntries", () => {
       await seedTaskEvent(t, orchestrationId, "1");
       await seedCommit(t, orchestrationId, "list_sha_1");
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
-        entryType: "comment",
         body: "First",
-        authorType: "human",
         authorName: "alice",
       });
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "commit",
         targetCommitSha: "list_sha_1",
         entryType: "suggestion",
@@ -494,26 +464,19 @@ describe("feedbackEntries", () => {
       const { orchestrationId } = await createFeatureFixture(t, "fb-list-2");
       await seedTaskEvent(t, orchestrationId, "1");
 
-      const entryId = await t.mutation(
-        api.feedbackEntries.createFeedbackEntry,
-        {
-          orchestrationId: orchestrationId as any,
-          targetType: "task",
-          targetTaskId: "1",
-          entryType: "comment",
-          body: "Will resolve",
-          authorType: "human",
-          authorName: "alice",
-        },
-      );
-
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      const entryId = await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
-        entryType: "comment",
+        body: "Will resolve",
+        authorName: "alice",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
         body: "Stays open",
-        authorType: "human",
         authorName: "bob",
       });
 
@@ -543,23 +506,19 @@ describe("feedbackEntries", () => {
       await seedTaskEvent(t, orchestrationId, "1");
       await seedCommit(t, orchestrationId, "filter_sha_1");
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
-        entryType: "comment",
         body: "Task entry",
-        authorType: "human",
         authorName: "alice",
       });
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "commit",
         targetCommitSha: "filter_sha_1",
-        entryType: "comment",
         body: "Commit entry",
-        authorType: "human",
         authorName: "alice",
       });
 
@@ -576,23 +535,20 @@ describe("feedbackEntries", () => {
       const { orchestrationId } = await createFeatureFixture(t, "fb-list-4");
       await seedTaskEvent(t, orchestrationId, "1");
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
-        entryType: "comment",
         body: "A comment",
-        authorType: "human",
         authorName: "alice",
       });
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
         entryType: "ask_for_change",
         body: "A change request",
-        authorType: "human",
         authorName: "alice",
       });
 
@@ -612,21 +568,18 @@ describe("feedbackEntries", () => {
       const { orchestrationId } = await createFeatureFixture(t, "fb-list-5");
       await seedTaskEvent(t, orchestrationId, "1");
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
-        entryType: "comment",
         body: "Human says",
-        authorType: "human",
         authorName: "alice",
       });
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
-        entryType: "comment",
         body: "Agent says",
         authorType: "agent",
         authorName: "claude",
@@ -651,23 +604,19 @@ describe("feedbackEntries", () => {
       await seedTaskEvent(t, orchestrationId, "1");
       await seedTaskEvent(t, orchestrationId, "2");
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
-        entryType: "comment",
         body: "For task 1",
-        authorType: "human",
         authorName: "alice",
       });
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "2",
-        entryType: "comment",
         body: "For task 2",
-        authorType: "human",
         authorName: "alice",
       });
 
@@ -692,23 +641,21 @@ describe("feedbackEntries", () => {
       await seedCommit(t, orchestrationId, "target_sha_a");
       await seedCommit(t, orchestrationId, "target_sha_b");
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "commit",
         targetCommitSha: "target_sha_a",
         entryType: "suggestion",
         body: "For commit a",
-        authorType: "human",
         authorName: "alice",
       });
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "commit",
         targetCommitSha: "target_sha_b",
         entryType: "suggestion",
         body: "For commit b",
-        authorType: "human",
         authorName: "alice",
       });
 
@@ -734,33 +681,29 @@ describe("feedbackEntries", () => {
       );
       await seedTaskEvent(t, orchestrationId, "1");
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
         entryType: "ask_for_change",
         body: "Blocking 1",
-        authorType: "human",
         authorName: "alice",
       });
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
         entryType: "ask_for_change",
         body: "Blocking 2",
-        authorType: "human",
         authorName: "bob",
       });
 
-      await t.mutation(api.feedbackEntries.createFeedbackEntry, {
-        orchestrationId: orchestrationId as any,
+      await createFeedbackEntry(t, {
+        orchestrationId,
         targetType: "task",
         targetTaskId: "1",
-        entryType: "comment",
         body: "Not blocking",
-        authorType: "human",
         authorName: "alice",
       });
 
@@ -780,18 +723,14 @@ describe("feedbackEntries", () => {
       );
       await seedTaskEvent(t, orchestrationId, "1");
 
-      const entryId = await t.mutation(
-        api.feedbackEntries.createFeedbackEntry,
-        {
-          orchestrationId: orchestrationId as any,
-          targetType: "task",
-          targetTaskId: "1",
-          entryType: "ask_for_change",
-          body: "Will resolve",
-          authorType: "human",
-          authorName: "alice",
-        },
-      );
+      const entryId = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        entryType: "ask_for_change",
+        body: "Will resolve",
+        authorName: "alice",
+      });
 
       await t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
         entryId: entryId as any,
