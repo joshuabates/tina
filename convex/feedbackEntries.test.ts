@@ -828,6 +828,9 @@ describe("feedbackEntries", () => {
         { orchestrationId: orchestrationId as any },
       );
       expect(summary.openAskForChangeCount).toBe(2);
+      expect(summary.totalBlocking).toBe(2);
+      expect(summary.byTargetType.task).toBe(2);
+      expect(summary.byTargetType.commit).toBe(0);
       expect(summary.entries).toHaveLength(2);
     });
 
@@ -858,6 +861,9 @@ describe("feedbackEntries", () => {
         { orchestrationId: orchestrationId as any },
       );
       expect(summary.openAskForChangeCount).toBe(0);
+      expect(summary.totalBlocking).toBe(0);
+      expect(summary.byTargetType.task).toBe(0);
+      expect(summary.byTargetType.commit).toBe(0);
       expect(summary.entries).toHaveLength(0);
     });
 
@@ -935,6 +941,9 @@ describe("feedbackEntries", () => {
         { orchestrationId: orchestrationId as any },
       );
       expect(summary.openAskForChangeCount).toBe(0);
+      expect(summary.totalBlocking).toBe(0);
+      expect(summary.byTargetType.task).toBe(0);
+      expect(summary.byTargetType.commit).toBe(0);
       expect(summary.entries).toHaveLength(0);
     });
   });
