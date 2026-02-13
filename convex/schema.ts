@@ -324,4 +324,52 @@ export default defineSchema({
     description: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  feedbackEntries: defineTable({
+    orchestrationId: v.id("orchestrations"),
+    targetType: v.union(v.literal("task"), v.literal("commit")),
+    targetTaskId: v.optional(v.string()),
+    targetCommitSha: v.optional(v.string()),
+    entryType: v.union(
+      v.literal("comment"),
+      v.literal("suggestion"),
+      v.literal("ask_for_change"),
+    ),
+    body: v.string(),
+    authorType: v.union(v.literal("human"), v.literal("agent")),
+    authorName: v.string(),
+    status: v.union(v.literal("open"), v.literal("resolved")),
+    resolvedBy: v.optional(v.string()),
+    resolvedAt: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_orchestration_created", ["orchestrationId", "createdAt"])
+    .index("by_orchestration_status_created", [
+      "orchestrationId",
+      "status",
+      "createdAt",
+    ])
+    .index("by_orchestration_target_created", [
+      "orchestrationId",
+      "targetType",
+      "createdAt",
+    ])
+    .index("by_orchestration_type_status", [
+      "orchestrationId",
+      "entryType",
+      "status",
+    ])
+    .index("by_target_status_created", [
+      "targetType",
+      "targetTaskId",
+      "status",
+      "createdAt",
+    ])
+    .index("by_target_commit_status_created", [
+      "targetType",
+      "targetCommitSha",
+      "status",
+      "createdAt",
+    ]),
 });
