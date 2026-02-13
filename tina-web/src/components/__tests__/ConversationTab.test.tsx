@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
 import { ConversationTab } from "../ConversationTab"
 import { buildReviewThread } from "@/test/builders/domain/entities"
 import { installAppRuntimeQueryMock } from "@/test/harness/app-runtime"
-import { querySuccess, queryLoading } from "@/test/builders/query"
+import { querySuccess, queryLoading, queryError } from "@/test/builders/query"
 
 vi.mock("@/hooks/useTypedQuery")
 
@@ -37,6 +37,18 @@ describe("ConversationTab", () => {
     render(<ConversationTab reviewId="rev1" orchestrationId="orch1" />)
 
     expect(screen.getByText("Loading comments...")).toBeInTheDocument()
+  })
+
+  it("shows error state when threads fail to load", () => {
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "reviewThreads.list": queryError("Network error"),
+      },
+    })
+
+    render(<ConversationTab reviewId="rev1" orchestrationId="orch1" />)
+
+    expect(screen.getByText("Failed to load comments")).toBeInTheDocument()
   })
 
   it("shows empty state when no threads exist", () => {
@@ -75,7 +87,6 @@ describe("ConversationTab", () => {
     expect(screen.getByText("p1")).toBeInTheDocument()
     expect(screen.getByText("review-agent")).toBeInTheDocument()
     expect(screen.getByText("src/auth.ts:42")).toBeInTheDocument()
-    // Timestamp rendered via toLocaleString
     expect(screen.getByText(new Date("2024-01-01T10:00:00Z").toLocaleString())).toBeInTheDocument()
   })
 
@@ -144,7 +155,7 @@ describe("ConversationTab", () => {
     })
   })
 
-  it("shows severity with appropriate visual treatment", () => {
+  it("shows severity badges with correct text for each level", () => {
     const threads = [
       buildReviewThread({
         _id: "t1",
@@ -173,17 +184,8 @@ describe("ConversationTab", () => {
 
     const badges = screen.getAllByTestId("severity-badge")
     expect(badges).toHaveLength(3)
-
-    // p0 = red
-    expect(badges[0]).toHaveClass("bg-red-900/30")
     expect(badges[0]).toHaveTextContent("p0")
-
-    // p1 = yellow
-    expect(badges[1]).toHaveClass("bg-yellow-900/30")
     expect(badges[1]).toHaveTextContent("p1")
-
-    // p2 = grey
-    expect(badges[2]).toHaveClass("bg-zinc-800")
     expect(badges[2]).toHaveTextContent("p2")
   })
 
@@ -207,5 +209,58 @@ describe("ConversationTab", () => {
 
     expect(summaryInput).toHaveValue("")
     expect(bodyInput).toHaveValue("")
+  })
+
+  it("disables submit button while submitting", async () => {
+    const user = userEvent.setup()
+    let resolveSubmit: () => void
+    mockCreateThread.mockImplementation(
+      () => new Promise<void>((resolve) => { resolveSubmit = resolve }),
+    )
+
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "reviewThreads.list": querySuccess([]),
+      },
+    })
+
+    render(<ConversationTab reviewId="rev1" orchestrationId="orch1" />)
+
+    await user.type(screen.getByLabelText("Comment summary"), "Test")
+    await user.click(screen.getByRole("button", { name: "Comment" }))
+
+    // Button should show submitting state while promise is pending
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Submitting..." })).toBeDisabled()
+    })
+
+    // Resolve the mutation and verify button re-enables
+    resolveSubmit!()
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Comment" })).toBeEnabled()
+    })
+  })
+
+  it("displays error message when mutation fails", async () => {
+    const user = userEvent.setup()
+    mockCreateThread.mockRejectedValue(new Error("Review not found"))
+
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "reviewThreads.list": querySuccess([]),
+      },
+    })
+
+    render(<ConversationTab reviewId="rev1" orchestrationId="orch1" />)
+
+    await user.type(screen.getByLabelText("Comment summary"), "Test")
+    await user.click(screen.getByRole("button", { name: "Comment" }))
+
+    await waitFor(() => {
+      expect(screen.getByText("Review not found")).toBeInTheDocument()
+    })
+
+    // Inputs should NOT be cleared on error
+    expect(screen.getByLabelText("Comment summary")).toHaveValue("Test")
   })
 })

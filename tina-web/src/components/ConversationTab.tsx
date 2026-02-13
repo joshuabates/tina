@@ -77,28 +77,37 @@ function CommentComposer({
 }) {
   const [summary, setSummary] = React.useState("")
   const [body, setBody] = React.useState("")
+  const [submitting, setSubmitting] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
   const createThread = useMutation(api.reviewThreads.createThread)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!summary.trim()) return
 
-    await createThread({
-      reviewId: reviewId as Id<"reviews">,
-      orchestrationId: orchestrationId as Id<"orchestrations">,
-      summary,
-      body,
-      source: "human",
-      filePath: "",
-      line: 0,
-      commitSha: "",
-      severity: "p2",
-      author: "human",
-      gateImpact: "review",
-    })
-
-    setSummary("")
-    setBody("")
+    setSubmitting(true)
+    setError(null)
+    try {
+      await createThread({
+        reviewId: reviewId as Id<"reviews">,
+        orchestrationId: orchestrationId as Id<"orchestrations">,
+        summary,
+        body,
+        source: "human",
+        filePath: "",
+        line: 0,
+        commitSha: "",
+        severity: "p2",
+        author: "human",
+        gateImpact: "review",
+      })
+      setSummary("")
+      setBody("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add comment")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -118,11 +127,13 @@ function CommentComposer({
         rows={3}
         className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm"
       />
+      {error && <div className="text-red-500 text-sm">{error}</div>}
       <button
         type="submit"
-        className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        disabled={submitting}
+        className="rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
       >
-        Comment
+        {submitting ? "Submitting..." : "Comment"}
       </button>
     </form>
   )
