@@ -7,6 +7,7 @@ import { installAppRuntimeQueryMock } from "@/test/harness/app-runtime"
 import { querySuccess, queryLoading, queryError } from "@/test/builders/query"
 
 vi.mock("@/hooks/useTypedQuery")
+vi.mock("@/hooks/useCreateSession")
 
 // Mock useMutation to avoid Convex client requirement
 vi.mock("convex/react", async (importOriginal) => {
@@ -20,6 +21,9 @@ vi.mock("convex/react", async (importOriginal) => {
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
+const mockUseCreateSession = vi.mocked(
+  await import("@/hooks/useCreateSession"),
+).useCreateSession
 
 function createMockCommit(overrides: Partial<Commit> = {}): Commit {
   return {
@@ -42,6 +46,10 @@ function createMockCommit(overrides: Partial<Commit> = {}): Commit {
 describe("CommitListPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseCreateSession.mockReturnValue({
+      createAndConnect: vi.fn(),
+      connectToPane: vi.fn(),
+    })
   })
 
   it("shows loading state while commits are loading", () => {
