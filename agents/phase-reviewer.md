@@ -92,22 +92,46 @@ ORCHESTRATION_ID=$(echo "$REVIEW_JSON" | jq -r '.orchestrationId')
 ```
 
 **Step 1: Run CLI Checks**
-`tina-session review run-checks --feature "$FEATURE_NAME" --review-id "$REVIEW_ID" --json` - Results stream to Convex as checks complete. Parse JSON to identify failures.
+```bash
+tina-session review run-checks --feature "$FEATURE_NAME" --review-id "$REVIEW_ID" --json
+```
+Results stream to Convex as checks complete. Parse JSON to identify failures.
 
 **Step 2: Evaluate Project Checks**
-For each `kind = "project"` entry in `tina-checks.toml`: (1) Start check: `tina-session review start-check --review-id "$REVIEW_ID" --orchestration-id "$ORCHESTRATION_ID" --name "$CHECK_NAME" --kind project --json`, (2) Read check's markdown from `path` field, (3) Evaluate codebase against criteria, (4) Complete: `tina-session review complete-check --review-id "$REVIEW_ID" --name "$CHECK_NAME" --status passed|failed --comment "..." --json`
+For each `kind = "project"` entry in `tina-checks.toml`:
+1. Start check:
+   ```bash
+   tina-session review start-check --review-id "$REVIEW_ID" --orchestration-id "$ORCHESTRATION_ID" --name "$CHECK_NAME" --kind project --json
+   ```
+2. Read check's markdown from `path` field
+3. Evaluate codebase against criteria
+4. Complete check:
+   ```bash
+   tina-session review complete-check --review-id "$REVIEW_ID" --name "$CHECK_NAME" --status passed|failed --comment "..." --json
+   ```
 
 **Step 3: Write Findings**
-For each issue found during review: `tina-session review add-finding --review-id "$REVIEW_ID" --orchestration-id "$ORCHESTRATION_ID" --file "path" --line N --commit "$(git rev-parse HEAD)" --severity p0|p1|p2 --gate review --summary "..." --body "..." --source agent --author "phase-reviewer" --json`
-
+For each issue found during review:
+```bash
+tina-session review add-finding --review-id "$REVIEW_ID" --orchestration-id "$ORCHESTRATION_ID" --file "path" --line N --commit "$(git rev-parse HEAD)" --severity p0|p1|p2 --gate review --summary "..." --body "..." --source agent --author "phase-reviewer" --json
+```
 Severity: **p0** = won't work/dead code/detector hard-block; **p1** = pattern violations/missed reuse/>50% drift; **p2** = style/readability. Gate: **review** = standard findings; **plan** = planning issues; **finalize** = blocks merge.
 
 **Step 4: Complete Review**
-`tina-session review complete --feature "$FEATURE_NAME" --review-id "$REVIEW_ID" --status approved|changes_requested --json` - Status = approved if all checks passed and no unresolved p0/p1 findings.
+```bash
+tina-session review complete --feature "$FEATURE_NAME" --review-id "$REVIEW_ID" --status approved|changes_requested --json
+```
+Status = approved if all checks passed and no unresolved p0/p1 findings.
 
 **Step 5: Gate Management**
-Block: `tina-session review gate block --feature "$FEATURE_NAME" --gate review --reason "..." --json`
-Approve: `tina-session review gate approve --feature "$FEATURE_NAME" --gate review --json`
+Block:
+```bash
+tina-session review gate block --feature "$FEATURE_NAME" --gate review --reason "..." --json
+```
+Approve:
+```bash
+tina-session review gate approve --feature "$FEATURE_NAME" --gate review --json
+```
 
 ## Input
 
@@ -160,7 +184,7 @@ Verify new code is actually connected, not orphaned:
 
 ### 3. Functional Verification
 
-You MUST run the implemented code. Run appropriate commands: CLI tools (`./target/release/tool --help`, `./tool <args>`), libraries (`cargo test`, `cargo run --example`), services (`cargo run & ; curl localhost:8080/health ; kill $!`), TypeScript/Node (`npm test`, `npm run start`), Python (`pytest`, `python -m module --help`). If code doesn't run successfully, review FAILS.
+You MUST run the implemented code. Examples: CLI tools (`./target/release/tool --help`), libraries (`cargo test`), services (use `cargo run & ; PID=$! ; curl localhost:8080/health ; kill $PID`), TypeScript/Node (`npm test`), Python (`pytest`). If code doesn't run successfully, review FAILS.
 
 ### 4. Detector + Reuse + Consistency
 
@@ -188,7 +212,23 @@ When `hard_block_detectors = true`, any detector failure is a Stop-level issue u
 
 ### 5. Metrics Collection and Estimate Comparison
 
-Read `## Phase Estimates` from plan (expected impl/test lines, files touched, coverage/performance targets, ROI). Measure actuals using git: impl lines `git diff --numstat $BASE..HEAD -- '*.rs' '*.ts' '*.py' '*.go' '*.js' | grep -v -E '(_test\.|\.test\.|/tests/)' | awk '{added+=$1; deleted+=$2} END {print "+"added" -"deleted}'`, test lines (same but matching test patterns), files `git diff --name-only $BASE..HEAD | wc -l`. Calculate `drift_pct = abs(actual - expected) / expected * 100`. Severity: <30% Pass, 30-50% Warning, >50% Stop. For test work, check `actual_roi = coverage_lines_added / test_lines_added` against expectation: ≥100% Pass, 50-100% Warning, <50% Stop.
+Read `## Phase Estimates` from plan (expected impl/test lines, files touched, coverage/performance targets, ROI). Measure actuals:
+
+```bash
+# Impl lines (excluding tests)
+git diff --numstat $BASE..HEAD -- '*.rs' '*.ts' '*.py' '*.go' '*.js' | \
+  grep -v -E '(_test\.|\.test\.|/tests/)' | \
+  awk '{added+=$1; deleted+=$2} END {print "+"added" -"deleted}'
+
+# Test lines
+git diff --numstat $BASE..HEAD -- '*_test.*' '*.test.*' '**/tests/**' '**/test_*' | \
+  awk '{added+=$1; deleted+=$2} END {print "+"added" -"deleted}'
+
+# Files touched
+git diff --name-only $BASE..HEAD | wc -l
+```
+
+Calculate `drift_pct = abs(actual - expected) / expected * 100`. Severity: <30% Pass, 30-50% Warning, >50% Stop. For test work, check `actual_roi = coverage_lines_added / test_lines_added` against expectation: ≥100% Pass, 50-100% Warning, <50% Stop.
 
 ## Issue Severity
 
