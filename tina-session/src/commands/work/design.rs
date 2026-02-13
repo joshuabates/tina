@@ -2,6 +2,19 @@ use serde_json::json;
 use std::path::Path;
 use tina_session::convex;
 
+fn map_design_id_error(err: anyhow::Error, design_id: &str) -> anyhow::Error {
+    let msg = format!("{:#}", err);
+    if msg.contains("ArgumentValidationError")
+        && (msg.contains("Path: .designId") || msg.contains("Validator: v.id(\"designs\")"))
+    {
+        return anyhow::anyhow!(
+            "Invalid design id '{}': expected a Convex designs document id",
+            design_id
+        );
+    }
+    anyhow::anyhow!(msg)
+}
+
 pub fn create(
     project_id: &str,
     title: &str,
@@ -154,8 +167,8 @@ pub fn transition(id: &str, status: &str, json: bool) -> Result<u8, anyhow::Erro
 }
 
 pub fn resolve(design_id: &str, json: bool) -> Result<u8, anyhow::Error> {
-    let design =
-        convex::run_convex(|mut writer| async move { writer.get_design(design_id).await })?;
+    let design = convex::run_convex(|mut writer| async move { writer.get_design(design_id).await })
+        .map_err(|e| map_design_id_error(e, design_id))?;
 
     match design {
         Some(d) => {
@@ -194,8 +207,8 @@ pub fn resolve(design_id: &str, json: bool) -> Result<u8, anyhow::Error> {
 }
 
 pub fn resolve_to_file(design_id: &str, output: &Path, json: bool) -> Result<u8, anyhow::Error> {
-    let design =
-        convex::run_convex(|mut writer| async move { writer.get_design(design_id).await })?;
+    let design = convex::run_convex(|mut writer| async move { writer.get_design(design_id).await })
+        .map_err(|e| map_design_id_error(e, design_id))?;
 
     match design {
         Some(d) => {

@@ -224,7 +224,8 @@ See `skills/test-harness/SKILL.md` for full documentation.
 
 Subagent types for the Task tool:
 
-- **tina:planner** - Creates implementation plans for a design doc phase
+- **tina:phase-planner** - Creates implementation plans for a design doc phase (orchestration runtime)
+- **tina:planner** - Standalone planner agent for manual/non-orchestrated use
 - **tina:implementer** - Implements a single task from a plan
 - **tina:spec-reviewer** - Verifies implementation matches spec
 - **tina:code-quality-reviewer** - Reviews architecture, patterns, maintainability

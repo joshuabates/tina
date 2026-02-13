@@ -1,5 +1,7 @@
 # Handoff: Team-to-Orchestration Linking
 
+> Historical design note (not runtime protocol). This document may mention exploratory commands that are not implemented in current `tina-session`.
+
 ## The Problem
 
 The daemon watches `~/.claude/teams/` and `~/.claude/tasks/` on the filesystem. When it sees a team, it needs to figure out which Convex orchestration that team belongs to so it can write `teamMembers` and `taskEvents` records with the correct `orchestrationId`.

@@ -1,5 +1,7 @@
 # Handoff: Eliminate Filesystem State
 
+> Historical design note (not runtime protocol). This document may include proposal-only command names.
+
 ## Problem
 
 Convex is supposed to be the single source of truth for orchestration state, but two filesystem-based state stores remain:

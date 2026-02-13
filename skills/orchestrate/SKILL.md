@@ -100,6 +100,7 @@ else
 fi
 
 TEAM_NAME="${FEATURE_NAME}-orchestration"
+BRANCH_PREFIX="${TINA_BRANCH_PREFIX:-tina}"
 ```
 
 If `MODEL_OVERRIDE` is set, pass it to phase-planner prompts so all tasks use that model.
@@ -153,14 +154,14 @@ if [[ -n "$DESIGN_ID" ]]; then
       --feature "$FEATURE_NAME" \
       --cwd "$PWD" \
       --design-id "$DESIGN_ID" \
-      --branch "tina/$FEATURE_NAME" \
+      --branch "${BRANCH_PREFIX}/$FEATURE_NAME" \
       --total-phases "$TOTAL_PHASES")
 else
     INIT_JSON=$(tina-session init \
       --feature "$FEATURE_NAME" \
       --cwd "$PWD" \
       --design-doc "$DESIGN_DOC" \
-      --branch "tina/$FEATURE_NAME" \
+      --branch "${BRANCH_PREFIX}/$FEATURE_NAME" \
       --total-phases "$TOTAL_PHASES")
 fi
 ```
@@ -1156,8 +1157,7 @@ To resume after fixing the issue:
   /tina:orchestrate <design-doc-path>  (or --design-id <id>)
 
 To reset and start fresh:
-  rm -rf ~/.claude/teams/${TEAM_NAME}/
-  rm -rf ~/.claude/tasks/${TEAM_NAME}/
+  tina-session cleanup --feature "$FEATURE_NAME"
   /tina:orchestrate <design-doc-path>  (or --design-id <id>)
 
 To manually inspect state:
@@ -1402,9 +1402,7 @@ TaskUpdate { taskId: "review-phase-1", status: "completed", metadata: { manual_s
 
 4. **Clean up and restart:**
 ```
-# Delete team config and task directory
-rm -rf ~/.claude/teams/${TEAM_NAME}/
-rm -rf ~/.claude/tasks/${TEAM_NAME}/
+tina-session cleanup --feature "$FEATURE_NAME"
 # Then rerun orchestrate for fresh start
 ```
 
@@ -1440,7 +1438,7 @@ To minimize recovery needs:
 
 **Cause:** Teammate crashed without sending error message, or teammate is stuck in infinite loop.
 
-**Detection:** Manual observation (no automatic timeout in current design).
+**Detection:** Task appears stalled (`in_progress` without teammate progress), and `tina-session orchestrate next --feature "$FEATURE_NAME"` keeps returning `wait`.
 
 **Handling:**
 1. User notices orchestration stalled
@@ -1448,7 +1446,7 @@ To minimize recovery needs:
 3. User finds in_progress task with no recent activity
 4. User manually marks task failed or respawns teammate
 
-**Future improvement:** Add heartbeat messages from teammates, or orchestrator-side timeout.
+**Operational response:** Use TaskList + state-machine action to respawn the stalled teammate, then continue the event loop.
 
 ### Tmux Session Dies Mid-Phase
 
@@ -1508,7 +1506,7 @@ To minimize recovery needs:
 
 **Handling:**
 1. Manual cleanup of old worktrees: `rm -rf .worktrees/old-feature`
-2. Clean up old tasks: `rm -rf ~/.claude/tasks/old-orchestration/`
+2. Clean up old orchestration runtime artifacts: `tina-session cleanup --feature old-feature`
 3. Resume orchestration
 
 ### Git Conflicts in Worktree
@@ -1583,7 +1581,7 @@ Before using orchestration on real work, verify these behaviors manually:
 
 **Basic Flow:**
 - [ ] Run `/tina:orchestrate docs/plans/test-fixtures/minimal-orchestration-test-design.md`
-- [ ] Verify team created: `test -f ~/.claude/teams/minimal-orchestration-test-orchestration/config.json`
+- [ ] Verify orchestration appears in Tina control plane: `tina-session list | rg minimal-orchestration-test`
 - [ ] Verify tasks created: `TaskList` shows all expected tasks with dependencies
 - [ ] Watch validator spawn and complete
 - [ ] Verify worktree was created by tina-session init (before team creation)
@@ -1608,8 +1606,7 @@ Before using orchestration on real work, verify these behaviors manually:
 - [ ] If third would be needed, verify orchestration exits with error
 
 **Cleanup:**
-- [ ] After testing: `rm -rf ~/.claude/teams/minimal-orchestration-test-orchestration/`
-- [ ] After testing: `rm -rf ~/.claude/tasks/minimal-orchestration-test-orchestration/`
+- [ ] After testing: `tina-session cleanup --feature minimal-orchestration-test`
 - [ ] After testing: `rm -rf .worktrees/minimal-orchestration-test/`
 
 ## Red Flags
@@ -1657,8 +1654,7 @@ Common issues and their resolutions:
 1. If resuming: skip team creation, go to STEP 5b (Resume Logic)
 2. If starting fresh: clean up first:
    ```bash
-   rm -rf ~/.claude/teams/<team-name>/
-   rm -rf ~/.claude/tasks/<team-name>/
+   tina-session cleanup --feature <feature-name>
    ```
 
 ### Tasks stuck in pending (none unblocked)

@@ -339,6 +339,10 @@ fn first_path_hit(name: &str, entries: &[PathBuf]) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
+fn canonical_or_self(path: &Path) -> PathBuf {
+    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 fn check_subcommand_surface(binary: &Path, command_path: &[&str]) -> anyhow::Result<bool> {
     let status = Command::new(binary)
         .args(command_path)
@@ -428,18 +432,34 @@ pub fn doctor() -> anyhow::Result<u8> {
 
     if let Some(cargo_bin) = cargo_bin_dir.as_ref() {
         if resolved_binary.starts_with(cargo_bin) {
-            failures += 1;
-            println!(
-                "FAIL: Active tina-session binary is from ~/.cargo/bin (this often drifts from repo docs/skills)"
-            );
+            let resolved_target = canonical_or_self(&resolved_binary);
+            if let Some(local_bin) = local_bin_dir.as_ref() {
+                let local_binary = local_bin.join("tina-session");
+                if local_binary.exists() {
+                    let local_target = canonical_or_self(&local_binary);
+                    if resolved_target == local_target {
+                        println!(
+                            "PASS: Active tina-session binary is from ~/.cargo/bin but matches ~/.local/bin target"
+                        );
+                    } else {
+                        failures += 1;
+                        println!(
+                            "FAIL: Active tina-session binary is from ~/.cargo/bin (this often drifts from repo docs/skills)"
+                        );
+                    }
+                } else {
+                    failures += 1;
+                    println!(
+                        "FAIL: Active tina-session binary is from ~/.cargo/bin and ~/.local/bin/tina-session is missing"
+                    );
+                }
+            }
         } else if let Some(local_bin) = local_bin_dir.as_ref() {
             if resolved_binary.starts_with(local_bin) {
                 println!("PASS: Active tina-session binary is from ~/.local/bin");
             } else {
                 warnings += 1;
-                println!(
-                    "WARN: Active tina-session binary is outside ~/.local/bin and ~/.cargo/bin"
-                );
+                println!("WARN: Active tina-session binary is outside ~/.local/bin and ~/.cargo/bin");
             }
         }
     }
