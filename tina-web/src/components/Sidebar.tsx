@@ -40,6 +40,7 @@ function SidebarContent() {
   const { orchestrationId, selectOrchestration } = useSelection()
   const navigate = useNavigate()
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
+  const [deletingOrchestrationId, setDeletingOrchestrationId] = useState<string | null>(null)
 
   // Flat array of orchestrations for keyboard navigation
   const orchestrations = useMemo(() => {
@@ -163,6 +164,41 @@ function SidebarContent() {
         statusText: statusLabel(toStatusBadgeStatus(orchestration.status)),
         statusColor: statusTextClass(toStatusBadgeStatus(orchestration.status)),
         onClick: () => selectOrchestration(orchestration._id),
+        onDelete: () => {
+          if (deletingOrchestrationId !== null) return
+          const shouldClearSelection = orchestration._id === orchestrationId
+          setDeletingOrchestrationId(orchestration._id)
+
+          void (async () => {
+            try {
+              const { convex } = await import("@/convex")
+              let done = false
+              let attempts = 0
+              const maxAttempts = 25
+
+              while (!done && attempts < maxAttempts) {
+                attempts += 1
+                const result = await convex.mutation(api.orchestrations.deleteOrchestration, {
+                  orchestrationId: orchestration._id as Id<"orchestrations">,
+                })
+                done = result.done
+              }
+
+              if (!done) {
+                throw new Error("Deletion did not complete")
+              }
+
+              if (shouldClearSelection) {
+                selectOrchestration(null)
+              }
+            } catch (error) {
+              console.error("Failed to delete orchestration", error)
+            } finally {
+              setDeletingOrchestrationId((current) => (current === orchestration._id ? null : current))
+            }
+          })()
+        },
+        deleting: deletingOrchestrationId === orchestration._id,
         "data-orchestration-id": orchestration._id,
         ...rovingProps,
         className: undefined,
@@ -206,6 +242,7 @@ function SidebarContent() {
     return result
   }, [
     deletingProjectId,
+    deletingOrchestrationId,
     projectsResult,
     orchestrationsResult,
     orchestrationId,

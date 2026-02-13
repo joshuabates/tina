@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { screen, within } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
 import { Sidebar } from "../Sidebar"
+import { api } from "@convex/_generated/api"
 import {
   buildOrchestrationSummary,
   buildProjectSummary,
@@ -95,7 +96,7 @@ describe("Sidebar", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUseNavigate.mockReturnValue(vi.fn())
-    mockConvexMutation.mockResolvedValue(undefined as any)
+    mockConvexMutation.mockResolvedValue({ done: true } as any)
   })
 
   it("renders loading state while queries are pending", () => {
@@ -133,6 +134,18 @@ describe("Sidebar", () => {
     expect(deleteButton).toHaveClass("ml-auto")
     expect(deleteButton).toHaveClass("opacity-0")
     expect(deleteButton).toHaveClass("group-hover/project:opacity-100")
+  })
+
+  it("renders a right-aligned orchestration delete control that is hidden until hover", () => {
+    renderSidebar()
+
+    const deleteButton = screen.getByRole("button", {
+      name: /delete orchestration feature-two/i,
+    })
+
+    expect(deleteButton).toHaveClass("ml-auto")
+    expect(deleteButton).toHaveClass("opacity-0")
+    expect(deleteButton).toHaveClass("group-hover/item:opacity-100")
   })
 
   it("highlights selected orchestration and shows normalized status text", () => {
@@ -190,6 +203,24 @@ describe("Sidebar", () => {
       projectId: "p2",
     })
     expect(itemContainer("feature-three")).not.toHaveClass("bg-muted/50")
+  })
+
+  it("clicking orchestration delete calls deleteOrchestration", async () => {
+    const user = userEvent.setup()
+    renderSidebar()
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /delete orchestration feature-two/i,
+      }),
+    )
+
+    expect(mockConvexMutation).toHaveBeenCalledWith(
+      api.orchestrations.deleteOrchestration,
+      {
+        orchestrationId: "o2",
+      },
+    )
   })
 
   it("renders empty state when no orchestrations exist", () => {
