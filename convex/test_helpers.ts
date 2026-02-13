@@ -228,6 +228,89 @@ export async function createReview(
   return await t.mutation(api.reviews.createReview, {
     orchestrationId: options.orchestrationId as any,
     phaseNumber: options.phaseNumber,
-    reviewerAgent: options.reviewerAgent ?? "spec-reviewer",
+    reviewerAgent: options.reviewerAgent ?? "test-review-agent",
   });
+}
+
+interface CreateReviewThreadOptions {
+  reviewId: string;
+  orchestrationId: string;
+  filePath?: string;
+  line?: number;
+  commitSha?: string;
+  summary?: string;
+  body?: string;
+  severity?: "p0" | "p1" | "p2";
+  source?: "human" | "agent";
+  author?: string;
+  gateImpact?: "plan" | "review" | "finalize";
+}
+
+export async function createReviewThread(
+  t: ConvexHarness,
+  options: CreateReviewThreadOptions,
+) {
+  return await t.mutation(api.reviewThreads.createThread, {
+    reviewId: options.reviewId as any,
+    orchestrationId: options.orchestrationId as any,
+    filePath: options.filePath ?? "src/example.ts",
+    line: options.line ?? 42,
+    commitSha: options.commitSha ?? "abc1234",
+    summary: options.summary ?? "Test finding",
+    body: options.body ?? "Test finding body",
+    severity: options.severity ?? "p1",
+    source: options.source ?? "agent",
+    author: options.author ?? "test-agent",
+    gateImpact: options.gateImpact ?? "review",
+  });
+}
+
+interface StartReviewCheckOptions {
+  reviewId: string;
+  orchestrationId: string;
+  name?: string;
+  kind?: "cli" | "project";
+  command?: string;
+}
+
+export async function startReviewCheck(
+  t: ConvexHarness,
+  options: StartReviewCheckOptions,
+) {
+  const args: Record<string, unknown> = {
+    reviewId: options.reviewId as any,
+    orchestrationId: options.orchestrationId as any,
+    name: options.name ?? "typecheck",
+    kind: options.kind ?? "cli",
+  };
+  if (options.command !== undefined) {
+    args.command = options.command;
+  }
+  return await t.mutation(api.reviewChecks.startCheck, args as any);
+}
+
+interface UpsertReviewGateOptions {
+  orchestrationId: string;
+  gateId: "plan" | "review" | "finalize";
+  status?: "pending" | "blocked" | "approved";
+  owner?: string;
+  decidedBy?: string;
+  summary?: string;
+}
+
+export async function upsertReviewGate(
+  t: ConvexHarness,
+  options: UpsertReviewGateOptions,
+) {
+  const args: Record<string, unknown> = {
+    orchestrationId: options.orchestrationId as any,
+    gateId: options.gateId,
+    status: options.status ?? "pending",
+    owner: options.owner ?? "orchestrator",
+    summary: options.summary ?? "Awaiting review",
+  };
+  if (options.decidedBy !== undefined) {
+    args.decidedBy = options.decidedBy;
+  }
+  return await t.mutation(api.reviewGates.upsertGate, args as any);
 }
