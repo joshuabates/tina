@@ -371,5 +371,17 @@ export default defineSchema({
       "targetCommitSha",
       "status",
       "createdAt",
+    ])
+    .index("by_orchestration_task_target_created", [
+      "orchestrationId",
+      "targetType",
+      "targetTaskId",
+      "createdAt",
+    ])
+    .index("by_orchestration_commit_target_created", [
+      "orchestrationId",
+      "targetType",
+      "targetCommitSha",
+      "createdAt",
     ]),
 });

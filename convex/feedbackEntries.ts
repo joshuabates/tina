@@ -1,9 +1,5 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import {
-  loadTaskEventsForOrchestration,
-  deduplicateTaskEvents,
-} from "./tasks";
 
 export const createFeedbackEntry = mutation({
   args: {
@@ -32,13 +28,15 @@ export const createFeedbackEntry = mutation({
           "targetCommitSha must not be set when targetType is 'task'",
         );
       }
-      const events = await loadTaskEventsForOrchestration(
-        ctx,
-        args.orchestrationId,
-      );
-      const tasks = deduplicateTaskEvents(events);
-      const taskExists = tasks.some((t) => t.taskId === args.targetTaskId);
-      if (!taskExists) {
+      const taskEvent = await ctx.db
+        .query("taskEvents")
+        .withIndex("by_orchestration_task", (q) =>
+          q
+            .eq("orchestrationId", args.orchestrationId)
+            .eq("taskId", args.targetTaskId!),
+        )
+        .first();
+      if (!taskEvent) {
         throw new Error(`Task not found: ${args.targetTaskId}`);
       }
     } else {
@@ -176,7 +174,7 @@ export const listFeedbackEntriesByOrchestration = query({
             .eq("status", args.status!),
         )
         .order("desc")
-        .take(limit);
+        .collect();
     } else if (args.targetType !== undefined) {
       entries = await ctx.db
         .query("feedbackEntries")
@@ -186,7 +184,7 @@ export const listFeedbackEntriesByOrchestration = query({
             .eq("targetType", args.targetType!),
         )
         .order("desc")
-        .take(limit);
+        .collect();
     } else {
       entries = await ctx.db
         .query("feedbackEntries")
@@ -194,10 +192,13 @@ export const listFeedbackEntriesByOrchestration = query({
           q.eq("orchestrationId", args.orchestrationId),
         )
         .order("desc")
-        .take(limit);
+        .collect();
     }
 
-    if (args.targetType !== undefined && args.status !== undefined) {
+    if (args.status !== undefined) {
+      entries = entries.filter((e) => e.status === args.status);
+    }
+    if (args.targetType !== undefined) {
       entries = entries.filter((e) => e.targetType === args.targetType);
     }
     if (args.entryType !== undefined) {
@@ -207,7 +208,7 @@ export const listFeedbackEntriesByOrchestration = query({
       entries = entries.filter((e) => e.authorType === args.authorType);
     }
 
-    return entries;
+    return entries.slice(0, limit);
   },
 });
 
@@ -221,29 +222,27 @@ export const listFeedbackEntriesByTarget = query({
   handler: async (ctx, args) => {
     const limit = args.limit ?? 200;
     if (args.targetType === "task") {
-      const entries = await ctx.db
+      return await ctx.db
         .query("feedbackEntries")
-        .withIndex("by_target_status_created", (q) =>
-          q.eq("targetType", "task").eq("targetTaskId", args.targetRef),
+        .withIndex("by_orchestration_task_target_created", (q) =>
+          q
+            .eq("orchestrationId", args.orchestrationId)
+            .eq("targetType", "task")
+            .eq("targetTaskId", args.targetRef),
         )
         .order("desc")
         .take(limit);
-      return entries.filter(
-        (e) => e.orchestrationId === args.orchestrationId,
-      );
     } else {
-      const entries = await ctx.db
+      return await ctx.db
         .query("feedbackEntries")
-        .withIndex("by_target_commit_status_created", (q) =>
+        .withIndex("by_orchestration_commit_target_created", (q) =>
           q
+            .eq("orchestrationId", args.orchestrationId)
             .eq("targetType", "commit")
             .eq("targetCommitSha", args.targetRef),
         )
         .order("desc")
         .take(limit);
-      return entries.filter(
-        (e) => e.orchestrationId === args.orchestrationId,
-      );
     }
   },
 });

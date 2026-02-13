@@ -247,6 +247,33 @@ describe("feedbackEntries", () => {
         }),
       ).rejects.toThrow("targetTaskId must not be set");
     });
+
+    test("accepts valid task targets even when newer events exceed legacy scan windows", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(
+        t,
+        "fb-create-11",
+      );
+      await seedTaskEvent(t, orchestrationId, "legacy-task");
+      for (let i = 0; i < 1005; i++) {
+        await seedTaskEvent(t, orchestrationId, `bulk-task-${i}`);
+      }
+
+      const entryId = await t.mutation(
+        api.feedbackEntries.createFeedbackEntry,
+        {
+          orchestrationId: orchestrationId as any,
+          targetType: "task",
+          targetTaskId: "legacy-task",
+          entryType: "comment",
+          body: "Still valid",
+          authorType: "human",
+          authorName: "alice",
+        },
+      );
+
+      expect(entryId).toBeDefined();
+    });
   });
 
   describe("resolveFeedbackEntry", () => {
@@ -662,6 +689,55 @@ describe("feedbackEntries", () => {
       );
       expect(limited).toHaveLength(1);
     });
+
+    test("applies filters before limit when combining status and secondary filters", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(t, "fb-list-8");
+      await seedTaskEvent(t, orchestrationId, "1");
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        entryType: "ask_for_change",
+        body: "Match older",
+        authorType: "agent",
+        authorName: "agent-a",
+      });
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        entryType: "ask_for_change",
+        body: "Match newer",
+        authorType: "agent",
+        authorName: "agent-b",
+      });
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        entryType: "comment",
+        body: "Newest non-match",
+        authorType: "human",
+        authorName: "alice",
+      });
+
+      const filtered = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByOrchestration,
+        {
+          orchestrationId: orchestrationId as any,
+          status: "open",
+          entryType: "ask_for_change",
+          authorType: "agent",
+          limit: 2,
+        },
+      );
+
+      expect(filtered).toHaveLength(2);
+      expect(filtered[0].body).toBe("Match newer");
+      expect(filtered[1].body).toBe("Match older");
+    });
   });
 
   describe("listFeedbackEntriesByTarget", () => {
@@ -785,6 +861,90 @@ describe("feedbackEntries", () => {
         },
       );
       expect(all).toHaveLength(2);
+    });
+
+    test("does not lose entries when task IDs collide across orchestrations", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId: orchA } = await createFeatureFixture(
+        t,
+        "fb-target-4a",
+      );
+      const { orchestrationId: orchB } = await createFeatureFixture(
+        t,
+        "fb-target-4b",
+      );
+      await seedTaskEvent(t, orchA, "1");
+      await seedTaskEvent(t, orchB, "1");
+
+      await createFeedbackEntry(t, {
+        orchestrationId: orchA,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Orchestration A task",
+        authorName: "alice",
+      });
+      await createFeedbackEntry(t, {
+        orchestrationId: orchB,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Orchestration B task",
+        authorName: "bob",
+      });
+
+      const orchAEntries = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByTarget,
+        {
+          orchestrationId: orchA as any,
+          targetType: "task",
+          targetRef: "1",
+          limit: 1,
+        },
+      );
+
+      expect(orchAEntries).toHaveLength(1);
+      expect(orchAEntries[0].body).toBe("Orchestration A task");
+      expect(orchAEntries[0].orchestrationId).toBe(orchA);
+    });
+
+    test("orders target results by createdAt regardless of mixed status", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(t, "fb-target-5");
+      await seedTaskEvent(t, orchestrationId, "1");
+
+      const olderEntry = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Older resolved",
+        authorName: "alice",
+      });
+
+      await t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
+        entryId: olderEntry as any,
+        resolvedBy: "alice",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Newer open",
+        authorName: "bob",
+      });
+
+      const latestOnly = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByTarget,
+        {
+          orchestrationId: orchestrationId as any,
+          targetType: "task",
+          targetRef: "1",
+          limit: 1,
+        },
+      );
+
+      expect(latestOnly).toHaveLength(1);
+      expect(latestOnly[0].body).toBe("Newer open");
+      expect(latestOnly[0].status).toBe("open");
     });
   });
 
