@@ -373,6 +373,12 @@ enum Commands {
         #[command(subcommand)]
         command: WorkCommands,
     },
+
+    /// Review management (findings, checks, gates)
+    Review {
+        #[command(subcommand)]
+        command: ReviewCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1006,6 +1012,237 @@ enum CommentCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum ReviewCommands {
+    /// Start a new review for a phase or orchestration
+    Start {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Phase number (omit for orchestration-level review)
+        #[arg(long)]
+        phase: Option<String>,
+
+        /// Reviewer agent name
+        #[arg(long, default_value = "review-agent")]
+        reviewer: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Complete an open review
+    Complete {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Review ID (Convex document ID)
+        #[arg(long)]
+        review_id: String,
+
+        /// Review outcome
+        #[arg(long, value_parser = ["approved", "changes_requested", "superseded"])]
+        status: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Add a finding (review thread) to the current review
+    AddFinding {
+        /// Review ID (Convex document ID)
+        #[arg(long)]
+        review_id: String,
+
+        /// Orchestration ID (Convex document ID)
+        #[arg(long)]
+        orchestration_id: String,
+
+        /// Source file path
+        #[arg(long)]
+        file: String,
+
+        /// Line number
+        #[arg(long)]
+        line: i64,
+
+        /// Git commit SHA this finding relates to
+        #[arg(long)]
+        commit: String,
+
+        /// Severity level
+        #[arg(long, value_parser = ["p0", "p1", "p2"])]
+        severity: String,
+
+        /// Which gate this finding can block
+        #[arg(long, value_parser = ["plan", "review", "finalize"])]
+        gate: String,
+
+        /// Short title
+        #[arg(long)]
+        summary: String,
+
+        /// Detailed explanation
+        #[arg(long)]
+        body: String,
+
+        /// Who created it
+        #[arg(long, value_parser = ["human", "agent"], default_value = "agent")]
+        source: String,
+
+        /// Author name
+        #[arg(long, default_value = "review-agent")]
+        author: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Resolve a finding
+    ResolveFinding {
+        /// Thread ID (Convex document ID)
+        #[arg(long)]
+        finding_id: String,
+
+        /// Who resolved it
+        #[arg(long, default_value = "review-agent")]
+        resolved_by: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Run all CLI checks from tina-checks.toml
+    RunChecks {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Review ID (Convex document ID)
+        #[arg(long)]
+        review_id: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Start a project check (agent-evaluated)
+    StartCheck {
+        /// Review ID (Convex document ID)
+        #[arg(long)]
+        review_id: String,
+
+        /// Orchestration ID (Convex document ID)
+        #[arg(long)]
+        orchestration_id: String,
+
+        /// Check name
+        #[arg(long)]
+        name: String,
+
+        /// Check kind
+        #[arg(long, value_parser = ["cli", "project"])]
+        kind: String,
+
+        /// CLI command (for cli kind)
+        #[arg(long)]
+        command: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Complete a running check
+    CompleteCheck {
+        /// Review ID (Convex document ID)
+        #[arg(long)]
+        review_id: String,
+
+        /// Check name
+        #[arg(long)]
+        name: String,
+
+        /// Check result
+        #[arg(long, value_parser = ["passed", "failed"])]
+        status: String,
+
+        /// Explanation on failure
+        #[arg(long)]
+        comment: Option<String>,
+
+        /// Captured stdout/stderr
+        #[arg(long)]
+        output: Option<String>,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// HITL gate management
+    Gate {
+        #[command(subcommand)]
+        command: ReviewGateCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ReviewGateCommands {
+    /// Approve a gate
+    Approve {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Gate to approve
+        #[arg(long, value_parser = ["plan", "review", "finalize"])]
+        gate: String,
+
+        /// Who approved
+        #[arg(long, default_value = "human")]
+        decided_by: String,
+
+        /// Summary explanation
+        #[arg(long, default_value = "Approved")]
+        summary: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Block a gate
+    Block {
+        /// Feature name
+        #[arg(long)]
+        feature: String,
+
+        /// Gate to block
+        #[arg(long, value_parser = ["plan", "review", "finalize"])]
+        gate: String,
+
+        /// Reason for blocking
+        #[arg(long)]
+        reason: String,
+
+        /// Who blocked
+        #[arg(long, default_value = "review-agent")]
+        decided_by: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 enum OutputFormat {
     Text,
@@ -1480,6 +1717,52 @@ fn run() -> anyhow::Result<u8> {
                             "error": format!("{:#}", e),
                         })
                     );
+                    Ok(1)
+                }
+                Err(e) => Err(e),
+            }
+        }
+
+        Commands::Review { command } => {
+            let json_mode = match &command {
+                ReviewCommands::Start { json, .. } => *json,
+                ReviewCommands::Complete { json, .. } => *json,
+                ReviewCommands::AddFinding { json, .. } => *json,
+                ReviewCommands::ResolveFinding { json, .. } => *json,
+                ReviewCommands::RunChecks { json, .. } => *json,
+                ReviewCommands::StartCheck { json, .. } => *json,
+                ReviewCommands::CompleteCheck { json, .. } => *json,
+                ReviewCommands::Gate { command } => match command {
+                    ReviewGateCommands::Approve { json, .. } => *json,
+                    ReviewGateCommands::Block { json, .. } => *json,
+                },
+            };
+            let result = match command {
+                ReviewCommands::Start { feature, phase, reviewer, json } =>
+                    commands::review::start(&feature, phase.as_deref(), &reviewer, json),
+                ReviewCommands::Complete { feature, review_id, status, json } =>
+                    commands::review::complete(&feature, &review_id, &status, json),
+                ReviewCommands::AddFinding { review_id, orchestration_id, file, line, commit, severity, gate, summary, body, source, author, json } =>
+                    commands::review::add_finding(&review_id, &orchestration_id, &file, line, &commit, &severity, &gate, &summary, &body, &source, &author, json),
+                ReviewCommands::ResolveFinding { finding_id, resolved_by, json } =>
+                    commands::review::resolve_finding(&finding_id, &resolved_by, json),
+                ReviewCommands::RunChecks { feature, review_id, json } =>
+                    commands::review::run_checks(&feature, &review_id, json),
+                ReviewCommands::StartCheck { review_id, orchestration_id, name, kind, command, json } =>
+                    commands::review::start_check(&review_id, &orchestration_id, &name, &kind, command.as_deref(), json),
+                ReviewCommands::CompleteCheck { review_id, name, status, comment, output, json } =>
+                    commands::review::complete_check(&review_id, &name, &status, comment.as_deref(), output.as_deref(), json),
+                ReviewCommands::Gate { command } => match command {
+                    ReviewGateCommands::Approve { feature, gate, decided_by, summary, json } =>
+                        commands::review::gate_approve(&feature, &gate, &decided_by, &summary, json),
+                    ReviewGateCommands::Block { feature, gate, reason, decided_by, json } =>
+                        commands::review::gate_block(&feature, &gate, &reason, &decided_by, json),
+                },
+            };
+            match result {
+                Ok(code) => Ok(code),
+                Err(e) if json_mode => {
+                    eprintln!("{}", serde_json::json!({ "ok": false, "error": format!("{:#}", e) }));
                     Ok(1)
                 }
                 Err(e) => Err(e),
