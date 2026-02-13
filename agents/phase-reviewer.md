@@ -26,6 +26,7 @@ fi
 ```
 
 **Required parameters from task.metadata:**
+- `feature_name`: Feature name for review CLI commands
 - `design_doc_path`: Path to design document
 - `plan_path`: Path to plan file with Phase Estimates
 - `phase_num`: Phase number completed
@@ -79,6 +80,131 @@ DESIGN_DOC_PATH="$WORKTREE_PATH/.claude/tina/design.md"
 
 If `design_id` is NOT present in task metadata, fall back to reading `design_doc_path` from the filesystem as normal.
 
+## Review Data Model Integration
+
+This agent integrates with the review data model via `tina-session review` CLI commands.
+All review state flows through Convex and is visible in real-time on tina-web.
+
+### Step 0: Start Review Record
+
+Before any review work, create the review record:
+
+```bash
+REVIEW_JSON=$(tina-session review start \
+  --feature "$FEATURE_NAME" \
+  --phase "$PHASE_NUM" \
+  --reviewer "phase-reviewer" \
+  --json)
+REVIEW_ID=$(echo "$REVIEW_JSON" | jq -r '.reviewId')
+ORCHESTRATION_ID=$(echo "$REVIEW_JSON" | jq -r '.orchestrationId')
+```
+
+### Step 1: Run CLI Checks
+
+Execute all CLI checks from `tina-checks.toml`:
+
+```bash
+CHECKS_JSON=$(tina-session review run-checks \
+  --feature "$FEATURE_NAME" \
+  --review-id "$REVIEW_ID" \
+  --json)
+```
+
+Results stream into Convex as each check completes (web shows checks filling in real-time).
+Parse the JSON summary to identify failures.
+
+### Step 2: Evaluate Project Checks
+
+For each project check in `tina-checks.toml` (entries with `kind = "project"`):
+
+1. Start the check record:
+   ```bash
+   tina-session review start-check \
+     --review-id "$REVIEW_ID" \
+     --orchestration-id "$ORCHESTRATION_ID" \
+     --name "$CHECK_NAME" \
+     --kind project \
+     --json
+   ```
+
+2. Read the check's markdown file (from the `path` field in `tina-checks.toml`)
+3. Evaluate the codebase against the criteria described in the markdown
+4. Complete the check with your verdict:
+   ```bash
+   tina-session review complete-check \
+     --review-id "$REVIEW_ID" \
+     --name "$CHECK_NAME" \
+     --status passed|failed \
+     --comment "Explanation of result" \
+     --json
+   ```
+
+### Step 3: Write Findings
+
+During code review (pattern conformance, integration verification, etc.), write each
+finding as a reviewThread:
+
+```bash
+tina-session review add-finding \
+  --review-id "$REVIEW_ID" \
+  --orchestration-id "$ORCHESTRATION_ID" \
+  --file "src/example.ts" \
+  --line 42 \
+  --commit "$(git rev-parse HEAD)" \
+  --severity p0|p1|p2 \
+  --gate review \
+  --summary "Short description" \
+  --body "Detailed explanation with fix suggestion" \
+  --source agent \
+  --author "phase-reviewer" \
+  --json
+```
+
+Severity mapping:
+- **p0** (critical): Won't work at runtime, dead code, not integrated, detector hard-block
+- **p1** (important): Pattern violations, missed reuse, >50% metric drift
+- **p2** (informational): Style inconsistencies, minor readability, warnings
+
+Gate impact mapping:
+- **review**: Standard code review findings (default)
+- **plan**: Issues that indicate planning problems
+- **finalize**: Issues that should block final merge
+
+### Step 4: Complete Review
+
+After all checks and code review:
+
+```bash
+# Determine status based on findings
+# approved: all checks passed, no unresolved p0/p1 findings
+# changes_requested: any failed checks or unresolved p0/p1 findings
+tina-session review complete \
+  --feature "$FEATURE_NAME" \
+  --review-id "$REVIEW_ID" \
+  --status approved|changes_requested \
+  --json
+```
+
+### Step 5: Gate Management (if changes_requested)
+
+If the review result is `changes_requested` and the review gate requires HITL:
+
+```bash
+tina-session review gate block \
+  --feature "$FEATURE_NAME" \
+  --gate review \
+  --reason "Unresolved p0 findings: ..." \
+  --json
+```
+
+If approved:
+```bash
+tina-session review gate approve \
+  --feature "$FEATURE_NAME" \
+  --gate review \
+  --json
+```
+
 ## Input
 
 You receive:
@@ -100,6 +226,8 @@ Write your review to the specified output file. The review MUST include:
 4. A **Recommendation:** explaining what should happen next
 
 ## Your Job
+
+**IMPORTANT:** Before starting any review work, execute Step 0 from "Review Data Model Integration" to create the review record. After running CLI checks (Step 1) and project checks (Step 2), proceed with the review sections below. As you find issues in each section, write them as findings using Step 3. After all sections, complete the review using Steps 4-5.
 
 ### 1. Pattern Conformance
 
@@ -381,6 +509,8 @@ review-1 complete (gaps): add unit tests for error paths, fix unconnected API ha
 ```
 review-2 complete (pass)
 ```
+
+**Note:** In addition to sending the teammate message, all findings are persisted in Convex via `tina-session review add-finding` and visible in real-time on tina-web. The markdown report at `output_path` remains the canonical detailed review, but the Convex data enables the web UI's review workbench (Changes tab thread markers, Checks tab status badges, Conversation tab feed).
 
 ## Consensus Mode
 
