@@ -2,6 +2,7 @@ import { useId, useRef } from "react"
 import { useFocusTrap } from "@/hooks/useFocusTrap"
 import { useQuicklookKeyboard } from "@/hooks/useQuicklookKeyboard"
 import type { Commit } from "@/schemas"
+import { FeedbackSection } from "@/components/FeedbackSection"
 import styles from "./QuicklookDialog.module.scss"
 
 interface CommitQuicklookProps {
@@ -88,6 +89,14 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
 
             <div className="text-sm text-muted-foreground italic">
               Full diff view coming in future update
+            </div>
+
+            <div className="pt-4 border-t border-border">
+              <FeedbackSection
+                orchestrationId={commit.orchestrationId}
+                targetType="commit"
+                targetRef={commit.sha}
+              />
             </div>
           </div>
         </div>
