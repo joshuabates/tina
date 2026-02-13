@@ -51,7 +51,7 @@ describe("ConversationTab", () => {
     expect(screen.getByText("No comments yet")).toBeInTheDocument()
   })
 
-  it("renders thread cards with summary, body, severity badge, author, and file:line reference", () => {
+  it("renders thread cards with summary, body, severity badge, author, timestamp, and file:line reference", () => {
     const thread = buildReviewThread({
       summary: "Missing error handling",
       body: "The function should handle network errors",
@@ -59,6 +59,7 @@ describe("ConversationTab", () => {
       author: "review-agent",
       filePath: "src/auth.ts",
       line: 42,
+      createdAt: "2024-01-01T10:00:00Z",
     })
 
     installAppRuntimeQueryMock(mockUseTypedQuery, {
@@ -74,6 +75,8 @@ describe("ConversationTab", () => {
     expect(screen.getByText("p1")).toBeInTheDocument()
     expect(screen.getByText("review-agent")).toBeInTheDocument()
     expect(screen.getByText("src/auth.ts:42")).toBeInTheDocument()
+    // Timestamp rendered via toLocaleString
+    expect(screen.getByText(new Date("2024-01-01T10:00:00Z").toLocaleString())).toBeInTheDocument()
   })
 
   it("renders general comments without file:line when filePath is empty", () => {
@@ -93,7 +96,8 @@ describe("ConversationTab", () => {
     render(<ConversationTab reviewId="rev1" orchestrationId="orch1" />)
 
     expect(screen.getByText("General observation")).toBeInTheDocument()
-    expect(screen.queryByText(/:0/)).not.toBeInTheDocument()
+    // No file:line reference should be rendered for empty filePath
+    expect(screen.queryByText(/^\S+:\d+$/)).not.toBeInTheDocument()
   })
 
   it("renders comment composer with summary input, body textarea, and submit button", () => {

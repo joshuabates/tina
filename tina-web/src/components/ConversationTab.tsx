@@ -48,6 +48,9 @@ function ThreadCard({ thread }: { thread: ReviewThread }) {
             <span className="text-sm font-medium">{thread.author}</span>
             <SeverityBadge severity={thread.severity} />
             <span className="text-xs text-muted-foreground">{thread.source}</span>
+            <span className="text-xs text-muted-foreground">
+              {new Date(thread.createdAt).toLocaleString()}
+            </span>
           </div>
           {thread.filePath && (
             <div className="text-xs text-muted-foreground mt-0.5">
