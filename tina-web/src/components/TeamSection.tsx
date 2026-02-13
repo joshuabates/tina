@@ -1,5 +1,6 @@
 import React from "react"
 import { Option } from "effect"
+import { useCreateSession } from "@/hooks/useCreateSession"
 import { useFocusable } from "@/hooks/useFocusable"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
@@ -16,12 +17,16 @@ interface TeamSectionProps {
 function mapTeamMember(
   member: OrchestrationTeamMember,
   activePhase: number,
-): { name: string; memberStatus: MemberStatus } {
+): { name: string; memberStatus: MemberStatus; tmuxPaneId?: string } {
   const memberPhaseNum = Number(member.phaseNumber)
 
   const memberStatus: MemberStatus = memberPhaseNum === activePhase ? "active" : "idle"
 
-  return { name: member.agentName, memberStatus }
+  return {
+    name: member.agentName,
+    memberStatus,
+    tmuxPaneId: Option.getOrUndefined(member.tmuxPaneId),
+  }
 }
 
 function isOrchestrationScopeMember(member: OrchestrationTeamMember): boolean {
@@ -30,6 +35,7 @@ function isOrchestrationScopeMember(member: OrchestrationTeamMember): boolean {
 }
 
 export function TeamSection({ detail }: TeamSectionProps) {
+  const { connectToPane } = useCreateSession()
   const { phaseId } = useSelection()
   const selectedPhaseNumber = phaseId
     ? detail.phases.find((phase) => phase._id === phaseId)?.phaseNumber ?? null
@@ -88,6 +94,7 @@ export function TeamSection({ detail }: TeamSectionProps) {
           title="Orchestration Team"
           members={orchestrationMembers}
           emptyMessage="No team members"
+          onConnect={connectToPane}
         />
 
         <TeamPanelUI
@@ -98,6 +105,7 @@ export function TeamSection({ detail }: TeamSectionProps) {
               ? "No phase selected"
               : "No team in this phase"
           }
+          onConnect={connectToPane}
         />
       </div>
     </StatPanel>

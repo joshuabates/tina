@@ -6,6 +6,7 @@ type MemberStatus = "active" | "busy" | "idle" | "away" | "shutdown";
 interface TeamMemberProps extends React.HTMLAttributes<HTMLDivElement> {
   name: string;
   memberStatus: MemberStatus;
+  onConnect?: () => void;
 }
 
 const dotColorMap: Record<MemberStatus, string> = {
@@ -35,6 +36,7 @@ const labelColorMap: Record<MemberStatus, string> = {
 function TeamMember({
   name,
   memberStatus,
+  onConnect,
   className,
   ...props
 }: TeamMemberProps) {
@@ -62,9 +64,20 @@ function TeamMember({
           {name}
         </span>
       </div>
-      <MonoText className={cn("text-[8px]", labelColorMap[memberStatus])}>
-        {labelMap[memberStatus]}
-      </MonoText>
+      <div className="flex items-center gap-2">
+        {onConnect && (
+          <button
+            type="button"
+            onClick={onConnect}
+            className="text-[8px] font-medium text-primary hover:underline"
+          >
+            Connect
+          </button>
+        )}
+        <MonoText className={cn("text-[8px]", labelColorMap[memberStatus])}>
+          {labelMap[memberStatus]}
+        </MonoText>
+      </div>
     </div>
   );
 }
