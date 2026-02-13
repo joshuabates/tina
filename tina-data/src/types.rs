@@ -295,3 +295,144 @@ pub struct CommentRecord {
     pub created_at: String,
     pub edited_at: Option<String>,
 }
+
+/// Input record for creating a feedback entry via Convex `feedbackEntries:createFeedbackEntry`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedbackEntryInput {
+    pub orchestration_id: String,
+    pub target_type: String,
+    pub target_task_id: Option<String>,
+    pub target_commit_sha: Option<String>,
+    pub entry_type: String,
+    pub body: String,
+    pub author_type: String,
+    pub author_name: String,
+}
+
+/// Response record as returned by Convex feedback entry queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedbackEntryRecord {
+    pub id: String,
+    pub orchestration_id: String,
+    pub target_type: String,
+    pub target_task_id: Option<String>,
+    pub target_commit_sha: Option<String>,
+    pub entry_type: String,
+    pub body: String,
+    pub author_type: String,
+    pub author_name: String,
+    pub status: String,
+    pub resolved_by: Option<String>,
+    pub resolved_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Blocking feedback summary as returned by `feedbackEntries:getBlockingFeedbackSummary`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockingFeedbackSummary {
+    pub total_blocking: u32,
+    pub by_target_type: BlockingByTargetType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockingByTargetType {
+    pub task: u32,
+    pub commit: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn feedback_entry_input_round_trip() {
+        let input = FeedbackEntryInput {
+            orchestration_id: "orch-1".into(),
+            target_type: "task".into(),
+            target_task_id: Some("task-42".into()),
+            target_commit_sha: None,
+            entry_type: "ask_for_change".into(),
+            body: "Please fix the naming".into(),
+            author_type: "human".into(),
+            author_name: "alice".into(),
+        };
+        let json = serde_json::to_string(&input).unwrap();
+        let deserialized: FeedbackEntryInput = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.orchestration_id, "orch-1");
+        assert_eq!(deserialized.target_type, "task");
+        assert_eq!(deserialized.target_task_id, Some("task-42".into()));
+        assert!(deserialized.target_commit_sha.is_none());
+        assert_eq!(deserialized.entry_type, "ask_for_change");
+        assert_eq!(deserialized.body, "Please fix the naming");
+    }
+
+    #[test]
+    fn feedback_entry_record_round_trip() {
+        let record = FeedbackEntryRecord {
+            id: "entry-1".into(),
+            orchestration_id: "orch-1".into(),
+            target_type: "commit".into(),
+            target_task_id: None,
+            target_commit_sha: Some("abc123".into()),
+            entry_type: "comment".into(),
+            body: "Looks good".into(),
+            author_type: "agent".into(),
+            author_name: "reviewer-bot".into(),
+            status: "open".into(),
+            resolved_by: None,
+            resolved_at: None,
+            created_at: "2026-02-12T10:00:00Z".into(),
+            updated_at: "2026-02-12T10:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        let deserialized: FeedbackEntryRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, "entry-1");
+        assert_eq!(deserialized.target_type, "commit");
+        assert_eq!(deserialized.target_commit_sha, Some("abc123".into()));
+        assert!(deserialized.target_task_id.is_none());
+        assert_eq!(deserialized.status, "open");
+        assert!(deserialized.resolved_by.is_none());
+    }
+
+    #[test]
+    fn feedback_entry_record_resolved_state() {
+        let record = FeedbackEntryRecord {
+            id: "entry-2".into(),
+            orchestration_id: "orch-1".into(),
+            target_type: "task".into(),
+            target_task_id: Some("task-5".into()),
+            target_commit_sha: None,
+            entry_type: "suggestion".into(),
+            body: "Consider using a constant".into(),
+            author_type: "human".into(),
+            author_name: "bob".into(),
+            status: "resolved".into(),
+            resolved_by: Some("bob".into()),
+            resolved_at: Some("2026-02-12T12:00:00Z".into()),
+            created_at: "2026-02-12T10:00:00Z".into(),
+            updated_at: "2026-02-12T12:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        let deserialized: FeedbackEntryRecord = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.status, "resolved");
+        assert_eq!(deserialized.resolved_by, Some("bob".into()));
+        assert_eq!(deserialized.resolved_at, Some("2026-02-12T12:00:00Z".into()));
+    }
+
+    #[test]
+    fn blocking_feedback_summary_round_trip() {
+        let summary = BlockingFeedbackSummary {
+            total_blocking: 5,
+            by_target_type: BlockingByTargetType {
+                task: 3,
+                commit: 2,
+            },
+        };
+        let json = serde_json::to_string(&summary).unwrap();
+        let deserialized: BlockingFeedbackSummary = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.total_blocking, 5);
+        assert_eq!(deserialized.by_target_type.task, 3);
+        assert_eq!(deserialized.by_target_type.commit, 2);
+    }
+}
