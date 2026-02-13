@@ -915,6 +915,20 @@ Handoff written to .claude/tina/phase-N/handoff.md
 
 Note: `team-name.txt` is no longer used. Team names are passed explicitly from orchestrator to executor to team-lead.
 
+## Codex Role Progression Parity
+
+Codex-routed tasks follow the identical progression as Claude-routed tasks:
+
+1. **Routing check:** `tina-session config cli-for-model --model <model>` returns `claude` or `codex`
+2. **Worker spawn:** `tina:implementer` (claude) or `tina:codex-cli` with `role: executor` (codex)
+3. **Worker result:** v2 headers (both emit) or legacy freeform (Claude only) → dual-grammar recognition
+4. **Spec-reviewer spawn:** `tina:spec-reviewer` (claude) or `tina:codex-cli` with `role: reviewer` (codex)
+5. **Code-quality-reviewer spawn:** `tina:code-quality-reviewer` (claude) or `tina:codex-cli` with `role: reviewer` (codex)
+6. **Review results:** Same dual-grammar recognition, same acceptance matrix, same retry policy
+7. **Task completion:** Identical shutdown, mark complete, re-check ready queue flow
+
+The routing decision affects only the subagent_type and prompt format. All task lifecycle transitions (in_progress → review → complete/blocked), retry counters, escalation rules, and completion gates are engine-agnostic.
+
 ## Red Flags
 
 **Never:**
