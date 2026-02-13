@@ -225,22 +225,12 @@ pub fn run_checks(
     review_id: &str,
     json_mode: bool,
 ) -> Result<u8, anyhow::Error> {
-    let feature_name = feature.to_string();
-
-    // 1. Load orchestration context
-    let orch = convex::run_convex(|mut writer| async move {
-        writer.get_by_feature(&feature_name).await
-    })?
-    .ok_or_else(|| {
-        anyhow::anyhow!("Orchestration not found for feature: {}", feature)
-    })?;
-
+    let orch = load_orchestration(feature)?;
     let worktree = orch
         .worktree_path
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("No worktree_path for orchestration"))?;
 
-    // 2. Parse tina-checks.toml
     let checks_path = std::path::Path::new(worktree).join("tina-checks.toml");
     let checks_config = parse_checks_toml(&checks_path)?;
 
@@ -262,73 +252,18 @@ pub fn run_checks(
     // 3. Run each CLI check
     let mut results = Vec::new();
     for check in &cli_checks {
-        let command = check.command.as_deref().unwrap_or("");
-        let name = &check.name;
-
-        // Record check start in Convex
-        let rid = review_id.to_string();
-        let oid = orch.id.clone();
-        let n = name.clone();
-        let cmd = command.to_string();
-        let _check_id = convex::run_convex(|mut writer| async move {
-            writer
-                .start_review_check(&rid, &oid, &n, "cli", Some(&cmd))
-                .await
-        })?;
-
-        // Execute command
-        let start = std::time::Instant::now();
-        let cmd_output = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(command)
-            .current_dir(worktree)
-            .output();
-
-        let (exit_code, stdout_stderr) = match cmd_output {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                let combined = if stderr.is_empty() {
-                    stdout.to_string()
-                } else {
-                    format!("{}\n{}", stdout, stderr)
-                };
-                (output.status.code().unwrap_or(1), combined)
-            }
-            Err(e) => (1, format!("Failed to execute: {}", e)),
-        };
-        let duration_ms = start.elapsed().as_millis() as u64;
-
-        let check_status = if exit_code == 0 { "passed" } else { "failed" };
-
-        // Record check completion in Convex
-        let rid = review_id.to_string();
-        let n = name.clone();
-        let st = check_status.to_string();
-        let out = stdout_stderr.clone();
-        convex::run_convex(|mut writer| async move {
-            writer
-                .complete_review_check(&rid, &n, &st, None, Some(&out))
-                .await
-        })?;
-
-        results.push(json!({
-            "name": name,
-            "command": command,
-            "status": check_status,
-            "exit_code": exit_code,
-            "duration_ms": duration_ms,
-            "output": stdout_stderr,
-        }));
-
+        let result = run_single_check(check, worktree, review_id, &orch.id)?;
         if !json_mode {
-            let icon = if exit_code == 0 { "PASS" } else { "FAIL" };
-            eprintln!("[{}] {} ({}ms)", icon, name, duration_ms);
+            let status = result["status"].as_str().unwrap_or("unknown");
+            let icon = if status == "passed" { "PASS" } else { "FAIL" };
+            let ms = result["duration_ms"].as_u64().unwrap_or(0);
+            eprintln!("[{}] {} ({}ms)", icon, &check.name, ms);
         }
+        results.push(result);
     }
 
     if json_mode {
-        println!("{}", serde_json::to_string_pretty(&results)?);
+        println!("{}", json!({ "ok": true, "checks": results }));
     }
     Ok(0)
 }
@@ -341,22 +276,12 @@ pub fn gate_approve(
     summary: &str,
     json_mode: bool,
 ) -> Result<u8, anyhow::Error> {
-    let feature_name = feature.to_string();
+    let orch = load_orchestration(feature)?;
     let g = gate.to_string();
     let db = decided_by.to_string();
     let sum = summary.to_string();
 
     let gate_id = convex::run_convex(|mut writer| async move {
-        let orch = writer
-            .get_by_feature(&feature_name)
-            .await?
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Orchestration not found for feature: {}",
-                    feature_name
-                )
-            })?;
-
         writer
             .upsert_review_gate(&orch.id, &g, "approved", "human", Some(&db), &sum)
             .await
@@ -386,22 +311,12 @@ pub fn gate_block(
     decided_by: &str,
     json_mode: bool,
 ) -> Result<u8, anyhow::Error> {
-    let feature_name = feature.to_string();
+    let orch = load_orchestration(feature)?;
     let g = gate.to_string();
     let r = reason.to_string();
     let db = decided_by.to_string();
 
     let gate_id = convex::run_convex(|mut writer| async move {
-        let orch = writer
-            .get_by_feature(&feature_name)
-            .await?
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Orchestration not found for feature: {}",
-                    feature_name
-                )
-            })?;
-
         writer
             .upsert_review_gate(&orch.id, &g, "blocked", "review-agent", Some(&db), &r)
             .await
@@ -421,6 +336,86 @@ pub fn gate_block(
         println!("Blocked gate: {} ({})", gate, reason);
     }
     Ok(0)
+}
+
+// --- Shared helpers ---
+
+fn load_orchestration(feature: &str) -> anyhow::Result<convex::OrchestrationRecord> {
+    let feature_name = feature.to_string();
+    convex::run_convex(|mut writer| async move {
+        writer.get_by_feature(&feature_name).await
+    })?
+    .ok_or_else(|| anyhow::anyhow!("Orchestration not found for feature: {}", feature))
+}
+
+// --- Check execution helpers ---
+
+fn execute_shell_command(command: &str, cwd: &str) -> (i32, String) {
+    match std::process::Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .current_dir(cwd)
+        .output()
+    {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let combined = if stderr.is_empty() {
+                stdout.to_string()
+            } else {
+                format!("{}\n{}", stdout, stderr)
+            };
+            (output.status.code().unwrap_or(1), combined)
+        }
+        Err(e) => (1, format!("Failed to execute: {}", e)),
+    }
+}
+
+fn run_single_check(
+    check: &CheckEntry,
+    worktree: &str,
+    review_id: &str,
+    orch_id: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let command = check.command.as_deref().unwrap_or("");
+    let name = &check.name;
+
+    // Record check start in Convex
+    let rid = review_id.to_string();
+    let oid = orch_id.to_string();
+    let n = name.clone();
+    let cmd = command.to_string();
+    let _check_id = convex::run_convex(|mut writer| async move {
+        writer
+            .start_review_check(&rid, &oid, &n, "cli", Some(&cmd))
+            .await
+    })?;
+
+    // Execute command
+    let start = std::time::Instant::now();
+    let (exit_code, stdout_stderr) = execute_shell_command(command, worktree);
+    let duration_ms = start.elapsed().as_millis() as u64;
+    let check_status = if exit_code == 0 { "passed" } else { "failed" };
+
+    // Record check completion in Convex
+    let rid = review_id.to_string();
+    let n = name.clone();
+    let st = check_status.to_string();
+    let out = stdout_stderr.clone();
+    convex::run_convex(|mut writer| async move {
+        writer
+            .complete_review_check(&rid, &n, &st, None, Some(&out))
+            .await
+    })?;
+
+    Ok(json!({
+        "name": name,
+        "command": command,
+        "status": check_status,
+        "exit_code": exit_code,
+        "duration_ms": duration_ms,
+        "output": stdout_stderr,
+    }))
 }
 
 // --- tina-checks.toml parsing ---
