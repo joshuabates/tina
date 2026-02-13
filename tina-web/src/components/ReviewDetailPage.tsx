@@ -5,6 +5,7 @@ import { useTypedQuery } from "@/hooks/useTypedQuery"
 import {
   ReviewDetailQuery,
   ReviewGateListQuery,
+  OrchestrationDetailQuery,
 } from "@/services/data/queryDefs"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -13,6 +14,7 @@ import { DataErrorBoundary } from "./DataErrorBoundary"
 import { CommitListPanel } from "./CommitListPanel"
 import { ConversationTab } from "./ConversationTab"
 import { ChecksTab } from "./ChecksTab"
+import { ChangesTab } from "./ChangesTab"
 import type { ReviewGate } from "@/schemas"
 import styles from "./ReviewDetailPage.module.scss"
 
@@ -51,6 +53,9 @@ function ReviewDetailContent() {
     reviewId: reviewId ?? "",
   })
   const gatesResult = useTypedQuery(ReviewGateListQuery, {
+    orchestrationId: orchestrationId ?? "",
+  })
+  const orchResult = useTypedQuery(OrchestrationDetailQuery, {
     orchestrationId: orchestrationId ?? "",
   })
 
@@ -154,11 +159,16 @@ function ReviewDetailContent() {
         {activeTab === "checks" && (
           <ChecksTab reviewId={reviewId ?? ""} />
         )}
-        {activeTab === "changes" && (
-          <div className={styles.placeholder}>
-            Changes tab — coming in Phase 6
-          </div>
-        )}
+        {activeTab === "changes" &&
+          orchResult.status === "success" &&
+          orchResult.data && (
+            <ChangesTab
+              reviewId={reviewId ?? ""}
+              orchestrationId={orchestrationId ?? ""}
+              worktreePath={Option.getOrElse(orchResult.data.worktreePath, () => "")}
+              baseBranch={orchResult.data.branch}
+            />
+          )}
       </div>
     </div>
   )

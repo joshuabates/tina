@@ -9,7 +9,8 @@ import {
   buildReviewSummary,
   buildReviewGate,
 } from "@/test/builders/domain/entities"
-import { none } from "@/test/builders/domain/primitives"
+import { buildOrchestrationDetail } from "@/test/builders/domain/fixtures"
+import { none, some } from "@/test/builders/domain/primitives"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("convex/react", async (importOriginal) => {
@@ -30,6 +31,9 @@ vi.mock("../ConversationTab", () => ({
 }))
 vi.mock("../ChecksTab", () => ({
   ChecksTab: () => <div data-testid="checks-tab">ChecksTab</div>,
+}))
+vi.mock("../ChangesTab", () => ({
+  ChangesTab: () => <div data-testid="changes-tab">ChangesTab</div>,
 }))
 
 const mockUseTypedQuery = vi.mocked(
@@ -67,6 +71,7 @@ describe("ReviewDetailPage", () => {
         "reviews.detail": querySuccess(buildReviewSummary({ state: "open" })),
         "reviewGates.list": querySuccess([]),
       },
+      detailFallback: querySuccess(buildOrchestrationDetail()),
     })
 
     renderPage()
@@ -98,6 +103,7 @@ describe("ReviewDetailPage", () => {
           }),
         ]),
       },
+      detailFallback: querySuccess(buildOrchestrationDetail()),
     })
 
     renderPage()
@@ -114,6 +120,7 @@ describe("ReviewDetailPage", () => {
         "reviews.detail": querySuccess(buildReviewSummary()),
         "reviewGates.list": querySuccess([]),
       },
+      detailFallback: querySuccess(buildOrchestrationDetail()),
     })
 
     renderPage()
@@ -134,6 +141,7 @@ describe("ReviewDetailPage", () => {
         "reviews.detail": querySuccess(buildReviewSummary()),
         "reviewGates.list": querySuccess([]),
       },
+      detailFallback: querySuccess(buildOrchestrationDetail()),
     })
 
     renderPage()
@@ -148,6 +156,7 @@ describe("ReviewDetailPage", () => {
         "reviews.detail": querySuccess(buildReviewSummary()),
         "reviewGates.list": querySuccess([]),
       },
+      detailFallback: querySuccess(buildOrchestrationDetail()),
     })
 
     renderPage()
@@ -157,19 +166,27 @@ describe("ReviewDetailPage", () => {
     expect(screen.queryByTestId("conversation-tab")).not.toBeInTheDocument()
   })
 
-  it("shows placeholder when switching to Changes tab", async () => {
+  it("shows ChangesTab when switching to Changes tab", async () => {
     const user = userEvent.setup()
     installAppRuntimeQueryMock(mockUseTypedQuery, {
       states: {
         "reviews.detail": querySuccess(buildReviewSummary()),
         "reviewGates.list": querySuccess([]),
       },
+      detailResults: {
+        orch1: querySuccess(
+          buildOrchestrationDetail({
+            worktreePath: some("/tmp/worktree"),
+            branch: "tina/my-feature",
+          }),
+        ),
+      },
     })
 
     renderPage()
 
     await user.click(screen.getByText("Changes"))
-    expect(screen.getByText(/Changes tab/)).toBeInTheDocument()
+    expect(screen.getByTestId("changes-tab")).toBeInTheDocument()
     expect(screen.queryByTestId("conversation-tab")).not.toBeInTheDocument()
   })
 
@@ -179,6 +196,7 @@ describe("ReviewDetailPage", () => {
         "reviews.detail": querySuccess(null),
         "reviewGates.list": querySuccess([]),
       },
+      detailFallback: querySuccess(buildOrchestrationDetail()),
     })
 
     renderPage()
@@ -211,6 +229,7 @@ describe("ReviewDetailPage", () => {
         ),
         "reviewGates.list": querySuccess([]),
       },
+      detailFallback: querySuccess(buildOrchestrationDetail()),
     })
 
     renderPage()
