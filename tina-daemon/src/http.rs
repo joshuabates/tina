@@ -1,6 +1,6 @@
 use axum::extract::Query;
 use axum::http::{HeaderValue, Method, StatusCode};
-use axum::routing::get;
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use std::path::{Path, PathBuf};
 use tokio::net::TcpListener;
@@ -9,6 +9,8 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
 use crate::git;
+use crate::sessions;
+use crate::terminal;
 
 /// Shared application state.
 ///
@@ -115,7 +117,12 @@ pub fn build_router() -> Router {
             HeaderValue::from_static("http://localhost:4173"),
             HeaderValue::from_static("http://127.0.0.1:4173"),
         ])
-        .allow_methods([Method::GET, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
         .allow_headers(Any);
 
     Router::new()
@@ -123,6 +130,15 @@ pub fn build_router() -> Router {
         .route("/diff", get(get_diff_list))
         .route("/diff/file", get(get_diff_file))
         .route("/file", get(get_file))
+        .route(
+            "/ws/terminal/{paneId}",
+            get(terminal::ws_terminal_handler),
+        )
+        .route("/sessions", post(sessions::create_session))
+        .route(
+            "/sessions/{sessionName}",
+            delete(sessions::delete_session),
+        )
         .layer(cors)
 }
 
@@ -362,6 +378,30 @@ mod tests {
         assert!(text.contains("world"), "expected 'world' in file content");
     }
 
+    #[tokio::test]
+    async fn test_ws_terminal_route_is_registered() {
+        // Non-WebSocket GET to a terminal route returns 400 (not 404),
+        // proving the route is registered. WebSocket upgrade would be needed
+        // for a real connection.
+        let resp = test_router()
+            .oneshot(get("/ws/terminal/302"))
+            .await
+            .unwrap();
+        // 400 from WebSocketUpgrade extractor (missing WS headers) proves the
+        // route matched. A missing route would return 404.
+        assert_ne!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_ws_terminal_route_not_found_for_missing_pane_id() {
+        // No pane ID in path → 404 (route doesn't match).
+        let resp = test_router()
+            .oneshot(get("/ws/terminal/"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
     /// Resolve the git repo root from CARGO_MANIFEST_DIR.
     fn repo_root() -> String {
         let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -396,5 +436,105 @@ mod tests {
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains("[package]"));
         assert!(text.contains("tina-daemon"));
+    }
+
+    // --- Session endpoint tests ---
+
+    fn post_json(uri: &str, body: &str) -> Request<Body> {
+        Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    }
+
+    fn delete_req(uri: &str) -> Request<Body> {
+        Request::builder()
+            .method("DELETE")
+            .uri(uri)
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_create_session_rejects_missing_body() {
+        let req = Request::builder()
+            .method("POST")
+            .uri("/sessions")
+            .header("Content-Type", "application/json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = test_router().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_create_session_rejects_invalid_cli() {
+        let resp = test_router()
+            .oneshot(post_json(
+                "/sessions",
+                r#"{"label": "test", "cli": "invalid"}"#,
+            ))
+            .await
+            .unwrap();
+        // Invalid enum variant → 422 (Unprocessable Entity) from axum
+        assert!(
+            resp.status() == StatusCode::BAD_REQUEST
+                || resp.status() == StatusCode::UNPROCESSABLE_ENTITY,
+            "expected 400 or 422, got {}",
+            resp.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_session_rejects_missing_label() {
+        let resp = test_router()
+            .oneshot(post_json("/sessions", r#"{"cli": "claude"}"#))
+            .await
+            .unwrap();
+        assert!(
+            resp.status() == StatusCode::BAD_REQUEST
+                || resp.status() == StatusCode::UNPROCESSABLE_ENTITY,
+            "expected 400 or 422, got {}",
+            resp.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_session_nonexistent_returns_error_or_success() {
+        // Deleting a nonexistent tmux session — kill_session_blocking
+        // returns Ok because it ignores "session not found" errors.
+        let resp = test_router()
+            .oneshot(delete_req("/sessions/tina-adhoc-nonexistent"))
+            .await
+            .unwrap();
+        // Should succeed (204) since kill_session_blocking ignores not-found
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_cors_allows_post_and_delete() {
+        // Test CORS preflight for POST
+        let req = Request::builder()
+            .method("OPTIONS")
+            .uri("/sessions")
+            .header("Origin", "http://localhost:5173")
+            .header("Access-Control-Request-Method", "POST")
+            .body(Body::empty())
+            .unwrap();
+        let resp = test_router().oneshot(req).await.unwrap();
+        assert!(resp.headers().get("access-control-allow-origin").is_some());
+
+        // Test CORS preflight for DELETE
+        let req = Request::builder()
+            .method("OPTIONS")
+            .uri("/sessions/tina-adhoc-abc")
+            .header("Origin", "http://localhost:5173")
+            .header("Access-Control-Request-Method", "DELETE")
+            .body(Body::empty())
+            .unwrap();
+        let resp = test_router().oneshot(req).await.unwrap();
+        assert!(resp.headers().get("access-control-allow-origin").is_some());
     }
 }
