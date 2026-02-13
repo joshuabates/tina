@@ -115,4 +115,25 @@ describe("parsePhaseStructure", () => {
     expect(result.phaseCount).toBe(2);
     expect(result.phaseStructureValid).toBe(true);
   });
+
+  test("handles case-insensitive phase headings", () => {
+    const md = "# Design\n\n## phase 1: setup";
+    const result = parsePhaseStructure(md);
+    expect(result.phaseCount).toBe(1);
+    expect(result.phaseStructureValid).toBe(true);
+  });
+
+  test("handles leading whitespace before phase headings", () => {
+    const md = "# Design\n\n   ## Phase 1: Setup";
+    const result = parsePhaseStructure(md);
+    expect(result.phaseCount).toBe(1);
+    expect(result.phaseStructureValid).toBe(true);
+  });
+
+  test("handles level-3 phase headings", () => {
+    const md = "# Design\n\n### Phase 1: Setup";
+    const result = parsePhaseStructure(md);
+    expect(result.phaseCount).toBe(1);
+    expect(result.phaseStructureValid).toBe(true);
+  });
 });

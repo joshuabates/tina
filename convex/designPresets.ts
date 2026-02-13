@@ -46,7 +46,7 @@ export interface PhaseStructure {
   phaseStructureValid: boolean;
 }
 
-const PHASE_HEADING_PATTERN = /^## Phase \d+/gm;
+const PHASE_HEADING_PATTERN = /^\s{0,3}#{2,4}\s+phase\s+\d+/gim;
 
 export function parsePhaseStructure(markdown: string): PhaseStructure {
   const matches = markdown.match(PHASE_HEADING_PATTERN);
