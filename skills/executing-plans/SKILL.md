@@ -135,6 +135,26 @@ digraph team_process {
 }
 ```
 
+### Result Contract and Dual-Grammar Recognition
+
+Team-lead in executing-plans mode accepts both v2 structured headers and legacy freeform messages permanently.
+
+**v2 format:** Message starts with `role:` header line. Parse key-value headers (role, task_id, status, git_range, files_changed, issues, confidence) then freeform body after blank line.
+
+**Legacy format:** Message does not start with `role:`. Interpret freeform text for verdict, git range, and issues using LLM reasoning.
+
+**Acceptance matrix (v2 only):**
+| role | status | required fields |
+|------|--------|----------------|
+| worker | pass | task_id, status, git_range |
+| worker | gaps/error | task_id, status, issues |
+| spec-reviewer | pass | task_id, status |
+| spec-reviewer | gaps/error | task_id, status, issues |
+| code-quality-reviewer | pass | task_id, status |
+| code-quality-reviewer | gaps/error | task_id, status, issues |
+
+Claude agents emit v2 as best-effort. Codex agents (via codex-cli) emit v2 deterministically. Always handle legacy gracefully.
+
 ### Ephemeral Team Mode Implementation
 
 **1. Phase Initialization:**
@@ -390,16 +410,20 @@ State is discarded after task completes. Next task starts fresh.
 
 ### Message Handling
 
-Team-lead monitors for specific messages:
+Team-lead monitors for messages and applies dual-grammar recognition:
 
-**From workers:**
-- Implementation complete notification → Spawn reviewers
-- `"Task blocked on X"` → Note blocker, skip to next task
+**From workers (v2 or legacy):**
+- v2 `status: pass` or legacy "Implementation complete" → Spawn reviewers
+- v2 `status: gaps` or legacy "Task blocked on X" → Note blocker, assess next steps
+- v2 `status: error` or legacy error indication → Apply retry policy
 
-**From reviewers:**
-- `"Review passed"` → Track as passed, check if both complete
-- `"Issues found: [list]"` → Worker fixes, re-review
-- `"Review loop exceeded 3 iterations"` → Team-lead intervenes
+**From reviewers (v2 or legacy):**
+- v2 `status: pass` or legacy "Review passed" / "APPROVED" → Track as passed, check if both complete
+- v2 `status: gaps` or legacy "Issues found: [list]" → Worker fixes, re-review
+- v2 `status: error` or legacy "Review loop exceeded" → Team-lead intervenes
+
+**Invalid result handling:**
+If a v2 message fails acceptance matrix validation, retry the agent once with stricter instructions requesting v2 headers. On second failure, follow existing escalation.
 
 ### Infinite Loop Prevention
 
