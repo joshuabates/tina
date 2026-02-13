@@ -302,3 +302,48 @@ On restart, the daemon reconciles state:
 **Stale sessions.** If the daemon crashes or the browser disconnects uncleanly, WebSocket connections leak. Mitigation: PTY processes are children of the daemon — they die with it. Daemon restart reconciliation cleans up Convex state.
 
 **Codex interactive sessions.** Currently Codex agents run as one-shot turns, not persistent tmux panes. The terminal infra is CLI-agnostic — if Codex agents move to persistent tmux panes in the future, they become connectable with zero terminal-side changes. This is a separate orchestration model decision.
+
+## Architectural Context
+
+### Patterns to follow
+
+- **Daemon event loop**: `tina-daemon/src/main.rs:158-358` — `tokio::select!` multiplexing watchers, Convex subscription, and signals. The HTTP/WebSocket server should be spawned as another task in this loop, same pattern as `heartbeat::spawn_heartbeat`.
+- **Background task lifecycle**: `tina-daemon/src/heartbeat.rs:42-63` — `tokio::spawn` + `CancellationToken` + `JoinHandle`. Each WebSocket PTY bridge should follow this pattern.
+- **Pane-ID tmux targeting**: `tina-monitor/src/tmux/capture.rs:35-49` — `pane_exists()` validates a pane via `tmux display-message -t {paneId}`. Reuse this exact pattern for WebSocket connection validation.
+- **CLI readiness polling**: `tina-session/src/claude/ready.rs:1-53` — polls pane output for prompt characters. Reuse for ad-hoc session startup.
+- **Convex table definition**: `convex/schema.ts:105-119` — `teamMembers` table pattern with `defineTable()`, validators, and composite indexes. Follow for `terminalSessions`.
+- **Convex upsert mutation**: `convex/teamMembers.ts:1-37` — query by composite index, `patch` or `insert`. Follow for `terminalSessions` mutations.
+- **Convex join query**: `convex/teams.ts:45-70` — `listActiveTeams` manually joins via `ctx.db.get()` and filters. Follow for `listTerminalTargets`.
+- **Rust record + args serializer**: `tina-data/src/types.rs:55-65` (TeamMemberRecord) and `tina-data/src/convex_client.rs:144-169` (team_member_to_args). Follow for `TerminalSessionRecord`.
+- **Daemon sync with cache**: `tina-daemon/src/sync.rs:131-246` — `sync_team_members` reads filesystem, builds records, uses `SyncCache` to skip unchanged. Extend to sync `tmuxPaneId`.
+- **Sidebar rendering**: `tina-web/src/components/Sidebar.tsx:37-50` — multiple `useTypedQuery` calls, `SidebarNav` > `SidebarItem` hierarchy. Add Sessions section following same pattern.
+- **Route structure**: `tina-web/src/App.tsx:1-21` — layout routes with `<Outlet />`. Add `/terminal/:paneId` route under AppShell.
+- **Selection + URL sync**: `tina-web/src/services/selection-service.ts:1-106` — external store + `useSyncExternalStore` + URL params. Terminal view can use route params directly (no need to extend selection service).
+- **Error boundaries**: `tina-web/src/components/DataErrorBoundary.tsx:1-142` — wrap `TerminalView` in `DataErrorBoundary` for connection failures.
+- **Keyboard modal scope**: `tina-web/src/services/keyboard-service.ts:1-132` — `setModalScope()` blocks global keyboard dispatch. Use this when terminal is focused so keystrokes go to xterm.js, not the app.
+
+### Code to reuse
+
+- `tina-monitor/src/tmux/capture.rs` — `pane_exists()` and `capture_pane_content()` by pane ID. Extract or duplicate in daemon.
+- `tina-session/src/tmux/session.rs` — `create_session()`, `kill_session()`, `session_exists()`, `list_sessions()` for ad-hoc lifecycle.
+- `tina-session/src/tmux/send.rs` — `send_keys()` and `send_keys_raw()` for context seeding.
+- `tina-session/src/claude/ready.rs` — `wait_for_ready()` for polling CLI startup.
+- `tina-data/src/convex_client.rs` — `TinaConvexClient` methods and `extract_*` response parsers.
+- `tina-web/src/hooks/useTypedQuery.ts` — typed Convex subscription hook.
+- `tina-web/src/lib/query-state.ts` — `matchQueryResult`, `isAnyQueryLoading` helpers.
+- `tina-web/src/components/ui/sidebar-item.tsx` — `SidebarItem` for session list entries.
+- `tina-web/src/hooks/useFocusTrap.ts` — may be useful if terminal view needs focus management.
+
+### Anti-patterns
+
+- Don't add `axum` as a separate dependency if the mechanical review workbench design (`docs/plans/2026-02-12-mechanical-review-workbench-design.md`) also plans axum in tina-daemon. Coordinate: one shared HTTP server, one port, one axum Router with both sets of routes.
+- Don't use synchronous `std::process::Command` for tmux calls from async context — use `tokio::task::spawn_blocking` as in `tina-daemon/src/actions.rs:88-159`.
+- Don't extend the selection service for terminal state — use route params (`/terminal/:paneId`) instead. The selection service tracks orchestration/phase; terminal is a different navigation context.
+- Don't capture keyboard events globally when terminal is focused — use `keyboardService.setModalScope("terminal")` to prevent the keyboard service from intercepting keystrokes meant for xterm.js.
+
+### Integration
+
+- **Entry (daemon)**: HTTP/WebSocket server spawned as task in `tina-daemon/src/main.rs` event loop, alongside heartbeat and watcher.
+- **Entry (web)**: New route `/terminal/:paneId` in `tina-web/src/App.tsx` under the AppShell layout route.
+- **Connects to**: `tina-daemon/src/sync.rs` (tmuxPaneId sync), `convex/schema.ts` (new table + field), `tina-web/src/components/Sidebar.tsx` (sessions section), `tina-web/src/components/TeamSection.tsx` (connect buttons).
+- **Shared with**: Mechanical Review Workbench design — both add HTTP endpoints to tina-daemon. Must share the same axum server instance and port configuration.
