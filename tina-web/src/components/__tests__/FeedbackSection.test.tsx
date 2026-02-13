@@ -111,6 +111,12 @@ describe("FeedbackSection", () => {
 
     expect(screen.getByText("First entry")).toBeInTheDocument()
     expect(screen.getByText("Second entry")).toBeInTheDocument()
+
+    const items = screen.getAllByRole("listitem")
+    const texts = items.map((item) => item.textContent)
+    const secondIdx = texts.findIndex((t) => t?.includes("Second entry"))
+    const firstIdx = texts.findIndex((t) => t?.includes("First entry"))
+    expect(secondIdx).toBeLessThan(firstIdx)
   })
 
   it("shows entry type badge on each entry", () => {

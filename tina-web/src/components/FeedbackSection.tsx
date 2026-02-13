@@ -250,7 +250,9 @@ export function FeedbackSection({
     return null
   }
 
-  const entries = entriesResult.data
+  const entries = [...entriesResult.data].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
 
   return (
     <div data-testid="feedback-section" className="space-y-2">
