@@ -1,0 +1,306 @@
+@use '../styles/tokens' as *;
+
+.changesLayout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 400px;
+}
+
+.sidebar {
+  border: 1px solid $border-color;
+  border-radius: 6px;
+  background: $bg-card;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.filterInput {
+  padding: 8px;
+  border-bottom: 1px solid $border-color;
+
+  input {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid $border-color;
+    border-radius: 4px;
+    background: $bg-primary;
+    color: $text-primary;
+    outline: none;
+    &:focus { border-color: $accent; }
+  }
+}
+
+.fileList {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 68vh;
+}
+
+.fileItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: $text-muted;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover { background: rgba(255, 255, 255, 0.03); color: $text-primary; }
+  &.selected { background: rgba(255, 255, 255, 0.06); color: $text-primary; }
+}
+
+.fileMarker {
+  width: 14px;
+  text-align: center;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.fileName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileStats {
+  font-size: 10px;
+  color: $text-muted;
+  flex-shrink: 0;
+}
+
+.diffPanel {
+  border: 1px solid $border-color;
+  border-radius: 6px;
+  background: $bg-card;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.diffHeader {
+  padding: 8px 12px;
+  border-bottom: 1px solid $border-color;
+  font-size: 12px;
+}
+
+.diffFilePath {
+  font-weight: 600;
+  color: $text-primary;
+  font-family: $font-mono;
+}
+
+.diffStats {
+  font-size: 11px;
+  color: $text-muted;
+  margin-top: 2px;
+}
+
+.diffScroll {
+  flex: 1;
+  overflow: auto;
+  max-height: 68vh;
+}
+
+.diffTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: $font-mono;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.diffGutter {
+  width: 48px;
+  padding: 0 6px;
+  text-align: right;
+  color: $text-muted;
+  user-select: none;
+  font-size: 11px;
+  vertical-align: top;
+}
+
+.diffSep {
+  width: 1px;
+  background: $border-color;
+}
+
+.diffCode {
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  vertical-align: top;
+}
+
+.lineAdd { background: rgba(46, 160, 67, 0.08); }
+.lineDelete { background: rgba(248, 81, 73, 0.08); }
+.lineContext { background: transparent; }
+
+.commentBtn {
+  width: 18px;
+  height: 18px;
+  border: 1px solid $border-color;
+  border-radius: 3px;
+  background: $bg-card;
+  color: $text-muted;
+  font-size: 10px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+
+  tr:hover & { opacity: 1; }
+  &:hover { border-color: $accent; color: $accent; }
+}
+
+.commentBtnCell {
+  width: 24px;
+  text-align: center;
+  vertical-align: top;
+  padding: 1px 2px;
+}
+
+.threadMarker {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.threadMarkerP0 { background: hsl(var(--status-blocked)); }
+.threadMarkerP1 { background: hsl(var(--status-reviewing)); }
+.threadMarkerP2 { background: $text-muted; }
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: $text-muted;
+  font-size: 13px;
+}
+
+.springIndicator {
+  padding: 8px 12px;
+  border-top: 1px solid $border-color;
+  font-size: 11px;
+  color: $text-muted;
+}
+
+.springBar {
+  height: 3px;
+  border-radius: 2px;
+  background: $border-color;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.springFill {
+  height: 100%;
+  border-radius: 2px;
+  background: $accent;
+  transition: width 0.05s;
+}
+
+.inlineComposer {
+  padding: 8px;
+  border-top: 1px solid $border-color;
+  background: $bg-card;
+}
+
+.inlineComposerTarget {
+  font-size: 11px;
+  color: $text-muted;
+  margin-bottom: 4px;
+  font-family: $font-mono;
+}
+
+.inlineComposerTextarea {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: $bg-primary;
+  color: $text-primary;
+  resize: vertical;
+  min-height: 60px;
+  outline: none;
+  &:focus { border-color: $accent; }
+}
+
+.inlineComposerActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inlineComposerSubmit {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: $bg-card;
+  color: $text-primary;
+  cursor: pointer;
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+  &:hover:not(:disabled) { border-color: $accent; }
+}
+
+.inlineComposerCancel {
+  padding: 4px 10px;
+  font-size: 11px;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  background: none;
+  color: $text-muted;
+  cursor: pointer;
+}
+
+.fileComments {
+  padding: 8px 12px;
+  border-top: 1px solid $border-color;
+}
+
+.fileCommentsTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: $text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.threadCard {
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 6px;
+}
+
+.threadMeta {
+  font-size: 11px;
+  color: $text-muted;
+}
+
+.threadSummary {
+  font-size: 12px;
+  font-weight: 600;
+  color: $text-primary;
+  margin-top: 2px;
+}
+
+.threadBody {
+  font-size: 12px;
+  color: $text-muted;
+  margin-top: 2px;
+}
