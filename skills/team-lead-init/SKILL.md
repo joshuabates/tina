@@ -123,6 +123,57 @@ Do NOT spawn workers or reviewers yet. The team is just a container at this poin
 
 ---
 
+## STEP 4b: Result contract and dual-grammar recognition
+
+### v2 Result Contract
+
+All worker and reviewer outputs normalize to this schema:
+
+| Field | Type | Required |
+|-------|------|----------|
+| `role` | `worker\|spec-reviewer\|code-quality-reviewer` | always |
+| `task_id` | string (TaskCreate UUID) | always |
+| `status` | `pass\|gaps\|error` | always |
+| `git_range` | string | when role=worker and status=pass |
+| `files_changed` | string | optional |
+| `issues` | string | when status=gaps or error |
+| `confidence` | `high\|medium\|low` | optional, reviewers only |
+
+### Acceptance matrix
+
+When processing a result message, validate required fields:
+
+| role | status | required fields |
+|------|--------|----------------|
+| worker | pass | task_id, status, git_range |
+| worker | gaps or error | task_id, status, issues |
+| spec-reviewer | pass | task_id, status |
+| spec-reviewer | gaps or error | task_id, status, issues |
+| code-quality-reviewer | pass | task_id, status |
+| code-quality-reviewer | gaps or error | task_id, status, issues |
+
+If a required field is missing from a v2 message, treat the result as invalid (see retry policy).
+
+### Dual-grammar recognition (permanent)
+
+Team-lead accepts BOTH formats permanently:
+
+**v2 format (structured headers):** Message starts with `role:` line followed by key-value header lines, then a blank line, then freeform body. Parse headers into the v2 schema above.
+
+**Legacy format (freeform):** Message does NOT start with `role:`. Interpret the message body using LLM reasoning to extract:
+- Pass/fail verdict from phrases like "review passed", "spec compliant", "APPROVED", "FAILED", "issues found"
+- Git range from patterns like `abc123..def456`
+- Issues from bullet lists or numbered findings
+
+**Recognition logic:**
+1. Check if first line of message content matches `^role:\s*(worker|spec-reviewer|code-quality-reviewer)$`
+2. If yes: parse as v2 — extract all header fields, validate against acceptance matrix
+3. If no: parse as legacy — interpret freeform message for verdict, git range, issues
+
+**IMPORTANT:** Claude agents produce freeform text. v2 headers are a best-effort convention for Claude, not a guaranteed parse. Always handle legacy gracefully. For Codex outputs (via codex-cli adapter), v2 is deterministic.
+
+---
+
 ## STEP 5: DAG scheduler - concurrent task execution
 
 Replace the sequential task loop with a ready-queue DAG scheduler that runs independent tasks in parallel.
@@ -176,6 +227,12 @@ If `CLI == "codex"`:
 
 Monitor for Teammate messages from any active worker indicating completion. Track active workers in a map: task-number -> worker-name.
 
+When a worker message arrives, apply dual-grammar recognition:
+1. If message has v2 headers: extract `role`, `task_id`, `status`, `git_range`, `files_changed`, `issues`
+2. If message is legacy freeform: interpret verdict and extract git range from text
+3. Validate against acceptance matrix (for v2 messages only)
+4. If v2 validation fails (missing required field): treat as invalid result, apply retry policy
+
 ### 5.4 Review the completed task
 
 When worker-N reports completion, spawn reviewers for task N. Run a routing check using the task's model:
@@ -225,6 +282,137 @@ If `CLI == "codex"`:
 
 Wait for both reviewers to approve.
 
+When a reviewer message arrives, apply dual-grammar recognition:
+1. If message has v2 headers: extract `role`, `task_id`, `status`, `issues`, `confidence`
+2. If message is legacy freeform: interpret pass/fail verdict and extract issues from text
+3. For v2 messages, validate against acceptance matrix
+4. Decision logic:
+   - `status: pass` → reviewer approved
+   - `status: gaps` → reviewer found issues, send back to worker for fixes
+   - `status: error` → reviewer encountered an error, apply retry policy
+
+### 5.4b Retry protocol for invalid results
+
+**Scope:** This protocol handles results that fail v2 acceptance matrix validation or are completely uninterpretable. It does NOT apply to valid results with `status=gaps` (those follow the normal remediation loop where reviewer sends issues to worker).
+
+**Retry tracker:** Team-lead maintains a mental retry counter per agent spawn:
+
+```
+retry_tracker:
+  worker-1: { attempts: 0, max: 1 }
+  spec-reviewer-1: { attempts: 0, max: 1 }
+  code-quality-reviewer-1: { attempts: 0, max: 1 }
+```
+
+Each agent gets at most 1 retry (2 total attempts). The counter resets when a new agent is spawned for a different task.
+
+**Decision flow:**
+
+```
+Invalid result received from agent-N
+  │
+  ├── attempts < max?
+  │     │
+  │     YES → Shut down agent-N
+  │     │     Increment attempts
+  │     │     Spawn replacement agent-N with stricter prompt
+  │     │     Wait for replacement result
+  │     │
+  │     NO → Escalate (see escalation below)
+  │
+  └── Result is valid but status=gaps/error?
+        │
+        └── Normal remediation flow (NOT a retry)
+```
+
+**Step 1 — Detect invalid result:**
+
+A result is "invalid" when:
+1. v2 headers are present but fail acceptance matrix validation (missing required fields)
+2. Message cannot be interpreted at all (no v2 headers AND no recognizable legacy verdict)
+3. `task_id` in v2 headers doesn't match the expected task
+
+A result is NOT invalid when:
+- Legacy freeform message with a clear pass/fail verdict (valid legacy)
+- v2 message with `status: gaps` or `status: error` and all required fields present (valid gaps/error)
+
+**Step 2 — Retry with stricter instructions:**
+
+Shut down the failed agent:
+```json
+SendMessage({ type: "shutdown_request", recipient: "agent-N", content: "Invalid result, retrying" })
+```
+
+Spawn a replacement with the same name and an augmented prompt. Prepend this retry preamble to the original prompt:
+
+**For workers (invalid result retry):**
+```
+RETRY CONTEXT: Your previous run produced an invalid result that could not be processed.
+The team-lead could not extract a valid verdict from your output.
+
+You MUST include v2 structured headers as the FIRST lines of your completion message:
+
+role: worker
+task_id: <your-task-id>
+status: pass|gaps|error
+git_range: <base>..<head>  (required when status=pass)
+issues: <description>  (required when status=gaps or error)
+
+Then include a blank line followed by your freeform explanation.
+
+IMPORTANT: Do NOT skip the headers. Do NOT embed them inside prose. They must be the very first lines of your message.
+
+---
+<original task prompt follows>
+```
+
+**For reviewers (invalid result retry):**
+```
+RETRY CONTEXT: Your previous review produced an invalid result that could not be processed.
+The team-lead could not extract a valid verdict from your output.
+
+You MUST include v2 structured headers as the FIRST lines of your completion message:
+
+role: <spec-reviewer|code-quality-reviewer>
+task_id: <your-task-id>
+status: pass|gaps|error
+issues: <description>  (required when status=gaps or error)
+
+Then include a blank line followed by your freeform review body.
+
+IMPORTANT: Do NOT skip the headers. Do NOT embed them inside prose. They must be the very first lines of your message.
+
+---
+<original review prompt follows>
+```
+
+**Codex agents (via codex-cli):** When retrying a Codex agent, the retry preamble is added to the `prompt_content` field in the codex-cli spawn prompt. The codex-cli adapter will include it in the Codex prompt, and the adapter itself always emits v2 headers deterministically. If the adapter still fails (e.g., Codex returns empty output that the adapter can't normalize), the retry preamble won't help — escalate after the second attempt.
+
+**Step 3 — Escalation after exhausting retries:**
+
+After 2 failed attempts (original + 1 retry):
+
+For workers:
+1. Shut down the failed worker-N
+2. Mark the task as blocked: `TaskUpdate({ taskId: "<task-N-id>", status: "blocked", description: "BLOCKED: worker produced invalid results after retry" })`
+3. Log: "worker-N exhausted retries for task N — marking task blocked"
+4. Continue with other tasks (blocked task's dependents stay blocked)
+
+For reviewers:
+1. Shut down the failed reviewer
+2. Spawn a replacement reviewer with a fresh prompt (no retry preamble — this is a fresh start, not a retry)
+3. If the fresh reviewer also produces an invalid result, mark the task as blocked
+4. Log: "reviewer-N exhausted retries for task N — spawning fresh replacement" or "— marking task blocked"
+
+**Interaction with existing error handling:**
+
+This retry protocol is separate from the existing worker/reviewer error handling (section "Error handling per task"):
+- **Invalid result retry** (this section): Result arrives but can't be parsed → retry once with stricter instructions
+- **Worker failure retry** (existing): Worker crashes, times out, or reports `status: error` → shut down, retry with fresh worker
+- **Review loop cap** (existing): Reviewer rejects 3x → escalate
+
+A single task can trigger both: an invalid result retry, then after the retried agent produces a valid `status: error`, the existing worker failure retry logic takes over. The retry counters are independent.
+
 ### 5.5 Shut down task-N's agents
 
 After reviews pass for task N, shut down that task's agents only:
@@ -255,9 +443,12 @@ Continue the wait-for-any/review/shutdown/re-check cycle until `TaskList` shows 
 ### Error handling per task
 
 Current retry/escalation logic applies per-task:
-- Worker fails → shut down, retry with fresh `worker-N` (one retry)
+- Worker produces invalid result → retry once with stricter instructions (section 5.4b)
+- Worker fails (crash/timeout/error status) → shut down, retry with fresh `worker-N` (one retry)
+- Reviewer produces invalid result → retry once with stricter instructions (section 5.4b)
 - Reviewer rejects 3x → escalate, set status=blocked
 - A blocked task does NOT block unrelated tasks — only its dependents stay blocked
+- Invalid-result retry and failure retry are independent counters
 
 ---
 
@@ -723,6 +914,20 @@ Handoff written to .claude/tina/phase-N/handoff.md
 - `.claude/tina/phase-N/status.json` - Phase execution status (fallback for monitoring)
 
 Note: `team-name.txt` is no longer used. Team names are passed explicitly from orchestrator to executor to team-lead.
+
+## Codex Role Progression Parity
+
+Codex-routed tasks follow the identical progression as Claude-routed tasks:
+
+1. **Routing check:** `tina-session config cli-for-model --model <model>` returns `claude` or `codex`
+2. **Worker spawn:** `tina:implementer` (claude) or `tina:codex-cli` with `role: executor` (codex)
+3. **Worker result:** v2 headers (both emit) or legacy freeform (Claude only) → dual-grammar recognition
+4. **Spec-reviewer spawn:** `tina:spec-reviewer` (claude) or `tina:codex-cli` with `role: reviewer` (codex)
+5. **Code-quality-reviewer spawn:** `tina:code-quality-reviewer` (claude) or `tina:codex-cli` with `role: reviewer` (codex)
+6. **Review results:** Same dual-grammar recognition, same acceptance matrix, same retry policy
+7. **Task completion:** Identical shutdown, mark complete, re-check ready queue flow
+
+The routing decision affects only the subagent_type and prompt format. All task lifecycle transitions (in_progress → review → complete/blocked), retry counters, escalation rules, and completion gates are engine-agnostic.
 
 ## Red Flags
 

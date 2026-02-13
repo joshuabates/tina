@@ -135,6 +135,26 @@ digraph team_process {
 }
 ```
 
+### Result Contract and Dual-Grammar Recognition
+
+Team-lead in executing-plans mode accepts both v2 structured headers and legacy freeform messages permanently.
+
+**v2 format:** Message starts with `role:` header line. Parse key-value headers (role, task_id, status, git_range, files_changed, issues, confidence) then freeform body after blank line.
+
+**Legacy format:** Message does not start with `role:`. Interpret freeform text for verdict, git range, and issues using LLM reasoning.
+
+**Acceptance matrix (v2 only):**
+| role | status | required fields |
+|------|--------|----------------|
+| worker | pass | task_id, status, git_range |
+| worker | gaps/error | task_id, status, issues |
+| spec-reviewer | pass | task_id, status |
+| spec-reviewer | gaps/error | task_id, status, issues |
+| code-quality-reviewer | pass | task_id, status |
+| code-quality-reviewer | gaps/error | task_id, status, issues |
+
+Claude agents emit v2 as best-effort. Codex agents (via codex-cli) emit v2 deterministically. Always handle legacy gracefully.
+
 ### Ephemeral Team Mode Implementation
 
 **1. Phase Initialization:**
@@ -390,16 +410,81 @@ State is discarded after task completes. Next task starts fresh.
 
 ### Message Handling
 
-Team-lead monitors for specific messages:
+Team-lead monitors for messages and applies dual-grammar recognition:
 
-**From workers:**
-- Implementation complete notification → Spawn reviewers
-- `"Task blocked on X"` → Note blocker, skip to next task
+**From workers (v2 or legacy):**
+- v2 `status: pass` or legacy "Implementation complete" → Spawn reviewers
+- v2 `status: gaps` or legacy "Task blocked on X" → Note blocker, assess next steps
+- v2 `status: error` or legacy error indication → Apply retry policy
 
-**From reviewers:**
-- `"Review passed"` → Track as passed, check if both complete
-- `"Issues found: [list]"` → Worker fixes, re-review
-- `"Review loop exceeded 3 iterations"` → Team-lead intervenes
+**From reviewers (v2 or legacy):**
+- v2 `status: pass` or legacy "Review passed" / "APPROVED" → Track as passed, check if both complete
+- v2 `status: gaps` or legacy "Issues found: [list]" → Worker fixes, re-review
+- v2 `status: error` or legacy "Review loop exceeded" → Team-lead intervenes
+
+### Invalid Result Retry Protocol
+
+When a v2 message fails acceptance matrix validation or a message cannot be interpreted at all:
+
+**Retry tracking:** Track retry attempts per agent (max 1 retry = 2 total attempts per agent).
+
+**Retry flow:**
+1. Shut down the agent that produced the invalid result
+2. Spawn a replacement with the same name and an augmented prompt containing a retry preamble:
+
+**Worker retry preamble:**
+```
+RETRY CONTEXT: Your previous run produced an invalid result that could not be processed.
+The team-lead could not extract a valid verdict from your output.
+
+You MUST include v2 structured headers as the FIRST lines of your completion message:
+
+role: worker
+task_id: <your-task-id>
+status: pass|gaps|error
+git_range: <base>..<head>  (required when status=pass)
+issues: <description>  (required when status=gaps or error)
+
+Then include a blank line followed by your freeform explanation.
+
+IMPORTANT: Do NOT skip the headers. Do NOT embed them inside prose. They must be the very first lines of your message.
+
+---
+<original task prompt follows>
+```
+
+**Reviewer retry preamble:**
+```
+RETRY CONTEXT: Your previous review produced an invalid result that could not be processed.
+The team-lead could not extract a valid verdict from your output.
+
+You MUST include v2 structured headers as the FIRST lines of your completion message:
+
+role: <spec-reviewer|code-quality-reviewer>
+task_id: <your-task-id>
+status: pass|gaps|error
+issues: <description>  (required when status=gaps or error)
+
+Then include a blank line followed by your freeform review body.
+
+IMPORTANT: Do NOT skip the headers. Do NOT embed them inside prose. They must be the very first lines of your message.
+
+---
+<original review prompt follows>
+```
+
+3. If the replacement also produces an invalid result, escalate per role:
+
+**Escalation after exhausting retries (workers):**
+1. Shut down the failed worker
+2. Mark the task as blocked and continue with other tasks
+
+**Escalation after exhausting retries (reviewers):**
+1. Shut down the failed reviewer
+2. Spawn a replacement reviewer with a fresh prompt (no retry preamble — this is a fresh start, not a retry)
+3. If the fresh reviewer also produces an invalid result, mark the task as blocked
+
+**Does NOT apply to:** Valid results with `status=gaps` (normal remediation loop) or `status=error` (existing error handling).
 
 ### Infinite Loop Prevention
 
@@ -409,6 +494,8 @@ If task bounces between worker and reviewer 3+ times:
 2. Messages both parties: "Review loop detected. Explain core disagreement."
 3. If unresolvable: Mark task blocked, continue with other tasks
 4. Include blocked task in phase-reviewer context
+
+**Invalid result loops:** If an agent produces an unparseable result, this is handled by the Invalid Result Retry Protocol (above), not the review loop counter. The two mechanisms are independent.
 
 ### Phase Reviewer Integration
 

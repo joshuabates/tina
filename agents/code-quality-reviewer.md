@@ -67,6 +67,18 @@ All issues must be fixed before approval.
 
 ## Report Format
 
+Return v2 structured headers followed by a freeform body:
+
+**v2 Headers (required):**
+```
+role: code-quality-reviewer
+task_id: <TaskCreate UUID>
+status: pass|gaps|error
+confidence: high|medium|low  (optional)
+issues: <semicolon-separated list>  (required when status=gaps or error)
+```
+
+**Freeform body (required):**
 Include these sections:
 
 #### Detector Findings
@@ -99,7 +111,7 @@ PASS message:
 SendMessage({
   type: "message",
   recipient: "worker",
-  content: "Code quality review PASSED.",
+  content: "role: code-quality-reviewer\ntask_id: <id>\nstatus: pass\n\nCode quality review PASSED.",
   summary: "Code quality review passed"
 })
 ```
@@ -109,7 +121,7 @@ FAIL message:
 SendMessage({
   type: "message",
   recipient: "worker",
-  content: "Code quality review FAILED. Issues:\n- [Issue 1]\n- [Issue 2]",
+  content: "role: code-quality-reviewer\ntask_id: <id>\nstatus: gaps\nissues: <issue1>; <issue2>\n\nCode quality review FAILED. Issues:\n- [Issue 1]\n- [Issue 2]",
   summary: "Code quality review failed"
 })
 ```
