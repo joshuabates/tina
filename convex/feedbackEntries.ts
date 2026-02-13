@@ -161,8 +161,10 @@ export const listFeedbackEntriesByOrchestration = query({
     ),
     status: v.optional(v.union(v.literal("open"), v.literal("resolved"))),
     authorType: v.optional(v.union(v.literal("human"), v.literal("agent"))),
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const limit = args.limit ?? 200;
     let entries;
 
     if (args.status !== undefined) {
@@ -174,7 +176,7 @@ export const listFeedbackEntriesByOrchestration = query({
             .eq("status", args.status!),
         )
         .order("desc")
-        .collect();
+        .take(limit);
     } else if (args.targetType !== undefined) {
       entries = await ctx.db
         .query("feedbackEntries")
@@ -184,7 +186,7 @@ export const listFeedbackEntriesByOrchestration = query({
             .eq("targetType", args.targetType!),
         )
         .order("desc")
-        .collect();
+        .take(limit);
     } else {
       entries = await ctx.db
         .query("feedbackEntries")
@@ -192,7 +194,7 @@ export const listFeedbackEntriesByOrchestration = query({
           q.eq("orchestrationId", args.orchestrationId),
         )
         .order("desc")
-        .collect();
+        .take(limit);
     }
 
     if (args.targetType !== undefined && args.status !== undefined) {
@@ -214,8 +216,10 @@ export const listFeedbackEntriesByTarget = query({
     orchestrationId: v.id("orchestrations"),
     targetType: v.union(v.literal("task"), v.literal("commit")),
     targetRef: v.string(),
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const limit = args.limit ?? 200;
     if (args.targetType === "task") {
       const entries = await ctx.db
         .query("feedbackEntries")
@@ -223,7 +227,7 @@ export const listFeedbackEntriesByTarget = query({
           q.eq("targetType", "task").eq("targetTaskId", args.targetRef),
         )
         .order("desc")
-        .collect();
+        .take(limit);
       return entries.filter(
         (e) => e.orchestrationId === args.orchestrationId,
       );
@@ -236,7 +240,7 @@ export const listFeedbackEntriesByTarget = query({
             .eq("targetCommitSha", args.targetRef),
         )
         .order("desc")
-        .collect();
+        .take(limit);
       return entries.filter(
         (e) => e.orchestrationId === args.orchestrationId,
       );
