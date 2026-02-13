@@ -1,10 +1,9 @@
 import { Schema } from "effect"
-import { convexDocumentFields } from "./common"
+import { optionalString, orchestrationScopedDocumentFields } from "./common"
 
 export const ReviewThread = Schema.Struct({
-  ...convexDocumentFields,
+  ...orchestrationScopedDocumentFields,
   reviewId: Schema.String,
-  orchestrationId: Schema.String,
   filePath: Schema.String,
   line: Schema.Number,
   commitSha: Schema.String,
@@ -16,8 +15,8 @@ export const ReviewThread = Schema.Struct({
   author: Schema.String,
   gateImpact: Schema.String,
   createdAt: Schema.String,
-  resolvedAt: Schema.optionalWith(Schema.String, { as: "Option" }),
-  resolvedBy: Schema.optionalWith(Schema.String, { as: "Option" }),
+  resolvedAt: optionalString,
+  resolvedBy: optionalString,
 })
 
 export type ReviewThread = typeof ReviewThread.Type

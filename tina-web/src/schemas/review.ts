@@ -1,14 +1,13 @@
 import { Schema } from "effect"
-import { convexDocumentFields } from "./common"
+import { optionalString, orchestrationScopedDocumentFields } from "./common"
 
 export const ReviewSummary = Schema.Struct({
-  ...convexDocumentFields,
-  orchestrationId: Schema.String,
-  phaseNumber: Schema.optionalWith(Schema.String, { as: "Option" }),
+  ...orchestrationScopedDocumentFields,
+  phaseNumber: optionalString,
   state: Schema.String,
   reviewerAgent: Schema.String,
   startedAt: Schema.String,
-  completedAt: Schema.optionalWith(Schema.String, { as: "Option" }),
+  completedAt: optionalString,
 })
 
 export type ReviewSummary = typeof ReviewSummary.Type

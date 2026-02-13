@@ -1,14 +1,13 @@
 import { Schema } from "effect"
-import { convexDocumentFields } from "./common"
+import { optionalString, orchestrationScopedDocumentFields } from "./common"
 
 export const ReviewGate = Schema.Struct({
-  ...convexDocumentFields,
-  orchestrationId: Schema.String,
+  ...orchestrationScopedDocumentFields,
   gateId: Schema.String,
   status: Schema.String,
   owner: Schema.String,
-  decidedBy: Schema.optionalWith(Schema.String, { as: "Option" }),
-  decidedAt: Schema.optionalWith(Schema.String, { as: "Option" }),
+  decidedBy: optionalString,
+  decidedAt: optionalString,
   summary: Schema.String,
 })
 
