@@ -5,10 +5,7 @@ import { formatBlockedByForDisplay } from "@/lib/task-dependencies"
 import { QuicklookDialog } from "@/components/QuicklookDialog"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import { FeedbackSection } from "@/components/FeedbackSection"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import styles from "./QuicklookDialog.module.scss"
 import taskStyles from "./TaskQuicklook.module.scss"
 import markdownStyles from "./PlanQuicklook.module.scss"
@@ -32,33 +29,9 @@ export function TaskQuicklook({ task, onClose }: TaskQuicklookProps) {
         {Option.match(task.description, {
           onNone: () => <div className={styles.value}>No description</div>,
           onSome: (description) => (
-            <div className={markdownStyles.content}>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  code(props) {
-                    const { className, children, ...rest } = props
-                    const match = /language-(\w+)/.exec(className || "")
-                    const isInline = !("inline" in rest) || rest.inline === false
-                    return !isInline && match ? (
-                      <SyntaxHighlighter
-                        style={oneDark}
-                        language={match[1]}
-                        PreTag="div"
-                      >
-                        {String(children).replace(/\n$/, "")}
-                      </SyntaxHighlighter>
-                    ) : (
-                      <code className={className} {...rest}>
-                        {children}
-                      </code>
-                    )
-                  },
-                }}
-              >
-                {description}
-              </ReactMarkdown>
-            </div>
+            <MarkdownRenderer className={markdownStyles.content}>
+              {description}
+            </MarkdownRenderer>
           ),
         })}
       </section>

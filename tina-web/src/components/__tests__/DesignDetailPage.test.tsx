@@ -96,6 +96,7 @@ describe("DesignDetailPage", () => {
   it("renders markdown body", () => {
     renderApp("/pm/designs/d1?project=p1")
 
+    expect(screen.getByRole("heading", { level: 1, name: "Auth" })).toBeInTheDocument()
     expect(screen.getByText(/Design for auth flow/)).toBeInTheDocument()
   })
 

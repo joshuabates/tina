@@ -130,6 +130,19 @@ describe("TicketDetailPage", () => {
     expect(screen.getByText("Add a login form with email and password fields")).toBeInTheDocument()
   })
 
+  it("renders ticket description as markdown with headings", () => {
+    renderApp("/pm/tickets/t1?project=p1", {
+      ...defaultStates,
+      "tickets.get": querySuccess(buildTicket({
+        description: "## Login details\n\nUse **email** and *password*.",
+      })),
+    })
+
+    expect(screen.getByRole("heading", { level: 2, name: "Login details" })).toBeInTheDocument()
+    expect(screen.getByText("email").tagName.toLowerCase()).toBe("strong")
+    expect(screen.getByText("password").tagName.toLowerCase()).toBe("em")
+  })
+
   it("renders metadata fields for priority", () => {
     renderApp("/pm/tickets/t1?project=p1")
 

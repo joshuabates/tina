@@ -11,7 +11,9 @@ import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import { CommentTimeline } from "./CommentTimeline"
 import { EditDesignModal } from "./EditDesignModal"
 import type { Id } from "@convex/_generated/dataModel"
+import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import styles from "./DesignDetailPage.module.scss"
+import markdownStyles from "../PlanQuicklook.module.scss"
 
 const DESIGN_STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -156,7 +158,9 @@ export function DesignDetailPage() {
         )}
       </div>
 
-      <pre className={styles.markdownBody}>{design.markdown}</pre>
+      <MarkdownRenderer className={`${styles.markdownBody} ${markdownStyles.content}`}>
+        {design.markdown}
+      </MarkdownRenderer>
 
       {complexityPreset && (
         <div className={styles.section} data-testid="validation-section">

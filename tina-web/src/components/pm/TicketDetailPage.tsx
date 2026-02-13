@@ -11,7 +11,9 @@ import { toStatusBadgeStatus, priorityLabel } from "@/components/ui/status-style
 import { CommentTimeline } from "./CommentTimeline"
 import { EditTicketModal } from "./EditTicketModal"
 import type { Id } from "@convex/_generated/dataModel"
+import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import styles from "./TicketDetailPage.module.scss"
+import markdownStyles from "../PlanQuicklook.module.scss"
 
 
 interface TransitionAction {
@@ -180,7 +182,9 @@ export function TicketDetailPage() {
         />
       )}
 
-      <div className={styles.descriptionBody}>{ticket.description}</div>
+      <MarkdownRenderer className={`${styles.descriptionBody} ${markdownStyles.content}`}>
+        {ticket.description}
+      </MarkdownRenderer>
 
       <div className={styles.metadataGrid}>
         <div className={styles.metadataItem} data-testid="meta-priority">

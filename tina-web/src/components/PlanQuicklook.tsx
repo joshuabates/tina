@@ -4,10 +4,7 @@ import { useQuicklookKeyboard } from "@/hooks/useQuicklookKeyboard"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { PlanQuery } from "@/services/data/queryDefs"
 import { matchQueryResult } from "@/lib/query-state"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import styles from "./QuicklookDialog.module.scss"
 import markdownStyles from "./PlanQuicklook.module.scss"
 
@@ -67,33 +64,9 @@ export function PlanQuicklook({ orchestrationId, phaseNumber, onClose }: PlanQui
               }
 
               return (
-                <div className={markdownStyles.content}>
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      code(props) {
-                        const { className, children, ...rest } = props
-                        const match = /language-(\w+)/.exec(className || "")
-                        const isInline = !("inline" in rest) || rest.inline === false
-                        return !isInline && match ? (
-                          <SyntaxHighlighter
-                            style={oneDark}
-                            language={match[1]}
-                            PreTag="div"
-                          >
-                            {String(children).replace(/\n$/, "")}
-                          </SyntaxHighlighter>
-                        ) : (
-                          <code className={className} {...rest}>
-                            {children}
-                          </code>
-                        )
-                      },
-                    }}
-                  >
-                    {plan.content}
-                  </ReactMarkdown>
-                </div>
+                <MarkdownRenderer className={markdownStyles.content}>
+                  {plan.content}
+                </MarkdownRenderer>
               )
             },
           })}
