@@ -61,6 +61,7 @@ pub struct TeamMemberRecord {
     pub agent_type: Option<String>,
     pub model: Option<String>,
     pub joined_at: Option<String>,
+    pub tmux_pane_id: Option<String>,
     pub recorded_at: String,
 }
 

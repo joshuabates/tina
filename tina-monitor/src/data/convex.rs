@@ -310,7 +310,7 @@ fn materialize_agent(member: &TeamMemberRecord) -> Agent {
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.timestamp_millis())
             .unwrap_or(0),
-        tmux_pane_id: None,
+        tmux_pane_id: member.tmux_pane_id.clone(),
         cwd: PathBuf::new(),
         subscriptions: vec![],
     }
@@ -517,6 +517,7 @@ mod tests {
             agent_type: Some("executor".to_string()),
             model: Some("claude-opus-4-6".to_string()),
             joined_at: Some("2026-02-07T10:00:00Z".to_string()),
+            tmux_pane_id: None,
             recorded_at: "2026-02-07T10:00:00Z".to_string(),
         };
 

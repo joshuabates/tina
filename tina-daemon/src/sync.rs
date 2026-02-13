@@ -237,6 +237,7 @@ pub async fn sync_team_members(
             agent_type: member.agent_type.clone(),
             model: Some(member.model.clone()),
             joined_at,
+            tmux_pane_id: member.tmux_pane_id.clone(),
             recorded_at: now.clone(),
         };
 
@@ -977,6 +978,45 @@ mod tests {
         assert_eq!(team.members.len(), 2);
         assert_eq!(team.members[0].name, "team-lead");
         assert_eq!(team.members[1].name, "worker");
+    }
+
+    #[test]
+    fn test_load_team_config_with_tmux_pane_id() {
+        let temp = TempDir::new().unwrap();
+        let teams_dir = temp.path().join("teams");
+        let team_dir = teams_dir.join("pane-team");
+        fs::create_dir_all(&team_dir).unwrap();
+        let config = r#"{
+            "name": "pane-team",
+            "description": "Test",
+            "createdAt": 1706644800000,
+            "leadAgentId": "lead@pane-team",
+            "leadSessionId": "session-pane",
+            "members": [{
+                "agentId": "lead@pane-team",
+                "name": "team-lead",
+                "agentType": "team-lead",
+                "model": "claude-opus-4-6",
+                "joinedAt": 1706644800000,
+                "tmuxPaneId": "%42",
+                "cwd": "/path",
+                "subscriptions": []
+            }, {
+                "agentId": "worker@pane-team",
+                "name": "worker",
+                "agentType": "general-purpose",
+                "model": "claude-sonnet-4-5",
+                "joinedAt": 1706644800001,
+                "tmuxPaneId": null,
+                "cwd": "/path",
+                "subscriptions": []
+            }]
+        }"#;
+        fs::write(team_dir.join("config.json"), config).unwrap();
+
+        let team = load_team_config(&teams_dir, "pane-team").unwrap();
+        assert_eq!(team.members[0].tmux_pane_id, Some("%42".to_string()));
+        assert_eq!(team.members[1].tmux_pane_id, None);
     }
 
     #[test]

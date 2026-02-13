@@ -298,6 +298,7 @@ mod tests {
             agent_type: Some("general-purpose".to_string()),
             model: Some("opus".to_string()),
             joined_at: None,
+            tmux_pane_id: None,
             recorded_at: "2026-02-08T10:00:00Z".to_string(),
         }
     }

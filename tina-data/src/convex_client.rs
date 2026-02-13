@@ -161,6 +161,9 @@ fn team_member_to_args(member: &TeamMemberRecord) -> BTreeMap<String, Value> {
     if let Some(ref ja) = member.joined_at {
         args.insert("joinedAt".into(), Value::from(ja.as_str()));
     }
+    if let Some(ref pane_id) = member.tmux_pane_id {
+        args.insert("tmuxPaneId".into(), Value::from(pane_id.as_str()));
+    }
     args.insert(
         "recordedAt".into(),
         Value::from(member.recorded_at.as_str()),
@@ -632,6 +635,7 @@ fn extract_team_member_from_obj(obj: &BTreeMap<String, Value>) -> TeamMemberReco
         agent_type: value_as_opt_str(obj, "agentType"),
         model: value_as_opt_str(obj, "model"),
         joined_at: value_as_opt_str(obj, "joinedAt"),
+        tmux_pane_id: value_as_opt_str(obj, "tmuxPaneId"),
         recorded_at: value_as_str(obj, "recordedAt"),
     }
 }
@@ -2055,6 +2059,7 @@ mod tests {
             agent_type: Some("executor".to_string()),
             model: Some("claude-opus-4-6".to_string()),
             joined_at: Some("2026-02-07T10:00:00Z".to_string()),
+            tmux_pane_id: Some("%42".to_string()),
             recorded_at: "2026-02-07T10:00:00Z".to_string(),
         };
 
@@ -2065,7 +2070,8 @@ mod tests {
         assert_eq!(args.get("agentName"), Some(&Value::from("executor-1")));
         assert_eq!(args.get("agentType"), Some(&Value::from("executor")));
         assert_eq!(args.get("model"), Some(&Value::from("claude-opus-4-6")));
-        assert_eq!(args.len(), 7);
+        assert_eq!(args.get("tmuxPaneId"), Some(&Value::from("%42")));
+        assert_eq!(args.len(), 8);
     }
 
     #[test]
@@ -2077,6 +2083,7 @@ mod tests {
             agent_type: None,
             model: None,
             joined_at: None,
+            tmux_pane_id: None,
             recorded_at: "2026-02-07T10:00:00Z".to_string(),
         };
 
@@ -2085,6 +2092,7 @@ mod tests {
         assert!(args.get("agentType").is_none());
         assert!(args.get("model").is_none());
         assert!(args.get("joinedAt").is_none());
+        assert!(args.get("tmuxPaneId").is_none());
         assert_eq!(args.len(), 4);
     }
 
