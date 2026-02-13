@@ -592,6 +592,76 @@ describe("feedbackEntries", () => {
       expect(agentEntries).toHaveLength(1);
       expect(agentEntries[0].body).toBe("Agent says");
     });
+
+    test("respects limit argument", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(t, "fb-list-6");
+      await seedTaskEvent(t, orchestrationId, "1");
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Entry 1",
+        authorName: "alice",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Entry 2",
+        authorName: "alice",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Entry 3",
+        authorName: "alice",
+      });
+
+      const limited = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByOrchestration,
+        { orchestrationId: orchestrationId as any, limit: 2 },
+      );
+      expect(limited).toHaveLength(2);
+
+      const all = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByOrchestration,
+        { orchestrationId: orchestrationId as any },
+      );
+      expect(all).toHaveLength(3);
+    });
+
+    test("respects limit with status filter", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(t, "fb-list-7");
+      await seedTaskEvent(t, orchestrationId, "1");
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Open 1",
+        authorName: "alice",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Open 2",
+        authorName: "alice",
+      });
+
+      const limited = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByOrchestration,
+        { orchestrationId: orchestrationId as any, status: "open", limit: 1 },
+      );
+      expect(limited).toHaveLength(1);
+    });
   });
 
   describe("listFeedbackEntriesByTarget", () => {
@@ -670,6 +740,52 @@ describe("feedbackEntries", () => {
       expect(entries).toHaveLength(1);
       expect(entries[0].body).toBe("For commit a");
     });
+
+    test("respects limit argument for task target", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(
+        t,
+        "fb-target-3",
+      );
+      await seedTaskEvent(t, orchestrationId, "1");
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Task feedback 1",
+        authorName: "alice",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        body: "Task feedback 2",
+        authorName: "bob",
+      });
+
+      const limited = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByTarget,
+        {
+          orchestrationId: orchestrationId as any,
+          targetType: "task",
+          targetRef: "1",
+          limit: 1,
+        },
+      );
+      expect(limited).toHaveLength(1);
+
+      const all = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByTarget,
+        {
+          orchestrationId: orchestrationId as any,
+          targetType: "task",
+          targetRef: "1",
+        },
+      );
+      expect(all).toHaveLength(2);
+    });
   });
 
   describe("getBlockingFeedbackSummary", () => {
@@ -743,6 +859,68 @@ describe("feedbackEntries", () => {
       );
       expect(summary.openAskForChangeCount).toBe(0);
       expect(summary.entries).toHaveLength(0);
+    });
+
+    test("includes byTargetType breakdown with task and commit counts", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(
+        t,
+        "fb-blocking-4",
+      );
+      await seedTaskEvent(t, orchestrationId, "1");
+      await seedCommit(t, orchestrationId, "blocking_sha_1");
+      await seedCommit(t, orchestrationId, "blocking_sha_2");
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        entryType: "ask_for_change",
+        body: "Task blocking",
+        authorName: "alice",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "commit",
+        targetCommitSha: "blocking_sha_1",
+        entryType: "ask_for_change",
+        body: "Commit blocking 1",
+        authorName: "alice",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "commit",
+        targetCommitSha: "blocking_sha_2",
+        entryType: "ask_for_change",
+        body: "Commit blocking 2",
+        authorName: "bob",
+      });
+
+      const summary = await t.query(
+        api.feedbackEntries.getBlockingFeedbackSummary,
+        { orchestrationId: orchestrationId as any },
+      );
+      expect(summary.totalBlocking).toBe(3);
+      expect(summary.byTargetType).toEqual({ task: 1, commit: 2 });
+      expect(summary.openAskForChangeCount).toBe(3);
+      expect(summary.entries).toHaveLength(3);
+    });
+
+    test("byTargetType shows zeroes when no entries exist", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(
+        t,
+        "fb-blocking-5",
+      );
+
+      const summary = await t.query(
+        api.feedbackEntries.getBlockingFeedbackSummary,
+        { orchestrationId: orchestrationId as any },
+      );
+      expect(summary.totalBlocking).toBe(0);
+      expect(summary.byTargetType).toEqual({ task: 0, commit: 0 });
     });
 
     test("returns zero count when no entries exist", async () => {

@@ -259,8 +259,20 @@ export const getBlockingFeedbackSummary = query({
       )
       .collect();
 
+    let taskCount = 0;
+    let commitCount = 0;
+    for (const entry of entries) {
+      if (entry.targetType === "task") {
+        taskCount++;
+      } else {
+        commitCount++;
+      }
+    }
+
     return {
       openAskForChangeCount: entries.length,
+      totalBlocking: entries.length,
+      byTargetType: { task: taskCount, commit: commitCount },
       entries,
     };
   },
