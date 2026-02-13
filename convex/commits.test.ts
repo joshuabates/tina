@@ -14,6 +14,7 @@ describe("commits:recordCommit", () => {
       phaseNumber: "1",
       sha: "abc123def456",
       shortSha: "abc123d",
+      subject: "Add authentication module",
     });
 
     expect(commitId).toBeTruthy();
@@ -27,6 +28,7 @@ describe("commits:recordCommit", () => {
     expect(commit!.phaseNumber).toBe("1");
     expect(commit!.sha).toBe("abc123def456");
     expect(commit!.shortSha).toBe("abc123d");
+    expect(commit!.subject).toBe("Add authentication module");
     expect(commit!.recordedAt).toBeTruthy();
   });
 
@@ -57,6 +59,7 @@ describe("commits:recordCommit", () => {
       phaseNumber: "1",
       sha: "duplicate123",
       shortSha: "duplica",
+      subject: "First commit",
     });
 
     const id2 = await t.mutation(api.commits.recordCommit, {

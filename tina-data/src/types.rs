@@ -209,6 +209,7 @@ pub struct CommitRecord {
     pub phase_number: String,
     pub sha: String,
     pub short_sha: Option<String>,
+    pub subject: Option<String>,
 }
 
 /// Plan record for Convex `plans` table.

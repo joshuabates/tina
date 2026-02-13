@@ -105,7 +105,7 @@ export function CommitListPanel({ orchestrationId, phaseNumber }: CommitListPane
                       <div className="flex items-start gap-2">
                         <code className="text-primary font-mono">{commitShortSha(commit)}</code>
                         <span className="flex-1">
-                          {commit.detail?.subject ?? "Commit message unavailable (index only)"}
+                          {commit.detail?.subject ?? commit.subject ?? "Commit message unavailable (index only)"}
                         </span>
                       </div>
                       <div className="text-muted-foreground text-xs mt-1">

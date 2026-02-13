@@ -739,6 +739,7 @@ pub async fn sync_commits(
             phase_number: phase_number.to_string(),
             sha: commit.sha.clone(),
             short_sha: Some(commit.short_sha.clone()),
+            subject: Some(commit.subject.clone()),
         };
 
         let record_result = {

@@ -34,6 +34,7 @@ function createMockCommit(overrides: Partial<HydratedCommit> = {}): HydratedComm
     phaseNumber: "1",
     sha: "abc123def456789",
     shortSha: "abc123",
+    subject: "feat: add awesome feature",
     recordedAt: "2026-02-10T10:00:05Z",
     detail: {
       sha: "abc123def456789",
@@ -85,6 +86,7 @@ describe("CommitQuicklook", () => {
 
   it("shows placeholders when daemon data is unavailable", () => {
     const commit = createMockCommit({
+      subject: undefined,
       detail: undefined,
     })
 

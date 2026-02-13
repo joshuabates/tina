@@ -170,6 +170,7 @@ export default defineSchema({
     phaseNumber: v.string(),
     sha: v.string(),
     shortSha: v.optional(v.string()),
+    subject: v.optional(v.string()),
     recordedAt: v.string(),
   })
     .index("by_orchestration", ["orchestrationId"])

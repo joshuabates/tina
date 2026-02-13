@@ -40,6 +40,7 @@ export type OrchestrationEventsResult =
 
 function commitToGitEvent(commit: Commit): OrchestrationEvent {
   const shortSha = commit.shortSha ?? commit.sha.slice(0, 7)
+  const fallbackSummary = commit.subject ?? `Commit ${shortSha}`
   return {
     _id: commit._id,
     _creationTime: commit._creationTime,
@@ -47,7 +48,7 @@ function commitToGitEvent(commit: Commit): OrchestrationEvent {
     phaseNumber: Option.some(commit.phaseNumber),
     eventType: "git_commit",
     source: "tina-daemon",
-    summary: `Commit ${shortSha}`,
+    summary: fallbackSummary,
     detail: Option.some(shortSha),
     recordedAt: commit.recordedAt,
   }

@@ -6,6 +6,7 @@ export const Commit = Schema.Struct({
   phaseNumber: Schema.String,
   sha: Schema.String,
   shortSha: Schema.optional(Schema.String),
+  subject: Schema.optional(Schema.String),
   recordedAt: Schema.String,
 })
 

@@ -39,6 +39,7 @@ function createMockCommit(overrides: Partial<Commit> = {}): Commit {
     phaseNumber: "1",
     sha: "abc123def456",
     shortSha: "abc123",
+    subject: "feat: add feature X",
     recordedAt: "2026-02-10T10:00:05Z",
     ...overrides,
   }
@@ -179,7 +180,7 @@ describe("CommitListPanel", () => {
     render(<CommitListPanel orchestrationId="orch1" phaseNumber="1" />)
 
     expect(screen.getByText("Daemon details unavailable. Showing commit index only.")).toBeInTheDocument()
-    expect(screen.getByText("Commit message unavailable (index only)")).toBeInTheDocument()
+    expect(screen.getByText("feat: add feature X")).toBeInTheDocument()
     expect(screen.getByText(/metadata unavailable/i)).toBeInTheDocument()
   })
 

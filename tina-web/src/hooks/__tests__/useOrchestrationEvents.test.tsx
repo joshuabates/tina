@@ -61,6 +61,7 @@ describe("useOrchestrationEvents", () => {
         phaseNumber: "1",
         sha: "abc123456789",
         shortSha: "abc1234",
+        subject: "commit from convex index",
         recordedAt: "2024-01-01T10:00:05Z",
       },
     ]
@@ -126,6 +127,7 @@ describe("useOrchestrationEvents", () => {
         phaseNumber: "1",
         sha: "abc123456789",
         shortSha: "abc1234",
+        subject: "commit from convex index",
         recordedAt: "2024-01-01T10:00:05Z",
       },
     ]
@@ -140,6 +142,6 @@ describe("useOrchestrationEvents", () => {
     const { result } = renderHook(() => useOrchestrationEvents("orch1"))
 
     expect(result.current.status).toBe("success")
-    expect(result.current.gitEvents[0].summary).toBe("Commit abc1234")
+    expect(result.current.gitEvents[0].summary).toBe("commit from convex index")
   })
 })

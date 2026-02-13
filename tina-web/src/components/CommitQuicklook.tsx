@@ -28,7 +28,7 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
     navigator.clipboard.writeText(commit.sha)
   }
 
-  const subject = commit.detail?.subject ?? "Commit message unavailable (daemon offline)"
+  const subject = commit.detail?.subject ?? commit.subject ?? "Commit message unavailable (daemon offline)"
   const author = commit.detail?.author ?? "Unknown"
   const time = commit.detail?.timestamp
     ? new Date(commit.detail.timestamp).toLocaleString()

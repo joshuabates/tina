@@ -245,6 +245,9 @@ fn commit_to_args(commit: &CommitRecord) -> BTreeMap<String, Value> {
     if let Some(ref short_sha) = commit.short_sha {
         args.insert("shortSha".into(), Value::from(short_sha.as_str()));
     }
+    if let Some(ref subject) = commit.subject {
+        args.insert("subject".into(), Value::from(subject.as_str()));
+    }
     args
 }
 
@@ -647,6 +650,7 @@ fn extract_commit_from_obj(obj: &BTreeMap<String, Value>) -> CommitRecord {
         phase_number: value_as_str(obj, "phaseNumber"),
         sha: value_as_str(obj, "sha"),
         short_sha: value_as_opt_str(obj, "shortSha"),
+        subject: value_as_opt_str(obj, "subject"),
     }
 }
 
@@ -2071,6 +2075,7 @@ mod tests {
             phase_number: "1".to_string(),
             sha: "abc123".to_string(),
             short_sha: None,
+            subject: None,
         };
 
         let args = commit_to_args(&commit);
@@ -2078,6 +2083,7 @@ mod tests {
         assert_eq!(args.get("phaseNumber"), Some(&Value::from("1")));
         assert_eq!(args.get("sha"), Some(&Value::from("abc123")));
         assert!(args.get("shortSha").is_none());
+        assert!(args.get("subject").is_none());
         assert_eq!(args.len(), 3);
     }
 

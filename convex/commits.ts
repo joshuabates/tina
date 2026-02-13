@@ -7,6 +7,7 @@ export const recordCommit = mutation({
     phaseNumber: v.string(),
     sha: v.string(),
     shortSha: v.optional(v.string()),
+    subject: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Check for duplicate by SHA
