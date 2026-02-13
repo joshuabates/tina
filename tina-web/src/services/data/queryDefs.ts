@@ -15,8 +15,6 @@ import {
   WorkComment,
   NodeSummary,
   TimelineEntry,
-  FeedbackEntry,
-  BlockingFeedbackSummary,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -185,35 +183,3 @@ export const TimelineQuery = queryDef({
   schema: Schema.Array(TimelineEntry),
 })
 
-export const FeedbackEntryListQuery = queryDef({
-  key: "feedbackEntries.list",
-  query: api.feedbackEntries.listFeedbackEntriesByOrchestration,
-  args: Schema.Struct({
-    orchestrationId: Schema.String,
-    targetType: Schema.optional(Schema.String),
-    entryType: Schema.optional(Schema.String),
-    status: Schema.optional(Schema.String),
-    authorType: Schema.optional(Schema.String),
-  }),
-  schema: Schema.Array(FeedbackEntry),
-})
-
-export const FeedbackEntryByTargetQuery = queryDef({
-  key: "feedbackEntries.byTarget",
-  query: api.feedbackEntries.listFeedbackEntriesByTarget,
-  args: Schema.Struct({
-    orchestrationId: Schema.String,
-    targetType: Schema.String,
-    targetRef: Schema.String,
-  }),
-  schema: Schema.Array(FeedbackEntry),
-})
-
-export const BlockingFeedbackSummaryQuery = queryDef({
-  key: "feedbackEntries.blockingSummary",
-  query: api.feedbackEntries.getBlockingFeedbackSummary,
-  args: Schema.Struct({
-    orchestrationId: Schema.String,
-  }),
-  schema: BlockingFeedbackSummary,
-})

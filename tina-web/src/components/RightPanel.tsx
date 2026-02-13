@@ -4,7 +4,6 @@ import { TeamSection } from "@/components/TeamSection"
 import { GitOpsSection } from "@/components/GitOpsSection"
 import { ReviewSection } from "@/components/ReviewSection"
 import { ActionTimeline } from "@/components/ActionTimeline"
-import { FeedbackSummarySection } from "@/components/FeedbackSummarySection"
 import type { OrchestrationDetail } from "@/schemas"
 import { useOrchestrationEvents } from "@/hooks/useOrchestrationEvents"
 import styles from "./RightPanel.module.scss"
@@ -32,7 +31,6 @@ export function RightPanel({ detail }: RightPanelProps) {
         <GitOpsSection gitEvents={events.gitEvents} isLoading={events.isLoading} />
         <ReviewSection reviewEvents={events.reviewEvents} isLoading={events.isLoading} />
         <ActionTimeline orchestrationId={detail._id} />
-        <FeedbackSummarySection orchestrationId={detail._id} />
       </div>
     </ScrollArea>
   )
