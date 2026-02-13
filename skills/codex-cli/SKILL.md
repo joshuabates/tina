@@ -272,6 +272,18 @@ These common Codex failure patterns are normalized deterministically before repo
 
 The adapter MUST normalize all of these before sending to team-lead. Team-lead should never receive raw Codex error output.
 
+## Retry-Aware Behavior
+
+When team-lead retries a Codex agent due to an invalid result, the retry preamble is included in the `prompt_content` field of the spawn prompt. The adapter handles this transparently:
+
+1. **Prompt assembly:** The retry preamble becomes part of the prompt sent to Codex via `exec-codex`. No special handling is needed — the adapter assembles the full prompt from `prompt_content` as usual.
+
+2. **v2 emission unchanged:** The adapter always emits v2 headers deterministically (STEP 5). The retry preamble targets the Codex model's behavior, not the adapter's normalization.
+
+3. **When retry doesn't help:** If the underlying Codex failure is infrastructure-level (timeout, crash, empty output), the retry preamble won't change the outcome. The adapter normalizes the same failure class deterministically. Team-lead will see the same error category on both attempts and should escalate after the second failure.
+
+4. **Detection hint:** If the `prompt_content` starts with `RETRY CONTEXT:`, this is a retry attempt. The adapter should log this fact in the freeform body of the v2 report: "Note: This was a retry attempt after a previous invalid result."
+
 ## Error Handling Summary
 
 | Condition | Action |
@@ -309,3 +321,4 @@ The adapter MUST normalize all of these before sending to team-lead. Team-lead s
 - Include the run_id and duration in error reports when available
 - Clean up temp prompt files after execution
 - Report errors immediately rather than silently failing
+- Note retry context in freeform body when prompt_content starts with "RETRY CONTEXT:"
