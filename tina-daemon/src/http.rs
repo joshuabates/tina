@@ -1,23 +1,26 @@
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use axum::extract::Query;
 use axum::http::{HeaderValue, Method, StatusCode};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
-use std::path::{Path, PathBuf};
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::{Any, CorsLayer};
+use tina_data::TinaConvexClient;
 use tracing::info;
 
 use crate::git;
 use crate::sessions;
 use crate::terminal;
 
-/// Shared application state.
-///
-/// Currently empty — all endpoints are stateless git operations.
-/// Exists for future extensibility (e.g., caching).
+/// Shared application state for HTTP handlers.
 #[derive(Clone)]
-pub struct AppState {}
+pub struct AppState {
+    pub convex_client: Option<Arc<Mutex<TinaConvexClient>>>,
+}
 
 #[derive(Debug, serde::Deserialize)]
 pub struct DiffListParams {
@@ -110,6 +113,12 @@ async fn get_health() -> Json<serde_json::Value> {
 }
 
 pub fn build_router() -> Router {
+    build_router_with_state(AppState {
+        convex_client: None,
+    })
+}
+
+pub fn build_router_with_state(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin([
             HeaderValue::from_static("http://localhost:5173"),
@@ -139,6 +148,7 @@ pub fn build_router() -> Router {
             "/sessions/{sessionName}",
             delete(sessions::delete_session),
         )
+        .with_state(state)
         .layer(cors)
 }
 
@@ -146,7 +156,15 @@ pub async fn spawn_http_server(
     port: u16,
     cancel: CancellationToken,
 ) -> Result<tokio::task::JoinHandle<()>, anyhow::Error> {
-    let router = build_router();
+    spawn_http_server_with_client(port, cancel, None).await
+}
+
+pub async fn spawn_http_server_with_client(
+    port: u16,
+    cancel: CancellationToken,
+    convex_client: Option<Arc<Mutex<TinaConvexClient>>>,
+) -> Result<tokio::task::JoinHandle<()>, anyhow::Error> {
+    let router = build_router_with_state(AppState { convex_client });
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
     info!(port = port, "HTTP server listening");
 

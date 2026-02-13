@@ -3,11 +3,14 @@
 //! POST /sessions  — create a new tmux session with a CLI
 //! DELETE /sessions/{sessionName} — end a session
 
-use axum::extract::Path;
+use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use serde::{Deserialize, Serialize};
-use tracing::{error, info};
+use tracing::{error, info, warn};
+
+use crate::http::AppState;
+use tina_data::TerminalSessionRecord;
 
 /// CLI choices for ad-hoc sessions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -223,6 +226,7 @@ pub fn is_cli_ready(output: &str) -> bool {
 
 /// POST /sessions handler.
 pub async fn create_session(
+    State(state): State<AppState>,
     Json(req): Json<CreateSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateSessionResponse>), (StatusCode, String)> {
     let session_name = generate_session_name();
@@ -295,6 +299,36 @@ pub async fn create_session(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
+    // 6. Write to Convex terminalSessions table
+    let cli_str = match req.cli {
+        CliChoice::Claude => "claude",
+        CliChoice::Codex => "codex",
+    };
+    let now = chrono::Utc::now().timestamp_millis() as f64;
+    let record = TerminalSessionRecord {
+        session_name: session_name.clone(),
+        tmux_pane_id: pane_id.clone(),
+        label: req.label,
+        cli: cli_str.to_string(),
+        status: "active".to_string(),
+        context_type: req.context_type.map(|ct| format!("{:?}", ct).to_lowercase()),
+        context_id: req.context_id,
+        context_summary: req.context_summary,
+        created_at: now,
+        ended_at: None,
+    };
+
+    if let Some(ref client) = state.convex_client {
+        let mut client_guard = client.lock().await;
+        if let Err(e) = client_guard.upsert_terminal_session(&record).await {
+            warn!(
+                session_name = %session_name,
+                error = %e,
+                "failed to persist terminal session to Convex (session still created)"
+            );
+        }
+    }
+
     info!(
         session_name = %session_name,
         pane_id = %pane_id,
@@ -313,6 +347,7 @@ pub async fn create_session(
 
 /// DELETE /sessions/{sessionName} handler.
 pub async fn delete_session(
+    State(state): State<AppState>,
     Path(session_name): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     // 1. Kill tmux session
@@ -321,6 +356,19 @@ pub async fn delete_session(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    // 2. Mark Convex record as ended
+    if let Some(ref client) = state.convex_client {
+        let now = chrono::Utc::now().timestamp_millis() as f64;
+        let mut client_guard = client.lock().await;
+        if let Err(e) = client_guard.mark_terminal_ended(&session_name, now).await {
+            warn!(
+                session_name = %session_name,
+                error = %e,
+                "failed to mark terminal session as ended in Convex (session still killed)"
+            );
+        }
+    }
 
     info!(session_name = %session_name, "ad-hoc session ended");
 

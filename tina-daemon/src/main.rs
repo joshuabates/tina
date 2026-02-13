@@ -197,9 +197,14 @@ async fn main() -> Result<()> {
     let heartbeat_handle =
         heartbeat::spawn_heartbeat(Arc::clone(&client), node_id.clone(), cancel.clone());
 
-    // Start HTTP server
+    // Start HTTP server (with Convex client for session persistence)
     let http_cancel = cancel.clone();
-    let http_handle = http::spawn_http_server(config.http_port, http_cancel).await?;
+    let http_handle = http::spawn_http_server_with_client(
+        config.http_port,
+        http_cancel,
+        Some(Arc::clone(&client)),
+    )
+    .await?;
 
     // Set up file watchers
     let home = dirs::home_dir().expect("could not determine home directory");
