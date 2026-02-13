@@ -1,6 +1,5 @@
 import { convexTest } from "convex-test";
 import { api } from "./_generated/api";
-import { CP_FLAGS } from "./featureFlags";
 
 export type ConvexHarness = ReturnType<typeof convexTest>;
 
@@ -199,18 +198,4 @@ export async function createValidatedLaunchFixture(t: ConvexHarness) {
     completedMarkers: ["objective_defined", "scope_bounded"],
   });
   return { nodeId, projectId, designId };
-}
-
-export async function seedFeatureFlag(
-  t: ConvexHarness,
-  key: string,
-  enabled: boolean,
-) {
-  return await t.mutation(api.featureFlags.setFlag, { key, enabled });
-}
-
-export async function enableAllControlPlaneFlags(t: ConvexHarness) {
-  for (const key of Object.values(CP_FLAGS)) {
-    await seedFeatureFlag(t, key, true);
-  }
 }

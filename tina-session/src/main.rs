@@ -603,7 +603,7 @@ enum OrchestrateCommands {
         #[arg(long)]
         role: String,
 
-        /// New model name (opus, sonnet, haiku)
+        /// New model name (opus, sonnet, haiku, gpt-5.3-codex, gpt-5.3-codex-spark)
         #[arg(long)]
         model: String,
     },
@@ -634,7 +634,7 @@ enum OrchestrateCommands {
         #[arg(long)]
         description: Option<String>,
 
-        /// New model (optional: opus, sonnet, haiku)
+        /// New model (optional: opus, sonnet, haiku, gpt-5.3-codex, gpt-5.3-codex-spark)
         #[arg(long)]
         model: Option<String>,
     },
@@ -657,7 +657,7 @@ enum OrchestrateCommands {
         #[arg(long)]
         subject: String,
 
-        /// Model (optional: opus, sonnet, haiku)
+        /// Model (optional: opus, sonnet, haiku, gpt-5.3-codex, gpt-5.3-codex-spark)
         #[arg(long)]
         model: Option<String>,
 
@@ -684,7 +684,7 @@ enum OrchestrateCommands {
         #[arg(long)]
         revision: u32,
 
-        /// New model (opus, sonnet, haiku)
+        /// New model (opus, sonnet, haiku, gpt-5.3-codex, gpt-5.3-codex-spark)
         #[arg(long)]
         model: String,
     },

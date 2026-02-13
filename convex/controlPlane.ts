@@ -6,7 +6,6 @@ import { validateDesignForLaunch } from "./designValidation";
 import { policySnapshotValidator, hashPolicy } from "./policyPresets";
 import type { PolicySnapshot } from "./policyPresets";
 import { HEARTBEAT_TIMEOUT_MS } from "./nodes";
-import { isFeatureFlagEnabled, CP_FLAGS } from "./featureFlags";
 
 const RUNTIME_ACTION_TYPES = [
   "pause",
@@ -57,7 +56,13 @@ function validateRuntimePayload(actionType: string, rawPayload: string): void {
   }
 }
 
-const ALLOWED_MODELS = ["opus", "sonnet", "haiku"] as const;
+const ALLOWED_MODELS = [
+  "opus",
+  "sonnet",
+  "haiku",
+  "gpt-5.3-codex",
+  "gpt-5.3-codex-spark",
+] as const;
 const ALLOWED_ROLES = ["validator", "planner", "executor", "reviewer"] as const;
 
 function validateModelName(model: unknown): asserts model is string {
@@ -398,11 +403,6 @@ export const launchOrchestration = mutation({
     idempotencyKey: v.string(),
   },
   handler: async (ctx, args) => {
-    const launchEnabled = await isFeatureFlagEnabled(ctx, CP_FLAGS.LAUNCH_FROM_WEB);
-    if (!launchEnabled) {
-      throw new Error(`Launch from web is not enabled. Set ${CP_FLAGS.LAUNCH_FROM_WEB} feature flag to enable.`);
-    }
-
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error(`Project not found: ${args.projectId}`);
 
@@ -511,27 +511,6 @@ export const enqueueControlAction = mutation({
       throw new Error(
         `Invalid actionType: "${args.actionType}". Allowed: ${RUNTIME_ACTION_TYPES.join(", ")}`,
       );
-    }
-
-    // Feature flag gates per action category
-    const FLAG_MAP: Record<string, string> = {
-      pause: CP_FLAGS.RUNTIME_CONTROLS,
-      resume: CP_FLAGS.RUNTIME_CONTROLS,
-      retry: CP_FLAGS.RUNTIME_CONTROLS,
-      orchestration_set_policy: CP_FLAGS.POLICY_RECONFIGURATION,
-      orchestration_set_role_model: CP_FLAGS.POLICY_RECONFIGURATION,
-      task_edit: CP_FLAGS.TASK_RECONFIGURATION,
-      task_insert: CP_FLAGS.TASK_RECONFIGURATION,
-      task_set_model: CP_FLAGS.TASK_RECONFIGURATION,
-    };
-    const flagKey = FLAG_MAP[args.actionType];
-    if (flagKey) {
-      const flagEnabled = await isFeatureFlagEnabled(ctx, flagKey);
-      if (!flagEnabled) {
-        throw new Error(
-          `Action "${args.actionType}" is not enabled. Set ${flagKey} feature flag to enable.`,
-        );
-      }
     }
 
     // Validate payload structure per action type

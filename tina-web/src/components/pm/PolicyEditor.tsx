@@ -2,12 +2,12 @@ import { PRESETS } from "@convex/policyPresets"
 import type { PolicySnapshot, ReviewPolicyConfig, ModelPolicyConfig } from "@convex/policyPresets"
 import formStyles from "../FormDialog.module.scss"
 import styles from "./PolicyEditor.module.scss"
+import { MODEL_OPTIONS } from "@/lib/control-plane-styles"
 
 const ENFORCEMENT_OPTIONS = ["task_and_phase", "task_only", "phase_only"] as const
 const DETECTOR_SCOPE_OPTIONS = ["whole_repo_pattern_index", "touched_area_only", "architectural_allowlist_only"] as const
 const ARCHITECT_MODE_OPTIONS = ["manual_only", "manual_plus_auto", "disabled"] as const
 const TEST_INTEGRITY_OPTIONS = ["strict_baseline", "max_strict", "minimal"] as const
-const MODEL_OPTIONS = ["opus", "sonnet", "haiku"] as const
 const ROLES = ["validator", "planner", "executor", "reviewer"] as const
 const PRESET_NAMES = Object.keys(PRESETS) as Array<keyof typeof PRESETS>
 

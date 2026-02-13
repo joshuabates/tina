@@ -75,7 +75,7 @@ export default defineSchema({
     subject: v.string(),
     description: v.optional(v.string()),
     status: v.string(), // pending, in_progress, completed, skipped
-    model: v.optional(v.string()), // opus, sonnet, haiku
+    model: v.optional(v.string()), // opus, sonnet, haiku, gpt-5.3-codex, gpt-5.3-codex-spark
     dependsOn: v.optional(v.array(v.number())),
     revision: v.number(),
     insertedBy: v.optional(v.string()),
@@ -317,13 +317,6 @@ export default defineSchema({
     nextValue: v.number(),
   })
     .index("by_project_type", ["projectId", "counterType"]),
-
-  featureFlags: defineTable({
-    key: v.string(),
-    enabled: v.boolean(),
-    description: v.optional(v.string()),
-    updatedAt: v.number(),
-  }).index("by_key", ["key"]),
 
   feedbackEntries: defineTable({
     orchestrationId: v.id("orchestrations"),

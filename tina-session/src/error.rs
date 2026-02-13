@@ -53,7 +53,9 @@ pub enum SessionError {
     #[error("Verification failed: {0}")]
     VerificationFailed(String),
 
-    #[error("Invalid model '{0}'. Must be 'opus' or 'haiku'.")]
+    #[error(
+        "Invalid model '{0}'. Must be one of: opus, sonnet, haiku, gpt-5.3-codex, gpt-5.3-codex-spark."
+    )]
     InvalidModel(String),
 
     #[error("Convex error: {0}")]

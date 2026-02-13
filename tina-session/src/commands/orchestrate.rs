@@ -344,7 +344,13 @@ pub fn set_role_model(feature: &str, role: &str, model: &str) -> anyhow::Result<
         );
     }
 
-    let valid_models = ["opus", "sonnet", "haiku"];
+    let valid_models = [
+        "opus",
+        "sonnet",
+        "haiku",
+        "gpt-5.3-codex",
+        "gpt-5.3-codex-spark",
+    ];
     if !valid_models.contains(&model) {
         anyhow::bail!(
             "invalid model: '{}'. Allowed: {}",

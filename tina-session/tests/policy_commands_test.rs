@@ -290,3 +290,34 @@ fn task_set_model_outputs_json_on_success() {
     assert_eq!(json["revision"], 3);
     assert_eq!(json["model"], "sonnet");
 }
+
+#[test]
+fn task_set_model_accepts_codex_model() {
+    let output = Command::new(tina_session_bin())
+        .args([
+            "orchestrate",
+            "task-set-model",
+            "--feature",
+            "test-feat",
+            "--phase",
+            "1",
+            "--task",
+            "5",
+            "--revision",
+            "3",
+            "--model",
+            "gpt-5.3-codex",
+        ])
+        .output()
+        .expect("failed to run");
+    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stdout should be valid JSON");
+    assert_eq!(json["success"], true);
+    assert_eq!(json["action"], "task_set_model");
+    assert_eq!(json["feature"], "test-feat");
+    assert_eq!(json["phase"], "1");
+    assert_eq!(json["task_number"], 5);
+    assert_eq!(json["revision"], 3);
+    assert_eq!(json["model"], "gpt-5.3-codex");
+}
