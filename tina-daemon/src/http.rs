@@ -103,6 +103,10 @@ pub async fn get_file(Query(params): Query<FileParams>) -> Result<String, (Statu
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
+async fn get_health() -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "status": "ok" }))
+}
+
 pub fn build_router() -> Router {
     let cors = CorsLayer::new()
         .allow_origin([
@@ -115,6 +119,7 @@ pub fn build_router() -> Router {
         .allow_headers(Any);
 
     Router::new()
+        .route("/health", get(get_health))
         .route("/diff", get(get_diff_list))
         .route("/diff/file", get(get_diff_file))
         .route("/file", get(get_file))
@@ -152,6 +157,18 @@ mod tests {
 
     fn get(uri: &str) -> Request<Body> {
         Request::builder().uri(uri).body(Body::empty()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_health_returns_ok() {
+        let resp = test_router().oneshot(get("/health")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), 1_000_000)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], "ok");
     }
 
     #[tokio::test]
