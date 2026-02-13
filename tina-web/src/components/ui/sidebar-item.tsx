@@ -6,6 +6,7 @@ interface SidebarItemProps extends React.HTMLAttributes<HTMLDivElement> {
   active?: boolean;
   statusText?: string;
   statusColor?: string;
+  statusIndicatorClass?: string;
   onDelete?: React.MouseEventHandler<HTMLButtonElement>;
   deleting?: boolean;
   "data-orchestration-id"?: string;
@@ -17,12 +18,15 @@ function SidebarItem({
   active = false,
   statusText,
   statusColor = "text-muted-foreground",
+  statusIndicatorClass,
   onDelete,
   deleting = false,
   className,
   ...props
 }: SidebarItemProps) {
   const shouldRenderDelete = onDelete !== undefined;
+  const shouldRenderStatusDot = statusIndicatorClass !== undefined
+  const dotClass = statusIndicatorClass ?? "bg-muted-foreground/50"
 
   return (
     <div
@@ -35,12 +39,14 @@ function SidebarItem({
       )}
       {...props}
     >
-      <span className="truncate leading-tight">{label}</span>
-      {statusText && (
-        <span className={cn("text-[8px] font-semibold opacity-55 shrink-0 ml-2", statusColor)}>
-          {statusText}
-        </span>
+      {shouldRenderStatusDot && (
+        <span
+          className={cn("mr-1.5 h-1.5 w-1.5 rounded-full shrink-0", dotClass)}
+          aria-hidden="true"
+          data-status-indicator="true"
+        />
       )}
+      <span className="truncate leading-tight">{label}</span>
       {shouldRenderDelete && (
         <button
           type="button"

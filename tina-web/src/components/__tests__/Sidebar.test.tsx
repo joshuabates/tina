@@ -15,7 +15,7 @@ import {
   type QueryStateMap,
 } from "@/test/builders/query"
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
-import { expectStatusLabelVisible } from "@/test/harness/status"
+import { toStatusBadgeStatus, statusIconBgClass } from "@/components/ui/status-styles"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("react-router-dom", async () => {
@@ -148,7 +148,7 @@ describe("Sidebar", () => {
     expect(deleteButton).toHaveClass("group-hover/item:opacity-100")
   })
 
-  it("highlights selected orchestration and shows normalized status text", () => {
+  it("highlights selected orchestration and shows status indicator", () => {
     const { container } = renderSidebar({
       route: "/?orch=o1",
       states: {
@@ -167,7 +167,16 @@ describe("Sidebar", () => {
     })
 
     expect(within(container).getByText("feature-one").closest("div")).toHaveClass("bg-muted/50")
-    expectStatusLabelVisible("executing", container)
+    const statusDot = within(container)
+      .getByText("feature-one")
+      .closest("div")
+      ?.querySelector("span[data-status-indicator]")
+    expect(statusDot).toBeTruthy()
+    const expectedStatusClass = statusIconBgClass(toStatusBadgeStatus("executing")).replace(
+      "phase-glow",
+      "",
+    )
+    expect(statusDot).toHaveClass(expectedStatusClass)
   })
 
   it("clicking an orchestration updates active selection styling", async () => {

@@ -12,9 +12,8 @@ import { useIndexedAction } from "@/hooks/useIndexedAction"
 import { useRovingSection } from "@/hooks/useRovingSection"
 import { ProjectListQuery, OrchestrationListQuery } from "@/services/data/queryDefs"
 import {
-  statusLabel,
-  statusTextClass,
   toStatusBadgeStatus,
+  statusIconBgClass,
 } from "@/components/ui/status-styles"
 import { firstQueryError, isAnyQueryLoading } from "@/lib/query-state"
 import styles from "./Sidebar.module.scss"
@@ -161,8 +160,9 @@ function SidebarContent() {
       const item: SidebarItemProps = {
         label: orchestration.featureName,
         active: orchestration._id === orchestrationId,
-        statusText: statusLabel(toStatusBadgeStatus(orchestration.status)),
-        statusColor: statusTextClass(toStatusBadgeStatus(orchestration.status)),
+        statusIndicatorClass: statusIconBgClass(
+          toStatusBadgeStatus(orchestration.status),
+        ).replace("phase-glow", ""),
         onClick: () => selectOrchestration(orchestration._id),
         onDelete: () => {
           if (deletingOrchestrationId !== null) return
