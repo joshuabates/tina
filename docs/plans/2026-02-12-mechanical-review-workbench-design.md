@@ -8,7 +8,14 @@ Deliver a GitHub-PR-style review surface where a review agent mechanically works
 
 ## Wireframes
 
-Interactive prototype with static data covering all 4 tabs (Conversation, Changes, Commits, Checks):
+Visual references:
+
+![Conversation tab](assets/project4-wireframes/conversation-tab.png)
+![Changes tab](assets/project4-wireframes/changes-tab.png)
+![Commits tab](assets/project4-wireframes/commits-tab.png)
+![Checks tab](assets/project4-wireframes/checks-tab.png)
+
+Interactive prototype with static data covering all 4 tabs:
 
 `designs/src/designSets/project4-mechanical-review-workbench/`
 
