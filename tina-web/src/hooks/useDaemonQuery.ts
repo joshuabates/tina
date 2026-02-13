@@ -29,6 +29,21 @@ export interface DiffHunk {
   lines: DiffLine[]
 }
 
+export interface DaemonCommitDetail {
+  sha: string
+  short_sha: string
+  subject: string
+  author: string
+  timestamp: string
+  insertions: number
+  deletions: number
+}
+
+export interface DaemonCommitDetailsResponse {
+  commits: DaemonCommitDetail[]
+  missingShas: string[]
+}
+
 export async function fetchDaemon<T>(
   path: string,
   params: Record<string, string>,
@@ -67,5 +82,21 @@ export function useDiffFile(worktree: string, base: string, file: string) {
     queryKey: ["daemon", "diff", "file", worktree, base, file],
     queryFn: () => fetchDaemon<DiffHunk[]>("/diff/file", { worktree, base, file }),
     enabled: !!worktree && !!base && !!file,
+  })
+}
+
+export function useCommitDetails(worktree: string, shas: string[]) {
+  const uniqueShas = Array.from(new Set(shas.filter(Boolean)))
+  const shasParam = uniqueShas.join(",")
+
+  return useQuery<DaemonCommitDetailsResponse>({
+    queryKey: ["daemon", "commits", worktree, ...uniqueShas],
+    queryFn: () =>
+      fetchDaemon<DaemonCommitDetailsResponse>("/commits", {
+        worktree,
+        shas: shasParam,
+      }),
+    enabled: !!worktree && uniqueShas.length > 0,
+    retry: false,
   })
 }

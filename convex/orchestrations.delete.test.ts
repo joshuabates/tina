@@ -96,11 +96,6 @@ describe("orchestrations:deleteOrchestration", () => {
       phaseNumber: "1",
       sha: "orchdelete123",
       shortSha: "orchdel",
-      subject: "Add orchestration delete",
-      author: "Test User <test@example.com>",
-      timestamp: "2026-02-11T01:05:00Z",
-      insertions: 31,
-      deletions: 4,
     });
 
     await t.mutation(api.plans.upsertPlan, {

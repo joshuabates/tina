@@ -6,12 +6,7 @@ export const recordCommit = mutation({
     orchestrationId: v.id("orchestrations"),
     phaseNumber: v.string(),
     sha: v.string(),
-    shortSha: v.string(),
-    subject: v.string(),
-    author: v.string(),
-    timestamp: v.string(),
-    insertions: v.number(),
-    deletions: v.number(),
+    shortSha: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Check for duplicate by SHA
@@ -35,17 +30,25 @@ export const listCommits = query({
     phaseNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let q = ctx.db
+    const { orchestrationId, phaseNumber } = args;
+
+    if (phaseNumber) {
+      return await ctx.db
+        .query("commits")
+        .withIndex("by_phase", (q) =>
+          q
+            .eq("orchestrationId", orchestrationId)
+            .eq("phaseNumber", phaseNumber)
+        )
+        .collect();
+    }
+
+    return await ctx.db
       .query("commits")
       .withIndex("by_orchestration", (q) =>
-        q.eq("orchestrationId", args.orchestrationId)
-      );
-
-    const commits = await q.collect();
-
-    return args.phaseNumber
-      ? commits.filter((c) => c.phaseNumber === args.phaseNumber)
-      : commits;
+        q.eq("orchestrationId", orchestrationId)
+      )
+      .collect();
   },
 });
 

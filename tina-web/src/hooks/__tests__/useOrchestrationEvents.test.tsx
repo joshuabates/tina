@@ -6,14 +6,26 @@ import type { Commit } from "@/schemas"
 import { queryError, queryLoading, querySuccess } from "@/test/builders/query"
 
 vi.mock("../useTypedQuery")
+vi.mock("../useDaemonQuery", () => ({
+  useCommitDetails: vi.fn(() => ({
+    data: { commits: [], missingShas: [] },
+  })),
+}))
 
 const mockUseTypedQuery = vi.mocked(
   await import("../useTypedQuery"),
 ).useTypedQuery
 
+const mockUseCommitDetails = vi.mocked(
+  await import("../useDaemonQuery"),
+).useCommitDetails
+
 describe("useOrchestrationEvents", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseCommitDetails.mockReturnValue({
+      data: { commits: [], missingShas: [] },
+    } as unknown as ReturnType<typeof mockUseCommitDetails>)
   })
 
   it("returns loading state while query is pending", () => {
@@ -40,7 +52,7 @@ describe("useOrchestrationEvents", () => {
     expect(result.current.isLoading).toBe(false)
   })
 
-  it("reads git data from commits and review data from orchestration events", () => {
+  it("uses daemon commit details when available and keeps review events from orchestration events", () => {
     const commits: Commit[] = [
       {
         _id: "commit1",
@@ -49,14 +61,26 @@ describe("useOrchestrationEvents", () => {
         phaseNumber: "1",
         sha: "abc123456789",
         shortSha: "abc1234",
-        subject: "commit from commits table",
-        author: "Tina Bot",
-        timestamp: "2024-01-01T10:00:00Z",
-        insertions: 10,
-        deletions: 2,
         recordedAt: "2024-01-01T10:00:05Z",
       },
     ]
+
+    mockUseCommitDetails.mockReturnValue({
+      data: {
+        commits: [
+          {
+            sha: "abc123456789",
+            short_sha: "abc1234",
+            subject: "commit from daemon details",
+            author: "Tina Bot",
+            timestamp: "2024-01-01T10:00:00Z",
+            insertions: 10,
+            deletions: 2,
+          },
+        ],
+        missingShas: [],
+      },
+    } as unknown as ReturnType<typeof mockUseCommitDetails>)
 
     mockUseTypedQuery.mockImplementation((def) => {
       if (def.key === "events.list") {
@@ -76,6 +100,9 @@ describe("useOrchestrationEvents", () => {
       if (def.key === "commits.list") {
         return querySuccess(commits)
       }
+      if (def.key === "orchestrations.detail") {
+        return querySuccess(null)
+      }
       return queryLoading()
     })
 
@@ -85,8 +112,34 @@ describe("useOrchestrationEvents", () => {
     expect(result.current.isLoading).toBe(false)
     expect(result.current.gitEvents.map((event) => event._id)).toEqual(["commit1"])
     expect(result.current.gitEvents.map((event) => event.summary)).toEqual([
-      "commit from commits table",
+      "commit from daemon details",
     ])
     expect(result.current.reviewEvents.map((event) => event._id)).toEqual(["review1"])
+  })
+
+  it("falls back to index summary when daemon data is missing", () => {
+    const commits: Commit[] = [
+      {
+        _id: "commit1",
+        _creationTime: 1234567890,
+        orchestrationId: "orch1",
+        phaseNumber: "1",
+        sha: "abc123456789",
+        shortSha: "abc1234",
+        recordedAt: "2024-01-01T10:00:05Z",
+      },
+    ]
+
+    mockUseTypedQuery.mockImplementation((def) => {
+      if (def.key === "events.list") return querySuccess([])
+      if (def.key === "commits.list") return querySuccess(commits)
+      if (def.key === "orchestrations.detail") return querySuccess(null)
+      return queryLoading()
+    })
+
+    const { result } = renderHook(() => useOrchestrationEvents("orch1"))
+
+    expect(result.current.status).toBe("success")
+    expect(result.current.gitEvents[0].summary).toBe("Commit abc1234")
   })
 })

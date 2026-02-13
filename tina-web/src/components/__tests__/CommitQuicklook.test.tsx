@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, cleanup } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
-import { CommitQuicklook } from "../CommitQuicklook"
-import type { Commit } from "@/schemas"
+import { CommitQuicklook, type HydratedCommit } from "../CommitQuicklook"
 import { defineQuicklookDialogContract } from "@/test/harness/quicklook-contract"
 
 // Mock useTypedQuery to avoid Convex client requirement
@@ -27,7 +26,7 @@ vi.mock("@/hooks/useCreateSession", () => ({
   }),
 }))
 
-function createMockCommit(overrides: Partial<Commit> = {}): Commit {
+function createMockCommit(overrides: Partial<HydratedCommit> = {}): HydratedCommit {
   return {
     _id: "commit1",
     _creationTime: 1234567890,
@@ -35,12 +34,16 @@ function createMockCommit(overrides: Partial<Commit> = {}): Commit {
     phaseNumber: "1",
     sha: "abc123def456789",
     shortSha: "abc123",
-    subject: "feat: add awesome feature",
-    author: "Alice <alice@example.com>",
-    timestamp: "2026-02-10T10:00:00Z",
-    insertions: 15,
-    deletions: 5,
     recordedAt: "2026-02-10T10:00:05Z",
+    detail: {
+      sha: "abc123def456789",
+      short_sha: "abc123",
+      subject: "feat: add awesome feature",
+      author: "Alice <alice@example.com>",
+      timestamp: "2026-02-10T10:00:00Z",
+      insertions: 15,
+      deletions: 5,
+    },
     ...overrides,
   }
 }
@@ -56,46 +59,58 @@ describe("CommitQuicklook", () => {
     cleanup()
   })
 
-  it("displays full commit details", () => {
+  it("displays full commit details when daemon data is present", () => {
     const commit = createMockCommit({
       sha: "abc123def456789",
-      subject: "feat: add amazing feature",
-      author: "Bob <bob@example.com>",
-      timestamp: "2026-02-10T15:30:00Z",
-      insertions: 25,
-      deletions: 10,
+      detail: {
+        sha: "abc123def456789",
+        short_sha: "abc123",
+        subject: "feat: add amazing feature",
+        author: "Bob <bob@example.com>",
+        timestamp: "2026-02-10T15:30:00Z",
+        insertions: 25,
+        deletions: 10,
+      },
     })
 
     render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
 
-    // Verify title
     expect(screen.getByText("Commit Details")).toBeInTheDocument()
-
-    // Verify full SHA displayed
     expect(screen.getByText("abc123def456789")).toBeInTheDocument()
-
-    // Verify subject displayed
     expect(screen.getByText("feat: add amazing feature")).toBeInTheDocument()
-
-    // Verify author displayed
     expect(screen.getByText("Bob <bob@example.com>")).toBeInTheDocument()
-
-    // Verify insertions displayed in green
     expect(screen.getByText("+25")).toBeInTheDocument()
-
-    // Verify deletions displayed in red
     expect(screen.getByText("-10")).toBeInTheDocument()
+  })
+
+  it("shows placeholders when daemon data is unavailable", () => {
+    const commit = createMockCommit({
+      detail: undefined,
+    })
+
+    render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
+
+    expect(screen.getByText("Commit message unavailable (daemon offline)")).toBeInTheDocument()
+    expect(screen.getByText("Unknown")).toBeInTheDocument()
+    expect(screen.getByText("Unavailable")).toBeInTheDocument()
+    expect(screen.getAllByText("--").length).toBeGreaterThanOrEqual(2)
   })
 
   it("formats timestamp correctly", () => {
     const commit = createMockCommit({
-      timestamp: "2026-02-10T10:00:00Z",
+      detail: {
+        sha: "abc123def456789",
+        short_sha: "abc123",
+        subject: "feat: add awesome feature",
+        author: "Alice <alice@example.com>",
+        timestamp: "2026-02-10T10:00:00Z",
+        insertions: 15,
+        deletions: 5,
+      },
     })
 
     render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
 
-    // The component uses toLocaleString(), so we just verify some part appears
-    // (exact format is locale-dependent)
     const timestampElements = screen.getAllByText(/2026|10|Feb/i)
     expect(timestampElements.length).toBeGreaterThan(0)
   })
@@ -104,9 +119,17 @@ describe("CommitQuicklook", () => {
     const user = userEvent.setup()
     const commit = createMockCommit({
       sha: "abc123def456789full",
+      detail: {
+        sha: "abc123def456789full",
+        short_sha: "abc123d",
+        subject: "feat: copy",
+        author: "Alice <alice@example.com>",
+        timestamp: "2026-02-10T10:00:00Z",
+        insertions: 1,
+        deletions: 0,
+      },
     })
 
-    // Mock clipboard API
     const writeTextMock = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, "clipboard", {
       value: {
@@ -118,11 +141,9 @@ describe("CommitQuicklook", () => {
 
     render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
 
-    // Click the copy button
     const copyButton = screen.getByText("Copy")
     await user.click(copyButton)
 
-    // Verify clipboard.writeText was called with full SHA
     expect(writeTextMock).toHaveBeenCalledWith("abc123def456789full")
   })
 
@@ -132,7 +153,6 @@ describe("CommitQuicklook", () => {
 
     render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
 
-    // Click the close button
     const closeButton = screen.getByLabelText("Close quicklook")
     await user.click(closeButton)
 
@@ -145,7 +165,6 @@ describe("CommitQuicklook", () => {
 
     render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
 
-    // Click the backdrop
     const dialog = screen.getByRole("dialog")
     const backdrop = dialog.parentElement!
     await user.click(backdrop)
@@ -165,10 +184,15 @@ describe("CommitQuicklook", () => {
     const user = userEvent.setup()
     const commit = createMockCommit({
       sha: "abc123def456789",
-      subject: "feat: add awesome feature",
-      author: "Alice <alice@example.com>",
-      insertions: 15,
-      deletions: 5,
+      detail: {
+        sha: "abc123def456789",
+        short_sha: "abc123",
+        subject: "feat: add awesome feature",
+        author: "Alice <alice@example.com>",
+        timestamp: "2026-02-10T10:00:00Z",
+        insertions: 15,
+        deletions: 5,
+      },
     })
 
     render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)

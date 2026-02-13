@@ -675,12 +675,7 @@ mod tests {
             orchestration_id: "orch-1".to_string(),
             phase_number: "1".to_string(),
             sha: "abc123".to_string(),
-            short_sha: "abc123".to_string(),
-            subject: "feat: add".to_string(),
-            author: "dev".to_string(),
-            timestamp: "2026-02-08T10:00:00Z".to_string(),
-            insertions: 10,
-            deletions: 2,
+            short_sha: Some("abc123".to_string()),
         }];
         let plans = vec![PlanRecord {
             orchestration_id: "orch-1".to_string(),

@@ -738,12 +738,7 @@ pub async fn sync_commits(
             orchestration_id: orchestration_id.to_string(),
             phase_number: phase_number.to_string(),
             sha: commit.sha.clone(),
-            short_sha: commit.short_sha.clone(),
-            subject: commit.subject.clone(),
-            author: commit.author.clone(),
-            timestamp: commit.timestamp.clone(),
-            insertions: commit.insertions,
-            deletions: commit.deletions,
+            short_sha: Some(commit.short_sha.clone()),
         };
 
         let record_result = {

@@ -169,12 +169,7 @@ export default defineSchema({
     orchestrationId: v.id("orchestrations"),
     phaseNumber: v.string(),
     sha: v.string(),
-    shortSha: v.string(),
-    subject: v.string(),
-    author: v.string(),
-    timestamp: v.string(),
-    insertions: v.number(),
-    deletions: v.number(),
+    shortSha: v.optional(v.string()),
     recordedAt: v.string(),
   })
     .index("by_orchestration", ["orchestrationId"])

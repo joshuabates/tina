@@ -3,10 +3,15 @@ import { useFocusTrap } from "@/hooks/useFocusTrap"
 import { useCreateSession } from "@/hooks/useCreateSession"
 import { useQuicklookKeyboard } from "@/hooks/useQuicklookKeyboard"
 import type { Commit } from "@/schemas"
+import type { DaemonCommitDetail } from "@/hooks/useDaemonQuery"
 import styles from "./QuicklookDialog.module.scss"
 
+export interface HydratedCommit extends Commit {
+  detail?: DaemonCommitDetail
+}
+
 interface CommitQuicklookProps {
-  commit: Commit
+  commit: HydratedCommit
   onClose: () => void
 }
 
@@ -23,15 +28,30 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
     navigator.clipboard.writeText(commit.sha)
   }
 
+  const subject = commit.detail?.subject ?? "Commit message unavailable (daemon offline)"
+  const author = commit.detail?.author ?? "Unknown"
+  const time = commit.detail?.timestamp
+    ? new Date(commit.detail.timestamp).toLocaleString()
+    : "Unavailable"
+  const insertionsValue = commit.detail?.insertions
+  const deletionsValue = commit.detail?.deletions
+  const insertions = insertionsValue !== undefined ? `+${insertionsValue}` : "--"
+  const deletions = deletionsValue !== undefined ? `-${deletionsValue}` : "--"
+
   const handleReviewCommit = () => {
+    const stats =
+      insertionsValue !== undefined && deletionsValue !== undefined
+        ? `+${insertionsValue} -${deletionsValue}`
+        : "Stats unavailable"
     const summary = [
       `Commit: ${commit.sha}`,
-      `Message: ${commit.subject}`,
-      `Author: ${commit.author}`,
-      `+${commit.insertions} -${commit.deletions}`,
+      `Message: ${subject}`,
+      `Author: ${author}`,
+      stats,
     ].join("\n")
+
     createAndConnect({
-      label: `Review: ${commit.subject}`,
+      label: `Review: ${subject}`,
       contextType: "commit",
       contextId: commit._id,
       contextSummary: summary,
@@ -79,28 +99,28 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
 
             <div>
               <div className="text-sm text-muted-foreground">Message</div>
-              <div className="font-semibold">{commit.subject}</div>
+              <div className="font-semibold">{subject}</div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="text-sm text-muted-foreground">Author</div>
-                <div>{commit.author}</div>
+                <div>{author}</div>
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">Time</div>
-                <div>{new Date(commit.timestamp).toLocaleString()}</div>
+                <div>{time}</div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="text-sm text-muted-foreground">Insertions</div>
-                <div className="text-green-400">+{commit.insertions}</div>
+                <div className="text-green-400">{insertions}</div>
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">Deletions</div>
-                <div className="text-red-400">-{commit.deletions}</div>
+                <div className="text-red-400">{deletions}</div>
               </div>
             </div>
 

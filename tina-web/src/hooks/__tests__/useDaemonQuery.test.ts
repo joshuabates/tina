@@ -75,4 +75,17 @@ describe("fetchDaemon", () => {
     expect(init.body).toBeUndefined()
     expect(init.headers).toBeUndefined()
   })
+
+  it("supports commit batch query params", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ commits: [], missingShas: [] }), { status: 200 }),
+    )
+
+    await fetchDaemon("/commits", { worktree: "/tmp/wt", shas: "abc123,def456" })
+
+    const calledUrl = vi.mocked(globalThis.fetch).mock.calls[0][0] as string
+    expect(calledUrl).toContain("/commits")
+    expect(calledUrl).toContain("worktree=%2Ftmp%2Fwt")
+    expect(calledUrl).toContain("shas=abc123%2Cdef456")
+  })
 })

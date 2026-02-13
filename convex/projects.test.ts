@@ -74,11 +74,6 @@ describe("projects:deleteProject", () => {
       phaseNumber: "1",
       sha: "deletefeature123",
       shortSha: "deletef",
-      subject: "Add delete action",
-      author: "Test User <test@example.com>",
-      timestamp: "2026-02-11T00:05:00Z",
-      insertions: 42,
-      deletions: 8,
     });
 
     await t.mutation(api.plans.upsertPlan, {

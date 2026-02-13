@@ -242,12 +242,9 @@ fn commit_to_args(commit: &CommitRecord) -> BTreeMap<String, Value> {
         Value::from(commit.phase_number.as_str()),
     );
     args.insert("sha".into(), Value::from(commit.sha.as_str()));
-    args.insert("shortSha".into(), Value::from(commit.short_sha.as_str()));
-    args.insert("subject".into(), Value::from(commit.subject.as_str()));
-    args.insert("author".into(), Value::from(commit.author.as_str()));
-    args.insert("timestamp".into(), Value::from(commit.timestamp.as_str()));
-    args.insert("insertions".into(), Value::from(commit.insertions as f64));
-    args.insert("deletions".into(), Value::from(commit.deletions as f64));
+    if let Some(ref short_sha) = commit.short_sha {
+        args.insert("shortSha".into(), Value::from(short_sha.as_str()));
+    }
     args
 }
 
@@ -534,14 +531,6 @@ fn value_as_opt_f64(map: &BTreeMap<String, Value>, key: &str) -> Option<f64> {
     }
 }
 
-fn value_as_u32(map: &BTreeMap<String, Value>, key: &str) -> u32 {
-    match map.get(key) {
-        Some(Value::Int64(n)) => (*n).max(0) as u32,
-        Some(Value::Float64(f)) if *f >= 0.0 => *f as u32,
-        _ => 0,
-    }
-}
-
 fn value_as_opt_bool(map: &BTreeMap<String, Value>, key: &str) -> Option<bool> {
     match map.get(key) {
         Some(Value::Boolean(b)) => Some(*b),
@@ -657,12 +646,7 @@ fn extract_commit_from_obj(obj: &BTreeMap<String, Value>) -> CommitRecord {
         orchestration_id: value_as_id(obj, "orchestrationId"),
         phase_number: value_as_str(obj, "phaseNumber"),
         sha: value_as_str(obj, "sha"),
-        short_sha: value_as_str(obj, "shortSha"),
-        subject: value_as_str(obj, "subject"),
-        author: value_as_str(obj, "author"),
-        timestamp: value_as_str(obj, "timestamp"),
-        insertions: value_as_u32(obj, "insertions"),
-        deletions: value_as_u32(obj, "deletions"),
+        short_sha: value_as_opt_str(obj, "shortSha"),
     }
 }
 
@@ -2081,22 +2065,20 @@ mod tests {
     }
 
     #[test]
-    fn test_commit_to_args_uses_f64_for_diff_counts() {
+    fn test_commit_to_args_omits_short_sha_when_missing() {
         let commit = CommitRecord {
             orchestration_id: "orch-123".to_string(),
             phase_number: "1".to_string(),
             sha: "abc123".to_string(),
-            short_sha: "abc123".to_string(),
-            subject: "feat: test".to_string(),
-            author: "Test <test@example.com>".to_string(),
-            timestamp: "2026-02-11T07:00:00Z".to_string(),
-            insertions: 12,
-            deletions: 0,
+            short_sha: None,
         };
 
         let args = commit_to_args(&commit);
-        assert_eq!(args.get("insertions"), Some(&Value::from(12.0f64)));
-        assert_eq!(args.get("deletions"), Some(&Value::from(0.0f64)));
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-123")));
+        assert_eq!(args.get("phaseNumber"), Some(&Value::from("1")));
+        assert_eq!(args.get("sha"), Some(&Value::from("abc123")));
+        assert!(args.get("shortSha").is_none());
+        assert_eq!(args.len(), 3);
     }
 
     #[test]
