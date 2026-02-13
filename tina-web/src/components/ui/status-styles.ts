@@ -17,6 +17,10 @@ const STATUS_VALUES = [
   // Ticket statuses (todo, canceled — others already present above)
   "todo",
   "canceled",
+  // Review statuses
+  "open",
+  "changes_requested",
+  "superseded",
 ] as const
 
 export type StatusBadgeStatus = (typeof STATUS_VALUES)[number]
@@ -124,6 +128,28 @@ const statusStyleMap: Record<StatusBadgeStatus, StatusStyleTokens> = {
   },
   archived: {
     label: "Archived",
+    textClass: "text-muted-foreground",
+    iconBgClass: "bg-card",
+    borderClass: "border-l-muted",
+    badgeClass: "text-muted-foreground border-muted bg-transparent",
+  },
+  // Review statuses
+  open: {
+    label: "Open",
+    textClass: "text-status-executing",
+    iconBgClass: "bg-primary phase-glow",
+    borderClass: "border-l-status-executing",
+    badgeClass: "text-status-executing border-status-executing/30 bg-status-executing/12",
+  },
+  changes_requested: {
+    label: "Changes Requested",
+    textClass: "text-status-warning",
+    iconBgClass: "bg-status-warning",
+    borderClass: "border-l-status-warning",
+    badgeClass: "text-status-warning border-status-warning/30 bg-status-warning/8",
+  },
+  superseded: {
+    label: "Superseded",
     textClass: "text-muted-foreground",
     iconBgClass: "bg-card",
     borderClass: "border-l-muted",
