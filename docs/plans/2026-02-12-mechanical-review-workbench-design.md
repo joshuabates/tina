@@ -6,6 +6,15 @@ Project 4 from the [IDE Program Roadmap](2026-02-10-tina-web-ide-program-roadmap
 
 Deliver a GitHub-PR-style review surface where a review agent mechanically works through a configurable checklist of CLI and project checks, writes code findings, and produces a structured scorecard. Humans monitor in real-time via tina-web and step in at HITL gates when required.
 
+## Wireframes
+
+Interactive prototype with static data covering all 4 tabs (Conversation, Changes, Commits, Checks):
+
+`designs/src/designSets/project4-mechanical-review-workbench/`
+
+- `data.ts` — seed data types and fixtures (ReviewFile, ReviewThread, AgentReviewRun, HitlGate, etc.)
+- `index.tsx` — full interactive wireframe (tab switching, file tree, side-by-side diff, inline commenting, spring navigation)
+
 ## Context
 
 Projects 1-3 are complete (work graph, control plane, feedback fabric). The existing `feedbackEntries` system is replaced entirely by the review domain described here.
