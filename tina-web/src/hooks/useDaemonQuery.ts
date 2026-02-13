@@ -30,15 +30,22 @@ export interface DiffHunk {
 
 const DAEMON_BASE = import.meta.env.VITE_DAEMON_URL ?? "http://localhost:7842"
 
-export async function fetchDaemon<T>(path: string, params: Record<string, string>): Promise<T> {
+export async function fetchDaemon<T>(
+  path: string,
+  params: Record<string, string>,
+  method: string = "GET",
+): Promise<T> {
   const url = new URL(path, DAEMON_BASE)
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v)
+  if (method === "GET") {
+    for (const [k, v] of Object.entries(params)) {
+      url.searchParams.set(k, v)
+    }
   }
-  const resp = await fetch(url.toString())
+  const resp = await fetch(url.toString(), { method })
   if (!resp.ok) {
     throw new Error(`Daemon ${path}: ${resp.status} ${await resp.text()}`)
   }
+  if (resp.status === 204) return undefined as T
   return resp.json() as Promise<T>
 }
 
