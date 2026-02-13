@@ -422,8 +422,42 @@ Team-lead monitors for messages and applies dual-grammar recognition:
 - v2 `status: gaps` or legacy "Issues found: [list]" → Worker fixes, re-review
 - v2 `status: error` or legacy "Review loop exceeded" → Team-lead intervenes
 
-**Invalid result handling:**
-If a v2 message fails acceptance matrix validation, retry the agent once with stricter instructions requesting v2 headers. On second failure, follow existing escalation.
+### Invalid Result Retry Protocol
+
+When a v2 message fails acceptance matrix validation or a message cannot be interpreted at all:
+
+**Retry tracking:** Track retry attempts per agent (max 1 retry = 2 total attempts per agent).
+
+**Retry flow:**
+1. Shut down the agent that produced the invalid result
+2. Spawn a replacement with the same name and an augmented prompt containing a retry preamble:
+
+**Worker retry preamble:**
+```
+RETRY CONTEXT: Your previous run produced an invalid result that could not be processed.
+You MUST include v2 structured headers as the FIRST lines of your completion message:
+role: worker
+task_id: <your-task-id>
+status: pass|gaps|error
+git_range: <base>..<head>  (required when status=pass)
+issues: <description>  (required when status=gaps or error)
+Then a blank line, then your freeform explanation.
+```
+
+**Reviewer retry preamble:**
+```
+RETRY CONTEXT: Your previous review produced an invalid result that could not be processed.
+You MUST include v2 structured headers as the FIRST lines of your completion message:
+role: <spec-reviewer|code-quality-reviewer>
+task_id: <your-task-id>
+status: pass|gaps|error
+issues: <description>  (required when status=gaps or error)
+Then a blank line, then your freeform review body.
+```
+
+3. If the replacement also produces an invalid result: mark the task as blocked and continue with other tasks.
+
+**Does NOT apply to:** Valid results with `status=gaps` (normal remediation loop) or `status=error` (existing error handling).
 
 ### Infinite Loop Prevention
 
@@ -433,6 +467,8 @@ If task bounces between worker and reviewer 3+ times:
 2. Messages both parties: "Review loop detected. Explain core disagreement."
 3. If unresolvable: Mark task blocked, continue with other tasks
 4. Include blocked task in phase-reviewer context
+
+**Invalid result loops:** If an agent produces an unparseable result, this is handled by the Invalid Result Retry Protocol (above), not the review loop counter. The two mechanisms are independent.
 
 ### Phase Reviewer Integration
 
