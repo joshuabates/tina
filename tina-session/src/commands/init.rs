@@ -1,14 +1,20 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use chrono::Utc;
 
+use tina_session::claude;
 use tina_session::error::SessionError;
+use tina_session::session::naming::{
+    orchestration_session_name, orchestration_team_name,
+};
 use tina_session::state::schema::{
     ArchitectMode, DetectorScope, ReviewEnforcement, SupervisorState, TestIntegrityProfile,
 };
+use tina_session::tmux;
 
 use tina_session::convex;
 
@@ -25,6 +31,7 @@ echo "$INPUT" | jq '{
 }' > "$TINA_DIR/context-metrics.json"
 echo "ctx:$(echo "$INPUT" | jq -r '.context_window.used_percentage // 0 | floor')%"
 "#;
+const CLAUDE_READY_TIMEOUT_SECS: u64 = 60;
 
 pub fn run(
     feature: &str,
@@ -40,6 +47,40 @@ pub fn run(
     hard_block_detectors: Option<bool>,
     allow_rare_override: Option<bool>,
     require_fix_first: Option<bool>,
+) -> anyhow::Result<u8> {
+    run_with_options(
+        feature,
+        cwd,
+        design_doc,
+        design_id,
+        branch,
+        total_phases,
+        review_enforcement,
+        detector_scope,
+        architect_mode,
+        test_integrity_profile,
+        hard_block_detectors,
+        allow_rare_override,
+        require_fix_first,
+        false,
+    )
+}
+
+pub fn run_with_options(
+    feature: &str,
+    cwd: &Path,
+    design_doc: Option<&Path>,
+    design_id: Option<&str>,
+    branch: &str,
+    total_phases: u32,
+    review_enforcement: Option<&str>,
+    detector_scope: Option<&str>,
+    architect_mode: Option<&str>,
+    test_integrity_profile: Option<&str>,
+    hard_block_detectors: Option<bool>,
+    allow_rare_override: Option<bool>,
+    require_fix_first: Option<bool>,
+    launch_orchestrator: bool,
 ) -> anyhow::Result<u8> {
     // Validate exactly one design source
     match (design_doc, design_id) {
@@ -74,6 +115,37 @@ pub fn run(
             .is_some_and(|path| !path.trim().is_empty());
 
         if !is_terminal && has_worktree {
+            if launch_orchestrator {
+                let worktree = existing.worktree_path.unwrap_or_default();
+                let worktree_path = PathBuf::from(worktree.clone());
+                let session_name = start_orchestration_session(
+                    feature,
+                    &worktree_path,
+                    resolved_design_id.as_deref(),
+                    &design_doc_path,
+                )?;
+                let team_name = orchestration_team_name(feature);
+                let team_id =
+                    register_orchestration_team(&existing.id, &team_name, Some(&session_name))?;
+                auto_start_daemon();
+
+                let mut output = serde_json::json!({
+                    "orchestration_id": existing.id,
+                    "team_id": team_id,
+                    "worktree_path": worktree,
+                    "feature": feature,
+                    "branch": existing.branch,
+                    "design_doc": existing.design_doc_path,
+                    "total_phases": existing.total_phases,
+                    "tmux_session_name": session_name,
+                });
+                if let Some(did) = existing.design_id {
+                    output["design_id"] = serde_json::Value::String(did);
+                }
+                println!("{}", serde_json::to_string(&output)?);
+                return Ok(0);
+            }
+
             let worktree = existing.worktree_path.unwrap_or_default();
             anyhow::bail!(SessionError::AlreadyInitialized(
                 feature.to_string(),
@@ -147,19 +219,28 @@ pub fn run(
         resolved_design_id.as_deref(),
     )?;
 
+    let orchestration_tmux_session = if launch_orchestrator {
+        Some(start_orchestration_session(
+            feature,
+            &worktree_path,
+            resolved_design_id.as_deref(),
+            &design_doc_path,
+        )?)
+    } else {
+        None
+    };
+
     // Pre-register the orchestration team in Convex so the daemon can link
     // teams/tasks to this orchestration. The lead_session_id is a placeholder
     // until the real team lead starts and re-registers via upsert.
-    let team_name = format!("{}-orchestration", feature);
-    let team_id = register_orchestration_team(&orch_id, &team_name)?;
+    let team_name = orchestration_team_name(feature);
+    let team_id = register_orchestration_team(
+        &orch_id,
+        &team_name,
+        orchestration_tmux_session.as_deref(),
+    )?;
 
-    // Auto-start daemon if not running
-    if tina_session::daemon::status().is_none() {
-        match tina_session::daemon::start() {
-            Ok(pid) => eprintln!("Auto-started daemon (pid {})", pid),
-            Err(e) => eprintln!("Warning: Failed to auto-start daemon: {}", e),
-        }
-    }
+    auto_start_daemon();
 
     // Output JSON for orchestrator to capture
     let mut output = serde_json::json!({
@@ -173,6 +254,9 @@ pub fn run(
     });
     if let Some(did) = resolved_design_id.as_deref() {
         output["design_id"] = serde_json::Value::String(did.to_string());
+    }
+    if let Some(session_name) = orchestration_tmux_session {
+        output["tmux_session_name"] = serde_json::Value::String(session_name);
     }
     println!("{}", serde_json::to_string(&output)?);
 
@@ -506,16 +590,154 @@ fn filter_internal_lines(body: &str, keywords: &[&str]) -> String {
         .join("\n")
 }
 
+fn auto_start_daemon() {
+    if tina_session::daemon::status().is_none() {
+        match tina_session::daemon::start() {
+            Ok(pid) => eprintln!("Auto-started daemon (pid {})", pid),
+            Err(e) => eprintln!("Warning: Failed to auto-start daemon: {}", e),
+        }
+    }
+}
+
+/// Detect a working claude executable and return an absolute path.
+fn detect_claude_binary() -> anyhow::Result<PathBuf> {
+    let claude_path = find_executable("claude")
+        .ok_or_else(|| anyhow::anyhow!("claude binary not found in PATH"))?;
+
+    let is_working = Command::new(&claude_path)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if !is_working {
+        anyhow::bail!(
+            "claude executable is not runnable: {}",
+            claude_path.display()
+        );
+    }
+
+    Ok(claude_path)
+}
+
+fn find_executable(name: &str) -> Option<PathBuf> {
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        for candidate in [
+            home.join(".local/bin").join(name),
+            home.join("bin").join(name),
+        ] {
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    for base in ["/usr/local/bin", "/opt/homebrew/bin"] {
+        let candidate = PathBuf::from(base).join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn shell_quote(arg: &str) -> String {
+    format!("\"{}\"", arg.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+fn start_orchestration_session(
+    feature: &str,
+    worktree_path: &Path,
+    design_id: Option<&str>,
+    design_doc_path: &Path,
+) -> anyhow::Result<String> {
+    let session_name = orchestration_session_name(feature);
+
+    if tmux::session_exists(&session_name) {
+        eprintln!(
+            "Orchestration session '{}' already exists. Reusing.",
+            session_name
+        );
+        return Ok(session_name);
+    }
+
+    if !worktree_path.exists() {
+        anyhow::bail!(
+            "orchestration worktree does not exist: {}",
+            worktree_path.display()
+        );
+    }
+
+    eprintln!(
+        "Creating orchestration session '{}' in {}",
+        session_name,
+        worktree_path.display()
+    );
+    tmux::create_session(&session_name, worktree_path, None)?;
+    std::thread::sleep(Duration::from_millis(500));
+
+    let claude_bin = detect_claude_binary()?;
+    let claude_cmd = format!(
+        "{} --dangerously-skip-permissions",
+        shell_quote(&claude_bin.to_string_lossy())
+    );
+    eprintln!("Starting Claude ({}) in orchestration session...", claude_bin.display());
+    tmux::send_keys(&session_name, &claude_cmd)?;
+
+    eprintln!(
+        "Waiting for Claude to be ready in orchestration session (up to {}s)...",
+        CLAUDE_READY_TIMEOUT_SECS
+    );
+    match claude::wait_for_ready(&session_name, CLAUDE_READY_TIMEOUT_SECS) {
+        Ok(_) => {
+            eprintln!("Claude is ready.");
+        }
+        Err(e) => {
+            eprintln!("Warning: {}", e);
+            eprintln!("Proceeding anyway, but Claude may not be ready.");
+        }
+    }
+
+    let skill_cmd = if let Some(did) = design_id {
+        format!("/tina:orchestrate --feature {} --design-id {}", feature, did)
+    } else {
+        format!(
+            "/tina:orchestrate --feature {} {}",
+            feature,
+            design_doc_path.display()
+        )
+    };
+    eprintln!("Sending: {}", skill_cmd);
+    tmux::send_keys(&session_name, &skill_cmd)?;
+
+    Ok(session_name)
+}
+
 /// Pre-register the orchestration team in Convex so the daemon can resolve
 /// the team-to-orchestration link when syncing team members and tasks.
-fn register_orchestration_team(orchestration_id: &str, team_name: &str) -> anyhow::Result<String> {
+fn register_orchestration_team(
+    orchestration_id: &str,
+    team_name: &str,
+    tmux_session_name: Option<&str>,
+) -> anyhow::Result<String> {
+    let tmux_session_name = tmux_session_name.map(str::to_string);
     convex::run_convex(|mut writer| async move {
         let args = convex::RegisterTeamArgs {
             team_name: team_name.to_string(),
             orchestration_id: orchestration_id.to_string(),
             lead_session_id: "pending".to_string(),
             local_dir_name: team_name.replace('.', "-"),
-            tmux_session_name: None,
+            tmux_session_name,
             phase_number: None,
             parent_team_id: None,
             created_at: chrono::Utc::now().timestamp_millis() as f64,

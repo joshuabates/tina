@@ -66,13 +66,28 @@ impl SyncCache {
 
     pub fn find_worktree_by_ref_path(&self, ref_path: &Path) -> Option<&WorktreeInfo> {
         self.worktrees.iter().find(|wt| {
-            let expected = wt
-                .worktree_path
-                .join(".git")
-                .join("refs")
-                .join("heads")
-                .join(&wt.branch);
-            expected == ref_path
+            let expected_branch_ref = wt.branch_ref_path.as_ref().cloned().unwrap_or_else(|| {
+                wt.worktree_path
+                    .join(".git")
+                    .join("refs")
+                    .join("heads")
+                    .join(&wt.branch)
+            });
+
+            // File-level watch events typically surface the exact ref path.
+            if expected_branch_ref == ref_path {
+                return true;
+            }
+            // Directory-level events can surface an ancestor path.
+            if expected_branch_ref.starts_with(ref_path) {
+                return true;
+            }
+
+            if let Some(git_dir) = wt.git_dir_path.as_ref() {
+                return ref_path == git_dir.join("HEAD") || ref_path == git_dir.join("packed-refs");
+            }
+
+            false
         })
     }
 
@@ -123,6 +138,23 @@ fn should_emit_skip_event(cache: &mut SyncCache, key: String, now_unix: i64) -> 
             cache.skip_event_last_emitted.insert(key, now_unix);
             true
         }
+    }
+}
+
+fn maybe_advance_last_commit_sha(
+    cache: &mut SyncCache,
+    orchestration_id: &str,
+    commits: &[git::GitCommit],
+    all_writes_succeeded: bool,
+) {
+    if !all_writes_succeeded {
+        return;
+    }
+
+    if let Some(latest) = commits.first() {
+        cache
+            .last_commit_sha
+            .insert(orchestration_id.to_string(), latest.sha.clone());
     }
 }
 
@@ -698,6 +730,9 @@ pub async fn sync_commits(
     );
 
     // Record each commit to Convex
+    let mut all_writes_succeeded = true;
+    let mut first_write_error = None;
+
     for commit in &new_commits {
         let record = CommitRecord {
             orchestration_id: orchestration_id.to_string(),
@@ -731,16 +766,36 @@ pub async fn sync_commits(
                 }
             }
             Err(e) => {
+                all_writes_succeeded = false;
+                if first_write_error.is_none() {
+                    first_write_error = Some(e.to_string());
+                }
                 error!(sha = %commit.short_sha, error = %e, "failed to record commit");
+                break;
             }
         }
     }
 
-    // Update cache with latest SHA
-    if let Some(latest) = new_commits.first() {
-        cache
-            .last_commit_sha
-            .insert(orchestration_id.to_string(), latest.sha.clone());
+    maybe_advance_last_commit_sha(
+        cache,
+        orchestration_id,
+        &new_commits,
+        all_writes_succeeded,
+    );
+
+    if let Some(err) = first_write_error {
+        if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+            t.end_span(
+                sid,
+                "daemon.sync_commits",
+                started_at,
+                "error",
+                Some("convex_write_failed".to_string()),
+                Some(err.clone()),
+            )
+            .await;
+        }
+        anyhow::bail!("failed to record commit batch: {}", err);
     }
 
     // Complete span
@@ -866,6 +921,8 @@ pub async fn discover_worktrees(
                 worktree_path: path_buf,
                 branch: orch.branch.clone(),
                 current_phase: orch.current_phase.to_string(),
+                git_dir_path: None,
+                branch_ref_path: None,
             });
         } else {
             warn!(
@@ -1225,10 +1282,32 @@ mod tests {
             worktree_path: PathBuf::from("/project/.worktrees/test"),
             branch: "tina/test-feature".to_string(),
             current_phase: "1".to_string(),
+            git_dir_path: Some(PathBuf::from("/project/.git")),
+            branch_ref_path: Some(PathBuf::from("/project/.git/refs/heads/tina/test-feature")),
         }]);
 
-        let ref_path = PathBuf::from("/project/.worktrees/test/.git/refs/heads/tina/test-feature");
+        let ref_path = PathBuf::from("/project/.git/refs/heads/tina/test-feature");
         let found = cache.find_worktree_by_ref_path(&ref_path);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().feature, "test-feature");
+    }
+
+    #[test]
+    fn test_find_worktree_by_ref_path_with_git_file_worktree_layout() {
+        let mut cache = SyncCache::new();
+        cache.set_worktrees(vec![WorktreeInfo {
+            orchestration_id: "orch1".to_string(),
+            feature: "test-feature".to_string(),
+            worktree_path: PathBuf::from("/project/.worktrees/test"),
+            branch: "tina/test-feature".to_string(),
+            current_phase: "1".to_string(),
+            git_dir_path: Some(PathBuf::from("/project/.git/worktrees/test")),
+            branch_ref_path: Some(PathBuf::from("/project/.git/refs/heads/tina/test-feature")),
+        }]);
+
+        // Simulate notify emitting an ancestor path from a nested branch event.
+        let parent_ref_dir = PathBuf::from("/project/.git/refs/heads/tina");
+        let found = cache.find_worktree_by_ref_path(&parent_ref_dir);
         assert!(found.is_some());
         assert_eq!(found.unwrap().feature, "test-feature");
     }
@@ -1242,6 +1321,8 @@ mod tests {
             worktree_path: PathBuf::from("/project/.worktrees/test"),
             branch: "tina/test-feature".to_string(),
             current_phase: "1".to_string(),
+            git_dir_path: None,
+            branch_ref_path: None,
         }]);
 
         let plan_path =
@@ -1271,5 +1352,46 @@ mod tests {
             key,
             now + SKIP_EVENT_THROTTLE_SECS + 1
         ));
+    }
+
+    #[test]
+    fn test_maybe_advance_last_commit_sha_updates_only_on_full_success() {
+        let mut cache = SyncCache::new();
+        cache
+            .last_commit_sha
+            .insert("orch-1".to_string(), "oldsha".to_string());
+
+        let commits = vec![
+            git::GitCommit {
+                sha: "newest".to_string(),
+                short_sha: "newest".to_string(),
+                subject: "new".to_string(),
+                author: "test".to_string(),
+                timestamp: "2026-02-13T00:00:00Z".to_string(),
+                insertions: 1,
+                deletions: 0,
+            },
+            git::GitCommit {
+                sha: "older".to_string(),
+                short_sha: "older".to_string(),
+                subject: "old".to_string(),
+                author: "test".to_string(),
+                timestamp: "2026-02-12T00:00:00Z".to_string(),
+                insertions: 0,
+                deletions: 1,
+            },
+        ];
+
+        maybe_advance_last_commit_sha(&mut cache, "orch-1", &commits, false);
+        assert_eq!(
+            cache.last_commit_sha.get("orch-1"),
+            Some(&"oldsha".to_string())
+        );
+
+        maybe_advance_last_commit_sha(&mut cache, "orch-1", &commits, true);
+        assert_eq!(
+            cache.last_commit_sha.get("orch-1"),
+            Some(&"newest".to_string())
+        );
     }
 }

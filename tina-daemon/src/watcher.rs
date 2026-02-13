@@ -14,6 +14,8 @@ pub struct WorktreeInfo {
     pub worktree_path: PathBuf,
     pub branch: String,
     pub current_phase: String,
+    pub git_dir_path: Option<PathBuf>,
+    pub branch_ref_path: Option<PathBuf>,
 }
 
 /// Categorized file-system event.
@@ -43,6 +45,45 @@ pub struct DaemonWatcher {
     plan_dirs: Vec<PathBuf>,
 }
 
+fn is_heads_ref_path(path: &Path) -> bool {
+    let refs = std::ffi::OsStr::new("refs");
+    let heads = std::ffi::OsStr::new("heads");
+    let mut saw_refs = false;
+
+    for component in path.components() {
+        let name = component.as_os_str();
+        if saw_refs && name == heads {
+            return true;
+        }
+        saw_refs = name == refs;
+    }
+
+    false
+}
+
+fn classify_watch_path(path: &Path, teams_prefix: &Path, tasks_prefix: &Path) -> Option<WatchEvent> {
+    if path.starts_with(teams_prefix) {
+        return Some(WatchEvent::Teams);
+    }
+    if path.starts_with(tasks_prefix) {
+        return Some(WatchEvent::Tasks);
+    }
+
+    let file_name = path.file_name();
+    if file_name == Some(std::ffi::OsStr::new("HEAD"))
+        || file_name == Some(std::ffi::OsStr::new("packed-refs"))
+        || is_heads_ref_path(path)
+    {
+        return Some(WatchEvent::GitRef(path.to_path_buf()));
+    }
+
+    if path.extension() == Some(std::ffi::OsStr::new("md")) {
+        return Some(WatchEvent::Plan(path.to_path_buf()));
+    }
+
+    None
+}
+
 impl DaemonWatcher {
     /// Create a watcher monitoring the given teams and tasks directories.
     ///
@@ -70,22 +111,7 @@ impl DaemonWatcher {
                 };
 
                 for path in &event.paths {
-                    let watch_event = if path.starts_with(&tp) {
-                        Some(WatchEvent::Teams)
-                    } else if path.starts_with(&tkp) {
-                        Some(WatchEvent::Tasks)
-                    } else if path.file_name() == Some(std::ffi::OsStr::new("HEAD"))
-                        || path.parent().and_then(|p| p.file_name())
-                            == Some(std::ffi::OsStr::new("heads"))
-                    {
-                        // Git ref file changed
-                        Some(WatchEvent::GitRef(path.clone()))
-                    } else if path.extension() == Some(std::ffi::OsStr::new("md")) {
-                        // Plan file changed (*.md in plans directory)
-                        Some(WatchEvent::Plan(path.clone()))
-                    } else {
-                        None
-                    };
+                    let watch_event = classify_watch_path(path, &tp, &tkp);
 
                     if let Some(evt) = watch_event {
                         let _ = std_tx.send(evt);
@@ -169,6 +195,7 @@ impl DaemonWatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     use tempfile::TempDir;
 
     #[test]
@@ -176,6 +203,36 @@ mod tests {
         assert_eq!(WatchEvent::Teams, WatchEvent::Teams);
         assert_eq!(WatchEvent::Tasks, WatchEvent::Tasks);
         assert_ne!(WatchEvent::Teams, WatchEvent::Tasks);
+    }
+
+    #[test]
+    fn test_classify_nested_branch_ref_as_git_ref() {
+        let teams = Path::new("/tmp/teams");
+        let tasks = Path::new("/tmp/tasks");
+        let path = Path::new("/repo/.git/refs/heads/tina/my-feature");
+
+        assert_eq!(
+            classify_watch_path(path, teams, tasks),
+            Some(WatchEvent::GitRef(path.to_path_buf()))
+        );
+    }
+
+    #[test]
+    fn test_classify_head_and_packed_refs_as_git_ref() {
+        let teams = Path::new("/tmp/teams");
+        let tasks = Path::new("/tmp/tasks");
+
+        let head = Path::new("/repo/.git/worktrees/x/HEAD");
+        let packed = Path::new("/repo/.git/packed-refs");
+
+        assert_eq!(
+            classify_watch_path(head, teams, tasks),
+            Some(WatchEvent::GitRef(head.to_path_buf()))
+        );
+        assert_eq!(
+            classify_watch_path(packed, teams, tasks),
+            Some(WatchEvent::GitRef(packed.to_path_buf()))
+        );
     }
 
     #[tokio::test]

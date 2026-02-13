@@ -317,6 +317,7 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
                 branch.to_string(),
                 "--total-phases".to_string(),
                 total_phases.to_string(),
+                "--launch-orchestrator".to_string(),
             ];
 
             // Apply policy overrides from snapshot if present
@@ -885,6 +886,7 @@ mod tests {
                 "tina/auth",
                 "--total-phases",
                 "3",
+                "--launch-orchestrator",
             ]
         );
     }
@@ -918,6 +920,7 @@ mod tests {
                 "tina/auth",
                 "--total-phases",
                 "3",
+                "--launch-orchestrator",
                 "--review-enforcement",
                 "task_and_phase",
                 "--detector-scope",
@@ -963,6 +966,7 @@ mod tests {
                 "tina/auth",
                 "--total-phases",
                 "3",
+                "--launch-orchestrator",
                 "--hard-block-detectors",
                 "true",
                 "--allow-rare-override",

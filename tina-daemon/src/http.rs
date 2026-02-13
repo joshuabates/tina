@@ -43,6 +43,19 @@ pub struct FileParams {
     pub git_ref: String,
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct CommitDetailsParams {
+    pub worktree: String,
+    pub shas: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitDetailsResponse {
+    pub commits: Vec<git::GitCommit>,
+    pub missing_shas: Vec<String>,
+}
+
 fn validate_worktree_path(raw: &str) -> Result<PathBuf, (StatusCode, String)> {
     let worktree = Path::new(raw);
     if !worktree.is_absolute() {
@@ -76,6 +89,42 @@ fn validate_worktree_path(raw: &str) -> Result<PathBuf, (StatusCode, String)> {
     Ok(canonical)
 }
 
+fn parse_sha_list(raw: &str) -> Result<Vec<String>, (StatusCode, String)> {
+    let shas = raw
+        .split(',')
+        .map(|part| part.trim())
+        .filter(|part| !part.is_empty())
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+
+    if shas.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "shas must include at least one SHA".to_string(),
+        ));
+    }
+
+    Ok(shas)
+}
+
+fn map_git_error(op: &str, error: anyhow::Error) -> (StatusCode, String) {
+    let message = error.to_string();
+    let lowered = message.to_ascii_lowercase();
+
+    let status = if lowered.contains("unknown revision")
+        || lowered.contains("bad revision")
+        || lowered.contains("invalid object name")
+        || lowered.contains("ambiguous argument")
+        || lowered.contains("invalid commit sha")
+    {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+
+    (status, format!("{}: {}", op, message))
+}
+
 pub async fn get_diff_list(
     Query(params): Query<DiffListParams>,
 ) -> Result<Json<Vec<git::DiffFileStat>>, (StatusCode, String)> {
@@ -84,7 +133,7 @@ pub async fn get_diff_list(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+        .map_err(|e| map_git_error("diff list failed", e))
 }
 
 pub async fn get_diff_file(
@@ -95,7 +144,7 @@ pub async fn get_diff_file(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .map(Json)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+        .map_err(|e| map_git_error("file diff failed", e))
 }
 
 pub async fn get_file(Query(params): Query<FileParams>) -> Result<String, (StatusCode, String)> {
@@ -105,7 +154,32 @@ pub async fn get_file(Query(params): Query<FileParams>) -> Result<String, (Statu
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    .map_err(|e| map_git_error("file lookup failed", e))
+}
+
+pub async fn get_commit_details(
+    Query(params): Query<CommitDetailsParams>,
+) -> Result<Json<CommitDetailsResponse>, (StatusCode, String)> {
+    let worktree = validate_worktree_path(&params.worktree)?;
+    let shas = parse_sha_list(&params.shas)?;
+    let requested_count = shas.len();
+
+    let lookup = tokio::task::spawn_blocking(move || git::get_commit_details_by_sha(&worktree, &shas))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| map_git_error("commit lookup failed", e))?;
+
+    if lookup.commits.is_empty() && lookup.missing_shas.len() == requested_count {
+        return Err((
+            StatusCode::NOT_FOUND,
+            format!("commits not found: {}", lookup.missing_shas.join(",")),
+        ));
+    }
+
+    Ok(Json(CommitDetailsResponse {
+        commits: lookup.commits,
+        missing_shas: lookup.missing_shas,
+    }))
 }
 
 async fn get_health() -> Json<serde_json::Value> {
@@ -139,6 +213,7 @@ pub fn build_router_with_state(state: AppState) -> Router {
         .route("/diff", get(get_diff_list))
         .route("/diff/file", get(get_diff_file))
         .route("/file", get(get_file))
+        .route("/commits", get(get_commit_details))
         .route(
             "/ws/terminal/{paneId}",
             get(terminal::ws_terminal_handler),
@@ -235,6 +310,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_commits_rejects_missing_worktree() {
+        let resp = test_router()
+            .oneshot(get(
+                "/commits?worktree=/nonexistent/path&shas=abc1234,def5678",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
     async fn test_diff_list_missing_params_returns_bad_request() {
         let resp = test_router().oneshot(get("/diff")).await.unwrap();
         // Missing query params → 400 from axum's Query extractor
@@ -250,6 +336,12 @@ mod tests {
     #[tokio::test]
     async fn test_file_missing_params_returns_bad_request() {
         let resp = test_router().oneshot(get("/file")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_commits_missing_params_returns_bad_request() {
+        let resp = test_router().oneshot(get("/commits")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
@@ -328,6 +420,21 @@ mod tests {
             args,
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+
+    fn run_git_capture(dir: &std::path::Path, args: &[&str]) -> String {
+        let output = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 
     #[tokio::test]
@@ -420,6 +527,66 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
+    #[tokio::test]
+    async fn test_file_rejects_invalid_ref() {
+        let repo = setup_test_repo();
+        let worktree = repo.path().to_str().unwrap();
+        let uri = format!(
+            "/file?worktree={}&path=hello.txt&ref=not-a-real-ref",
+            urlencoding::encode(worktree)
+        );
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_commits_rejects_invalid_sha() {
+        let repo = setup_test_repo();
+        let worktree = repo.path().to_str().unwrap();
+        let uri = format!(
+            "/commits?worktree={}&shas=not-a-sha",
+            urlencoding::encode(worktree)
+        );
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_commits_returns_found_and_missing_shas() {
+        let repo = setup_test_repo();
+        let worktree = repo.path().to_str().unwrap();
+        let head = run_git_capture(repo.path(), &["rev-parse", "HEAD"]);
+        let uri = format!(
+            "/commits?worktree={}&shas={},deadbeef",
+            urlencoding::encode(worktree),
+            head
+        );
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), 1_000_000)
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let commits = payload.get("commits").unwrap().as_array().unwrap();
+        let missing = payload.get("missingShas").unwrap().as_array().unwrap();
+
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].get("sha").unwrap().as_str(), Some(head.as_str()));
+        assert_eq!(missing, &vec![serde_json::Value::from("deadbeef")]);
+    }
+
+    #[tokio::test]
+    async fn test_commits_returns_not_found_when_all_missing() {
+        let repo = setup_test_repo();
+        let worktree = repo.path().to_str().unwrap();
+        let uri = format!(
+            "/commits?worktree={}&shas=deadbeef,cafebabe",
+            urlencoding::encode(worktree)
+        );
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
     /// Resolve the git repo root from CARGO_MANIFEST_DIR.
     fn repo_root() -> String {
         let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));

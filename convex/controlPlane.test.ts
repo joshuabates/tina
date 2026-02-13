@@ -832,13 +832,10 @@ describe("controlPlane:launchOrchestration", () => {
     const actions = await t.query(api.controlPlane.listControlActions, {
       orchestrationId: result.orchestrationId,
     });
-    expect(actions.length).toBe(2);
-    const actionTypes = actions.map((a) => a.actionType).sort();
-    expect(actionTypes).toEqual(["start_execution", "start_orchestration"]);
-    const startExecution = actions.find((a) => a.actionType === "start_execution");
-    expect(startExecution).toBeDefined();
-    const startExecutionPayload = JSON.parse(startExecution!.payload);
-    expect(startExecutionPayload.design_id).toBe(designId);
+    expect(actions.length).toBe(1);
+    expect(actions[0].actionType).toBe("start_orchestration");
+    const launchPayload = JSON.parse(actions[0].payload);
+    expect(launchPayload.design_id).toBe(designId);
   });
 
   test("rejects nonexistent project", async () => {
@@ -1066,9 +1063,8 @@ describe("controlPlane:launchOrchestration:integration", () => {
     const actions = await t.query(api.controlPlane.listControlActions, {
       orchestrationId: result.orchestrationId,
     });
-    expect(actions).toHaveLength(2);
-    const actionTypes = actions.map((a) => a.actionType).sort();
-    expect(actionTypes).toEqual(["start_execution", "start_orchestration"]);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].actionType).toBe("start_orchestration");
     expect(actions[0].status).toBe("pending");
     expect(actions[0].queueActionId).toBeDefined();
 

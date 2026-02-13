@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct GitCommit {
     pub sha: String,
     pub short_sha: String,
@@ -64,6 +65,166 @@ pub fn get_new_commits(
 
     let stdout = String::from_utf8(output.stdout)?;
     parse_git_log_output(&stdout)
+}
+
+/// Resolve a repository's git directory, handling linked worktrees.
+pub fn resolve_git_dir(repo_path: &Path) -> Result<PathBuf> {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["rev-parse", "--absolute-git-dir"])
+        .output()
+        .context("Failed to run git rev-parse --absolute-git-dir")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "git rev-parse --absolute-git-dir failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let git_dir = String::from_utf8(output.stdout)?.trim().to_string();
+    if git_dir.is_empty() {
+        anyhow::bail!("git rev-parse returned empty git dir");
+    }
+    Ok(PathBuf::from(git_dir))
+}
+
+/// Resolve a path under git control, handling linked worktrees.
+pub fn resolve_git_path(repo_path: &Path, git_path: &str) -> Result<PathBuf> {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["rev-parse", "--git-path", git_path])
+        .output()
+        .context("Failed to run git rev-parse --git-path")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "git rev-parse --git-path failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let raw = String::from_utf8(output.stdout)?.trim().to_string();
+    if raw.is_empty() {
+        anyhow::bail!("git rev-parse returned empty git path");
+    }
+
+    let candidate = PathBuf::from(raw);
+    if candidate.is_absolute() {
+        Ok(candidate)
+    } else {
+        Ok(repo_path.join(candidate))
+    }
+}
+
+/// Resolve the branch ref path for a worktree-aware repository.
+pub fn resolve_branch_ref_path(repo_path: &Path, branch: &str) -> Result<PathBuf> {
+    resolve_git_path(repo_path, &format!("refs/heads/{}", branch))
+}
+
+/// Batch lookup result for commit details by SHA.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CommitDetailLookup {
+    pub commits: Vec<GitCommit>,
+    pub missing_shas: Vec<String>,
+}
+
+fn is_valid_sha(sha: &str) -> bool {
+    let len = sha.len();
+    (4..=40).contains(&len) && sha.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+fn resolve_commit_sha(repo_path: &Path, sha: &str) -> Result<Option<String>> {
+    let rev = format!("{}^{{commit}}", sha);
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["rev-parse", "--verify", "--quiet", &rev])
+        .output()
+        .context("Failed to run git rev-parse --verify")?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let resolved = String::from_utf8(output.stdout)?.trim().to_string();
+    if resolved.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(resolved))
+    }
+}
+
+/// Get commit metadata for a set of SHAs.
+///
+/// Returns found commits in request order (deduplicated by requested SHA)
+/// and a list of unresolved SHAs.
+pub fn get_commit_details_by_sha(repo_path: &Path, shas: &[String]) -> Result<CommitDetailLookup> {
+    if shas.is_empty() {
+        return Ok(CommitDetailLookup::default());
+    }
+
+    let mut requested = Vec::new();
+    let mut seen = HashSet::new();
+    for sha in shas {
+        if !is_valid_sha(sha) {
+            anyhow::bail!("invalid commit SHA: {}", sha);
+        }
+        if seen.insert(sha.clone()) {
+            requested.push(sha.clone());
+        }
+    }
+
+    let mut missing_shas = Vec::new();
+    let mut requested_with_resolved = Vec::new();
+    for requested_sha in &requested {
+        match resolve_commit_sha(repo_path, requested_sha)? {
+            Some(resolved) => requested_with_resolved.push((requested_sha.clone(), resolved)),
+            None => missing_shas.push(requested_sha.clone()),
+        }
+    }
+
+    if requested_with_resolved.is_empty() {
+        return Ok(CommitDetailLookup {
+            commits: Vec::new(),
+            missing_shas,
+        });
+    }
+
+    let mut cmd = Command::new("git");
+    cmd.current_dir(repo_path)
+        .arg("show")
+        .arg("--numstat")
+        .arg("--format=%H|%h|%s|%an <%ae>|%aI");
+    for (_, resolved) in &requested_with_resolved {
+        cmd.arg(resolved);
+    }
+
+    let output = cmd.output().context("Failed to run git show for commits")?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git show failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed = parse_git_log_output(&stdout)?;
+    let mut by_sha: HashMap<String, GitCommit> =
+        parsed.into_iter().map(|commit| (commit.sha.clone(), commit)).collect();
+
+    let mut commits = Vec::new();
+    for (requested_sha, resolved_sha) in requested_with_resolved {
+        if let Some(commit) = by_sha.remove(&resolved_sha) {
+            commits.push(commit);
+        } else {
+            missing_shas.push(requested_sha);
+        }
+    }
+
+    Ok(CommitDetailLookup {
+        commits,
+        missing_shas,
+    })
 }
 
 fn parse_git_log_output(output: &str) -> Result<Vec<GitCommit>> {
@@ -444,6 +605,42 @@ pub fn get_file_at_ref(repo_path: &Path, git_ref: &str, file: &str) -> Result<St
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn run_git(dir: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn setup_commit_repo() -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+
+        run_git(dir, &["init", "-b", "main"]);
+        run_git(dir, &["config", "user.email", "test@test.com"]);
+        run_git(dir, &["config", "user.name", "Test"]);
+
+        fs::write(dir.join("a.txt"), "a\n").unwrap();
+        run_git(dir, &["add", "a.txt"]);
+        run_git(dir, &["commit", "-m", "first"]);
+
+        fs::write(dir.join("a.txt"), "a\nb\n").unwrap();
+        run_git(dir, &["add", "a.txt"]);
+        run_git(dir, &["commit", "-m", "second"]);
+
+        tmp
+    }
 
     #[test]
     fn test_parse_git_log_output() {
@@ -484,6 +681,63 @@ def456|def4567|fix: bug fix|Jane Smith <jane@example.com>|2026-02-10T11:00:00Z
         let output = "";
         let commits = parse_git_log_output(output).unwrap();
         assert!(commits.is_empty());
+    }
+
+    #[test]
+    fn test_resolve_branch_ref_path_for_linked_worktree() {
+        let repo = setup_commit_repo();
+        let repo_path = repo.path();
+        let worktree_path = repo_path.join(".worktrees").join("linked");
+        fs::create_dir_all(worktree_path.parent().unwrap()).unwrap();
+
+        let worktree_path_str = worktree_path.to_string_lossy().to_string();
+        run_git(
+            repo_path,
+            &["worktree", "add", "-b", "tina/test-feature", &worktree_path_str],
+        );
+
+        let git_file = fs::read_to_string(worktree_path.join(".git")).unwrap();
+        assert!(
+            git_file.starts_with("gitdir: "),
+            "expected .git to be a gitdir file in linked worktree"
+        );
+
+        let ref_path = resolve_branch_ref_path(&worktree_path, "tina/test-feature").unwrap();
+        assert!(
+            ref_path.ends_with("refs/heads/tina/test-feature"),
+            "unexpected ref path: {}",
+            ref_path.display()
+        );
+        assert!(ref_path.exists());
+    }
+
+    #[test]
+    fn test_get_commit_details_by_sha_includes_missing_and_preserves_order() {
+        let repo = setup_commit_repo();
+        let repo_path = repo.path();
+        let head = run_git(repo_path, &["rev-parse", "HEAD"]);
+        let prev = run_git(repo_path, &["rev-parse", "HEAD~1"]);
+        let missing = "deadbeef".to_string();
+
+        let result = get_commit_details_by_sha(
+            repo_path,
+            &[prev.clone(), missing.clone(), head.clone()],
+        )
+        .unwrap();
+
+        assert_eq!(result.missing_shas, vec![missing]);
+        assert_eq!(result.commits.len(), 2);
+        assert_eq!(result.commits[0].sha, prev);
+        assert_eq!(result.commits[1].sha, head);
+        assert!(!result.commits[0].subject.is_empty());
+        assert!(!result.commits[1].subject.is_empty());
+    }
+
+    #[test]
+    fn test_get_commit_details_by_sha_rejects_invalid_sha() {
+        let repo = setup_commit_repo();
+        let err = get_commit_details_by_sha(repo.path(), &["not-a-sha".to_string()]).unwrap_err();
+        assert!(err.to_string().contains("invalid commit SHA"));
     }
 
     // -- Diff file list tests --

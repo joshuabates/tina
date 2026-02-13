@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -11,6 +10,7 @@ use tracing::{error, info, warn};
 
 use tina_daemon::actions;
 use tina_daemon::config::DaemonConfig;
+use tina_daemon::git;
 use tina_daemon::heartbeat;
 use tina_daemon::http;
 use tina_daemon::reconcile;
@@ -36,31 +36,54 @@ struct Cli {
     env: Option<String>,
 }
 
-/// Refresh active worktree discovery, attach watchers, and backfill commit/plan
-/// projection for newly discovered orchestrations.
+/// Refresh active worktree discovery and attach watchers.
 async fn refresh_worktrees(
     client: &Arc<Mutex<TinaConvexClient>>,
     cache: &mut SyncCache,
     watcher: &mut DaemonWatcher,
-    telemetry: &DaemonTelemetry,
 ) -> Result<()> {
-    let previous_ids: HashSet<String> = cache
-        .worktrees
-        .iter()
-        .map(|w| w.orchestration_id.clone())
-        .collect();
+    let mut worktrees = sync::discover_worktrees(client).await?;
 
-    let worktrees = sync::discover_worktrees(client).await?;
+    for worktree in &mut worktrees {
+        let git_dir_path = match git::resolve_git_dir(&worktree.worktree_path) {
+            Ok(path) => path,
+            Err(e) => {
+                warn!(
+                    feature = %worktree.feature,
+                    path = %worktree.worktree_path.display(),
+                    error = %e,
+                    "failed to resolve git dir for worktree"
+                );
+                worktree.worktree_path.join(".git")
+            }
+        };
+        worktree.git_dir_path = Some(git_dir_path.clone());
 
-    for worktree in &worktrees {
-        let ref_path = worktree
-            .worktree_path
-            .join(".git")
-            .join("refs")
-            .join("heads")
-            .join(&worktree.branch);
+        let branch_ref_path =
+            match git::resolve_branch_ref_path(&worktree.worktree_path, &worktree.branch) {
+                Ok(path) => path,
+                Err(e) => {
+                    warn!(
+                        feature = %worktree.feature,
+                        branch = %worktree.branch,
+                        error = %e,
+                        "failed to resolve branch ref path for worktree"
+                    );
+                    git_dir_path.join("refs").join("heads").join(&worktree.branch)
+                }
+            };
+        worktree.branch_ref_path = Some(branch_ref_path.clone());
 
-        if ref_path.exists() {
+        let git_watch_paths = [
+            branch_ref_path,
+            git_dir_path.join("HEAD"),
+            git_dir_path.join("packed-refs"),
+        ];
+
+        for ref_path in git_watch_paths {
+            if !ref_path.exists() {
+                continue;
+            }
             if let Err(e) = watcher.watch_git_ref(&ref_path) {
                 warn!(
                     feature = %worktree.feature,
@@ -88,66 +111,6 @@ async fn refresh_worktrees(
                         error = %e,
                         "failed to watch plans directory"
                     );
-                }
-            }
-        }
-
-        // Backfill once for orchestration worktrees discovered after daemon startup.
-        if !previous_ids.contains(&worktree.orchestration_id) {
-            if let Err(e) = sync::sync_commits(
-                client,
-                cache,
-                &worktree.orchestration_id,
-                &worktree.current_phase,
-                &worktree.worktree_path,
-                &worktree.branch,
-                Some(telemetry),
-            )
-            .await
-            {
-                warn!(
-                    feature = %worktree.feature,
-                    error = %e,
-                    "failed to backfill commits for new worktree"
-                );
-            }
-
-            for plans_dir in &plan_dirs {
-                if !plans_dir.exists() {
-                    continue;
-                }
-                match std::fs::read_dir(plans_dir) {
-                    Ok(entries) => {
-                        for entry in entries.flatten() {
-                            let path = entry.path();
-                            if path.extension().and_then(|s| s.to_str()) != Some("md") {
-                                continue;
-                            }
-                            if let Err(e) = sync::sync_plan(
-                                client,
-                                &worktree.orchestration_id,
-                                &path,
-                                Some(telemetry),
-                            )
-                            .await
-                            {
-                                warn!(
-                                    feature = %worktree.feature,
-                                    path = %path.display(),
-                                    error = %e,
-                                    "failed to backfill plan for new worktree"
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        warn!(
-                            feature = %worktree.feature,
-                            path = %plans_dir.display(),
-                            error = %e,
-                            "failed to read plans directory for backfill"
-                        );
-                    }
                 }
             }
         }
@@ -216,10 +179,9 @@ async fn main() -> Result<()> {
     // Initialize sync cache before startup sync/watcher operations.
     let mut cache = SyncCache::new();
 
-    // Discover active worktrees first so commit/plan backfill and watchers
-    // are active before potentially expensive team/task projection work.
+    // Discover active worktrees and attach watchers before initial projection sync.
     info!("discovering active worktrees");
-    if let Err(e) = refresh_worktrees(&client, &mut cache, &mut watcher, &telemetry).await {
+    if let Err(e) = refresh_worktrees(&client, &mut cache, &mut watcher).await {
         error!(error = %e, "worktree discovery failed, git and plan watching may be incomplete");
     }
 
@@ -303,7 +265,7 @@ async fn main() -> Result<()> {
                 match event {
                     Some(WatchEvent::Teams) | Some(WatchEvent::Tasks) => {
                         if let Err(e) =
-                            refresh_worktrees(&client, &mut cache, &mut watcher, &telemetry).await
+                            refresh_worktrees(&client, &mut cache, &mut watcher).await
                         {
                             error!(error = %e, "worktree refresh failed");
                         }

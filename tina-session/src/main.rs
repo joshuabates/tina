@@ -121,6 +121,10 @@ enum Commands {
         /// Whether implementers must attempt fixes before requesting override.
         #[arg(long)]
         require_fix_first: Option<bool>,
+
+        /// Start orchestration lead tmux session and send /tina:orchestrate.
+        #[arg(long)]
+        launch_orchestrator: bool,
     },
 
     /// Start phase execution (creates tmux, starts Claude, sends skill)
@@ -1298,21 +1302,43 @@ fn run() -> anyhow::Result<u8> {
             hard_block_detectors,
             allow_rare_override,
             require_fix_first,
-        } => commands::init::run(
-            &feature,
-            &cwd,
-            design_doc.as_deref(),
-            design_id.as_deref(),
-            &branch,
-            total_phases,
-            review_enforcement.as_deref(),
-            detector_scope.as_deref(),
-            architect_mode.as_deref(),
-            test_integrity_profile.as_deref(),
-            hard_block_detectors,
-            allow_rare_override,
-            require_fix_first,
-        ),
+            launch_orchestrator,
+        } => {
+            if launch_orchestrator {
+                commands::init::run_with_options(
+                    &feature,
+                    &cwd,
+                    design_doc.as_deref(),
+                    design_id.as_deref(),
+                    &branch,
+                    total_phases,
+                    review_enforcement.as_deref(),
+                    detector_scope.as_deref(),
+                    architect_mode.as_deref(),
+                    test_integrity_profile.as_deref(),
+                    hard_block_detectors,
+                    allow_rare_override,
+                    require_fix_first,
+                    true,
+                )
+            } else {
+                commands::init::run(
+                    &feature,
+                    &cwd,
+                    design_doc.as_deref(),
+                    design_id.as_deref(),
+                    &branch,
+                    total_phases,
+                    review_enforcement.as_deref(),
+                    detector_scope.as_deref(),
+                    architect_mode.as_deref(),
+                    test_integrity_profile.as_deref(),
+                    hard_block_detectors,
+                    allow_rare_override,
+                    require_fix_first,
+                )
+            }
+        }
 
         Commands::Start {
             feature,

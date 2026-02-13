@@ -497,18 +497,6 @@ export const launchOrchestration = mutation({
       requestedBy: args.requestedBy,
       idempotencyKey: args.idempotencyKey,
     });
-    await insertControlActionWithQueue(ctx, {
-      orchestrationId,
-      nodeId: onlineNode._id,
-      actionType: "start_execution",
-      payload: JSON.stringify({
-        feature: args.feature,
-        phase: "1",
-        design_id: args.designId,
-      }),
-      requestedBy: args.requestedBy,
-      idempotencyKey: `${args.idempotencyKey}-start-execution`,
-    });
 
     await ctx.db.insert("orchestrationEvents", {
       orchestrationId,
