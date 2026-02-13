@@ -90,8 +90,14 @@ tina-session exec-codex \
   --task-id "$TASK_ID" \
   --prompt "$PROMPT"  \
   --cwd "$CWD" \
+  --role "$ROLE" \
   ${MODEL:+--model "$MODEL"}
 ```
+
+**Role mapping:** The `--role` parameter uses the v2 role name:
+- Spawn role `executor` → `--role worker`
+- Spawn role `reviewer` with name containing `spec-reviewer` → `--role spec-reviewer`
+- Spawn role `reviewer` with name containing `code-quality-reviewer` → `--role code-quality-reviewer`
 
 If `exec-codex` fails to launch (binary missing, codex disabled in config), report error immediately:
 

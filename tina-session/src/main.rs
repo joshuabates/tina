@@ -353,6 +353,10 @@ enum Commands {
         /// Write codex stdout to this file path
         #[arg(long)]
         output: Option<PathBuf>,
+
+        /// Agent role for tracking (e.g., "worker", "spec-reviewer", "code-quality-reviewer")
+        #[arg(long)]
+        role: Option<String>,
     },
 
     /// Clean up orchestration state
@@ -1239,6 +1243,7 @@ fn run() -> anyhow::Result<u8> {
             sandbox,
             timeout_secs,
             output,
+            role,
         } => {
             check_phase(&phase)?;
             commands::exec_codex::run(
@@ -1251,6 +1256,7 @@ fn run() -> anyhow::Result<u8> {
                 sandbox.as_deref(),
                 timeout_secs,
                 output.as_deref(),
+                role.as_deref(),
             )
         }
 

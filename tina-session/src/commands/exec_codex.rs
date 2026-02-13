@@ -57,14 +57,14 @@ fn truncate_output(output: &str, max_bytes: usize) -> String {
 }
 
 /// Deterministic agent name: `codex-{role}-{phase}-{hash8}`.
-fn agent_name(task_id: &str, phase: &str) -> String {
+fn agent_name(task_id: &str, phase: &str, role: &str) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     let mut hasher = DefaultHasher::new();
     task_id.hash(&mut hasher);
     let hash = hasher.finish();
     let hash8 = format!("{:08x}", hash & 0xFFFF_FFFF);
-    format!("codex-worker-{phase}-{hash8}")
+    format!("codex-{role}-{phase}-{hash8}")
 }
 
 pub fn run(
@@ -77,6 +77,7 @@ pub fn run(
     sandbox_override: Option<&str>,
     timeout_override: Option<u64>,
     output_path: Option<&Path>,
+    role: Option<&str>,
 ) -> anyhow::Result<u8> {
     let cfg = config::load_config()?;
     let codex = &cfg.codex;
@@ -100,6 +101,7 @@ pub fn run(
     let resolved_prompt = resolve_prompt(prompt)?;
     let sandbox = sandbox_override.unwrap_or(&codex.default_sandbox);
     let timeout_secs = timeout_override.unwrap_or(codex.timeout_secs);
+    let role_str = role.unwrap_or("worker");
 
     // Emit start event to Convex
     emit_start_event(
@@ -109,6 +111,7 @@ pub fn run(
         model,
         &run_id,
         resolved_prompt.len(),
+        role_str,
     )?;
 
     // Spawn codex subprocess
@@ -153,10 +156,11 @@ pub fn run(
         stdout.len(),
         stderr.len(),
         duration_secs,
+        role_str,
     )?;
 
     // Upsert team member
-    let name = agent_name(task_id, phase);
+    let name = agent_name(task_id, phase, role_str);
     upsert_team_member(feature, phase, &name, model)?;
 
     // Write output file if requested
@@ -240,12 +244,14 @@ fn emit_start_event(
     model: &str,
     run_id: &str,
     prompt_length: usize,
+    role: &str,
 ) -> anyhow::Result<()> {
     let detail = serde_json::json!({
         "runId": run_id,
         "taskId": task_id,
         "model": model,
         "promptLength": prompt_length,
+        "role": role,
     });
 
     tina_session::convex::run_convex_write(|mut writer| async move {
@@ -278,6 +284,7 @@ fn emit_terminal_event(
     stdout_bytes: usize,
     stderr_bytes: usize,
     duration_secs: f64,
+    role: &str,
 ) -> anyhow::Result<()> {
     let event_type = match status {
         "completed" => "codex_run_completed",
@@ -292,6 +299,7 @@ fn emit_terminal_event(
         "stdoutBytes": stdout_bytes,
         "stderrBytes": stderr_bytes,
         "durationSecs": duration_secs,
+        "role": role,
     });
 
     tina_session::convex::run_convex_write(|mut writer| async move {
@@ -410,22 +418,35 @@ mod tests {
 
     #[test]
     fn agent_name_format() {
-        let name = agent_name("task-123", "1");
+        let name = agent_name("task-123", "1", "worker");
         assert!(name.starts_with("codex-worker-1-"), "got: {}", name);
         assert_eq!(name.len(), "codex-worker-1-".len() + 8);
     }
 
     #[test]
     fn agent_name_deterministic() {
-        let name1 = agent_name("task-abc", "2");
-        let name2 = agent_name("task-abc", "2");
+        let name1 = agent_name("task-abc", "2", "worker");
+        let name2 = agent_name("task-abc", "2", "worker");
         assert_eq!(name1, name2);
     }
 
     #[test]
     fn agent_name_different_for_different_tasks() {
-        let name1 = agent_name("task-1", "1");
-        let name2 = agent_name("task-2", "1");
+        let name1 = agent_name("task-1", "1", "worker");
+        let name2 = agent_name("task-2", "1", "worker");
         assert_ne!(name1, name2);
+    }
+
+    #[test]
+    fn agent_name_includes_role() {
+        let worker = agent_name("task-1", "1", "worker");
+        let reviewer = agent_name("task-1", "1", "spec-reviewer");
+        assert!(worker.starts_with("codex-worker-"), "got: {}", worker);
+        assert!(
+            reviewer.starts_with("codex-spec-reviewer-"),
+            "got: {}",
+            reviewer
+        );
+        assert_ne!(worker, reviewer);
     }
 }
