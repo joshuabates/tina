@@ -1053,6 +1053,7 @@ fn extract_feedback_entry_list(result: FunctionResult) -> Result<Vec<FeedbackEnt
 fn extract_blocking_feedback_summary(result: FunctionResult) -> Result<BlockingFeedbackSummary> {
     match result {
         FunctionResult::Value(Value::Object(obj)) => {
+            let open_count = value_as_u32(&obj, "openAskForChangeCount");
             let total = value_as_u32(&obj, "totalBlocking");
             let by_target = match obj.get("byTargetType") {
                 Some(Value::Object(tt)) => BlockingByTargetType {
@@ -1062,6 +1063,7 @@ fn extract_blocking_feedback_summary(result: FunctionResult) -> Result<BlockingF
                 _ => BlockingByTargetType { task: 0, commit: 0 },
             };
             Ok(BlockingFeedbackSummary {
+                open_ask_for_change_count: open_count,
                 total_blocking: total,
                 by_target_type: by_target,
             })
@@ -2799,12 +2801,14 @@ mod tests {
         by_target.insert("commit".to_string(), Value::from(1.0f64));
 
         let mut obj = BTreeMap::new();
+        obj.insert("openAskForChangeCount".to_string(), Value::from(4.0f64));
         obj.insert("totalBlocking".to_string(), Value::from(4.0f64));
         obj.insert("byTargetType".to_string(), Value::Object(by_target));
 
         let result = FunctionResult::Value(Value::Object(obj));
         let summary = extract_blocking_feedback_summary(result).unwrap();
 
+        assert_eq!(summary.open_ask_for_change_count, 4);
         assert_eq!(summary.total_blocking, 4);
         assert_eq!(summary.by_target_type.task, 3);
         assert_eq!(summary.by_target_type.commit, 1);
@@ -2817,12 +2821,14 @@ mod tests {
         by_target.insert("commit".to_string(), Value::from(0.0f64));
 
         let mut obj = BTreeMap::new();
+        obj.insert("openAskForChangeCount".to_string(), Value::from(0.0f64));
         obj.insert("totalBlocking".to_string(), Value::from(0.0f64));
         obj.insert("byTargetType".to_string(), Value::Object(by_target));
 
         let result = FunctionResult::Value(Value::Object(obj));
         let summary = extract_blocking_feedback_summary(result).unwrap();
 
+        assert_eq!(summary.open_ask_for_change_count, 0);
         assert_eq!(summary.total_blocking, 0);
         assert_eq!(summary.by_target_type.task, 0);
         assert_eq!(summary.by_target_type.commit, 0);
@@ -2836,6 +2842,7 @@ mod tests {
         let result = FunctionResult::Value(Value::Object(obj));
         let summary = extract_blocking_feedback_summary(result).unwrap();
 
+        assert_eq!(summary.open_ask_for_change_count, 0);
         assert_eq!(summary.total_blocking, 2);
         assert_eq!(summary.by_target_type.task, 0);
         assert_eq!(summary.by_target_type.commit, 0);

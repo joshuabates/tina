@@ -331,6 +331,7 @@ pub struct FeedbackEntryRecord {
 /// Blocking feedback summary as returned by `feedbackEntries:getBlockingFeedbackSummary`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockingFeedbackSummary {
+    pub open_ask_for_change_count: u32,
     pub total_blocking: u32,
     pub by_target_type: BlockingByTargetType,
 }
@@ -423,6 +424,7 @@ mod tests {
     #[test]
     fn blocking_feedback_summary_round_trip() {
         let summary = BlockingFeedbackSummary {
+            open_ask_for_change_count: 5,
             total_blocking: 5,
             by_target_type: BlockingByTargetType {
                 task: 3,
@@ -431,6 +433,7 @@ mod tests {
         };
         let json = serde_json::to_string(&summary).unwrap();
         let deserialized: BlockingFeedbackSummary = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.open_ask_for_change_count, 5);
         assert_eq!(deserialized.total_blocking, 5);
         assert_eq!(deserialized.by_target_type.task, 3);
         assert_eq!(deserialized.by_target_type.commit, 2);
