@@ -80,6 +80,22 @@ pub struct TerminalSessionRecord {
     pub ended_at: Option<f64>,
 }
 
+/// Active terminal session as returned by `terminalSessions:listActive`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveTerminalSession {
+    pub session_name: String,
+    pub tmux_pane_id: String,
+}
+
+/// Team member with a tmux pane ID, as returned by `teamMembers:listWithPaneIds`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamMemberWithPane {
+    pub orchestration_id: String,
+    pub phase_number: String,
+    pub agent_name: String,
+    pub tmux_pane_id: String,
+}
+
 /// Team registration input (for `teams:registerTeam`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterTeamRecord {

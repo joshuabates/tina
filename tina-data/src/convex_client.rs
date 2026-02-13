@@ -860,6 +860,66 @@ fn extract_active_team_list(result: FunctionResult) -> Result<Vec<ActiveTeamReco
     }
 }
 
+fn extract_active_terminal_sessions(
+    result: FunctionResult,
+) -> Result<Vec<ActiveTerminalSession>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut sessions = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    sessions.push(ActiveTerminalSession {
+                        session_name: value_as_str(&obj, "sessionName"),
+                        tmux_pane_id: value_as_str(&obj, "tmuxPaneId"),
+                    });
+                }
+            }
+            Ok(sessions)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => {
+            bail!(
+                "expected array for active terminal sessions, got: {:?}",
+                other
+            )
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_team_members_with_panes(
+    result: FunctionResult,
+) -> Result<Vec<TeamMemberWithPane>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut members = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    if let Some(pane_id) = value_as_opt_str(&obj, "tmuxPaneId") {
+                        members.push(TeamMemberWithPane {
+                            orchestration_id: value_as_id(&obj, "orchestrationId"),
+                            phase_number: value_as_str(&obj, "phaseNumber"),
+                            agent_name: value_as_str(&obj, "agentName"),
+                            tmux_pane_id: pane_id,
+                        });
+                    }
+                }
+            }
+            Ok(members)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => {
+            bail!(
+                "expected array for team members with panes, got: {:?}",
+                other
+            )
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
 fn extract_orchestration_event_list(
     result: FunctionResult,
 ) -> Result<Vec<OrchestrationEventRecord>> {
@@ -1754,6 +1814,59 @@ impl TinaConvexClient {
         args.insert("summary".into(), Value::from(summary));
         let result = self.client.mutation("reviewGates:upsertGate", args).await?;
         extract_id(result)
+    }
+
+    /// Create or update a terminal session record.
+    pub async fn upsert_terminal_session(
+        &mut self,
+        session: &TerminalSessionRecord,
+    ) -> Result<String> {
+        let args = terminal_session_to_args(session);
+        let result = self
+            .client
+            .mutation("terminalSessions:upsert", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Mark a terminal session as ended.
+    pub async fn mark_terminal_ended(
+        &mut self,
+        session_name: &str,
+        ended_at: f64,
+    ) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("sessionName".into(), Value::from(session_name));
+        args.insert("endedAt".into(), Value::from(ended_at));
+        let result = self
+            .client
+            .mutation("terminalSessions:markEnded", args)
+            .await?;
+        extract_unit(result)
+    }
+
+    /// List active terminal sessions (status = "active").
+    pub async fn list_active_terminal_sessions(
+        &mut self,
+    ) -> Result<Vec<ActiveTerminalSession>> {
+        let args = BTreeMap::new();
+        let result = self
+            .client
+            .query("terminalSessions:listActive", args)
+            .await?;
+        extract_active_terminal_sessions(result)
+    }
+
+    /// List team members that have a tmuxPaneId set.
+    pub async fn list_team_members_with_panes(
+        &mut self,
+    ) -> Result<Vec<TeamMemberWithPane>> {
+        let args = BTreeMap::new();
+        let result = self
+            .client
+            .query("teamMembers:listWithPaneIds", args)
+            .await?;
+        extract_team_members_with_panes(result)
     }
 }
 
