@@ -25,6 +25,14 @@ describe("FeedbackSummarySection", () => {
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
   })
 
+  it("shows error state", () => {
+    mockUseTypedQuery.mockReturnValue({ status: "error", error: new Error("fail") })
+
+    render(<FeedbackSummarySection orchestrationId="orch1" />)
+
+    expect(screen.getByText(/failed to load feedback/i)).toBeInTheDocument()
+  })
+
   it("shows zero count when no blocking entries", () => {
     mockUseTypedQuery.mockReturnValue({
       status: "success",
