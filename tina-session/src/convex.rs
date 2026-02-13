@@ -380,11 +380,7 @@ impl ConvexWriter {
     }
 
     /// Complete a review.
-    pub async fn complete_review(
-        &mut self,
-        review_id: &str,
-        state: &str,
-    ) -> anyhow::Result<()> {
+    pub async fn complete_review(&mut self, review_id: &str, state: &str) -> anyhow::Result<()> {
         self.client.complete_review(review_id, state).await
     }
 
@@ -470,7 +466,14 @@ impl ConvexWriter {
         summary: &str,
     ) -> anyhow::Result<String> {
         self.client
-            .upsert_review_gate(orchestration_id, gate_id, status, owner, decided_by, summary)
+            .upsert_review_gate(
+                orchestration_id,
+                gate_id,
+                status,
+                owner,
+                decided_by,
+                summary,
+            )
             .await
     }
 }

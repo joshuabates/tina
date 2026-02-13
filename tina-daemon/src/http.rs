@@ -75,31 +75,25 @@ pub async fn get_diff_list(
     Query(params): Query<DiffListParams>,
 ) -> Result<Json<Vec<git::DiffFileStat>>, (StatusCode, String)> {
     let worktree = validate_worktree_path(&params.worktree)?;
-    tokio::task::spawn_blocking(move || {
-        git::get_diff_file_list(&worktree, &params.base)
-    })
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .map(Json)
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    tokio::task::spawn_blocking(move || git::get_diff_file_list(&worktree, &params.base))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
 pub async fn get_diff_file(
     Query(params): Query<DiffFileParams>,
 ) -> Result<Json<Vec<git::DiffHunk>>, (StatusCode, String)> {
     let worktree = validate_worktree_path(&params.worktree)?;
-    tokio::task::spawn_blocking(move || {
-        git::get_file_diff(&worktree, &params.base, &params.file)
-    })
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .map(Json)
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    tokio::task::spawn_blocking(move || git::get_file_diff(&worktree, &params.base, &params.file))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
-pub async fn get_file(
-    Query(params): Query<FileParams>,
-) -> Result<String, (StatusCode, String)> {
+pub async fn get_file(Query(params): Query<FileParams>) -> Result<String, (StatusCode, String)> {
     let worktree = validate_worktree_path(&params.worktree)?;
     tokio::task::spawn_blocking(move || {
         git::get_file_at_ref(&worktree, &params.git_ref, &params.path)
@@ -157,10 +151,7 @@ mod tests {
     }
 
     fn get(uri: &str) -> Request<Body> {
-        Request::builder()
-            .uri(uri)
-            .body(Body::empty())
-            .unwrap()
+        Request::builder().uri(uri).body(Body::empty()).unwrap()
     }
 
     #[tokio::test]
@@ -175,7 +166,9 @@ mod tests {
     #[tokio::test]
     async fn test_diff_file_rejects_missing_worktree() {
         let resp = test_router()
-            .oneshot(get("/diff/file?worktree=/nonexistent/path&base=main&file=foo.rs"))
+            .oneshot(get(
+                "/diff/file?worktree=/nonexistent/path&base=main&file=foo.rs",
+            ))
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -192,29 +185,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_diff_list_missing_params_returns_bad_request() {
-        let resp = test_router()
-            .oneshot(get("/diff"))
-            .await
-            .unwrap();
+        let resp = test_router().oneshot(get("/diff")).await.unwrap();
         // Missing query params → 400 from axum's Query extractor
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
     async fn test_diff_file_missing_params_returns_bad_request() {
-        let resp = test_router()
-            .oneshot(get("/diff/file"))
-            .await
-            .unwrap();
+        let resp = test_router().oneshot(get("/diff/file")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
     async fn test_file_missing_params_returns_bad_request() {
-        let resp = test_router()
-            .oneshot(get("/file"))
-            .await
-            .unwrap();
+        let resp = test_router().oneshot(get("/file")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
@@ -242,20 +226,14 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let resp = test_router().oneshot(req).await.unwrap();
-        assert!(resp
-            .headers()
-            .get("access-control-allow-origin")
-            .is_some());
+        assert!(resp.headers().get("access-control-allow-origin").is_some());
     }
 
     #[tokio::test]
     async fn test_rejects_non_git_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let worktree = tmp.path().to_str().unwrap();
-        let uri = format!(
-            "/diff?worktree={}&base=main",
-            urlencoding::encode(worktree)
-        );
+        let uri = format!("/diff?worktree={}&base=main", urlencoding::encode(worktree));
         let resp = test_router().oneshot(get(&uri)).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -305,10 +283,7 @@ mod tests {
     async fn test_diff_list_returns_changed_files() {
         let repo = setup_test_repo();
         let worktree = repo.path().to_str().unwrap();
-        let uri = format!(
-            "/diff?worktree={}&base=main",
-            urlencoding::encode(worktree)
-        );
+        let uri = format!("/diff?worktree={}&base=main", urlencoding::encode(worktree));
         let resp = test_router().oneshot(get(&uri)).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
@@ -323,7 +298,10 @@ mod tests {
         );
 
         let paths: Vec<&str> = files.iter().filter_map(|f| f["path"].as_str()).collect();
-        assert!(paths.contains(&"hello.txt"), "missing hello.txt in {paths:?}");
+        assert!(
+            paths.contains(&"hello.txt"),
+            "missing hello.txt in {paths:?}"
+        );
         assert!(paths.contains(&"new.txt"), "missing new.txt in {paths:?}");
     }
 
@@ -381,10 +359,7 @@ mod tests {
             "/diff?worktree={}&base=HEAD~1",
             urlencoding::encode(&worktree)
         );
-        let resp = test_router()
-            .oneshot(get(&uri))
-            .await
-            .unwrap();
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
         // Should either succeed (200) or fail from git (500) — not 400
         assert_ne!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -396,10 +371,7 @@ mod tests {
             "/file?worktree={}&path=tina-daemon/Cargo.toml&ref=HEAD",
             urlencoding::encode(&worktree)
         );
-        let resp = test_router()
-            .oneshot(get(&uri))
-            .await
-            .unwrap();
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let body = axum::body::to_bytes(resp.into_body(), 1_000_000)
             .await

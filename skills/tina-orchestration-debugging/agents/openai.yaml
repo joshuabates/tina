@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tina Orchestration Debugging"
+  short_description: "Debug Tina orchestration issues with evidence-first triage"
+  default_prompt: "Use $tina-orchestration-debugging to triage this Tina orchestration issue and collect evidence before proposing fixes."

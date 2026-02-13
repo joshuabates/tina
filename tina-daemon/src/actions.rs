@@ -126,7 +126,11 @@ pub async fn dispatch_action(
     // Report result
     let mut client = client.lock().await;
     client
-        .complete_action(&action.id, &dispatch_result.to_json(), dispatch_result.success)
+        .complete_action(
+            &action.id,
+            &dispatch_result.to_json(),
+            dispatch_result.success,
+        )
         .await?;
 
     if dispatch_result.success {
@@ -372,14 +376,12 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
             Ok(args)
         }
         "orchestration_set_role_model" => {
-            let role = payload
-                .role
-                .as_deref()
-                .ok_or_else(|| anyhow::anyhow!("orchestration_set_role_model requires 'role' in payload"))?;
-            let model = payload
-                .model
-                .as_deref()
-                .ok_or_else(|| anyhow::anyhow!("orchestration_set_role_model requires 'model' in payload"))?;
+            let role = payload.role.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("orchestration_set_role_model requires 'role' in payload")
+            })?;
+            let model = payload.model.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("orchestration_set_role_model requires 'model' in payload")
+            })?;
             Ok(vec![
                 "orchestrate".to_string(),
                 "set-role-model".to_string(),
@@ -392,15 +394,16 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
             ])
         }
         "task_edit" => {
-            let phase_number = payload.phase_number.as_deref().ok_or_else(|| {
-                anyhow::anyhow!("task_edit requires 'phase_number' in payload")
-            })?;
-            let task_number = payload.task_number.ok_or_else(|| {
-                anyhow::anyhow!("task_edit requires 'task_number' in payload")
-            })?;
-            let revision = payload.revision.ok_or_else(|| {
-                anyhow::anyhow!("task_edit requires 'revision' in payload")
-            })?;
+            let phase_number = payload
+                .phase_number
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("task_edit requires 'phase_number' in payload"))?;
+            let task_number = payload
+                .task_number
+                .ok_or_else(|| anyhow::anyhow!("task_edit requires 'task_number' in payload"))?;
+            let revision = payload
+                .revision
+                .ok_or_else(|| anyhow::anyhow!("task_edit requires 'revision' in payload"))?;
 
             let mut args = vec![
                 "orchestrate".to_string(),
@@ -429,15 +432,17 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
             Ok(args)
         }
         "task_insert" => {
-            let phase_number = payload.phase_number.as_deref().ok_or_else(|| {
-                anyhow::anyhow!("task_insert requires 'phase_number' in payload")
-            })?;
-            let after_task = payload.after_task.ok_or_else(|| {
-                anyhow::anyhow!("task_insert requires 'after_task' in payload")
-            })?;
-            let subject = payload.subject.as_deref().ok_or_else(|| {
-                anyhow::anyhow!("task_insert requires 'subject' in payload")
-            })?;
+            let phase_number = payload
+                .phase_number
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("task_insert requires 'phase_number' in payload"))?;
+            let after_task = payload
+                .after_task
+                .ok_or_else(|| anyhow::anyhow!("task_insert requires 'after_task' in payload"))?;
+            let subject = payload
+                .subject
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("task_insert requires 'subject' in payload"))?;
 
             let mut args = vec![
                 "orchestrate".to_string(),
@@ -473,12 +478,13 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
             let task_number = payload.task_number.ok_or_else(|| {
                 anyhow::anyhow!("task_set_model requires 'task_number' in payload")
             })?;
-            let revision = payload.revision.ok_or_else(|| {
-                anyhow::anyhow!("task_set_model requires 'revision' in payload")
-            })?;
-            let model = payload.model.as_deref().ok_or_else(|| {
-                anyhow::anyhow!("task_set_model requires 'model' in payload")
-            })?;
+            let revision = payload
+                .revision
+                .ok_or_else(|| anyhow::anyhow!("task_set_model requires 'revision' in payload"))?;
+            let model = payload
+                .model
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("task_set_model requires 'model' in payload"))?;
 
             Ok(vec![
                 "orchestrate".to_string(),
@@ -1020,7 +1026,10 @@ mod tests {
         assert_eq!(model_json, serde_json::json!({"implementer": "haiku"}));
         assert_eq!(args[6], "--review-json");
         let review_json: serde_json::Value = serde_json::from_str(&args[7]).unwrap();
-        assert_eq!(review_json, serde_json::json!({"enforcement": "phase_only"}));
+        assert_eq!(
+            review_json,
+            serde_json::json!({"enforcement": "phase_only"})
+        );
     }
 
     #[test]
@@ -1063,10 +1072,7 @@ mod tests {
     fn test_set_policy_neither_policy() {
         let p = payload("auth", None);
         let args = build_cli_args("orchestration_set_policy", &p).unwrap();
-        assert_eq!(
-            args,
-            vec!["orchestrate", "set-policy", "--feature", "auth"]
-        );
+        assert_eq!(args, vec!["orchestrate", "set-policy", "--feature", "auth"]);
     }
 
     // --- orchestration_set_role_model tests ---
@@ -1447,7 +1453,10 @@ mod tests {
     #[test]
     fn test_dispatch_error_code_serializes_snake_case() {
         let codes = vec![
-            (DispatchErrorCode::PayloadMissingField, "payload_missing_field"),
+            (
+                DispatchErrorCode::PayloadMissingField,
+                "payload_missing_field",
+            ),
             (DispatchErrorCode::PayloadInvalid, "payload_invalid"),
             (DispatchErrorCode::CliExitNonZero, "cli_exit_non_zero"),
             (DispatchErrorCode::CliSpawnFailed, "cli_spawn_failed"),

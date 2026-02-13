@@ -12,24 +12,17 @@ pub fn start(
     let phase_str = phase.map(|s| s.to_string());
     let reviewer_str = reviewer.to_string();
 
-    let (review_id, orchestration_id) =
-        convex::run_convex(|mut writer| async move {
-            let orch = writer
-                .get_by_feature(&feature_name)
-                .await?
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Orchestration not found for feature: {}",
-                        feature_name
-                    )
-                })?;
-
-            let review_id = writer
-                .create_review(&orch.id, phase_str.as_deref(), &reviewer_str)
-                .await?;
-
-            Ok((review_id, orch.id))
+    let (review_id, orchestration_id) = convex::run_convex(|mut writer| async move {
+        let orch = writer.get_by_feature(&feature_name).await?.ok_or_else(|| {
+            anyhow::anyhow!("Orchestration not found for feature: {}", feature_name)
         })?;
+
+        let review_id = writer
+            .create_review(&orch.id, phase_str.as_deref(), &reviewer_str)
+            .await?;
+
+        Ok((review_id, orch.id))
+    })?;
 
     if json_mode {
         println!(
@@ -56,9 +49,7 @@ pub fn complete(
     let rid = review_id.to_string();
     let st = status.to_string();
 
-    convex::run_convex(|mut writer| async move {
-        writer.complete_review(&rid, &st).await
-    })?;
+    convex::run_convex(|mut writer| async move { writer.complete_review(&rid, &st).await })?;
 
     if json_mode {
         println!(
@@ -130,9 +121,7 @@ pub fn resolve_finding(
     let fid = finding_id.to_string();
     let rb = resolved_by.to_string();
 
-    convex::run_convex(|mut writer| async move {
-        writer.resolve_review_thread(&fid, &rb).await
-    })?;
+    convex::run_convex(|mut writer| async move { writer.resolve_review_thread(&fid, &rb).await })?;
 
     if json_mode {
         println!(
@@ -220,11 +209,7 @@ pub fn complete_check(
 }
 
 /// Run all CLI checks from tina-checks.toml.
-pub fn run_checks(
-    feature: &str,
-    review_id: &str,
-    json_mode: bool,
-) -> Result<u8, anyhow::Error> {
+pub fn run_checks(feature: &str, review_id: &str, json_mode: bool) -> Result<u8, anyhow::Error> {
     let orch = load_orchestration(feature)?;
     let worktree = orch
         .worktree_path
@@ -342,10 +327,8 @@ pub fn gate_block(
 
 fn load_orchestration(feature: &str) -> anyhow::Result<convex::OrchestrationRecord> {
     let feature_name = feature.to_string();
-    convex::run_convex(|mut writer| async move {
-        writer.get_by_feature(&feature_name).await
-    })?
-    .ok_or_else(|| anyhow::anyhow!("Orchestration not found for feature: {}", feature))
+    convex::run_convex(|mut writer| async move { writer.get_by_feature(&feature_name).await })?
+        .ok_or_else(|| anyhow::anyhow!("Orchestration not found for feature: {}", feature))
 }
 
 // --- Check execution helpers ---

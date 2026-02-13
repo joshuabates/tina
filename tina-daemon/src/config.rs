@@ -189,8 +189,13 @@ mod tests {
 
     #[test]
     fn test_build_missing_convex_url_errors() {
-        let result =
-            DaemonConfig::build("prod".to_string(), None, Some("token".to_string()), None, 7842);
+        let result = DaemonConfig::build(
+            "prod".to_string(),
+            None,
+            Some("token".to_string()),
+            None,
+            7842,
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("convex_url"));
     }

@@ -399,9 +399,7 @@ fn push_diff_line(hunk: &mut DiffHunk, line: &str, old_line: &mut u32, new_line:
 fn parse_hunk_header(line: &str) -> Result<(u32, u32, u32, u32)> {
     // Format: @@ -old_start,old_count +new_start,new_count @@ optional header
     let line = line.trim_start_matches("@@ ");
-    let end = line
-        .find(" @@")
-        .unwrap_or(line.len());
+    let end = line.find(" @@").unwrap_or(line.len());
     let range_part = &line[..end];
 
     let parts: Vec<&str> = range_part.split_whitespace().collect();
@@ -492,8 +490,10 @@ def456|def4567|fix: bug fix|Jane Smith <jane@example.com>|2026-02-10T11:00:00Z
 
     #[test]
     fn test_parse_diff_file_list() {
-        let name_status = "A\tsrc/new.rs\nM\tsrc/lib.rs\nD\tsrc/old.rs\nR100\tsrc/before.rs\tsrc/after.rs\n";
-        let numstat = "50\t0\tsrc/new.rs\n10\t3\tsrc/lib.rs\n0\t25\tsrc/old.rs\n2\t1\tsrc/after.rs\n";
+        let name_status =
+            "A\tsrc/new.rs\nM\tsrc/lib.rs\nD\tsrc/old.rs\nR100\tsrc/before.rs\tsrc/after.rs\n";
+        let numstat =
+            "50\t0\tsrc/new.rs\n10\t3\tsrc/lib.rs\n0\t25\tsrc/old.rs\n2\t1\tsrc/after.rs\n";
 
         let files = parse_diff_file_list(name_status, numstat).unwrap();
         assert_eq!(files.len(), 4);
