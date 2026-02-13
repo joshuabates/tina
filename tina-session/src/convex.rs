@@ -364,6 +364,115 @@ impl ConvexWriter {
     ) -> anyhow::Result<Vec<CommentRecord>> {
         self.client.list_comments(target_type, target_id).await
     }
+
+    // --- Review methods ---
+
+    /// Create a review record.
+    pub async fn create_review(
+        &mut self,
+        orchestration_id: &str,
+        phase_number: Option<&str>,
+        reviewer_agent: &str,
+    ) -> anyhow::Result<String> {
+        self.client
+            .create_review(orchestration_id, phase_number, reviewer_agent)
+            .await
+    }
+
+    /// Complete a review.
+    pub async fn complete_review(
+        &mut self,
+        review_id: &str,
+        state: &str,
+    ) -> anyhow::Result<()> {
+        self.client.complete_review(review_id, state).await
+    }
+
+    /// Create a review thread (finding).
+    pub async fn create_review_thread(
+        &mut self,
+        review_id: &str,
+        orchestration_id: &str,
+        file_path: &str,
+        line: i64,
+        commit_sha: &str,
+        summary: &str,
+        body: &str,
+        severity: &str,
+        source: &str,
+        author: &str,
+        gate_impact: &str,
+    ) -> anyhow::Result<String> {
+        self.client
+            .create_review_thread(
+                review_id,
+                orchestration_id,
+                file_path,
+                line,
+                commit_sha,
+                summary,
+                body,
+                severity,
+                source,
+                author,
+                gate_impact,
+            )
+            .await
+    }
+
+    /// Resolve a review thread.
+    pub async fn resolve_review_thread(
+        &mut self,
+        thread_id: &str,
+        resolved_by: &str,
+    ) -> anyhow::Result<()> {
+        self.client
+            .resolve_review_thread(thread_id, resolved_by)
+            .await
+    }
+
+    /// Start a review check.
+    pub async fn start_review_check(
+        &mut self,
+        review_id: &str,
+        orchestration_id: &str,
+        name: &str,
+        kind: &str,
+        command: Option<&str>,
+    ) -> anyhow::Result<String> {
+        self.client
+            .start_review_check(review_id, orchestration_id, name, kind, command)
+            .await
+    }
+
+    /// Complete a review check.
+    pub async fn complete_review_check(
+        &mut self,
+        review_id: &str,
+        name: &str,
+        status: &str,
+        comment: Option<&str>,
+        output: Option<&str>,
+    ) -> anyhow::Result<()> {
+        self.client
+            .complete_review_check(review_id, name, status, comment, output)
+            .await
+    }
+
+    /// Upsert a review gate.
+    pub async fn upsert_review_gate(
+        &mut self,
+        orchestration_id: &str,
+        gate_id: &str,
+        status: &str,
+        owner: &str,
+        decided_by: Option<&str>,
+        summary: &str,
+    ) -> anyhow::Result<String> {
+        self.client
+            .upsert_review_gate(orchestration_id, gate_id, status, owner, decided_by, summary)
+            .await
+    }
 }
 
 fn convert_list_entry(entry: tina_data::OrchestrationListEntry) -> OrchestrationRecord {
