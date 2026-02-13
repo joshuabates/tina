@@ -162,8 +162,50 @@ export const listFeedbackEntriesByOrchestration = query({
     status: v.optional(v.union(v.literal("open"), v.literal("resolved"))),
     authorType: v.optional(v.union(v.literal("human"), v.literal("agent"))),
   },
-  handler: async () => {
-    throw new Error("Not implemented yet");
+  handler: async (ctx, args) => {
+    let entries;
+
+    if (args.status !== undefined) {
+      entries = await ctx.db
+        .query("feedbackEntries")
+        .withIndex("by_orchestration_status_created", (q) =>
+          q
+            .eq("orchestrationId", args.orchestrationId)
+            .eq("status", args.status!),
+        )
+        .order("desc")
+        .collect();
+    } else if (args.targetType !== undefined) {
+      entries = await ctx.db
+        .query("feedbackEntries")
+        .withIndex("by_orchestration_target_created", (q) =>
+          q
+            .eq("orchestrationId", args.orchestrationId)
+            .eq("targetType", args.targetType!),
+        )
+        .order("desc")
+        .collect();
+    } else {
+      entries = await ctx.db
+        .query("feedbackEntries")
+        .withIndex("by_orchestration_created", (q) =>
+          q.eq("orchestrationId", args.orchestrationId),
+        )
+        .order("desc")
+        .collect();
+    }
+
+    if (args.targetType !== undefined && args.status !== undefined) {
+      entries = entries.filter((e) => e.targetType === args.targetType);
+    }
+    if (args.entryType !== undefined) {
+      entries = entries.filter((e) => e.entryType === args.entryType);
+    }
+    if (args.authorType !== undefined) {
+      entries = entries.filter((e) => e.authorType === args.authorType);
+    }
+
+    return entries;
   },
 });
 
@@ -173,8 +215,32 @@ export const listFeedbackEntriesByTarget = query({
     targetType: v.union(v.literal("task"), v.literal("commit")),
     targetRef: v.string(),
   },
-  handler: async () => {
-    throw new Error("Not implemented yet");
+  handler: async (ctx, args) => {
+    if (args.targetType === "task") {
+      const entries = await ctx.db
+        .query("feedbackEntries")
+        .withIndex("by_target_status_created", (q) =>
+          q.eq("targetType", "task").eq("targetTaskId", args.targetRef),
+        )
+        .order("desc")
+        .collect();
+      return entries.filter(
+        (e) => e.orchestrationId === args.orchestrationId,
+      );
+    } else {
+      const entries = await ctx.db
+        .query("feedbackEntries")
+        .withIndex("by_target_commit_status_created", (q) =>
+          q
+            .eq("targetType", "commit")
+            .eq("targetCommitSha", args.targetRef),
+        )
+        .order("desc")
+        .collect();
+      return entries.filter(
+        (e) => e.orchestrationId === args.orchestrationId,
+      );
+    }
   },
 });
 
@@ -182,7 +248,20 @@ export const getBlockingFeedbackSummary = query({
   args: {
     orchestrationId: v.id("orchestrations"),
   },
-  handler: async () => {
-    throw new Error("Not implemented yet");
+  handler: async (ctx, args) => {
+    const entries = await ctx.db
+      .query("feedbackEntries")
+      .withIndex("by_orchestration_type_status", (q) =>
+        q
+          .eq("orchestrationId", args.orchestrationId)
+          .eq("entryType", "ask_for_change")
+          .eq("status", "open"),
+      )
+      .collect();
+
+    return {
+      openAskForChangeCount: entries.length,
+      entries,
+    };
   },
 });
