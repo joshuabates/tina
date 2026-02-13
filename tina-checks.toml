@@ -1,0 +1,21 @@
+# Check suite for tina-session review run-checks.
+# CLI checks have a `command` field and are executed automatically.
+# Project checks have `kind = "project"` and a `path` to a markdown file
+# the review agent reads and evaluates.
+
+[[check]]
+name = "typecheck"
+command = "mise run check"
+
+[[check]]
+name = "test"
+command = "mise run test"
+
+[[check]]
+name = "convex-test"
+command = "npm test"
+
+[[check]]
+name = "api-contracts"
+kind = "project"
+path = "checks/api-contracts.md"

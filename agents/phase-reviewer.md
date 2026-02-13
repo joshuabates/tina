@@ -26,6 +26,7 @@ fi
 ```
 
 **Required parameters from task.metadata:**
+- `feature_name`: Feature name for review CLI commands
 - `design_doc_path`: Path to design document
 - `plan_path`: Path to plan file with Phase Estimates
 - `phase_num`: Phase number completed
@@ -79,6 +80,59 @@ DESIGN_DOC_PATH="$WORKTREE_PATH/.claude/tina/design.md"
 
 If `design_id` is NOT present in task metadata, fall back to reading `design_doc_path` from the filesystem as normal.
 
+## Review Data Model Integration
+
+Review state flows through Convex via `tina-session review` CLI commands (visible in tina-web).
+
+**Step 0: Start Review Record**
+```bash
+REVIEW_JSON=$(tina-session review start --feature "$FEATURE_NAME" --phase "$PHASE_NUM" --reviewer "phase-reviewer" --json)
+REVIEW_ID=$(echo "$REVIEW_JSON" | jq -r '.reviewId')
+ORCHESTRATION_ID=$(echo "$REVIEW_JSON" | jq -r '.orchestrationId')
+```
+
+**Step 1: Run CLI Checks**
+```bash
+tina-session review run-checks --feature "$FEATURE_NAME" --review-id "$REVIEW_ID" --json
+```
+Results stream to Convex as checks complete. Parse JSON to identify failures.
+
+**Step 2: Evaluate Project Checks**
+For each `kind = "project"` entry in `tina-checks.toml`:
+1. Start check:
+   ```bash
+   tina-session review start-check --review-id "$REVIEW_ID" --orchestration-id "$ORCHESTRATION_ID" --name "$CHECK_NAME" --kind project --json
+   ```
+2. Read check's markdown from `path` field
+3. Evaluate codebase against criteria
+4. Complete check:
+   ```bash
+   tina-session review complete-check --review-id "$REVIEW_ID" --name "$CHECK_NAME" --status passed|failed --comment "..." --json
+   ```
+
+**Step 3: Write Findings**
+For each issue found during review:
+```bash
+tina-session review add-finding --review-id "$REVIEW_ID" --orchestration-id "$ORCHESTRATION_ID" --file "path" --line N --commit "$(git rev-parse HEAD)" --severity p0|p1|p2 --gate review --summary "..." --body "..." --source agent --author "phase-reviewer" --json
+```
+Severity: **p0** = won't work/dead code/detector hard-block; **p1** = pattern violations/missed reuse/>50% drift; **p2** = style/readability. Gate: **review** = standard findings; **plan** = planning issues; **finalize** = blocks merge.
+
+**Step 4: Complete Review**
+```bash
+tina-session review complete --feature "$FEATURE_NAME" --review-id "$REVIEW_ID" --status approved|changes_requested --json
+```
+Status = approved if all checks passed and no unresolved p0/p1 findings.
+
+**Step 5: Gate Management**
+Block:
+```bash
+tina-session review gate block --feature "$FEATURE_NAME" --gate review --reason "..." --json
+```
+Approve:
+```bash
+tina-session review gate approve --feature "$FEATURE_NAME" --gate review --json
+```
+
 ## Input
 
 You receive:
@@ -100,6 +154,8 @@ Write your review to the specified output file. The review MUST include:
 4. A **Recommendation:** explaining what should happen next
 
 ## Your Job
+
+**IMPORTANT:** Before starting any review work, execute Step 0 from "Review Data Model Integration" to create the review record. After running CLI checks (Step 1) and project checks (Step 2), proceed with the review sections below. As you find issues in each section, write them as findings using Step 3. After all sections, complete the review using Steps 4-5.
 
 ### 1. Pattern Conformance
 
@@ -128,41 +184,7 @@ Verify new code is actually connected, not orphaned:
 
 ### 3. Functional Verification
 
-You MUST run the implemented code, not just read it.
-
-**For CLI tools:**
-```bash
-./target/release/tool --help
-./target/release/tool <typical-args>
-```
-
-**For libraries:**
-```bash
-cargo test
-cargo run --example basic  # if examples exist
-```
-
-**For services:**
-```bash
-cargo run &
-PID=$!
-curl http://localhost:8080/health
-kill $PID
-```
-
-**For TypeScript/Node:**
-```bash
-npm test
-npm run start  # verify it starts
-```
-
-**For Python:**
-```bash
-pytest
-python -m <module> --help  # if CLI
-```
-
-If you cannot run the code successfully, the review FAILS.
+You MUST run the implemented code. Examples: CLI tools (`./target/release/tool --help`), libraries (`cargo test`), services (use `cargo run & ; PID=$! ; curl localhost:8080/health ; kill $PID`), TypeScript/Node (`npm test`), Python (`pytest`). If code doesn't run successfully, review FAILS.
 
 ### 4. Detector + Reuse + Consistency
 
@@ -190,24 +212,9 @@ When `hard_block_detectors = true`, any detector failure is a Stop-level issue u
 
 ### 5. Metrics Collection and Estimate Comparison
 
-Collect actual metrics from the phase and compare against plan estimates.
-
-**Step 1:** Read the Phase Estimates section from the plan file
-
-Look for the `## Phase Estimates` section at the end of the plan. Extract:
-- Expected impl lines
-- Expected test lines
-- Expected files touched
-- Any metric-specific estimates (coverage, performance, etc.)
-- Target files list
-- ROI expectation
-
-**Step 2:** Measure actual results using git
+Read `## Phase Estimates` from plan (expected impl/test lines, files touched, coverage/performance targets, ROI). Measure actuals:
 
 ```bash
-# Get the base commit (before phase work)
-# This should be provided in the git range, e.g., abc123..HEAD means base is abc123
-
 # Impl lines (excluding tests)
 git diff --numstat $BASE..HEAD -- '*.rs' '*.ts' '*.py' '*.go' '*.js' | \
   grep -v -E '(_test\.|\.test\.|/tests/)' | \
@@ -219,39 +226,9 @@ git diff --numstat $BASE..HEAD -- '*_test.*' '*.test.*' '**/tests/**' '**/test_*
 
 # Files touched
 git diff --name-only $BASE..HEAD | wc -l
-
-# For coverage (if applicable) - run project's coverage command
-# For performance (if applicable) - run project's benchmark command
 ```
 
-**Step 3:** Calculate drift percentage
-
-```
-drift_pct = abs(actual - expected) / expected * 100
-```
-
-**Step 4:** Determine severity based on drift
-
-| Drift | Severity |
-|-------|----------|
-| < 30% | Pass |
-| 30-50% | Warning |
-| > 50% | Stop |
-
-**Step 5:** Check ROI for test work
-
-If this is test-related work and ROI expectation was specified:
-```
-actual_roi = coverage_lines_added / test_lines_added
-```
-
-| ROI | Severity |
-|-----|----------|
-| >= ROI expectation | Pass |
-| 50-100% of expectation | Warning |
-| < 50% of expectation | Stop (low-value test work) |
-
-**Flag:** Work that adds many lines but achieves little measurable outcome.
+Calculate `drift_pct = abs(actual - expected) / expected * 100`. Severity: <30% Pass, 30-50% Warning, >50% Stop. For test work, check `actual_roi = coverage_lines_added / test_lines_added` against expectation: ≥100% Pass, 50-100% Warning, <50% Stop.
 
 ## Issue Severity
 
@@ -273,60 +250,26 @@ actual_roi = coverage_lines_added / test_lines_added
 
 ```markdown
 ## Phase Review: Phase N
-
 ### Pattern Conformance
 - [Pattern]: ✅ Followed / ❌ Violated
-
-**Violations:**
-1. **[Severity]** `file:line` - [what's wrong] - Fix: [how]
-
+**Violations:** 1. **[Severity]** `file:line` - [what's wrong] - Fix: [how]
 ### Integration Verification
-**Flow traced:** Entry → ... → Output
-
-**Issues:**
-1. **[Severity]** `file:line` - [what's disconnected] - Fix: [how to connect]
-
+**Flow:** Entry → ... → Output | **Issues:** 1. **[Severity]** `file:line` - [disconnected] - Fix: [connect]
 ### Functional Verification
-**Executed:** [list of commands run]
-**Results:**
-- ✅ `./target/release/tina-session --help` - returned help text
-- ✅ `cargo test` - 18 tests passed
-- ❌ `./target/release/tina-session start` - segfault
-
-**Functional:** Yes / No
-
-If No, status is automatically **Stop**.
-
+**Executed:** [commands] | **Results:** ✅/❌ [command] - [result] | **Functional:** Yes/No (No = Stop)
 ### Reuse + Consistency
-**Issues:**
-1. **[Severity]** `file:line` - [what's wrong] - Fix: [what to use instead]
-
+**Issues:** 1. **[Severity]** `file:line` - [wrong] - Fix: [use instead]
 ### Metrics
-
 | Metric | Expected | Actual | Drift |
 |--------|----------|--------|-------|
 | Impl lines | ~150 | +142 | 5% ✅ |
 | Test lines | ~200 | +89 | 55% ❌ |
-| Files touched | 5-7 | 4 | 20% ✅ |
-| [Custom metric] | [expected] | [actual] | [drift] |
-
-**ROI:** [actual ratio] vs [expected] - ✅ Pass / ⚠️ Warning / ❌ Stop
-
-**Target files verification:**
-- ✅ `src/expected/file.rs` - touched as planned
-- ❌ `src/other/file.rs` - touched but NOT in plan
-- ⚠️ `src/planned/file.rs` - in plan but NOT touched
-
+**ROI:** [ratio] vs [expected] - ✅/⚠️/❌ | **Target files:** ✅ touched/❌ extra/⚠️ missed
 ### Summary
-**Status:** Pass / Warning / Stop
-**Severity tier:** Based on worst issue across detectors, code issues, and metrics
-**Detector status:** test_integrity: pass/fail, reuse_drift: pass/fail, architecture_drift: pass/fail
-**Issues:** Critical: N, Important: N, Minor: N, Metric drift: [worst %]
-
-**Recommendation:**
-- **Pass:** Continue to next phase
-- **Warning:** Review metrics before proceeding, consider replanning remaining phases
-- **Stop:** Halt execution, surface to user with full context
+**Status:** Pass/Warning/Stop | **Severity tier:** [worst across detectors/code/metrics]
+**Detector status:** test_integrity/reuse_drift/architecture_drift: pass/fail
+**Issues:** Critical: N, Important: N, Minor: N, Drift: [worst %]
+**Recommendation:** Pass = continue; Warning = review metrics; Stop = halt
 ```
 
 ## Critical Rules
@@ -381,6 +324,8 @@ review-1 complete (gaps): add unit tests for error paths, fix unconnected API ha
 ```
 review-2 complete (pass)
 ```
+
+**Note:** In addition to sending the teammate message, all findings are persisted in Convex via `tina-session review add-finding` and visible in real-time on tina-web. The markdown report at `output_path` remains the canonical detailed review, but the Convex data enables the web UI's review workbench (Changes tab thread markers, Checks tab status badges, Conversation tab feed).
 
 ## Consensus Mode
 

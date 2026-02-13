@@ -15,8 +15,10 @@ import {
   WorkComment,
   NodeSummary,
   TimelineEntry,
-  FeedbackEntry,
-  BlockingFeedbackSummary,
+  ReviewSummary,
+  ReviewThread,
+  ReviewGate,
+  ReviewCheck,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -185,35 +187,44 @@ export const TimelineQuery = queryDef({
   schema: Schema.Array(TimelineEntry),
 })
 
-export const FeedbackEntryListQuery = queryDef({
-  key: "feedbackEntries.list",
-  query: api.feedbackEntries.listFeedbackEntriesByOrchestration,
+export const ReviewDetailQuery = queryDef({
+  key: "reviews.detail",
+  query: api.reviews.getReview,
+  args: Schema.Struct({ reviewId: Schema.String }),
+  schema: Schema.NullOr(ReviewSummary),
+})
+
+export const ReviewListQuery = queryDef({
+  key: "reviews.list",
+  query: api.reviews.listReviewsByOrchestration,
   args: Schema.Struct({
     orchestrationId: Schema.String,
-    targetType: Schema.optional(Schema.String),
-    entryType: Schema.optional(Schema.String),
+    phaseNumber: Schema.optional(Schema.String),
+  }),
+  schema: Schema.Array(ReviewSummary),
+})
+
+export const ReviewThreadListQuery = queryDef({
+  key: "reviewThreads.list",
+  query: api.reviewThreads.listThreadsByReview,
+  args: Schema.Struct({
+    reviewId: Schema.String,
     status: Schema.optional(Schema.String),
-    authorType: Schema.optional(Schema.String),
   }),
-  schema: Schema.Array(FeedbackEntry),
+  schema: Schema.Array(ReviewThread),
 })
 
-export const FeedbackEntryByTargetQuery = queryDef({
-  key: "feedbackEntries.byTarget",
-  query: api.feedbackEntries.listFeedbackEntriesByTarget,
-  args: Schema.Struct({
-    orchestrationId: Schema.String,
-    targetType: Schema.String,
-    targetRef: Schema.String,
-  }),
-  schema: Schema.Array(FeedbackEntry),
+export const ReviewGateListQuery = queryDef({
+  key: "reviewGates.list",
+  query: api.reviewGates.listGatesByOrchestration,
+  args: Schema.Struct({ orchestrationId: Schema.String }),
+  schema: Schema.Array(ReviewGate),
 })
 
-export const BlockingFeedbackSummaryQuery = queryDef({
-  key: "feedbackEntries.blockingSummary",
-  query: api.feedbackEntries.getBlockingFeedbackSummary,
-  args: Schema.Struct({
-    orchestrationId: Schema.String,
-  }),
-  schema: BlockingFeedbackSummary,
+export const ReviewCheckListQuery = queryDef({
+  key: "reviewChecks.list",
+  query: api.reviewChecks.listChecksByReview,
+  args: Schema.Struct({ reviewId: Schema.String }),
+  schema: Schema.Array(ReviewCheck),
 })
+

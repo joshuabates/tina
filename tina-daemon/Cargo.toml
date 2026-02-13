@@ -57,8 +57,14 @@ convex = "0.10"
 # Signal handling
 tokio-util = "0.7"
 
+# HTTP server
+axum = "0.8"
+tower-http = { version = "0.6", features = ["cors"] }
+
 [profile.dev]
 debug = "line-tables-only"
 
 [dev-dependencies]
 tempfile = "3"
+tower = { version = "0.5.3", features = ["util"] }
+urlencoding = "2.1.3"

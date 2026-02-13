@@ -119,8 +119,13 @@ describe("PlanQuicklook", () => {
     )
 
     // Verify code content is rendered (SyntaxHighlighter renders as pre)
-    expect(screen.getByText(/const x = 1;/)).toBeInTheDocument()
-    expect(screen.getByText(/console.log\(x\);/)).toBeInTheDocument()
+    expect(
+      screen.getByText((_, element) => {
+        if (!element || element.tagName.toLowerCase() !== "code") return false
+        const text = element.textContent ?? ""
+        return text.includes("const x = 1;") && text.includes("console.log(x);")
+      }),
+    ).toBeInTheDocument()
   })
 
   it("renders inline code with background", () => {

@@ -10,6 +10,10 @@ const ORCHESTRATION_CHILD_TABLES = [
   "phases",
   "commits",
   "plans",
+  "reviews",
+  "reviewThreads",
+  "reviewChecks",
+  "reviewGates",
 ] as const;
 
 const DELETE_BATCH_SIZE = 64;

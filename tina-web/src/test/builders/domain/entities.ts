@@ -1,10 +1,13 @@
 import type {
   DesignSummary,
-  FeedbackEntry,
   OrchestrationEvent,
   OrchestrationSummary,
   Phase,
   ProjectSummary,
+  ReviewCheck,
+  ReviewGate,
+  ReviewSummary,
+  ReviewThread,
   TaskEvent,
   TeamMember,
 } from "@/schemas"
@@ -149,25 +152,82 @@ export function buildDesignSummary(
   }
 }
 
-export function buildFeedbackEntry(
-  overrides: Partial<FeedbackEntry> = {},
-): FeedbackEntry {
+export function buildReviewSummary(
+  overrides: Partial<ReviewSummary> = {},
+): ReviewSummary {
   return {
-    _id: "fb1",
+    _id: "rev1",
     _creationTime: 1234567890,
     orchestrationId: "orch1",
-    targetType: "task",
-    targetTaskId: some("1"),
-    targetCommitSha: none<string>(),
-    entryType: "comment",
-    body: "Looks good",
-    authorType: "human",
-    authorName: "alice",
-    status: "open",
-    resolvedBy: none<string>(),
-    resolvedAt: none<string>(),
-    createdAt: "2026-02-12T10:00:00Z",
-    updatedAt: "2026-02-12T10:00:00Z",
+    phaseNumber: some("1"),
+    state: "open",
+    reviewerAgent: "test-review-agent",
+    startedAt: "2024-01-01T10:00:00Z",
+    completedAt: none<string>(),
     ...overrides,
   }
 }
+
+export function buildReviewThread(
+  overrides: Partial<ReviewThread> = {},
+): ReviewThread {
+  return {
+    _id: "thread1",
+    _creationTime: 1234567890,
+    reviewId: "rev1",
+    orchestrationId: "orch1",
+    filePath: "src/foo.ts",
+    line: 42,
+    commitSha: "abc123",
+    summary: "Test finding",
+    body: "Detailed explanation of the finding",
+    severity: "p1",
+    status: "unresolved",
+    source: "agent",
+    author: "review-agent",
+    gateImpact: "review",
+    createdAt: "2024-01-01T10:00:00Z",
+    resolvedAt: none<string>(),
+    resolvedBy: none<string>(),
+    ...overrides,
+  }
+}
+
+export function buildReviewGate(
+  overrides: Partial<ReviewGate> = {},
+): ReviewGate {
+  return {
+    _id: "gate1",
+    _creationTime: 1234567890,
+    orchestrationId: "orch1",
+    gateId: "review",
+    status: "pending",
+    owner: "orchestrator",
+    decidedBy: none<string>(),
+    decidedAt: none<string>(),
+    summary: "Awaiting review",
+    ...overrides,
+  }
+}
+
+export function buildReviewCheck(
+  overrides: Partial<ReviewCheck> = {},
+): ReviewCheck {
+  return {
+    _id: "check1",
+    _creationTime: 1234567890,
+    orchestrationId: "orch1",
+    reviewId: "rev1",
+    name: "typecheck",
+    kind: "cli",
+    command: some("mise typecheck"),
+    status: "passed",
+    comment: none<string>(),
+    output: none<string>(),
+    startedAt: "2024-01-01T10:00:00Z",
+    completedAt: some("2024-01-01T10:00:04Z"),
+    durationMs: some(4200),
+    ...overrides,
+  }
+}
+

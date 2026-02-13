@@ -94,8 +94,35 @@ describe("status-styles", () => {
     })
   })
 
+  describe("review statuses", () => {
+    it("maps open to a valid status with executing styling", () => {
+      const status = toStatusBadgeStatus("open")
+      expect(status).toBe("open")
+      expect(statusLabel(status)).toBe("Open")
+      expect(statusTextClass(status)).toContain("executing")
+    })
+
+    it("maps changes_requested to a valid status with warning styling", () => {
+      const status = toStatusBadgeStatus("changes_requested")
+      expect(status).toBe("changes_requested")
+      expect(statusLabel(status)).toBe("Changes Requested")
+      expect(statusTextClass(status)).toContain("warning")
+    })
+
+    it("maps superseded to a valid status with muted styling", () => {
+      const status = toStatusBadgeStatus("superseded")
+      expect(status).toBe("superseded")
+      expect(statusLabel(status)).toBe("Superseded")
+      expect(statusTextClass(status)).toContain("muted")
+    })
+
+    it("normalizes changes-requested with hyphens", () => {
+      expect(toStatusBadgeStatus("changes-requested")).toBe("changes_requested")
+    })
+  })
+
   describe("all new statuses produce valid badge classes", () => {
-    const pmStatuses = ["draft", "in_review", "approved", "archived", "todo", "canceled"]
+    const pmStatuses = ["draft", "in_review", "approved", "archived", "todo", "canceled", "open", "changes_requested", "superseded"]
 
     for (const raw of pmStatuses) {
       it(`${raw} has non-empty badge class`, () => {

@@ -650,6 +650,7 @@ TaskCreate {
     "phase_num": <N>,
     "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
     "design_id": "<DESIGN_ID or null>",
+    "feature_name": "<FEATURE_NAME>",
     "output_path": "<WORKTREE_PATH>/.claude/tina/reports/phase-<N>-review.md"
   }
 }
@@ -824,7 +825,7 @@ Then: Mark execute-phase-N as in_progress
 **Phase reviewer spawn:**
 
 When: execute-phase-N complete
-Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, and git_range
+Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, feature_name, and git_range
 
 Run routing check on the action's model:
 
@@ -970,7 +971,8 @@ Orchestration tasks store metadata for monitoring and recovery:
 | `plan-phase-N` | `plan_path`, `design_id` (if ID-based) |
 | `execute-phase-N` | `phase_team_name`, `parent_team_id`, `started_at` |
 | `execute-phase-N` (on complete) | `git_range`, `completed_at` |
-| `review-phase-N` | `status: "pass"\|"gaps"`, `issues[]` (if gaps), `output_path` |
+| `review-phase-N` | `phase_num`, `design_doc_path`, `design_id` (if ID-based), `feature_name`, `output_path` |
+| `review-phase-N` (on complete) | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
 
 The `phase_team_name` field links the orchestrator's task to the phase execution team. This enables:
 - TUI to show nested task progress

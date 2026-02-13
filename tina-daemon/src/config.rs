@@ -11,6 +11,7 @@ pub struct DaemonConfig {
     pub convex_url: String,
     pub auth_token: String,
     pub node_name: String,
+    pub http_port: u16,
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -18,6 +19,7 @@ struct ProfileConfig {
     convex_url: Option<String>,
     auth_token: Option<String>,
     node_name: Option<String>,
+    http_port: Option<u16>,
 }
 
 /// Raw TOML file structure for `~/.config/tina/config.toml`.
@@ -27,6 +29,7 @@ struct ConfigFile {
     convex_url: Option<String>,
     auth_token: Option<String>,
     node_name: Option<String>,
+    http_port: Option<u16>,
 
     // New profile fields.
     active_env: Option<String>,
@@ -69,6 +72,7 @@ impl DaemonConfig {
             convex_url,
             auth_token,
             node_name,
+            http_port,
             active_env,
             prod,
             dev,
@@ -93,12 +97,19 @@ impl DaemonConfig {
             .ok()
             .or_else(|| profile.and_then(|p| p.node_name.clone()))
             .or(node_name);
+        let resolved_http_port = std::env::var("TINA_HTTP_PORT")
+            .ok()
+            .and_then(|s| s.parse::<u16>().ok())
+            .or_else(|| profile.and_then(|p| p.http_port))
+            .or(http_port)
+            .unwrap_or(7842);
 
         Self::build(
             env,
             resolved_convex_url,
             resolved_auth_token,
             resolved_node_name,
+            resolved_http_port,
         )
     }
 
@@ -108,6 +119,7 @@ impl DaemonConfig {
         convex_url: Option<String>,
         auth_token: Option<String>,
         node_name: Option<String>,
+        http_port: u16,
     ) -> Result<Self> {
         let convex_url = match convex_url {
             Some(url) if !url.is_empty() => url,
@@ -129,6 +141,7 @@ impl DaemonConfig {
             convex_url,
             auth_token,
             node_name,
+            http_port,
         })
     }
 }
@@ -163,6 +176,7 @@ mod tests {
             Some("https://test.convex.cloud".to_string()),
             Some("secret-token".to_string()),
             Some("test-laptop".to_string()),
+            7842,
         )
         .unwrap();
 
@@ -170,11 +184,13 @@ mod tests {
         assert_eq!(config.convex_url, "https://test.convex.cloud");
         assert_eq!(config.auth_token, "secret-token");
         assert_eq!(config.node_name, "test-laptop");
+        assert_eq!(config.http_port, 7842);
     }
 
     #[test]
     fn test_build_missing_convex_url_errors() {
-        let result = DaemonConfig::build("prod".to_string(), None, Some("token".to_string()), None);
+        let result =
+            DaemonConfig::build("prod".to_string(), None, Some("token".to_string()), None, 7842);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("convex_url"));
     }
@@ -186,6 +202,7 @@ mod tests {
             Some("".to_string()),
             Some("token".to_string()),
             None,
+            7842,
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("convex_url"));
@@ -198,6 +215,7 @@ mod tests {
             Some("https://test.convex.cloud".to_string()),
             None,
             None,
+            7842,
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("auth_token"));
@@ -210,6 +228,7 @@ mod tests {
             Some("https://test.convex.cloud".to_string()),
             Some("".to_string()),
             None,
+            7842,
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("auth_token"));
@@ -222,6 +241,7 @@ mod tests {
             Some("https://test.convex.cloud".to_string()),
             Some("token".to_string()),
             None,
+            7842,
         )
         .unwrap();
 
@@ -235,6 +255,7 @@ mod tests {
             Some("https://test.convex.cloud".to_string()),
             Some("token".to_string()),
             Some("".to_string()),
+            7842,
         )
         .unwrap();
 
@@ -299,11 +320,13 @@ node_name = "dev-laptop"
                 convex_url: Some("https://prod.convex.cloud".to_string()),
                 auth_token: Some("prod-token".to_string()),
                 node_name: Some("prod-node".to_string()),
+                http_port: None,
             }),
             dev: Some(ProfileConfig {
                 convex_url: Some("https://dev.convex.cloud".to_string()),
                 auth_token: Some("dev-token".to_string()),
                 node_name: Some("dev-node".to_string()),
+                http_port: None,
             }),
             ..ConfigFile::default()
         };
@@ -362,7 +385,20 @@ node_name = "prod-node"
 
     #[test]
     fn test_load_nonexistent_file_without_env_vars_errors() {
-        let result = DaemonConfig::build("prod".to_string(), None, None, None);
+        let result = DaemonConfig::build("prod".to_string(), None, None, None, 7842);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_build_with_custom_http_port() {
+        let config = DaemonConfig::build(
+            "prod".to_string(),
+            Some("https://test.convex.cloud".to_string()),
+            Some("token".to_string()),
+            Some("node".to_string()),
+            9999,
+        )
+        .unwrap();
+        assert_eq!(config.http_port, 9999);
     }
 }

@@ -12,6 +12,7 @@ use tracing::{error, info, warn};
 use tina_daemon::actions;
 use tina_daemon::config::DaemonConfig;
 use tina_daemon::heartbeat;
+use tina_daemon::http;
 use tina_daemon::sync::{self, SyncCache};
 use tina_daemon::telemetry::DaemonTelemetry;
 use tina_daemon::watcher::{DaemonWatcher, WatchEvent};
@@ -195,6 +196,10 @@ async fn main() -> Result<()> {
     let heartbeat_handle =
         heartbeat::spawn_heartbeat(Arc::clone(&client), node_id.clone(), cancel.clone());
 
+    // Start HTTP server
+    let http_cancel = cancel.clone();
+    let http_handle = http::spawn_http_server(config.http_port, http_cancel).await?;
+
     // Set up file watchers
     let home = dirs::home_dir().expect("could not determine home directory");
     let teams_dir = home.join(".claude").join("teams");
@@ -353,6 +358,7 @@ async fn main() -> Result<()> {
 
     // Clean shutdown
     heartbeat_handle.abort();
+    http_handle.abort();
     info!("daemon stopped");
     Ok(())
 }

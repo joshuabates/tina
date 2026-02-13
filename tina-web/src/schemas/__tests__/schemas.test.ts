@@ -6,6 +6,10 @@ import { OrchestrationDetail } from "../detail"
 import { DesignSummary } from "../design"
 import { TicketSummary } from "../ticket"
 import { WorkComment } from "../workComment"
+import { ReviewSummary } from "../review"
+import { ReviewThread } from "../reviewThread"
+import { ReviewGate } from "../reviewGate"
+import { ReviewCheck } from "../reviewCheck"
 
 describe("OrchestrationSummary schema", () => {
   it("decodes a valid orchestration payload", () => {
@@ -300,5 +304,211 @@ describe("WorkComment schema", () => {
   it("rejects a comment missing required fields", () => {
     const raw = { _id: "comment1", body: "text" }
     expect(() => Schema.decodeUnknownSync(WorkComment)(raw)).toThrow()
+  })
+})
+
+describe("ReviewSummary schema", () => {
+  it("decodes a valid review payload", () => {
+    const raw = {
+      _id: "review1",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      state: "in_progress",
+      reviewerAgent: "spec-reviewer",
+      startedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewSummary)(raw)
+    expect(result.orchestrationId).toBe("orch1")
+    expect(result.state).toBe("in_progress")
+    expect(result.reviewerAgent).toBe("spec-reviewer")
+    expect(Option.isNone(result.phaseNumber)).toBe(true)
+    expect(Option.isNone(result.completedAt)).toBe(true)
+  })
+
+  it("decodes a review with optional fields present", () => {
+    const raw = {
+      _id: "review2",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      phaseNumber: "2",
+      state: "completed",
+      reviewerAgent: "code-quality-reviewer",
+      startedAt: "2026-02-09T00:00:00Z",
+      completedAt: "2026-02-09T01:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewSummary)(raw)
+    expect(Option.getOrThrow(result.phaseNumber)).toBe("2")
+    expect(Option.getOrThrow(result.completedAt)).toBe("2026-02-09T01:00:00Z")
+  })
+
+  it("rejects a review missing required fields", () => {
+    const raw = { _id: "review1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(ReviewSummary)(raw)).toThrow()
+  })
+})
+
+describe("ReviewThread schema", () => {
+  it("decodes a valid thread payload", () => {
+    const raw = {
+      _id: "thread1",
+      _creationTime: 1700000000000,
+      reviewId: "review1",
+      orchestrationId: "orch1",
+      filePath: "src/auth.ts",
+      line: 42,
+      commitSha: "abc123def",
+      summary: "Missing error handling",
+      body: "This function should handle the case where the token is expired.",
+      severity: "major",
+      status: "open",
+      source: "spec-reviewer",
+      author: "spec-reviewer",
+      gateImpact: "hard_block",
+      createdAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewThread)(raw)
+    expect(result.filePath).toBe("src/auth.ts")
+    expect(result.line).toBe(42)
+    expect(result.severity).toBe("major")
+    expect(result.gateImpact).toBe("hard_block")
+    expect(Option.isNone(result.resolvedAt)).toBe(true)
+    expect(Option.isNone(result.resolvedBy)).toBe(true)
+  })
+
+  it("decodes a thread with resolved fields present", () => {
+    const raw = {
+      _id: "thread2",
+      _creationTime: 1700000000000,
+      reviewId: "review1",
+      orchestrationId: "orch1",
+      filePath: "src/auth.ts",
+      line: 10,
+      commitSha: "def456ghi",
+      summary: "Typo in variable name",
+      body: "Rename `usr` to `user`.",
+      severity: "minor",
+      status: "resolved",
+      source: "code-quality-reviewer",
+      author: "code-quality-reviewer",
+      gateImpact: "none",
+      createdAt: "2026-02-09T00:00:00Z",
+      resolvedAt: "2026-02-09T01:00:00Z",
+      resolvedBy: "worker-1",
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewThread)(raw)
+    expect(result.status).toBe("resolved")
+    expect(Option.getOrThrow(result.resolvedAt)).toBe("2026-02-09T01:00:00Z")
+    expect(Option.getOrThrow(result.resolvedBy)).toBe("worker-1")
+  })
+
+  it("rejects a thread missing required fields", () => {
+    const raw = { _id: "thread1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(ReviewThread)(raw)).toThrow()
+  })
+})
+
+describe("ReviewGate schema", () => {
+  it("decodes a valid gate payload", () => {
+    const raw = {
+      _id: "gate1",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      gateId: "spec-compliance",
+      status: "pending",
+      owner: "spec-reviewer",
+      summary: "Spec compliance check pending",
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewGate)(raw)
+    expect(result.gateId).toBe("spec-compliance")
+    expect(result.status).toBe("pending")
+    expect(result.owner).toBe("spec-reviewer")
+    expect(Option.isNone(result.decidedBy)).toBe(true)
+    expect(Option.isNone(result.decidedAt)).toBe(true)
+  })
+
+  it("decodes a gate with decided fields present", () => {
+    const raw = {
+      _id: "gate2",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      gateId: "code-quality",
+      status: "passed",
+      owner: "code-quality-reviewer",
+      decidedBy: "code-quality-reviewer",
+      decidedAt: "2026-02-09T01:00:00Z",
+      summary: "Code quality checks passed",
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewGate)(raw)
+    expect(result.status).toBe("passed")
+    expect(Option.getOrThrow(result.decidedBy)).toBe("code-quality-reviewer")
+    expect(Option.getOrThrow(result.decidedAt)).toBe("2026-02-09T01:00:00Z")
+  })
+
+  it("rejects a gate missing required fields", () => {
+    const raw = { _id: "gate1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(ReviewGate)(raw)).toThrow()
+  })
+})
+
+describe("ReviewCheck schema", () => {
+  it("decodes a valid check payload", () => {
+    const raw = {
+      _id: "check1",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      reviewId: "review1",
+      name: "lint",
+      kind: "analysis",
+      status: "passed",
+      startedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewCheck)(raw)
+    expect(result.reviewId).toBe("review1")
+    expect(result.name).toBe("lint")
+    expect(result.kind).toBe("analysis")
+    expect(result.status).toBe("passed")
+    expect(Option.isNone(result.command)).toBe(true)
+    expect(Option.isNone(result.comment)).toBe(true)
+    expect(Option.isNone(result.output)).toBe(true)
+    expect(Option.isNone(result.completedAt)).toBe(true)
+    expect(Option.isNone(result.durationMs)).toBe(true)
+  })
+
+  it("decodes a check with optional fields present", () => {
+    const raw = {
+      _id: "check2",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      reviewId: "review1",
+      name: "test",
+      kind: "execution",
+      command: "npm test",
+      status: "failed",
+      comment: "Tests failed",
+      output: "test output",
+      startedAt: "2026-02-09T00:00:00Z",
+      completedAt: "2026-02-09T00:05:00Z",
+      durationMs: 300000,
+    }
+
+    const result = Schema.decodeUnknownSync(ReviewCheck)(raw)
+    expect(result.status).toBe("failed")
+    expect(Option.getOrThrow(result.command)).toBe("npm test")
+    expect(Option.getOrThrow(result.comment)).toBe("Tests failed")
+    expect(Option.getOrThrow(result.output)).toBe("test output")
+    expect(Option.getOrThrow(result.completedAt)).toBe("2026-02-09T00:05:00Z")
+    expect(Option.getOrThrow(result.durationMs)).toBe(300000)
+  })
+
+  it("rejects a check missing required fields", () => {
+    const raw = { _id: "check1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(ReviewCheck)(raw)).toThrow()
   })
 })

@@ -46,11 +46,14 @@ export interface PhaseStructure {
   phaseStructureValid: boolean;
 }
 
-const PHASE_HEADING_PATTERN = /^\s{0,3}#{2,4}\s+phase\s+\d+/gim;
+const PHASE_HEADING_PATTERN = /^\s{0,3}(#{2,3})\s+phase\s+\d+/gim;
 
 export function parsePhaseStructure(markdown: string): PhaseStructure {
-  const matches = markdown.match(PHASE_HEADING_PATTERN);
-  const phaseCount = matches ? matches.length : 0;
+  const matches = Array.from(markdown.matchAll(PHASE_HEADING_PATTERN));
+  const hasLevel2Headings = matches.some((match) => match[1]?.length === 2);
+  const phaseCount = hasLevel2Headings
+    ? matches.filter((match) => match[1]?.length === 2).length
+    : matches.length;
   return {
     phaseCount,
     phaseStructureValid: phaseCount >= 1,
