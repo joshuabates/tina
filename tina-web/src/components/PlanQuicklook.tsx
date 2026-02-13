@@ -1,5 +1,6 @@
 import { useId, useRef } from "react"
 import { useFocusTrap } from "@/hooks/useFocusTrap"
+import { useCreateSession } from "@/hooks/useCreateSession"
 import { useQuicklookKeyboard } from "@/hooks/useQuicklookKeyboard"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { PlanQuery } from "@/services/data/queryDefs"
@@ -21,10 +22,21 @@ export function PlanQuicklook({ orchestrationId, phaseNumber, onClose }: PlanQui
   useQuicklookKeyboard(onClose)
   useFocusTrap(modalRef)
 
+  const { createAndConnect } = useCreateSession()
+
   const result = useTypedQuery(PlanQuery, {
     orchestrationId,
     phaseNumber,
   })
+
+  const handleRefinePlan = () => {
+    if (result.status !== "success" || !result.data) return
+    createAndConnect({
+      label: `Refine: Phase ${phaseNumber} Plan`,
+      contextType: "plan",
+      contextSummary: result.data.content.slice(0, 2000),
+    })
+  }
 
   return (
     <div className={styles.backdrop} onClick={onClose}>
@@ -41,6 +53,15 @@ export function PlanQuicklook({ orchestrationId, phaseNumber, onClose }: PlanQui
           <h2 id={titleId} className={styles.title}>
             Phase {phaseNumber} Plan
           </h2>
+          {result.status === "success" && result.data && (
+            <button
+              type="button"
+              className="text-xs text-primary hover:underline ml-auto mr-2"
+              onClick={handleRefinePlan}
+            >
+              Refine Plan
+            </button>
+          )}
           <button
             type="button"
             className={styles.closeButton}

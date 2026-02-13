@@ -6,11 +6,13 @@ import { assertDialogFocusTrap } from "@/test/harness/quicklook"
 interface QuicklookDialogContractOptions {
   renderDialog: () => void
   onClose: Mock
+  firstFocusable?: () => HTMLElement
 }
 
 export function defineQuicklookDialogContract({
   renderDialog,
   onClose,
+  firstFocusable: getFirstFocusable,
 }: QuicklookDialogContractOptions) {
   it.each(["{Escape}", " "])("closes modal on key %s", async (key) => {
     const user = userEvent.setup()
@@ -27,8 +29,10 @@ export function defineQuicklookDialogContract({
     renderDialog()
 
     const modal = screen.getByRole("dialog")
-    const closeButton = screen.getByRole("button", { name: /close/i })
-    await assertDialogFocusTrap(user, modal, closeButton)
+    const firstElement = getFirstFocusable
+      ? getFirstFocusable()
+      : screen.getByRole("button", { name: /close/i })
+    await assertDialogFocusTrap(user, modal, firstElement)
   })
 
   it("receives focus on mount", () => {
