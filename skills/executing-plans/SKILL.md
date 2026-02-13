@@ -435,27 +435,54 @@ When a v2 message fails acceptance matrix validation or a message cannot be inte
 **Worker retry preamble:**
 ```
 RETRY CONTEXT: Your previous run produced an invalid result that could not be processed.
+The team-lead could not extract a valid verdict from your output.
+
 You MUST include v2 structured headers as the FIRST lines of your completion message:
+
 role: worker
 task_id: <your-task-id>
 status: pass|gaps|error
 git_range: <base>..<head>  (required when status=pass)
 issues: <description>  (required when status=gaps or error)
-Then a blank line, then your freeform explanation.
+
+Then include a blank line followed by your freeform explanation.
+
+IMPORTANT: Do NOT skip the headers. Do NOT embed them inside prose. They must be the very first lines of your message.
+
+---
+<original task prompt follows>
 ```
 
 **Reviewer retry preamble:**
 ```
 RETRY CONTEXT: Your previous review produced an invalid result that could not be processed.
+The team-lead could not extract a valid verdict from your output.
+
 You MUST include v2 structured headers as the FIRST lines of your completion message:
+
 role: <spec-reviewer|code-quality-reviewer>
 task_id: <your-task-id>
 status: pass|gaps|error
 issues: <description>  (required when status=gaps or error)
-Then a blank line, then your freeform review body.
+
+Then include a blank line followed by your freeform review body.
+
+IMPORTANT: Do NOT skip the headers. Do NOT embed them inside prose. They must be the very first lines of your message.
+
+---
+<original review prompt follows>
 ```
 
-3. If the replacement also produces an invalid result: mark the task as blocked and continue with other tasks.
+3. If the replacement also produces an invalid result, escalate per role:
+
+**Escalation after exhausting retries (workers):**
+1. Shut down the failed worker
+2. Mark the task as blocked and continue with other tasks
+
+**Escalation after exhausting retries (reviewers):**
+1. Shut down the failed reviewer
+2. Spawn a replacement reviewer with a fresh prompt (no retry preamble — this is a fresh start, not a retry)
+3. If the fresh reviewer also produces an invalid result, mark the task as blocked
 
 **Does NOT apply to:** Valid results with `status=gaps` (normal remediation loop) or `status=error` (existing error handling).
 
