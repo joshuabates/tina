@@ -13,6 +13,20 @@ vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
 vi.mock("@/hooks/useActionRegistration")
 
+// Mock useTypedQuery to avoid Convex client requirement
+vi.mock("@/hooks/useTypedQuery", () => ({
+  useTypedQuery: vi.fn(() => ({ status: "success", data: [] })),
+}))
+
+// Mock useMutation to avoid Convex client requirement
+vi.mock("convex/react", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("convex/react")>()
+  return {
+    ...mod,
+    useMutation: vi.fn(() => vi.fn()),
+  }
+})
+
 const mockUseFocusable = vi.mocked(
   await import("@/hooks/useFocusable"),
 ).useFocusable

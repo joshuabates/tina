@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, cleanup, within } from "@testing-library/react"
+import { render, screen, cleanup } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
 import { Option } from "effect"
 import { FeedbackSection } from "../FeedbackSection"
@@ -10,7 +10,11 @@ vi.mock("convex/react", async (importOriginal) => {
   const mod = await importOriginal<typeof import("convex/react")>()
   return {
     ...mod,
-    useMutation: vi.fn(() => vi.fn()),
+    useMutation: vi.fn(() => {
+      const mockFn = vi.fn()
+      ;(mockFn as any).withOptimisticUpdate = vi.fn()
+      return mockFn
+    }),
   }
 })
 
@@ -184,7 +188,7 @@ describe("FeedbackSection", () => {
   it("submits new feedback entry via mutation", async () => {
     const user = userEvent.setup()
     const mockCreate = vi.fn().mockResolvedValue("new-id")
-    mockUseMutation.mockReturnValue(mockCreate)
+    mockUseMutation.mockReturnValue(mockCreate as any)
     mockUseTypedQuery.mockReturnValue({ status: "success", data: [] })
 
     render(
