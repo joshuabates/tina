@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, within } from "@testing-library/react"
+import { userEvent } from "@testing-library/user-event"
 import { PhaseQuicklook } from "../PhaseQuicklook"
 import {
   buildPhase,
@@ -16,17 +17,24 @@ import { querySuccess } from "@/test/builders/query"
 
 vi.mock("@/hooks/useActionRegistration")
 vi.mock("@/hooks/useTypedQuery")
+vi.mock("@/hooks/useCreateSession")
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
 
+const mockUseCreateSession = vi.mocked(
+  await import("@/hooks/useCreateSession"),
+).useCreateSession
+
+const mockConnectToPane = vi.fn()
 const mockOnClose = vi.fn()
 
 interface QuicklookFixtureOverrides {
   phase?: Partial<Phase>
   tasks?: TaskEvent[]
   teamMembers?: TeamMember[]
+  leadPaneId?: string
 }
 
 const defaultTasks = [
@@ -81,6 +89,7 @@ function renderQuicklook(overrides: QuicklookFixtureOverrides = {}) {
       phase={phase}
       tasks={tasks}
       teamMembers={teamMembers}
+      leadPaneId={overrides.leadPaneId}
       onClose={mockOnClose}
     />,
   )
@@ -96,6 +105,10 @@ function sectionByHeading(name: string): HTMLElement {
 describe("PhaseQuicklook", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseCreateSession.mockReturnValue({
+      createAndConnect: vi.fn(),
+      connectToPane: mockConnectToPane,
+    })
     installAppRuntimeQueryMock(mockUseTypedQuery, {
       states: {
         "commits.list": querySuccess([]),
@@ -180,5 +193,28 @@ describe("PhaseQuicklook", () => {
     renderQuicklook({ tasks: [] })
 
     expect(screen.getByText(/0\/0 tasks complete/i)).toBeInTheDocument()
+  })
+
+  describe("Connect to Lead button", () => {
+    it("shows Connect to Lead button when leadPaneId is provided", () => {
+      renderQuicklook({ leadPaneId: "%42" })
+
+      expect(screen.getByRole("button", { name: /connect to lead/i })).toBeInTheDocument()
+    })
+
+    it("hides Connect to Lead button when leadPaneId is not provided", () => {
+      renderQuicklook()
+
+      expect(screen.queryByRole("button", { name: /connect to lead/i })).not.toBeInTheDocument()
+    })
+
+    it("calls connectToPane with pane ID when clicked", async () => {
+      const user = userEvent.setup()
+      renderQuicklook({ leadPaneId: "%42" })
+
+      await user.click(screen.getByRole("button", { name: /connect to lead/i }))
+
+      expect(mockConnectToPane).toHaveBeenCalledWith("%42")
+    })
   })
 })
