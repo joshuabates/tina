@@ -5,7 +5,7 @@
     "final_status": "complete",
     "tests_pass": true,
     "file_changes": [
-      { "path": "src/main.rs", "contains": "stats" }
+      { "path": "src/main.rs", "contains": "verbose" }
     ],
     "convex": {
       "has_orchestration": true,
