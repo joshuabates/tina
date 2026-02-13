@@ -1636,6 +1636,106 @@ impl TinaConvexClient {
             .await?;
         extract_comment_list(result)
     }
+
+    // --- Feedback entry methods ---
+
+    /// Create a feedback entry for an orchestration target.
+    pub async fn create_feedback_entry(
+        &mut self,
+        entry: &FeedbackEntryInput,
+    ) -> Result<String> {
+        let args = feedback_entry_input_to_args(entry);
+        let result = self
+            .client
+            .mutation("feedbackEntries:createFeedbackEntry", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Resolve a feedback entry.
+    pub async fn resolve_feedback_entry(
+        &mut self,
+        entry_id: &str,
+        resolved_by: &str,
+    ) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("entryId".into(), Value::from(entry_id));
+        args.insert("resolvedBy".into(), Value::from(resolved_by));
+        let result = self
+            .client
+            .mutation("feedbackEntries:resolveFeedbackEntry", args)
+            .await?;
+        extract_unit(result)
+    }
+
+    /// Reopen a previously resolved feedback entry.
+    pub async fn reopen_feedback_entry(&mut self, entry_id: &str) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("entryId".into(), Value::from(entry_id));
+        let result = self
+            .client
+            .mutation("feedbackEntries:reopenFeedbackEntry", args)
+            .await?;
+        extract_unit(result)
+    }
+
+    /// List feedback entries for an orchestration, with optional filters.
+    pub async fn list_feedback_entries(
+        &mut self,
+        orchestration_id: &str,
+        target_type: Option<&str>,
+        entry_type: Option<&str>,
+        status: Option<&str>,
+    ) -> Result<Vec<FeedbackEntryRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        if let Some(tt) = target_type {
+            args.insert("targetType".into(), Value::from(tt));
+        }
+        if let Some(et) = entry_type {
+            args.insert("entryType".into(), Value::from(et));
+        }
+        if let Some(s) = status {
+            args.insert("status".into(), Value::from(s));
+        }
+        let result = self
+            .client
+            .query("feedbackEntries:listFeedbackEntriesByOrchestration", args)
+            .await?;
+        extract_feedback_entry_list(result)
+    }
+
+    /// List feedback entries for a specific target.
+    pub async fn list_feedback_entries_by_target(
+        &mut self,
+        orchestration_id: &str,
+        target_type: &str,
+        target_ref: &str,
+    ) -> Result<Vec<FeedbackEntryRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        args.insert("targetType".into(), Value::from(target_type));
+        args.insert("targetRef".into(), Value::from(target_ref));
+        let result = self
+            .client
+            .query("feedbackEntries:listFeedbackEntriesByTarget", args)
+            .await?;
+        extract_feedback_entry_list(result)
+    }
+
+    /// Get blocking feedback summary for an orchestration.
+    pub async fn get_blocking_feedback_summary(
+        &mut self,
+        orchestration_id: &str,
+    ) -> Result<BlockingFeedbackSummary> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        let result = self
+            .client
+            .query("feedbackEntries:getBlockingFeedbackSummary", args)
+            .await?;
+        extract_blocking_feedback_summary(result)
+    }
 }
 
 #[cfg(test)]
