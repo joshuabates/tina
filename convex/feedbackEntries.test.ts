@@ -4,6 +4,8 @@ import { api } from "./_generated/api";
 import schema from "./schema";
 import { createFeatureFixture } from "./test_helpers";
 
+const modules = import.meta.glob("./**/*.*s");
+
 async function seedTaskEvent(
   t: ReturnType<typeof convexTest>,
   orchestrationId: string,
@@ -39,7 +41,7 @@ async function seedCommit(
 describe("feedbackEntries", () => {
   describe("createFeedbackEntry", () => {
     test("creates a comment on a task target", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-create-1");
       await seedTaskEvent(t, orchestrationId, "1");
 
@@ -70,7 +72,7 @@ describe("feedbackEntries", () => {
     });
 
     test("creates a suggestion on a commit target", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-create-2");
       await seedCommit(t, orchestrationId, "abc1234567890");
 
@@ -91,7 +93,7 @@ describe("feedbackEntries", () => {
     });
 
     test("creates an ask_for_change entry", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-create-3");
       await seedTaskEvent(t, orchestrationId, "2");
 
@@ -112,7 +114,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws when targetTaskId is missing for task target", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-create-4");
 
       await expect(
@@ -128,7 +130,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws when targetCommitSha is missing for commit target", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-create-5");
 
       await expect(
@@ -144,7 +146,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws when task does not exist under orchestration", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-create-6");
 
       await expect(
@@ -161,7 +163,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws when commit SHA does not exist", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-create-7");
 
       await expect(
@@ -178,7 +180,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws when commit belongs to different orchestration", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId: orch1 } = await createFeatureFixture(
         t,
         "fb-create-8a",
@@ -203,7 +205,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws when targetCommitSha is set for task target", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-create-9",
@@ -225,7 +227,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws when targetTaskId is set for commit target", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-create-10",
@@ -249,7 +251,7 @@ describe("feedbackEntries", () => {
 
   describe("resolveFeedbackEntry", () => {
     test("resolves an open entry", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-resolve-1",
@@ -284,7 +286,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws when resolving an already-resolved entry", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-resolve-2",
@@ -318,7 +320,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws on stale updatedAt", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-resolve-3",
@@ -350,7 +352,7 @@ describe("feedbackEntries", () => {
 
   describe("reopenFeedbackEntry", () => {
     test("reopens a resolved entry", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-reopen-1",
@@ -389,7 +391,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws when reopening an already-open entry", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-reopen-2",
@@ -417,7 +419,7 @@ describe("feedbackEntries", () => {
     });
 
     test("throws on stale updatedAt", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-reopen-3",
@@ -453,7 +455,7 @@ describe("feedbackEntries", () => {
 
   describe("listFeedbackEntriesByOrchestration", () => {
     test("lists all entries newest-first", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-list-1");
       await seedTaskEvent(t, orchestrationId, "1");
       await seedCommit(t, orchestrationId, "list_sha_1");
@@ -488,7 +490,7 @@ describe("feedbackEntries", () => {
     });
 
     test("filters by status", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-list-2");
       await seedTaskEvent(t, orchestrationId, "1");
 
@@ -536,7 +538,7 @@ describe("feedbackEntries", () => {
     });
 
     test("filters by targetType", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-list-3");
       await seedTaskEvent(t, orchestrationId, "1");
       await seedCommit(t, orchestrationId, "filter_sha_1");
@@ -570,7 +572,7 @@ describe("feedbackEntries", () => {
     });
 
     test("filters by entryType", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-list-4");
       await seedTaskEvent(t, orchestrationId, "1");
 
@@ -606,7 +608,7 @@ describe("feedbackEntries", () => {
     });
 
     test("filters by authorType", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(t, "fb-list-5");
       await seedTaskEvent(t, orchestrationId, "1");
 
@@ -641,7 +643,7 @@ describe("feedbackEntries", () => {
 
   describe("listFeedbackEntriesByTarget", () => {
     test("lists entries for a specific task", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-target-1",
@@ -682,7 +684,7 @@ describe("feedbackEntries", () => {
     });
 
     test("lists entries for a specific commit", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-target-2",
@@ -725,7 +727,7 @@ describe("feedbackEntries", () => {
 
   describe("getBlockingFeedbackSummary", () => {
     test("counts open ask_for_change entries", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-blocking-1",
@@ -771,7 +773,7 @@ describe("feedbackEntries", () => {
     });
 
     test("excludes resolved ask_for_change entries", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-blocking-2",
@@ -805,7 +807,7 @@ describe("feedbackEntries", () => {
     });
 
     test("returns zero count when no entries exist", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const { orchestrationId } = await createFeatureFixture(
         t,
         "fb-blocking-3",
