@@ -285,6 +285,23 @@ fn comment_to_args(comment: &CommentRecord) -> BTreeMap<String, Value> {
     args
 }
 
+fn feedback_entry_input_to_args(entry: &FeedbackEntryInput) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert("orchestrationId".into(), Value::from(entry.orchestration_id.as_str()));
+    args.insert("targetType".into(), Value::from(entry.target_type.as_str()));
+    if let Some(ref tid) = entry.target_task_id {
+        args.insert("targetTaskId".into(), Value::from(tid.as_str()));
+    }
+    if let Some(ref sha) = entry.target_commit_sha {
+        args.insert("targetCommitSha".into(), Value::from(sha.as_str()));
+    }
+    args.insert("entryType".into(), Value::from(entry.entry_type.as_str()));
+    args.insert("body".into(), Value::from(entry.body.as_str()));
+    args.insert("authorType".into(), Value::from(entry.author_type.as_str()));
+    args.insert("authorName".into(), Value::from(entry.author_name.as_str()));
+    args
+}
+
 pub fn span_to_args(span: &SpanRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("traceId".into(), Value::from(span.trace_id.as_str()));
@@ -2398,5 +2415,57 @@ mod tests {
         let comment = extract_comment_record(&obj);
 
         assert_eq!(comment.edited_at, Some("2026-02-11T11:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_feedback_entry_input_to_args_all_fields() {
+        let input = FeedbackEntryInput {
+            orchestration_id: "orch-1".to_string(),
+            target_type: "task".to_string(),
+            target_task_id: Some("task-42".to_string()),
+            target_commit_sha: Some("abc123".to_string()),
+            entry_type: "ask_for_change".to_string(),
+            body: "Please fix naming".to_string(),
+            author_type: "human".to_string(),
+            author_name: "alice".to_string(),
+        };
+
+        let args = feedback_entry_input_to_args(&input);
+
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-1")));
+        assert_eq!(args.get("targetType"), Some(&Value::from("task")));
+        assert_eq!(args.get("targetTaskId"), Some(&Value::from("task-42")));
+        assert_eq!(args.get("targetCommitSha"), Some(&Value::from("abc123")));
+        assert_eq!(args.get("entryType"), Some(&Value::from("ask_for_change")));
+        assert_eq!(args.get("body"), Some(&Value::from("Please fix naming")));
+        assert_eq!(args.get("authorType"), Some(&Value::from("human")));
+        assert_eq!(args.get("authorName"), Some(&Value::from("alice")));
+        assert_eq!(args.len(), 8);
+    }
+
+    #[test]
+    fn test_feedback_entry_input_to_args_optional_fields_absent() {
+        let input = FeedbackEntryInput {
+            orchestration_id: "orch-2".to_string(),
+            target_type: "commit".to_string(),
+            target_task_id: None,
+            target_commit_sha: None,
+            entry_type: "blocking".to_string(),
+            body: "Needs tests".to_string(),
+            author_type: "agent".to_string(),
+            author_name: "spec-reviewer".to_string(),
+        };
+
+        let args = feedback_entry_input_to_args(&input);
+
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-2")));
+        assert_eq!(args.get("targetType"), Some(&Value::from("commit")));
+        assert!(args.get("targetTaskId").is_none());
+        assert!(args.get("targetCommitSha").is_none());
+        assert_eq!(args.get("entryType"), Some(&Value::from("blocking")));
+        assert_eq!(args.get("body"), Some(&Value::from("Needs tests")));
+        assert_eq!(args.get("authorType"), Some(&Value::from("agent")));
+        assert_eq!(args.get("authorName"), Some(&Value::from("spec-reviewer")));
+        assert_eq!(args.len(), 6);
     }
 }
