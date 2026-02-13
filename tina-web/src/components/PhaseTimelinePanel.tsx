@@ -103,7 +103,7 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
     : []
 
   // Find team lead pane ID for "Connect to Lead" button
-  const leadMember = quicklookTeamMembers.find(
+  const leadMember = detail.teamMembers.find(
     m => m.agentName === "team-lead",
   )
   const leadPaneId = leadMember ? Option.getOrUndefined(leadMember.tmuxPaneId) : undefined

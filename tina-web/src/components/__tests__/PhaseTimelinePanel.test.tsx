@@ -12,6 +12,7 @@ import { expectElementStatusText } from "@/test/harness/status"
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
 vi.mock("@/hooks/useActionRegistration")
+vi.mock("@/hooks/useCreateSession")
 
 const mockUseFocusable = vi.mocked(
   await import("@/hooks/useFocusable"),
