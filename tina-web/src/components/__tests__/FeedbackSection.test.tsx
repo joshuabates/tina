@@ -3,18 +3,14 @@ import { render, screen, cleanup } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
 import { Option } from "effect"
 import { FeedbackSection } from "../FeedbackSection"
-import type { FeedbackEntry } from "@/schemas"
+import { buildFeedbackEntry } from "@/test/builders/domain"
 
 // Mock Convex hooks
 vi.mock("convex/react", async (importOriginal) => {
   const mod = await importOriginal<typeof import("convex/react")>()
   return {
     ...mod,
-    useMutation: vi.fn(() => {
-      const mockFn = vi.fn()
-      ;(mockFn as any).withOptimisticUpdate = vi.fn()
-      return mockFn
-    }),
+    useMutation: vi.fn(() => vi.fn()),
   }
 })
 
@@ -27,27 +23,6 @@ const mockUseTypedQuery = vi.mocked(
 const mockUseMutation = vi.mocked(
   (await import("convex/react")).useMutation,
 )
-
-function buildFeedbackEntry(overrides: Partial<Record<string, unknown>> = {}): FeedbackEntry {
-  return {
-    _id: "fb1",
-    _creationTime: 1234567890,
-    orchestrationId: "orch1",
-    targetType: "task",
-    targetTaskId: Option.some("1"),
-    targetCommitSha: Option.none(),
-    entryType: "comment",
-    body: "Looks good",
-    authorType: "human",
-    authorName: "alice",
-    status: "open",
-    resolvedBy: Option.none(),
-    resolvedAt: Option.none(),
-    createdAt: "2026-02-12T10:00:00Z",
-    updatedAt: "2026-02-12T10:00:00Z",
-    ...overrides,
-  } as unknown as FeedbackEntry
-}
 
 describe("FeedbackSection", () => {
   beforeEach(() => {
@@ -210,5 +185,14 @@ describe("FeedbackSection", () => {
     await user.click(screen.getByRole("button", { name: /submit/i }))
 
     expect(mockCreate).toHaveBeenCalledOnce()
+    expect(mockCreate).toHaveBeenCalledWith({
+      orchestrationId: "orch1",
+      targetType: "task",
+      targetTaskId: "1",
+      entryType: "comment",
+      body: "Great work",
+      authorType: "human",
+      authorName: "alice",
+    })
   })
 })
