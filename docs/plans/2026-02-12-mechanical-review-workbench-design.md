@@ -128,6 +128,10 @@ HITL checkpoints. Review-local state, not coupled to control plane.
 | decidedAt | string \| null | |
 | summary | string | Current state explanation |
 
+### Data Retention
+
+Phase-level review data (reviews, threads, checks) is auto-purged after a configurable age (default 30 days). Orchestration-level reviews are kept indefinitely. This keeps check output (which can be large) from accumulating unbounded while preserving the rollup view. Purge runs as a scheduled Convex cron or daemon-triggered mutation.
+
 ### Dropped
 
 - `feedbackEntries` table and all related code (mutations, queries, components, tests)
@@ -391,7 +395,7 @@ Phase reviews listed from orchestration detail page.
 
 - Don't use epoch numbers for timestamps in Convex — existing convention is ISO 8601 strings (design doc says `number` for timestamps, should be `string`)
 - Don't call Convex directly from agents — all agent writes go through `tina-session` CLI
-- Don't add `fetch()` calls inline in web components — create a daemon client service (new pattern, needs a `useDaemonQuery` hook or similar abstraction since the app currently has zero HTTP fetches)
+- Don't add `fetch()` calls inline in web components — daemon data goes through react-query (TanStack Query) behind custom hooks (e.g. `useDiffFiles`, `useDiffFile`). This keeps the daemon HTTP layer consistent with how Convex data is consumed (hooks that return loading/error/data).
 
 **Integration points:**
 
@@ -402,12 +406,11 @@ Phase reviews listed from orchestration detail page.
 - Connects to: orchestration state machine in `tina-session/src/commands/orchestrate.rs` — review phase triggers review agent spawn
 - Replaces: `convex/feedbackEntries.ts`, `tina-web/src/components/FeedbackSection.tsx`, `tina-web/src/components/FeedbackSummarySection.tsx`, `tina-web/src/services/data/queryDefs.ts` (FeedbackEntryListQuery, FeedbackEntryByTargetQuery, BlockingFeedbackSummaryQuery)
 - Daemon HTTP: needs `axum` dependency added to `tina-daemon/Cargo.toml`, port configured in `~/Library/Application Support/tina/config.toml`
-- Web HTTP: needs daemon URL configured via `VITE_DAEMON_URL` env var (first non-Convex data source in tina-web)
+- Web HTTP: add `@tanstack/react-query` to tina-web, daemon URL via `VITE_DAEMON_URL` env var, custom hooks wrapping react-query for daemon data
 
 **Risks:**
 
-- tina-web has zero HTTP fetch infrastructure — the Changes tab introduces a new data source pattern (daemon HTTP alongside Convex subscriptions). Needs a clean abstraction (`useDaemonFetch` hook or similar) to handle loading, errors, and caching separately from Convex.
-- `reviewChecks.output` field could be large (full test output). Consider truncating or storing only tail of CLI output in Convex.
+- `reviewChecks.output` can be large (full test suite output). Store full output so it's visible in the UI. Auto-purge phase-level review data (checks, threads) older than a configurable age (e.g. 30 days). Orchestration-level reviews kept longer.
 
 ## Success Criteria
 
