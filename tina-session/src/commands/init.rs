@@ -68,7 +68,12 @@ pub fn run(
     // Check if already initialized via Convex (only block on active orchestrations)
     if let Some(existing) = check_existing_orchestration(feature)? {
         let is_terminal = existing.status == "complete" || existing.status == "blocked";
-        if !is_terminal {
+        let has_worktree = existing
+            .worktree_path
+            .as_ref()
+            .is_some_and(|path| !path.trim().is_empty());
+
+        if !is_terminal && has_worktree {
             let worktree = existing.worktree_path.unwrap_or_default();
             anyhow::bail!(SessionError::AlreadyInitialized(
                 feature.to_string(),
