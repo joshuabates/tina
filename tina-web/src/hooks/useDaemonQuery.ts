@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
+import { DAEMON_BASE } from "../lib/daemon"
 
 // Types matching tina-daemon/src/git.rs serialization
 export type FileStatus = "added" | "modified" | "deleted" | "renamed"
@@ -27,8 +28,6 @@ export interface DiffHunk {
   new_count: number
   lines: DiffLine[]
 }
-
-const DAEMON_BASE = import.meta.env.VITE_DAEMON_URL ?? "http://localhost:7842"
 
 export async function fetchDaemon<T>(
   path: string,

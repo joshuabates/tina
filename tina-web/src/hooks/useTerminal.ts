@@ -3,12 +3,20 @@ import { Terminal } from "xterm"
 import { AttachAddon } from "@xterm/addon-attach"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
-
-const DAEMON_BASE = import.meta.env.VITE_DAEMON_URL ?? "http://localhost:7842"
+import { DAEMON_BASE } from "../lib/daemon"
 
 function buildWsUrl(paneId: string): string {
   const base = DAEMON_BASE.replace(/^http/, "ws")
   return `${base}/ws/terminal/${encodeURIComponent(paneId)}`
+}
+
+function encodeResizeMessage(cols: number, rows: number): ArrayBuffer {
+  const msg = new Uint8Array(4)
+  msg[0] = (cols >> 8) & 0xff
+  msg[1] = cols & 0xff
+  msg[2] = (rows >> 8) & 0xff
+  msg[3] = rows & 0xff
+  return msg.buffer
 }
 
 export type TerminalStatus = "connecting" | "connected" | "disconnected" | "error"
@@ -78,12 +86,7 @@ export function useTerminal({ paneId, onStatusChange }: UseTerminalOptions) {
       // Send initial resize
       const dims = fitAddon.proposeDimensions()
       if (dims) {
-        const resizeMsg = new Uint8Array(4)
-        resizeMsg[0] = (dims.cols >> 8) & 0xff
-        resizeMsg[1] = dims.cols & 0xff
-        resizeMsg[2] = (dims.rows >> 8) & 0xff
-        resizeMsg[3] = dims.rows & 0xff
-        ws.send(resizeMsg.buffer)
+        ws.send(encodeResizeMessage(dims.cols, dims.rows))
       }
     })
 
@@ -101,12 +104,7 @@ export function useTerminal({ paneId, onStatusChange }: UseTerminalOptions) {
       if (ws.readyState === WebSocket.OPEN) {
         const dims = fitAddon.proposeDimensions()
         if (dims) {
-          const resizeMsg = new Uint8Array(4)
-          resizeMsg[0] = (dims.cols >> 8) & 0xff
-          resizeMsg[1] = dims.cols & 0xff
-          resizeMsg[2] = (dims.rows >> 8) & 0xff
-          resizeMsg[3] = dims.rows & 0xff
-          ws.send(resizeMsg.buffer)
+          ws.send(encodeResizeMessage(dims.cols, dims.rows))
         }
       }
     })
