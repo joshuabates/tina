@@ -78,7 +78,7 @@ Run harness scenarios 04, 05, and 06 with `--full` mode to validate end-to-end:
 
 ```bash
 # Rebuild binaries first
-cargo build -p tina-session -p tina-daemon && tina-session daemon stop && tina-session daemon start
+mise run install && tina-session daemon stop && tina-session daemon start
 
 # Run scenarios
 mise run harness:run 04-codex-reviewer -- --full --verify

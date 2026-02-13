@@ -20,10 +20,10 @@ This is a single-file change to the CLI argument parser and main processing loop
 
 1. **Executor (codex):** Add `stats: bool` field to `Cli` struct with `-s` and `--stats` flags. After normal processing output, if stats is enabled, count total characters and words in the output and print "Stats: N characters, M words" on a separate line.
 
-2. **Reviewer (codex):** Review the implementation for correctness, ensuring the stats flag does not affect normal processing when not enabled, output counts are accurate, and all existing tests still pass.
+2. **Reviewers (codex):** Run both spec-reviewer and code-quality-reviewer passes. Confirm the stats flag does not affect normal processing when not enabled, output counts are accurate, and all existing tests still pass.
 
 ### Success Criteria
 
 - `test-project --stats -u` shows output followed by stats line
 - `test-project` (without stats) works as before with no stats line
-- All existing tests continue to pass
+- All existing tests continue to pass, and both Codex reviewers approve

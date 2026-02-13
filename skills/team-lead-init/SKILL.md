@@ -394,7 +394,7 @@ After 2 failed attempts (original + 1 retry):
 
 For workers:
 1. Shut down the failed worker-N
-2. Mark the task as blocked: `TaskUpdate({ taskId: "<task-N-id>", status: "pending", description: "BLOCKED: worker produced invalid results after retry" })`
+2. Mark the task as blocked: `TaskUpdate({ taskId: "<task-N-id>", status: "blocked", description: "BLOCKED: worker produced invalid results after retry" })`
 3. Log: "worker-N exhausted retries for task N — marking task blocked"
 4. Continue with other tasks (blocked task's dependents stay blocked)
 

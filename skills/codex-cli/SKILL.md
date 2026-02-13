@@ -137,14 +137,15 @@ After parsing the JSON envelope, build a v2 result struct with these fields:
 | `issues` | Extracted from stdout/stderr on non-pass |
 | `confidence` | For reviewers only: `high` if exit_code=0, `medium` otherwise |
 
-**Status mapping:**
+**Status mapping (worker/reviewer):**
 
 | Envelope status | exit_code | v2 status |
 |----------------|-----------|-----------|
 | `completed` | 0 | `pass` |
-| `completed` | non-zero | `gaps` |
-| `failed` | any | `error` |
+| `failed` | non-zero | `gaps` (default) |
 | `timed_out` | any | `error` |
+
+`exec-codex` emits `status: failed` for non-zero Codex exits. Treat these as `gaps` by default, then upgrade to `error` when they match one of the infrastructure failure classes below.
 
 **Failure class normalization:**
 
@@ -153,9 +154,10 @@ Normalize common Codex failure modes into deterministic error outputs:
 | Failure class | Detection | v2 output |
 |---------------|-----------|-----------|
 | Timeout | `status == "timed_out"` | `status: error`, `issues: codex timed out after {duration}s` |
-| Binary not found | exec-codex launch error | `status: error`, `issues: codex unavailable - {detail}` |
+| Binary not found | stderr/stdout contains launch errors (for example `failed to spawn codex binary` or `No such file or directory`) | `status: error`, `issues: codex unavailable - {detail}` |
 | Invalid JSON | stdout not parseable | `status: error`, `issues: codex returned invalid output` |
-| Non-zero exit | `exit_code != 0` | `status: gaps`, `issues: {first 200 chars of stderr or stdout}` |
+| Codex crash / infra failure | `status == "failed"` and stderr/stdout indicates runtime crash/infrastructure failure | `status: error`, `issues: codex process failed: {first line}` |
+| Non-zero task/test failure | `status == "failed"` and `exit_code != 0` and no infrastructure failure signature matched | `status: gaps`, `issues: {first 200 chars of stderr or stdout}` |
 | Empty stdout | `stdout == ""` and `exit_code == 0` | `status: error`, `issues: codex returned empty output` |
 
 **Planner results:**

@@ -20,10 +20,10 @@ This is a single-file change to the CLI argument parser and main processing loop
 
 1. **Executor (codex):** Add `verbose: bool` field to `Cli` struct with `-v` and `--verbose` flags. When verbose is enabled, before each transformed line print "Processing line N: <original_line>". After all output, print "Verbose: processed N lines, M characters total" where N is line count and M is total character count of all original lines.
 
-2. **Reviewer (codex):** Review the implementation for correctness, ensuring verbose mode does not affect normal processing when not enabled, line numbers start at 1, character counts are accurate, and all existing tests still pass.
+2. **Reviewers (codex):** Run both spec-reviewer and code-quality-reviewer passes. Confirm verbose mode does not affect normal processing when not enabled, line numbers start at 1, character counts are accurate, and all existing tests still pass.
 
 ### Success Criteria
 
 - `test-project --verbose -u` shows processing details followed by transformed output
 - `test-project` (without verbose) works as before with no verbose output
-- All existing tests continue to pass
+- All existing tests continue to pass, and both Codex reviewers approve

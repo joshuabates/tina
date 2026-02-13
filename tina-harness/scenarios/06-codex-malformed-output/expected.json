@@ -12,8 +12,8 @@
       "expected_status": "complete",
       "min_phases": 1,
       "min_tasks": 1,
-      "min_team_members": 2,
-      "min_codex_events": 2
+      "min_team_members": 3,
+      "min_codex_events": 6
     }
   }
 }
