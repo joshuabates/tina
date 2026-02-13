@@ -13,6 +13,9 @@ import {
   TicketListQuery,
   TicketDetailQuery,
   CommentListQuery,
+  FeedbackEntryListQuery,
+  FeedbackEntryByTargetQuery,
+  BlockingFeedbackSummaryQuery,
 } from "../queryDefs"
 
 function decode<A, I>(schema: Schema.Schema<A, I>, input: unknown): A {
@@ -609,6 +612,207 @@ describe("queryDefs", () => {
 
     it("schema rejects invalid comment data", () => {
       expectDecodeThrows(CommentListQuery.schema, [{ body: 123 }])
+    })
+  })
+
+  describe("FeedbackEntryListQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(FeedbackEntryListQuery, "feedbackEntries.list")
+    })
+
+    it("args schema requires orchestrationId", () => {
+      const decoded = decode(FeedbackEntryListQuery.args, { orchestrationId: "orch123" })
+      expect(decoded.orchestrationId).toBe("orch123")
+    })
+
+    it("args schema accepts optional filters", () => {
+      const decoded = decode(FeedbackEntryListQuery.args, {
+        orchestrationId: "orch123",
+        targetType: "phase",
+        entryType: "ask_for_change",
+        status: "open",
+        authorType: "human",
+      })
+      expect(decoded.orchestrationId).toBe("orch123")
+      expect(decoded.targetType).toBe("phase")
+      expect(decoded.entryType).toBe("ask_for_change")
+      expect(decoded.status).toBe("open")
+      expect(decoded.authorType).toBe("human")
+    })
+
+    it("args schema rejects missing orchestrationId", () => {
+      expectDecodeThrows(FeedbackEntryListQuery.args, {})
+    })
+
+    it("schema decodes valid feedback entry list data", () => {
+      const decoded = decode(FeedbackEntryListQuery.schema, [
+        {
+          _id: "fb123",
+          _creationTime: 1234567890,
+          orchestrationId: "orch123",
+          targetType: "phase",
+          targetTaskId: undefined,
+          targetCommitSha: undefined,
+          entryType: "ask_for_change",
+          body: "Please revise this",
+          authorType: "human",
+          authorName: "Bob",
+          status: "open",
+          resolvedBy: undefined,
+          resolvedAt: undefined,
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+        },
+      ])
+
+      expect(decoded).toHaveLength(1)
+      expect(decoded[0].entryType).toBe("ask_for_change")
+      expect(decoded[0].authorName).toBe("Bob")
+    })
+
+    it("schema rejects invalid feedback entry data", () => {
+      expectDecodeThrows(FeedbackEntryListQuery.schema, [{ body: 123 }])
+    })
+  })
+
+  describe("FeedbackEntryByTargetQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(FeedbackEntryByTargetQuery, "feedbackEntries.byTarget")
+    })
+
+    it("args schema requires orchestrationId, targetType, and targetRef", () => {
+      const decoded = decode(FeedbackEntryByTargetQuery.args, {
+        orchestrationId: "orch123",
+        targetType: "phase",
+        targetRef: "phase-1",
+      })
+      expect(decoded.orchestrationId).toBe("orch123")
+      expect(decoded.targetType).toBe("phase")
+      expect(decoded.targetRef).toBe("phase-1")
+    })
+
+    it("args schema rejects missing orchestrationId", () => {
+      expectDecodeThrows(FeedbackEntryByTargetQuery.args, {
+        targetType: "phase",
+        targetRef: "phase-1",
+      })
+    })
+
+    it("args schema rejects missing targetType", () => {
+      expectDecodeThrows(FeedbackEntryByTargetQuery.args, {
+        orchestrationId: "orch123",
+        targetRef: "phase-1",
+      })
+    })
+
+    it("args schema rejects missing targetRef", () => {
+      expectDecodeThrows(FeedbackEntryByTargetQuery.args, {
+        orchestrationId: "orch123",
+        targetType: "phase",
+      })
+    })
+
+    it("schema decodes valid feedback entry list data", () => {
+      const decoded = decode(FeedbackEntryByTargetQuery.schema, [
+        {
+          _id: "fb456",
+          _creationTime: 1234567890,
+          orchestrationId: "orch123",
+          targetType: "phase",
+          targetTaskId: undefined,
+          targetCommitSha: undefined,
+          entryType: "ask_for_change",
+          body: "Update this phase",
+          authorType: "agent",
+          authorName: "reviewer",
+          status: "open",
+          resolvedBy: undefined,
+          resolvedAt: undefined,
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+        },
+      ])
+
+      expect(decoded).toHaveLength(1)
+      expect(decoded[0].orchestrationId).toBe("orch123")
+      expect(decoded[0].targetType).toBe("phase")
+    })
+
+    it("schema rejects invalid feedback entry data", () => {
+      expectDecodeThrows(FeedbackEntryByTargetQuery.schema, [{ authorType: 123 }])
+    })
+  })
+
+  describe("BlockingFeedbackSummaryQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(BlockingFeedbackSummaryQuery, "feedbackEntries.blockingSummary")
+    })
+
+    it("args schema requires orchestrationId", () => {
+      const decoded = decode(BlockingFeedbackSummaryQuery.args, { orchestrationId: "orch123" })
+      expect(decoded.orchestrationId).toBe("orch123")
+    })
+
+    it("args schema rejects missing orchestrationId", () => {
+      expectDecodeThrows(BlockingFeedbackSummaryQuery.args, {})
+    })
+
+    it("schema decodes valid blocking feedback summary data", () => {
+      const decoded = decode(BlockingFeedbackSummaryQuery.schema, {
+        openAskForChangeCount: 3,
+        entries: [
+          {
+            _id: "fb789",
+            _creationTime: 1234567890,
+            orchestrationId: "orch123",
+            targetType: "phase",
+            targetTaskId: undefined,
+            targetCommitSha: undefined,
+            entryType: "ask_for_change",
+            body: "Needs more work",
+            authorType: "human",
+            authorName: "Charlie",
+            status: "open",
+            resolvedBy: undefined,
+            resolvedAt: undefined,
+            createdAt: "2024-01-01T00:00:00Z",
+            updatedAt: "2024-01-01T00:00:00Z",
+          },
+        ],
+      })
+
+      expect(decoded.openAskForChangeCount).toBe(3)
+      expect(decoded.entries).toHaveLength(1)
+      expect(decoded.entries[0].authorName).toBe("Charlie")
+    })
+
+    it("schema accepts empty entries array", () => {
+      const decoded = decode(BlockingFeedbackSummaryQuery.schema, {
+        openAskForChangeCount: 0,
+        entries: [],
+      })
+
+      expect(decoded.openAskForChangeCount).toBe(0)
+      expect(decoded.entries).toHaveLength(0)
+    })
+
+    it("schema rejects invalid blocking feedback summary data", () => {
+      expectDecodeThrows(BlockingFeedbackSummaryQuery.schema, {
+        openAskForChangeCount: "not-a-number",
+        entries: [],
+      })
+    })
+
+    it("schema rejects missing openAskForChangeCount", () => {
+      expectDecodeThrows(BlockingFeedbackSummaryQuery.schema, {
+        entries: [],
+      })
+    })
+
+    it("schema rejects missing entries", () => {
+      expectDecodeThrows(BlockingFeedbackSummaryQuery.schema, {
+        openAskForChangeCount: 0,
+      })
     })
   })
 })

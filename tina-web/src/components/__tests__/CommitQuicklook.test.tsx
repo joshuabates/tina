@@ -5,6 +5,20 @@ import { CommitQuicklook } from "../CommitQuicklook"
 import type { Commit } from "@/schemas"
 import { defineQuicklookDialogContract } from "@/test/harness/quicklook-contract"
 
+// Mock useTypedQuery to avoid Convex client requirement
+vi.mock("@/hooks/useTypedQuery", () => ({
+  useTypedQuery: vi.fn(() => ({ status: "success", data: [] })),
+}))
+
+// Mock useMutation to avoid Convex client requirement
+vi.mock("convex/react", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("convex/react")>()
+  return {
+    ...mod,
+    useMutation: vi.fn(() => vi.fn()),
+  }
+})
+
 function createMockCommit(overrides: Partial<Commit> = {}): Commit {
   return {
     _id: "commit1",

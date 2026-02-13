@@ -9,6 +9,20 @@ import { defineQuicklookDialogContract } from "@/test/harness/quicklook-contract
 // Mock useActionRegistration
 vi.mock("@/hooks/useActionRegistration")
 
+// Mock useTypedQuery to avoid Convex client requirement
+vi.mock("@/hooks/useTypedQuery", () => ({
+  useTypedQuery: vi.fn(() => ({ status: "success", data: [] })),
+}))
+
+// Mock useMutation to avoid Convex client requirement
+vi.mock("convex/react", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("convex/react")>()
+  return {
+    ...mod,
+    useMutation: vi.fn(() => vi.fn()),
+  }
+})
+
 describe("TaskQuicklook", () => {
   const mockOnClose = vi.fn()
 

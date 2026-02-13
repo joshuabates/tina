@@ -20,6 +20,7 @@ import type * as designs from "../designs.js";
 import type * as events from "../events.js";
 import type * as executionTasks from "../executionTasks.js";
 import type * as featureFlags from "../featureFlags.js";
+import type * as feedbackEntries from "../feedbackEntries.js";
 import type * as generated_orchestrationCore from "../generated/orchestrationCore.js";
 import type * as nodes from "../nodes.js";
 import type * as orchestrations from "../orchestrations.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   events: typeof events;
   executionTasks: typeof executionTasks;
   featureFlags: typeof featureFlags;
+  feedbackEntries: typeof feedbackEntries;
   "generated/orchestrationCore": typeof generated_orchestrationCore;
   nodes: typeof nodes;
   orchestrations: typeof orchestrations;

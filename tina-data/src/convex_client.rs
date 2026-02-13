@@ -285,6 +285,23 @@ fn comment_to_args(comment: &CommentRecord) -> BTreeMap<String, Value> {
     args
 }
 
+fn feedback_entry_input_to_args(entry: &FeedbackEntryInput) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert("orchestrationId".into(), Value::from(entry.orchestration_id.as_str()));
+    args.insert("targetType".into(), Value::from(entry.target_type.as_str()));
+    if let Some(ref tid) = entry.target_task_id {
+        args.insert("targetTaskId".into(), Value::from(tid.as_str()));
+    }
+    if let Some(ref sha) = entry.target_commit_sha {
+        args.insert("targetCommitSha".into(), Value::from(sha.as_str()));
+    }
+    args.insert("entryType".into(), Value::from(entry.entry_type.as_str()));
+    args.insert("body".into(), Value::from(entry.body.as_str()));
+    args.insert("authorType".into(), Value::from(entry.author_type.as_str()));
+    args.insert("authorName".into(), Value::from(entry.author_name.as_str()));
+    args
+}
+
 pub fn span_to_args(span: &SpanRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("traceId".into(), Value::from(span.trace_id.as_str()));
@@ -994,6 +1011,71 @@ fn extract_comment_list(result: FunctionResult) -> Result<Vec<CommentRecord>> {
     }
 }
 
+fn extract_feedback_entry_from_obj(obj: &BTreeMap<String, Value>) -> FeedbackEntryRecord {
+    FeedbackEntryRecord {
+        id: value_as_id(obj, "_id"),
+        orchestration_id: value_as_id(obj, "orchestrationId"),
+        target_type: value_as_str(obj, "targetType"),
+        target_task_id: value_as_opt_str(obj, "targetTaskId"),
+        target_commit_sha: value_as_opt_str(obj, "targetCommitSha"),
+        entry_type: value_as_str(obj, "entryType"),
+        body: value_as_str(obj, "body"),
+        author_type: value_as_str(obj, "authorType"),
+        author_name: value_as_str(obj, "authorName"),
+        status: value_as_str(obj, "status"),
+        resolved_by: value_as_opt_str(obj, "resolvedBy"),
+        resolved_at: value_as_opt_str(obj, "resolvedAt"),
+        created_at: value_as_str(obj, "createdAt"),
+        updated_at: value_as_str(obj, "updatedAt"),
+    }
+}
+
+fn extract_feedback_entry_list(result: FunctionResult) -> Result<Vec<FeedbackEntryRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut entries = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    entries.push(extract_feedback_entry_from_obj(&obj));
+                }
+            }
+            Ok(entries)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => {
+            bail!("expected array for feedback entry list, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_blocking_feedback_summary(result: FunctionResult) -> Result<BlockingFeedbackSummary> {
+    match result {
+        FunctionResult::Value(Value::Object(obj)) => {
+            let open_count = value_as_u32(&obj, "openAskForChangeCount");
+            let total = value_as_u32(&obj, "totalBlocking");
+            let by_target = match obj.get("byTargetType") {
+                Some(Value::Object(tt)) => BlockingByTargetType {
+                    task: value_as_u32(tt, "task"),
+                    commit: value_as_u32(tt, "commit"),
+                },
+                _ => BlockingByTargetType { task: 0, commit: 0 },
+            };
+            Ok(BlockingFeedbackSummary {
+                open_ask_for_change_count: open_count,
+                total_blocking: total,
+                by_target_type: by_target,
+            })
+        }
+        FunctionResult::Value(other) => {
+            bail!("expected object for blocking summary, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
 impl TinaConvexClient {
     /// Connect to a Convex deployment.
     pub async fn new(deployment_url: &str) -> Result<Self> {
@@ -1555,6 +1637,106 @@ impl TinaConvexClient {
             .query("workComments:listComments", args)
             .await?;
         extract_comment_list(result)
+    }
+
+    // --- Feedback entry methods ---
+
+    /// Create a feedback entry for an orchestration target.
+    pub async fn create_feedback_entry(
+        &mut self,
+        entry: &FeedbackEntryInput,
+    ) -> Result<String> {
+        let args = feedback_entry_input_to_args(entry);
+        let result = self
+            .client
+            .mutation("feedbackEntries:createFeedbackEntry", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Resolve a feedback entry.
+    pub async fn resolve_feedback_entry(
+        &mut self,
+        entry_id: &str,
+        resolved_by: &str,
+    ) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("entryId".into(), Value::from(entry_id));
+        args.insert("resolvedBy".into(), Value::from(resolved_by));
+        let result = self
+            .client
+            .mutation("feedbackEntries:resolveFeedbackEntry", args)
+            .await?;
+        extract_unit(result)
+    }
+
+    /// Reopen a previously resolved feedback entry.
+    pub async fn reopen_feedback_entry(&mut self, entry_id: &str) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("entryId".into(), Value::from(entry_id));
+        let result = self
+            .client
+            .mutation("feedbackEntries:reopenFeedbackEntry", args)
+            .await?;
+        extract_unit(result)
+    }
+
+    /// List feedback entries for an orchestration, with optional filters.
+    pub async fn list_feedback_entries(
+        &mut self,
+        orchestration_id: &str,
+        target_type: Option<&str>,
+        entry_type: Option<&str>,
+        status: Option<&str>,
+    ) -> Result<Vec<FeedbackEntryRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        if let Some(tt) = target_type {
+            args.insert("targetType".into(), Value::from(tt));
+        }
+        if let Some(et) = entry_type {
+            args.insert("entryType".into(), Value::from(et));
+        }
+        if let Some(s) = status {
+            args.insert("status".into(), Value::from(s));
+        }
+        let result = self
+            .client
+            .query("feedbackEntries:listFeedbackEntriesByOrchestration", args)
+            .await?;
+        extract_feedback_entry_list(result)
+    }
+
+    /// List feedback entries for a specific target.
+    pub async fn list_feedback_entries_by_target(
+        &mut self,
+        orchestration_id: &str,
+        target_type: &str,
+        target_ref: &str,
+    ) -> Result<Vec<FeedbackEntryRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        args.insert("targetType".into(), Value::from(target_type));
+        args.insert("targetRef".into(), Value::from(target_ref));
+        let result = self
+            .client
+            .query("feedbackEntries:listFeedbackEntriesByTarget", args)
+            .await?;
+        extract_feedback_entry_list(result)
+    }
+
+    /// Get blocking feedback summary for an orchestration.
+    pub async fn get_blocking_feedback_summary(
+        &mut self,
+        orchestration_id: &str,
+    ) -> Result<BlockingFeedbackSummary> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        let result = self
+            .client
+            .query("feedbackEntries:getBlockingFeedbackSummary", args)
+            .await?;
+        extract_blocking_feedback_summary(result)
     }
 }
 
@@ -2398,5 +2580,277 @@ mod tests {
         let comment = extract_comment_record(&obj);
 
         assert_eq!(comment.edited_at, Some("2026-02-11T11:00:00Z".to_string()));
+    }
+
+    #[test]
+    fn test_feedback_entry_input_to_args_all_fields() {
+        let input = FeedbackEntryInput {
+            orchestration_id: "orch-1".to_string(),
+            target_type: "task".to_string(),
+            target_task_id: Some("task-42".to_string()),
+            target_commit_sha: Some("abc123".to_string()),
+            entry_type: "ask_for_change".to_string(),
+            body: "Please fix naming".to_string(),
+            author_type: "human".to_string(),
+            author_name: "alice".to_string(),
+        };
+
+        let args = feedback_entry_input_to_args(&input);
+
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-1")));
+        assert_eq!(args.get("targetType"), Some(&Value::from("task")));
+        assert_eq!(args.get("targetTaskId"), Some(&Value::from("task-42")));
+        assert_eq!(args.get("targetCommitSha"), Some(&Value::from("abc123")));
+        assert_eq!(args.get("entryType"), Some(&Value::from("ask_for_change")));
+        assert_eq!(args.get("body"), Some(&Value::from("Please fix naming")));
+        assert_eq!(args.get("authorType"), Some(&Value::from("human")));
+        assert_eq!(args.get("authorName"), Some(&Value::from("alice")));
+        assert_eq!(args.len(), 8);
+    }
+
+    #[test]
+    fn test_feedback_entry_input_to_args_optional_fields_absent() {
+        let input = FeedbackEntryInput {
+            orchestration_id: "orch-2".to_string(),
+            target_type: "commit".to_string(),
+            target_task_id: None,
+            target_commit_sha: None,
+            entry_type: "blocking".to_string(),
+            body: "Needs tests".to_string(),
+            author_type: "agent".to_string(),
+            author_name: "spec-reviewer".to_string(),
+        };
+
+        let args = feedback_entry_input_to_args(&input);
+
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-2")));
+        assert_eq!(args.get("targetType"), Some(&Value::from("commit")));
+        assert!(args.get("targetTaskId").is_none());
+        assert!(args.get("targetCommitSha").is_none());
+        assert_eq!(args.get("entryType"), Some(&Value::from("blocking")));
+        assert_eq!(args.get("body"), Some(&Value::from("Needs tests")));
+        assert_eq!(args.get("authorType"), Some(&Value::from("agent")));
+        assert_eq!(args.get("authorName"), Some(&Value::from("spec-reviewer")));
+        assert_eq!(args.len(), 6);
+    }
+
+    #[test]
+    fn test_feedback_entry_input_to_args_task_target() {
+        let entry = FeedbackEntryInput {
+            orchestration_id: "orch-123".to_string(),
+            target_type: "task".to_string(),
+            target_task_id: Some("5".to_string()),
+            target_commit_sha: None,
+            entry_type: "ask_for_change".to_string(),
+            body: "Please add error handling".to_string(),
+            author_type: "human".to_string(),
+            author_name: "joshua".to_string(),
+        };
+
+        let args = feedback_entry_input_to_args(&entry);
+
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-123")));
+        assert_eq!(args.get("targetType"), Some(&Value::from("task")));
+        assert_eq!(args.get("targetTaskId"), Some(&Value::from("5")));
+        assert!(args.get("targetCommitSha").is_none());
+        assert_eq!(args.get("entryType"), Some(&Value::from("ask_for_change")));
+        assert_eq!(args.get("body"), Some(&Value::from("Please add error handling")));
+        assert_eq!(args.get("authorType"), Some(&Value::from("human")));
+        assert_eq!(args.get("authorName"), Some(&Value::from("joshua")));
+        assert_eq!(args.len(), 7);
+    }
+
+    #[test]
+    fn test_feedback_entry_input_to_args_commit_target() {
+        let entry = FeedbackEntryInput {
+            orchestration_id: "orch-456".to_string(),
+            target_type: "commit".to_string(),
+            target_task_id: None,
+            target_commit_sha: Some("abc123def".to_string()),
+            entry_type: "suggestion".to_string(),
+            body: "Consider using a constant here".to_string(),
+            author_type: "agent".to_string(),
+            author_name: "code-reviewer".to_string(),
+        };
+
+        let args = feedback_entry_input_to_args(&entry);
+
+        assert_eq!(args.get("orchestrationId"), Some(&Value::from("orch-456")));
+        assert_eq!(args.get("targetType"), Some(&Value::from("commit")));
+        assert!(args.get("targetTaskId").is_none());
+        assert_eq!(args.get("targetCommitSha"), Some(&Value::from("abc123def")));
+        assert_eq!(args.get("entryType"), Some(&Value::from("suggestion")));
+        assert_eq!(args.get("authorType"), Some(&Value::from("agent")));
+        assert_eq!(args.get("authorName"), Some(&Value::from("code-reviewer")));
+        assert_eq!(args.len(), 7);
+    }
+
+    // --- Feedback extraction tests ---
+
+    #[test]
+    fn test_extract_feedback_entry_from_obj() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("fb-entry-1"));
+        obj.insert("orchestrationId".to_string(), Value::from("orch-1"));
+        obj.insert("targetType".to_string(), Value::from("task"));
+        obj.insert("targetTaskId".to_string(), Value::from("task-42"));
+        obj.insert("entryType".to_string(), Value::from("ask_for_change"));
+        obj.insert("body".to_string(), Value::from("Please fix naming"));
+        obj.insert("authorType".to_string(), Value::from("human"));
+        obj.insert("authorName".to_string(), Value::from("alice"));
+        obj.insert("status".to_string(), Value::from("open"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-12T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-12T10:00:00Z"));
+
+        let entry = extract_feedback_entry_from_obj(&obj);
+
+        assert_eq!(entry.id, "fb-entry-1");
+        assert_eq!(entry.orchestration_id, "orch-1");
+        assert_eq!(entry.target_type, "task");
+        assert_eq!(entry.target_task_id, Some("task-42".to_string()));
+        assert!(entry.target_commit_sha.is_none());
+        assert_eq!(entry.entry_type, "ask_for_change");
+        assert_eq!(entry.body, "Please fix naming");
+        assert_eq!(entry.author_type, "human");
+        assert_eq!(entry.author_name, "alice");
+        assert_eq!(entry.status, "open");
+        assert!(entry.resolved_by.is_none());
+        assert!(entry.resolved_at.is_none());
+        assert_eq!(entry.created_at, "2026-02-12T10:00:00Z");
+        assert_eq!(entry.updated_at, "2026-02-12T10:00:00Z");
+    }
+
+    #[test]
+    fn test_extract_feedback_entry_from_obj_with_resolved_fields() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("fb-entry-2"));
+        obj.insert("orchestrationId".to_string(), Value::from("orch-1"));
+        obj.insert("targetType".to_string(), Value::from("commit"));
+        obj.insert("targetCommitSha".to_string(), Value::from("abc123"));
+        obj.insert("entryType".to_string(), Value::from("blocking"));
+        obj.insert("body".to_string(), Value::from("Needs tests"));
+        obj.insert("authorType".to_string(), Value::from("agent"));
+        obj.insert("authorName".to_string(), Value::from("spec-reviewer"));
+        obj.insert("status".to_string(), Value::from("resolved"));
+        obj.insert("resolvedBy".to_string(), Value::from("alice"));
+        obj.insert(
+            "resolvedAt".to_string(),
+            Value::from("2026-02-12T12:00:00Z"),
+        );
+        obj.insert("createdAt".to_string(), Value::from("2026-02-12T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-12T12:00:00Z"));
+
+        let entry = extract_feedback_entry_from_obj(&obj);
+
+        assert_eq!(entry.target_commit_sha, Some("abc123".to_string()));
+        assert!(entry.target_task_id.is_none());
+        assert_eq!(entry.status, "resolved");
+        assert_eq!(entry.resolved_by, Some("alice".to_string()));
+        assert_eq!(
+            entry.resolved_at,
+            Some("2026-02-12T12:00:00Z".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_feedback_entry_list_with_entries() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("fb-entry-1"));
+        obj.insert("orchestrationId".to_string(), Value::from("orch-1"));
+        obj.insert("targetType".to_string(), Value::from("task"));
+        obj.insert("entryType".to_string(), Value::from("ask_for_change"));
+        obj.insert("body".to_string(), Value::from("Fix naming"));
+        obj.insert("authorType".to_string(), Value::from("human"));
+        obj.insert("authorName".to_string(), Value::from("alice"));
+        obj.insert("status".to_string(), Value::from("open"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-12T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-12T10:00:00Z"));
+
+        let result = FunctionResult::Value(Value::Array(vec![Value::Object(obj)]));
+        let entries = extract_feedback_entry_list(result).unwrap();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].id, "fb-entry-1");
+        assert_eq!(entries[0].body, "Fix naming");
+    }
+
+    #[test]
+    fn test_extract_feedback_entry_list_empty() {
+        let result = FunctionResult::Value(Value::Array(vec![]));
+        let entries = extract_feedback_entry_list(result).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_extract_feedback_entry_list_null() {
+        let result = FunctionResult::Value(Value::Null);
+        let entries = extract_feedback_entry_list(result).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn test_extract_feedback_entry_list_error() {
+        let result = FunctionResult::ErrorMessage("query failed".into());
+        assert!(extract_feedback_entry_list(result).is_err());
+    }
+
+    #[test]
+    fn test_extract_blocking_feedback_summary_success() {
+        let mut by_target = BTreeMap::new();
+        by_target.insert("task".to_string(), Value::from(3.0f64));
+        by_target.insert("commit".to_string(), Value::from(1.0f64));
+
+        let mut obj = BTreeMap::new();
+        obj.insert("openAskForChangeCount".to_string(), Value::from(4.0f64));
+        obj.insert("totalBlocking".to_string(), Value::from(4.0f64));
+        obj.insert("byTargetType".to_string(), Value::Object(by_target));
+
+        let result = FunctionResult::Value(Value::Object(obj));
+        let summary = extract_blocking_feedback_summary(result).unwrap();
+
+        assert_eq!(summary.open_ask_for_change_count, 4);
+        assert_eq!(summary.total_blocking, 4);
+        assert_eq!(summary.by_target_type.task, 3);
+        assert_eq!(summary.by_target_type.commit, 1);
+    }
+
+    #[test]
+    fn test_extract_blocking_feedback_summary_zero_counts() {
+        let mut by_target = BTreeMap::new();
+        by_target.insert("task".to_string(), Value::from(0.0f64));
+        by_target.insert("commit".to_string(), Value::from(0.0f64));
+
+        let mut obj = BTreeMap::new();
+        obj.insert("openAskForChangeCount".to_string(), Value::from(0.0f64));
+        obj.insert("totalBlocking".to_string(), Value::from(0.0f64));
+        obj.insert("byTargetType".to_string(), Value::Object(by_target));
+
+        let result = FunctionResult::Value(Value::Object(obj));
+        let summary = extract_blocking_feedback_summary(result).unwrap();
+
+        assert_eq!(summary.open_ask_for_change_count, 0);
+        assert_eq!(summary.total_blocking, 0);
+        assert_eq!(summary.by_target_type.task, 0);
+        assert_eq!(summary.by_target_type.commit, 0);
+    }
+
+    #[test]
+    fn test_extract_blocking_feedback_summary_missing_by_target_type() {
+        let mut obj = BTreeMap::new();
+        obj.insert("totalBlocking".to_string(), Value::from(2.0f64));
+
+        let result = FunctionResult::Value(Value::Object(obj));
+        let summary = extract_blocking_feedback_summary(result).unwrap();
+
+        assert_eq!(summary.open_ask_for_change_count, 0);
+        assert_eq!(summary.total_blocking, 2);
+        assert_eq!(summary.by_target_type.task, 0);
+        assert_eq!(summary.by_target_type.commit, 0);
+    }
+
+    #[test]
+    fn test_extract_blocking_feedback_summary_error() {
+        let result = FunctionResult::ErrorMessage("query failed".into());
+        assert!(extract_blocking_feedback_summary(result).is_err());
     }
 }

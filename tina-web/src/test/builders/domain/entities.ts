@@ -1,5 +1,6 @@
 import type {
   DesignSummary,
+  FeedbackEntry,
   OrchestrationEvent,
   OrchestrationSummary,
   Phase,
@@ -144,6 +145,29 @@ export function buildDesignSummary(
     phaseCount: none<number>(),
     phaseStructureValid: none<boolean>(),
     validationUpdatedAt: none<string>(),
+    ...overrides,
+  }
+}
+
+export function buildFeedbackEntry(
+  overrides: Partial<FeedbackEntry> = {},
+): FeedbackEntry {
+  return {
+    _id: "fb1",
+    _creationTime: 1234567890,
+    orchestrationId: "orch1",
+    targetType: "task",
+    targetTaskId: some("1"),
+    targetCommitSha: none<string>(),
+    entryType: "comment",
+    body: "Looks good",
+    authorType: "human",
+    authorName: "alice",
+    status: "open",
+    resolvedBy: none<string>(),
+    resolvedAt: none<string>(),
+    createdAt: "2026-02-12T10:00:00Z",
+    updatedAt: "2026-02-12T10:00:00Z",
     ...overrides,
   }
 }

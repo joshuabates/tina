@@ -4,6 +4,7 @@ import { optionText } from "@/lib/option-display"
 import { formatBlockedByForDisplay } from "@/lib/task-dependencies"
 import { QuicklookDialog } from "@/components/QuicklookDialog"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
+import { FeedbackSection } from "@/components/FeedbackSection"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
@@ -92,6 +93,14 @@ export function TaskQuicklook({ task, onClose }: TaskQuicklookProps) {
           <div className={styles.value}>{blockedBy}</div>
         </section>
       )}
+
+      <section className={styles.section}>
+        <FeedbackSection
+          orchestrationId={task.orchestrationId}
+          targetType="task"
+          targetRef={task.taskId}
+        />
+      </section>
     </QuicklookDialog>
   )
 }
