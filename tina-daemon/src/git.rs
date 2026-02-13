@@ -67,6 +67,28 @@ pub fn get_new_commits(
     parse_git_log_output(&stdout)
 }
 
+/// Resolve current HEAD SHA for the repository.
+pub fn get_head_sha(repo_path: &Path) -> Result<String> {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .context("Failed to run git rev-parse HEAD")?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "git rev-parse HEAD failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let sha = String::from_utf8(output.stdout)?.trim().to_string();
+    if sha.is_empty() {
+        anyhow::bail!("git rev-parse HEAD returned empty SHA");
+    }
+    Ok(sha)
+}
+
 /// Resolve a repository's git directory, handling linked worktrees.
 pub fn resolve_git_dir(repo_path: &Path) -> Result<PathBuf> {
     let output = Command::new("git")
@@ -738,6 +760,17 @@ def456|def4567|fix: bug fix|Jane Smith <jane@example.com>|2026-02-10T11:00:00Z
         let repo = setup_commit_repo();
         let err = get_commit_details_by_sha(repo.path(), &["not-a-sha".to_string()]).unwrap_err();
         assert!(err.to_string().contains("invalid commit SHA"));
+    }
+
+    #[test]
+    fn test_get_head_sha_returns_current_head() {
+        let tmp = setup_commit_repo();
+        let dir = tmp.path();
+
+        let head_from_helper = get_head_sha(dir).unwrap();
+        let head_from_git = run_git(dir, &["rev-parse", "HEAD"]);
+
+        assert_eq!(head_from_helper, head_from_git);
     }
 
     // -- Diff file list tests --

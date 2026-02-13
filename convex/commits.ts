@@ -41,6 +41,7 @@ export const listCommits = query({
             .eq("orchestrationId", orchestrationId)
             .eq("phaseNumber", phaseNumber)
         )
+        .order("desc")
         .collect();
     }
 
@@ -49,6 +50,7 @@ export const listCommits = query({
       .withIndex("by_orchestration", (q) =>
         q.eq("orchestrationId", orchestrationId)
       )
+      .order("desc")
       .collect();
   },
 });

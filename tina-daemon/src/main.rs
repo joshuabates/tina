@@ -114,6 +114,27 @@ async fn refresh_worktrees(
                 }
             }
         }
+
+        if !cache
+            .last_commit_sha
+            .contains_key(&worktree.orchestration_id)
+        {
+            match git::get_head_sha(&worktree.worktree_path) {
+                Ok(head_sha) => {
+                    cache
+                        .last_commit_sha
+                        .insert(worktree.orchestration_id.clone(), head_sha);
+                }
+                Err(e) => {
+                    warn!(
+                        feature = %worktree.feature,
+                        path = %worktree.worktree_path.display(),
+                        error = %e,
+                        "failed to initialize commit anchor from HEAD"
+                    );
+                }
+            }
+        }
     }
 
     cache.set_worktrees(worktrees);

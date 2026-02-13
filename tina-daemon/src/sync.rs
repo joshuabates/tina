@@ -158,6 +158,53 @@ fn maybe_advance_last_commit_sha(
     }
 }
 
+fn format_phase_number(phase: f64) -> Option<String> {
+    if !phase.is_finite() {
+        return None;
+    }
+    if phase.fract().abs() < f64::EPSILON {
+        return Some(format!("{:.0}", phase));
+    }
+
+    let mut phase_string = phase.to_string();
+    if phase_string.contains('.') {
+        while phase_string.ends_with('0') {
+            phase_string.pop();
+        }
+        if phase_string.ends_with('.') {
+            phase_string.pop();
+        }
+    }
+    Some(phase_string)
+}
+
+async fn resolve_live_phase_number(
+    client: &Arc<Mutex<TinaConvexClient>>,
+    orchestration_id: &str,
+    fallback_phase_number: &str,
+) -> String {
+    let list_result = {
+        let mut client_guard = client.lock().await;
+        client_guard.list_orchestrations().await
+    };
+
+    match list_result {
+        Ok(orchestrations) => orchestrations
+            .into_iter()
+            .find(|entry| entry.id == orchestration_id)
+            .and_then(|entry| format_phase_number(entry.record.current_phase))
+            .unwrap_or_else(|| fallback_phase_number.to_string()),
+        Err(e) => {
+            warn!(
+                orchestration = %orchestration_id,
+                error = %e,
+                "failed to resolve live phase, using cached phase"
+            );
+            fallback_phase_number.to_string()
+        }
+    }
+}
+
 fn resolve_local_team_dir_name(team: &ActiveTeamRecord, cache: &mut SyncCache) -> Result<String> {
     if let Some(dir_name) = cache.team_dir_name_by_id.get(&team.id) {
         return Ok(dir_name.clone());
@@ -683,7 +730,7 @@ pub async fn sync_commits(
     client: &Arc<Mutex<TinaConvexClient>>,
     cache: &mut SyncCache,
     orchestration_id: &str,
-    phase_number: &str,
+    cached_phase_number: &str,
     worktree_path: &Path,
     branch: &str,
     telemetry: Option<&DaemonTelemetry>,
@@ -694,10 +741,38 @@ pub async fn sync_commits(
     let last_sha = cache
         .last_commit_sha
         .get(orchestration_id)
-        .map(|s| s.as_str());
+        .cloned();
 
-    // Parse new commits
-    let new_commits = git::get_new_commits(worktree_path, branch, last_sha)?;
+    // Strict watch mode: only process commits after an initialized HEAD anchor.
+    let Some(last_sha) = last_sha else {
+        let anchor_sha = git::get_head_sha(worktree_path)?;
+        cache
+            .last_commit_sha
+            .insert(orchestration_id.to_string(), anchor_sha.clone());
+
+        if let Some(t) = telemetry {
+            let attrs = serde_json::json!({
+                "orchestration_id": orchestration_id,
+                "reason": "initialized_head_anchor",
+                "head_sha": anchor_sha,
+            })
+            .to_string();
+            t.emit_event(
+                "projection.skip",
+                "info",
+                "initialized commit anchor at HEAD",
+                Some(attrs),
+            )
+            .await;
+        }
+
+        if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+            t.end_span(sid, "daemon.sync_commits", started_at, "ok", None, None)
+                .await;
+        }
+        return Ok(());
+    };
+    let new_commits = git::get_new_commits(worktree_path, branch, Some(&last_sha))?;
 
     if new_commits.is_empty() {
         // Emit skip event for no new commits
@@ -728,6 +803,23 @@ pub async fn sync_commits(
         count = new_commits.len(),
         "syncing new commits"
     );
+
+    let phase_number = resolve_live_phase_number(client, orchestration_id, cached_phase_number).await;
+    if phase_number != cached_phase_number {
+        info!(
+            orchestration = %orchestration_id,
+            cached_phase = %cached_phase_number,
+            live_phase = %phase_number,
+            "resolved newer phase for commit sync"
+        );
+    }
+    if let Some(worktree) = cache
+        .worktrees
+        .iter_mut()
+        .find(|wt| wt.orchestration_id == orchestration_id)
+    {
+        worktree.current_phase = phase_number.clone();
+    }
 
     // Record each commit to Convex
     let mut all_writes_succeeded = true;

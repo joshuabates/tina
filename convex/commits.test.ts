@@ -104,6 +104,34 @@ describe("commits:listCommits", () => {
     expect(commits.length).toBe(2);
   });
 
+  test("returns newest commits first", async () => {
+    const t = convexTest(schema);
+    const { orchestrationId } = await createFeatureFixture(t, "ordering-feature");
+
+    await t.mutation(api.commits.recordCommit, {
+      orchestrationId,
+      phaseNumber: "1",
+      sha: "older-commit",
+      shortSha: "older",
+    });
+
+    await t.mutation(api.commits.recordCommit, {
+      orchestrationId,
+      phaseNumber: "1",
+      sha: "newer-commit",
+      shortSha: "newer",
+    });
+
+    const commits = await t.query(api.commits.listCommits, {
+      orchestrationId,
+    });
+
+    expect(commits.map((commit) => commit.sha)).toEqual([
+      "newer-commit",
+      "older-commit",
+    ]);
+  });
+
   test("returns only phase-specific commits when phaseNumber provided", async () => {
     const t = convexTest(schema);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
