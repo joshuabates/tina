@@ -384,4 +384,86 @@ export default defineSchema({
       "targetCommitSha",
       "createdAt",
     ]),
+
+  reviews: defineTable({
+    orchestrationId: v.id("orchestrations"),
+    phaseNumber: v.optional(v.string()),
+    state: v.union(
+      v.literal("open"),
+      v.literal("changes_requested"),
+      v.literal("approved"),
+      v.literal("superseded"),
+    ),
+    reviewerAgent: v.string(),
+    startedAt: v.string(),
+    completedAt: v.optional(v.string()),
+  })
+    .index("by_orchestration", ["orchestrationId"])
+    .index("by_orchestration_phase", ["orchestrationId", "phaseNumber"]),
+
+  reviewThreads: defineTable({
+    reviewId: v.id("reviews"),
+    orchestrationId: v.id("orchestrations"),
+    filePath: v.string(),
+    line: v.number(),
+    commitSha: v.string(),
+    summary: v.string(),
+    body: v.string(),
+    severity: v.union(v.literal("p0"), v.literal("p1"), v.literal("p2")),
+    status: v.union(v.literal("unresolved"), v.literal("resolved")),
+    source: v.union(v.literal("human"), v.literal("agent")),
+    author: v.string(),
+    gateImpact: v.union(
+      v.literal("plan"),
+      v.literal("review"),
+      v.literal("finalize"),
+    ),
+    createdAt: v.string(),
+    resolvedAt: v.optional(v.string()),
+    resolvedBy: v.optional(v.string()),
+  })
+    .index("by_review", ["reviewId"])
+    .index("by_orchestration", ["orchestrationId"])
+    .index("by_review_status", ["reviewId", "status"]),
+
+  reviewChecks: defineTable({
+    reviewId: v.id("reviews"),
+    orchestrationId: v.id("orchestrations"),
+    name: v.string(),
+    kind: v.union(v.literal("cli"), v.literal("project")),
+    command: v.optional(v.string()),
+    status: v.union(
+      v.literal("running"),
+      v.literal("passed"),
+      v.literal("failed"),
+    ),
+    comment: v.optional(v.string()),
+    output: v.optional(v.string()),
+    startedAt: v.string(),
+    completedAt: v.optional(v.string()),
+    durationMs: v.optional(v.number()),
+  })
+    .index("by_review", ["reviewId"])
+    .index("by_orchestration", ["orchestrationId"])
+    .index("by_review_name", ["reviewId", "name"]),
+
+  reviewGates: defineTable({
+    orchestrationId: v.id("orchestrations"),
+    gateId: v.union(
+      v.literal("plan"),
+      v.literal("review"),
+      v.literal("finalize"),
+    ),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("blocked"),
+      v.literal("approved"),
+    ),
+    owner: v.string(),
+    decidedBy: v.optional(v.string()),
+    decidedAt: v.optional(v.string()),
+    summary: v.string(),
+  })
+    .index("by_orchestration", ["orchestrationId"])
+    .index("by_orchestration_gate", ["orchestrationId", "gateId"]),
 });
