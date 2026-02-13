@@ -291,24 +291,127 @@ When a reviewer message arrives, apply dual-grammar recognition:
    - `status: gaps` → reviewer found issues, send back to worker for fixes
    - `status: error` → reviewer encountered an error, apply retry policy
 
-### 5.4b Invalid result handling
+### 5.4b Retry protocol for invalid results
 
-When a result message fails v2 acceptance matrix validation or cannot be interpreted:
+**Scope:** This protocol handles results that fail v2 acceptance matrix validation or are completely uninterpretable. It does NOT apply to valid results with `status=gaps` (those follow the normal remediation loop where reviewer sends issues to worker).
 
-1. **First attempt:** Retry the agent (worker or reviewer) once with stricter instructions. Add to the retry prompt:
-   ```
-   IMPORTANT: Your previous response could not be parsed. You MUST include v2 structured headers at the start of your message:
-   role: <your-role>
-   task_id: <task-id>
-   status: pass|gaps|error
-   [additional required fields per acceptance matrix]
+**Retry tracker:** Team-lead maintains a mental retry counter per agent spawn:
 
-   Then include your freeform explanation after a blank line.
-   ```
-2. **Second failure:** Mark the run as failed. For workers, shut down and retry with fresh worker (existing retry policy). For reviewers, treat as review error — shut down reviewer and spawn replacement.
-3. **After exhausting retries:** Mark task as blocked per existing escalation protocol.
+```
+retry_tracker:
+  worker-1: { attempts: 0, max: 1 }
+  spec-reviewer-1: { attempts: 0, max: 1 }
+  code-quality-reviewer-1: { attempts: 0, max: 1 }
+```
 
-Note: This retry policy applies only to unparseable/invalid results. Valid results with `status=gaps` follow the normal remediation loop (reviewer sends issues to worker, worker fixes, re-review).
+Each agent gets at most 1 retry (2 total attempts). The counter resets when a new agent is spawned for a different task.
+
+**Decision flow:**
+
+```
+Invalid result received from agent-N
+  │
+  ├── attempts < max?
+  │     │
+  │     YES → Shut down agent-N
+  │     │     Increment attempts
+  │     │     Spawn replacement agent-N with stricter prompt
+  │     │     Wait for replacement result
+  │     │
+  │     NO → Escalate (see escalation below)
+  │
+  └── Result is valid but status=gaps/error?
+        │
+        └── Normal remediation flow (NOT a retry)
+```
+
+**Step 1 — Detect invalid result:**
+
+A result is "invalid" when:
+1. v2 headers are present but fail acceptance matrix validation (missing required fields)
+2. Message cannot be interpreted at all (no v2 headers AND no recognizable legacy verdict)
+3. `task_id` in v2 headers doesn't match the expected task
+
+A result is NOT invalid when:
+- Legacy freeform message with a clear pass/fail verdict (valid legacy)
+- v2 message with `status: gaps` or `status: error` and all required fields present (valid gaps/error)
+
+**Step 2 — Retry with stricter instructions:**
+
+Shut down the failed agent:
+```json
+SendMessage({ type: "shutdown_request", recipient: "agent-N", content: "Invalid result, retrying" })
+```
+
+Spawn a replacement with the same name and an augmented prompt. Prepend this retry preamble to the original prompt:
+
+**For workers (invalid result retry):**
+```
+RETRY CONTEXT: Your previous run produced an invalid result that could not be processed.
+The team-lead could not extract a valid verdict from your output.
+
+You MUST include v2 structured headers as the FIRST lines of your completion message:
+
+role: worker
+task_id: <your-task-id>
+status: pass|gaps|error
+git_range: <base>..<head>  (required when status=pass)
+issues: <description>  (required when status=gaps or error)
+
+Then include a blank line followed by your freeform explanation.
+
+IMPORTANT: Do NOT skip the headers. Do NOT embed them inside prose. They must be the very first lines of your message.
+
+---
+<original task prompt follows>
+```
+
+**For reviewers (invalid result retry):**
+```
+RETRY CONTEXT: Your previous review produced an invalid result that could not be processed.
+The team-lead could not extract a valid verdict from your output.
+
+You MUST include v2 structured headers as the FIRST lines of your completion message:
+
+role: <spec-reviewer|code-quality-reviewer>
+task_id: <your-task-id>
+status: pass|gaps|error
+issues: <description>  (required when status=gaps or error)
+
+Then include a blank line followed by your freeform review body.
+
+IMPORTANT: Do NOT skip the headers. Do NOT embed them inside prose. They must be the very first lines of your message.
+
+---
+<original review prompt follows>
+```
+
+**Codex agents (via codex-cli):** When retrying a Codex agent, the retry preamble is added to the `prompt_content` field in the codex-cli spawn prompt. The codex-cli adapter will include it in the Codex prompt, and the adapter itself always emits v2 headers deterministically. If the adapter still fails (e.g., Codex returns empty output that the adapter can't normalize), the retry preamble won't help — escalate after the second attempt.
+
+**Step 3 — Escalation after exhausting retries:**
+
+After 2 failed attempts (original + 1 retry):
+
+For workers:
+1. Shut down the failed worker-N
+2. Mark the task as blocked: `TaskUpdate({ taskId: "<task-N-id>", status: "pending", description: "BLOCKED: worker produced invalid results after retry" })`
+3. Log: "worker-N exhausted retries for task N — marking task blocked"
+4. Continue with other tasks (blocked task's dependents stay blocked)
+
+For reviewers:
+1. Shut down the failed reviewer
+2. Spawn a replacement reviewer with a fresh prompt (no retry preamble — this is a fresh start, not a retry)
+3. If the fresh reviewer also produces an invalid result, mark the task as blocked
+4. Log: "reviewer-N exhausted retries for task N — spawning fresh replacement" or "— marking task blocked"
+
+**Interaction with existing error handling:**
+
+This retry protocol is separate from the existing worker/reviewer error handling (section "Error handling per task"):
+- **Invalid result retry** (this section): Result arrives but can't be parsed → retry once with stricter instructions
+- **Worker failure retry** (existing): Worker crashes, times out, or reports `status: error` → shut down, retry with fresh worker
+- **Review loop cap** (existing): Reviewer rejects 3x → escalate
+
+A single task can trigger both: an invalid result retry, then after the retried agent produces a valid `status: error`, the existing worker failure retry logic takes over. The retry counters are independent.
 
 ### 5.5 Shut down task-N's agents
 
@@ -340,9 +443,12 @@ Continue the wait-for-any/review/shutdown/re-check cycle until `TaskList` shows 
 ### Error handling per task
 
 Current retry/escalation logic applies per-task:
-- Worker fails → shut down, retry with fresh `worker-N` (one retry)
+- Worker produces invalid result → retry once with stricter instructions (section 5.4b)
+- Worker fails (crash/timeout/error status) → shut down, retry with fresh `worker-N` (one retry)
+- Reviewer produces invalid result → retry once with stricter instructions (section 5.4b)
 - Reviewer rejects 3x → escalate, set status=blocked
 - A blocked task does NOT block unrelated tasks — only its dependents stay blocked
+- Invalid-result retry and failure retry are independent counters
 
 ---
 
