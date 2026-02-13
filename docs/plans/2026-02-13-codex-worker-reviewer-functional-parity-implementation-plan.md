@@ -29,13 +29,12 @@ Functional parity means:
    - TDD and verification expectations.
    - Repo and worktree constraints.
    - Completion grammar requirements.
-6. Invalid result handling: retry once, then fallback to Claude for that run only.
-7. Fallback stickiness: per-run only (non-sticky).
-8. Responsibility split:
+6. Invalid result handling: retry once with stricter instructions. Codex-to-Claude fallback deferred.
+7. Responsibility split:
    - Adapter normalizes result shape.
-   - Team lead enforces retry and fallback policy.
-9. Rollout scope: worker plus both reviewers from day one.
-10. Guardrail storage: docs plus tests.
+   - Team lead enforces retry policy.
+8. Rollout scope: worker plus both reviewers from day one.
+9. Guardrail storage: docs plus tests.
 
 ## 3. Scope
 
@@ -43,8 +42,8 @@ Functional parity means:
 
 - `worker-N`, `spec-reviewer-N`, and `code-quality-reviewer-N` Codex routing and execution.
 - Shared role contract across Claude and Codex for those three roles.
-- Parser support for both legacy Claude message grammar and new normalized grammar.
-- Retry and fallback behavior in team-lead loop.
+- Skill and agent definition updates so team-lead recognizes v2 structured output and codex-cli emits it.
+- Retry behavior in team-lead loop.
 
 ### Out Of Scope
 
@@ -76,7 +75,7 @@ All worker and reviewer outputs should normalize to the same internal schema.
 
 Required header fields:
 - `role`: `worker|spec-reviewer|code-quality-reviewer`
-- `task_id`: numeric task id
+- `task_id`: string (TaskCreate UUID)
 - `status`: `pass|gaps|error`
 - `git_range`: required for `role=worker` and `status=pass`
 - `issues`: required for `status=gaps|error`
@@ -93,21 +92,24 @@ A freeform body remains allowed and expected for context and evidence.
 - reviewer + gaps or error: require `task_id`, `status`, `issues`
 - unknown or mismatched `task_id`: invalid result
 
-### 5.2 Transitional compatibility
+### 5.2 Permanent dual-grammar support
 
-Team lead parser accepts:
-- legacy Claude grammar (current messages)
-- v2 normalized contract
+Team lead accepts both formats permanently:
+- legacy Claude grammar (current freeform messages)
+- v2 normalized contract (structured headers)
 
-Legacy outputs are mapped to the same internal shape before policy decisions.
+Claude agents produce freeform text — v2 headers are a best-effort convention, not a guaranteed parse. Team-lead must always handle legacy gracefully. For Codex outputs, the codex-cli adapter skill enforces v2 deterministically before reporting to team-lead.
 
-## 6. Retry And Fallback Policy
+Both formats are mapped to the same internal shape before policy decisions.
+
+## 6. Retry Policy
 
 For invalid or ambiguous results:
 1. Adapter attempts normalization first.
 2. Team lead retries Codex once with stricter instructions.
-3. If still invalid, fallback to Claude for that run only.
-4. Next run remains eligible for Codex routing.
+3. If still invalid, mark the run as failed and escalate per existing team-lead error handling (task blocked after exhausting retries).
+
+Codex-to-Claude fallback (re-spawning with a different subagent_type mid-task) is deferred to a future iteration.
 
 For valid results with `status=gaps|error`, team lead follows normal remediation loop and spawns the next role as usual.
 
@@ -130,48 +132,48 @@ Update these docs to reflect the shared contract and split responsibilities:
 - optional architecture alignment note in `docs/architecture/orchestration-architecture.md`
 
 Expected doc outcomes:
-- clear v2 contract definition
-- compatibility rules for legacy grammar
-- clear retry and fallback decision flow
+- clear v2 contract definition in agent definitions and skills
+- permanent dual-grammar rules (v2 + legacy) in team-lead
+- clear retry-once decision flow
 - explicit statement that team lead launches reviewers
 
 ## 9. Implementation Phases
 
-### Phase A: Contract and parser foundations
+**Implementation note:** Most changes in this plan are skill and agent definition updates (markdown files), not Rust or TypeScript code. The "contract" and "normalization" live in skill prompts interpreted by Claude, not in programmatic parsers. The only code changes are potential exec-codex envelope tweaks and new harness test scenarios.
 
-- Define normalized in-memory result shape.
-- Add parser path for v2 headers.
-- Preserve legacy parser path for Claude outputs.
-- Add validator enforcing acceptance matrix.
+### Phase A: Contract, adapter normalization, and skill updates
 
-Deliverable: parser can evaluate both legacy and v2 outputs with deterministic outcomes.
+Update all skill and agent definitions to define and emit the v2 result contract:
 
-### Phase B: Adapter normalization
+- Update `agents/implementer.md`, `agents/spec-reviewer.md`, `agents/code-quality-reviewer.md` to request v2 structured headers in their output format sections.
+- Update `skills/codex-cli/SKILL.md` Step 4-5 to emit v2 headers deterministically when reporting results to team-lead.
+- Update `skills/team-lead-init/SKILL.md` to recognize v2 headers from both Claude and Codex agents, with permanent legacy fallback for Claude's freeform outputs.
+- Update `skills/executing-plans/SKILL.md` with the same dual-grammar recognition.
+- Add acceptance matrix validation logic to team-lead skill (required fields per role+status).
+- Normalize common Codex failure classes into deterministic `error` outputs in codex-cli skill.
 
-- Update Codex adapter instructions and handling to emit normalized v2 headers plus body.
-- Normalize common failure classes into deterministic `error` outputs.
+Deliverable: all skills and agents specify v2 contract; team-lead handles both v2 and legacy; codex-cli emits v2 deterministically.
 
-Deliverable: Codex role runs produce parser-ready structured outputs.
+### Phase B: Team-lead retry enforcement
 
-### Phase C: Team-lead policy enforcement
+- Add retry-once logic in team-lead decision path for invalid Codex results.
+- On second failure, mark task as failed per existing escalation protocol.
 
-- Add retry-once and per-run fallback logic in team-lead decision path.
-- Ensure fallback route is role-local and run-local.
+Deliverable: invalid Codex outputs trigger one retry with stricter instructions before escalation.
 
-Deliverable: invalid Codex outputs recover automatically or degrade safely.
-
-### Phase D: End-to-end role rollout
+### Phase C: End-to-end role rollout
 
 - Enable Codex routing for worker and both reviewer roles under the new contract.
 - Confirm team-lead role progression is unchanged.
+- Add new harness scenario for Codex worker flow (04-codex-reviewer only covers reviewers today).
 
 Deliverable: complete task loop runs with Codex-backed worker and reviewers.
 
-### Phase E: Verification and pilot
+### Phase D: Verification and pilot
 
 - Run harness scenarios including malformed output cases.
 - Run controlled dev pilot.
-- Validate parity signals and fallback rates.
+- Validate parity signals and retry rates.
 
 Deliverable: go/no-go report for broader use.
 
@@ -187,9 +189,8 @@ Deliverable: go/no-go report for broader use.
 
 ### 10.2 Policy tests
 
-- invalid Codex result triggers one retry
-- second invalid result triggers Claude fallback
-- fallback is non-sticky (next turn can route back to Codex)
+- invalid Codex result triggers one retry with stricter instructions
+- second invalid result escalates per existing team-lead error handling (task blocked)
 
 ### 10.3 Harness and integration tests
 
@@ -197,36 +198,39 @@ Deliverable: go/no-go report for broader use.
 - reviewer Codex pass flow
 - worker gaps flow with follow-up turn
 - reviewer gaps flow with follow-up worker turn
-- malformed Codex output flow verifying retry and fallback
+- malformed Codex output flow verifying retry and escalation
 
 ## 11. Acceptance Criteria
 
 The rollout is complete when all are true:
-1. Team lead can process both legacy and v2 role outputs.
+1. Team lead can process both legacy and v2 role outputs permanently.
 2. Codex worker and both reviewers can complete tasks end-to-end.
-3. Retry-once then per-run fallback behavior is deterministic.
+3. Retry-once behavior is deterministic; second failure escalates to task blocked.
 4. No regression in task lifecycle state transitions.
-5. Docs and tests both reflect the final contract.
+5. Skills, agent definitions, and tests all reflect the final contract.
 
 ## 12. Risks And Mitigations
 
 Risk: result-format drift between engines.
-- Mitigation: shared v2 contract and parser validation.
+- Mitigation: shared v2 contract in skill/agent definitions; codex-cli enforces v2 deterministically.
+
+Risk: Claude agents emit v2 headers inconsistently.
+- Mitigation: permanent dual-grammar support in team-lead — v2 is best-effort for Claude, not a hard requirement. Legacy fallback is always available.
 
 Risk: team-lead ambiguity handling causes stalls.
-- Mitigation: strict retry and fallback policy.
+- Mitigation: strict retry policy with escalation after second failure.
 
 Risk: parity regressions over time.
-- Mitigation: contract tests plus harness scenarios in CI.
+- Mitigation: harness scenarios in CI covering both Claude and Codex paths.
 
 ## 13. Execution Checklist
 
-- [ ] Update shared contract docs
-- [ ] Implement parser compatibility layer
-- [ ] Implement adapter normalization behavior
-- [ ] Implement retry and per-run fallback
-- [ ] Add unit and integration tests
-- [ ] Run harness full scenarios
+- [ ] Update agent definitions (implementer, spec-reviewer, code-quality-reviewer) with v2 output contract
+- [ ] Update codex-cli skill to emit v2 headers deterministically
+- [ ] Update team-lead-init and executing-plans skills with dual-grammar recognition
+- [ ] Add retry-once logic for invalid Codex results in team-lead skill
+- [ ] Add harness scenario for Codex worker flow
+- [ ] Run harness full scenarios (Claude and Codex paths)
 - [ ] Run dev pilot and capture results
 - [ ] Approve broader rollout
 
@@ -272,15 +276,11 @@ The only potential *code* changes are: (1) adding v2 header validation to `tina-
 - **Existing multi-CLI design:** `docs/plans/2026-02-09-multi-cli-agent-support-design.md` — parent design; this plan builds on top
 - **Connects to:** `tina-session exec-codex` for Codex execution, Convex `orchestrationEvents` for observability
 
-### Issues requiring resolution
+### Issues resolved
 
-1. **Section 5 `task_id` type mismatch:** Plan says "numeric task id" but the system uses string UUIDs from TaskCreate. Fix: change to `task_id: string (TaskCreate ID)`.
-
-2. **LLM output reliability risk unaddressed:** The plan treats v2 headers as deterministic, but Claude agents produce freeform text. The acceptance matrix (Section 5.1) implies hard validation — this only works for Codex outputs processed by the codex-cli adapter skill. For Claude agents, team-lead must use best-effort parsing with legacy fallback permanently, not just as a transitional measure.
-
-3. **Phase A/B boundary is blurry:** Both are skill-doc updates. Phase A updates team-lead to recognize v2 format; Phase B updates codex-cli to emit it. Consider: these could be one phase since neither involves substantial code and they're tightly coupled.
-
-4. **Missing: what triggers Codex-to-Claude fallback at the skill level?** Section 6 says "team lead retries Codex once then falls back to Claude" but `team-lead-init/SKILL.md` Step 5.2 currently just spawns workers — there's no infrastructure for re-spawning with a different `subagent_type`. The plan needs to specify how team-lead switches from `tina:codex-cli` to `tina:implementer` (or `tina:spec-reviewer`) mid-task.
-
-5. **Section 9 Phase D assumes all prior infrastructure.** The 04-codex-reviewer harness scenario only tests reviewer role. Worker parity needs a new scenario.
+1. **~~Section 5 `task_id` type mismatch~~** — Fixed: changed to `task_id: string (TaskCreate UUID)`.
+2. **~~LLM output reliability~~** — Fixed: Section 5.2 now specifies permanent dual-grammar support; v2 is best-effort for Claude, deterministic for Codex via adapter.
+3. **~~Phase A/B boundary~~** — Fixed: combined into single Phase A covering contract, adapter, and skill updates.
+4. **~~Codex-to-Claude fallback~~** — Deferred: fallback removed from scope. Retry once then escalate per existing error handling.
+5. **~~Missing worker harness scenario~~** — Fixed: Phase C now explicitly includes new Codex worker scenario.
 
