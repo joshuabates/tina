@@ -168,6 +168,35 @@ fn team_member_to_args(member: &TeamMemberRecord) -> BTreeMap<String, Value> {
     args
 }
 
+pub fn terminal_session_to_args(session: &TerminalSessionRecord) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert(
+        "sessionName".into(),
+        Value::from(session.session_name.as_str()),
+    );
+    args.insert(
+        "tmuxPaneId".into(),
+        Value::from(session.tmux_pane_id.as_str()),
+    );
+    args.insert("label".into(), Value::from(session.label.as_str()));
+    args.insert("cli".into(), Value::from(session.cli.as_str()));
+    args.insert("status".into(), Value::from(session.status.as_str()));
+    if let Some(ref ct) = session.context_type {
+        args.insert("contextType".into(), Value::from(ct.as_str()));
+    }
+    if let Some(ref ci) = session.context_id {
+        args.insert("contextId".into(), Value::from(ci.as_str()));
+    }
+    if let Some(ref cs) = session.context_summary {
+        args.insert("contextSummary".into(), Value::from(cs.as_str()));
+    }
+    args.insert("createdAt".into(), Value::from(session.created_at));
+    if let Some(ended) = session.ended_at {
+        args.insert("endedAt".into(), Value::from(ended));
+    }
+    args
+}
+
 fn register_team_to_args(team: &RegisterTeamRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("teamName".into(), Value::from(team.team_name.as_str()));
@@ -2057,6 +2086,75 @@ mod tests {
         assert!(args.get("model").is_none());
         assert!(args.get("joinedAt").is_none());
         assert_eq!(args.len(), 4);
+    }
+
+    #[test]
+    fn test_terminal_session_to_args_all_fields() {
+        let session = TerminalSessionRecord {
+            session_name: "tina-adhoc-abc123".to_string(),
+            tmux_pane_id: "%412".to_string(),
+            label: "Discuss: Add auth middleware".to_string(),
+            cli: "claude".to_string(),
+            status: "active".to_string(),
+            context_type: Some("task".to_string()),
+            context_id: Some("task-id-123".to_string()),
+            context_summary: Some("Review auth".to_string()),
+            created_at: 1707350400000.0,
+            ended_at: Some(1707354000000.0),
+        };
+
+        let args = terminal_session_to_args(&session);
+
+        assert_eq!(
+            args.get("sessionName"),
+            Some(&Value::from("tina-adhoc-abc123"))
+        );
+        assert_eq!(args.get("tmuxPaneId"), Some(&Value::from("%412")));
+        assert_eq!(
+            args.get("label"),
+            Some(&Value::from("Discuss: Add auth middleware"))
+        );
+        assert_eq!(args.get("cli"), Some(&Value::from("claude")));
+        assert_eq!(args.get("status"), Some(&Value::from("active")));
+        assert_eq!(args.get("contextType"), Some(&Value::from("task")));
+        assert_eq!(args.get("contextId"), Some(&Value::from("task-id-123")));
+        assert_eq!(
+            args.get("contextSummary"),
+            Some(&Value::from("Review auth"))
+        );
+        assert_eq!(
+            args.get("createdAt"),
+            Some(&Value::from(1707350400000.0f64))
+        );
+        assert_eq!(
+            args.get("endedAt"),
+            Some(&Value::from(1707354000000.0f64))
+        );
+        assert_eq!(args.len(), 10);
+    }
+
+    #[test]
+    fn test_terminal_session_to_args_minimal() {
+        let session = TerminalSessionRecord {
+            session_name: "tina-adhoc-xyz".to_string(),
+            tmux_pane_id: "%500".to_string(),
+            label: "Quick chat".to_string(),
+            cli: "codex".to_string(),
+            status: "active".to_string(),
+            context_type: None,
+            context_id: None,
+            context_summary: None,
+            created_at: 1707350400000.0,
+            ended_at: None,
+        };
+
+        let args = terminal_session_to_args(&session);
+
+        assert!(args.get("contextType").is_none());
+        assert!(args.get("contextId").is_none());
+        assert!(args.get("contextSummary").is_none());
+        assert!(args.get("endedAt").is_none());
+        assert_eq!(args.len(), 6);
     }
 
     // --- Result extraction tests ---

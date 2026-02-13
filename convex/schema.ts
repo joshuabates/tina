@@ -109,6 +109,7 @@ export default defineSchema({
     agentType: v.optional(v.string()),
     model: v.optional(v.string()),
     joinedAt: v.optional(v.string()),
+    tmuxPaneId: v.optional(v.string()),
     recordedAt: v.string(),
   })
     .index("by_orchestration", ["orchestrationId"])
@@ -400,4 +401,19 @@ export default defineSchema({
   })
     .index("by_orchestration", ["orchestrationId"])
     .index("by_orchestration_gate", ["orchestrationId", "gateId"]),
+
+  terminalSessions: defineTable({
+    sessionName: v.string(),
+    tmuxPaneId: v.string(),
+    label: v.string(),
+    cli: v.string(),
+    status: v.union(v.literal("active"), v.literal("ended")),
+    contextType: v.optional(v.string()),
+    contextId: v.optional(v.string()),
+    contextSummary: v.optional(v.string()),
+    createdAt: v.number(),
+    endedAt: v.optional(v.number()),
+  })
+    .index("by_status", ["status"])
+    .index("by_sessionName", ["sessionName"]),
 });

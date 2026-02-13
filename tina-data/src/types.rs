@@ -64,6 +64,21 @@ pub struct TeamMemberRecord {
     pub recorded_at: String,
 }
 
+/// Terminal session record matching the Convex `terminalSessions` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerminalSessionRecord {
+    pub session_name: String,
+    pub tmux_pane_id: String,
+    pub label: String,
+    pub cli: String,
+    pub status: String,
+    pub context_type: Option<String>,
+    pub context_id: Option<String>,
+    pub context_summary: Option<String>,
+    pub created_at: f64,
+    pub ended_at: Option<f64>,
+}
+
 /// Team registration input (for `teams:registerTeam`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegisterTeamRecord {

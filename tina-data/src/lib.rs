@@ -13,6 +13,6 @@ pub mod generated {
 pub use convex_client::TinaConvexClient;
 pub use convex_client::{
     event_to_args, orchestration_event_to_args, orchestration_to_args, phase_to_args,
-    rollup_to_args, span_to_args,
+    rollup_to_args, span_to_args, terminal_session_to_args,
 };
 pub use types::*;
