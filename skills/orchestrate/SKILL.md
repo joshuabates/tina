@@ -650,6 +650,7 @@ TaskCreate {
     "phase_num": <N>,
     "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
     "design_id": "<DESIGN_ID or null>",
+    "feature_name": "<FEATURE_NAME>",
     "output_path": "<WORKTREE_PATH>/.claude/tina/reports/phase-<N>-review.md"
   }
 }
@@ -824,7 +825,7 @@ Then: Mark execute-phase-N as in_progress
 **Phase reviewer spawn:**
 
 When: execute-phase-N complete
-Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, and git_range
+Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, feature_name, and git_range
 
 Run routing check on the action's model:
 
