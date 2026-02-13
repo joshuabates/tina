@@ -117,19 +117,40 @@ Parse the JSON envelope printed to stdout by `exec-codex`:
 }
 ```
 
-Map status to orchestration result based on role:
+### Normalize to v2 fields
 
-**Executor results:**
-- `status == "completed"` and `exit_code == 0`: extract git range from stdout if present, result is `pass`
-- `status == "completed"` and `exit_code != 0`: result is `gaps`, extract issues from stderr/stdout
-- `status == "failed"`: result is `error`
-- `status == "timed_out"`: result is `error` with timeout context
+After parsing the JSON envelope, build a v2 result struct with these fields:
 
-**Reviewer results:**
-- `status == "completed"` and `exit_code == 0`: parse stdout for pass/gaps verdict
-- `status == "completed"` and `exit_code != 0`: result is `gaps`, extract issues
-- `status == "failed"`: result is `error`
-- `status == "timed_out"`: result is `error` with timeout context
+| Field | Source |
+|-------|--------|
+| `role` | From spawn prompt `role` field, mapped: `executor` → `worker`, `reviewer` → infer from spawn name (`spec-reviewer-N` or `code-quality-reviewer-N`) |
+| `task_id` | From spawn prompt `task_id` field |
+| `status` | Mapped from envelope (see mapping table below) |
+| `git_range` | Extracted from stdout if present (pattern: `<hash>..<hash>`) |
+| `files_changed` | Extracted from stdout if present |
+| `issues` | Extracted from stdout/stderr on non-pass |
+| `confidence` | For reviewers only: `high` if exit_code=0, `medium` otherwise |
+
+**Status mapping:**
+
+| Envelope status | exit_code | v2 status |
+|----------------|-----------|-----------|
+| `completed` | 0 | `pass` |
+| `completed` | non-zero | `gaps` |
+| `failed` | any | `error` |
+| `timed_out` | any | `error` |
+
+**Failure class normalization:**
+
+Normalize common Codex failure modes into deterministic error outputs:
+
+| Failure class | Detection | v2 output |
+|---------------|-----------|-----------|
+| Timeout | `status == "timed_out"` | `status: error`, `issues: codex timed out after {duration}s` |
+| Binary not found | exec-codex launch error | `status: error`, `issues: codex unavailable - {detail}` |
+| Invalid JSON | stdout not parseable | `status: error`, `issues: codex returned invalid output` |
+| Non-zero exit | `exit_code != 0` | `status: gaps`, `issues: {first 200 chars of stderr or stdout}` |
+| Empty stdout | `stdout == ""` and `exit_code == 0` | `status: error`, `issues: codex returned empty output` |
 
 **Planner results:**
 - `status == "completed"` and `exit_code == 0`: plan path from output, result is `pass`
@@ -139,57 +160,117 @@ Map status to orchestration result based on role:
 - `status == "completed"` and `exit_code == 0`: parse stdout for pass/warning/stop
 - Otherwise: result is `error`
 
-## STEP 5: Report result
+## STEP 5: Report result with v2 headers
 
-Send a message to the team lead using the same format patterns as native Claude teammates. The orchestrator's event loop parses these patterns, so format compatibility is critical.
+Send a message to the team lead with v2 structured headers. The v2 headers are machine-parseable and the freeform body provides context.
 
-**Executor completion:**
+**Worker completion (role=executor):**
+
+Pass:
 ```
 SendMessage to team lead:
-  "execute-$PHASE complete. Git range: <range>"
-  # or on failure:
-  "execute-$PHASE error: <reason>"
+  content: |
+    role: worker
+    task_id: $TASK_ID
+    status: pass
+    git_range: <extracted range>
+    files_changed: <extracted list>
+
+    Codex run $RUN_ID completed in ${DURATION_SECS}s.
+    <relevant stdout excerpt>
+  summary: "execute-$PHASE complete"
 ```
 
-**Reviewer completion:**
+Gaps:
 ```
 SendMessage to team lead:
-  "review-$PHASE complete (pass)"
-  # or with gaps:
-  "review-$PHASE complete (gaps): <issue1>, <issue2>"
-  # or on failure:
-  "review-$PHASE error: <reason>"
+  content: |
+    role: worker
+    task_id: $TASK_ID
+    status: gaps
+    issues: <normalized issues>
+
+    Codex run $RUN_ID completed with issues in ${DURATION_SECS}s.
+    <relevant stdout/stderr excerpt>
+  summary: "execute-$PHASE gaps"
 ```
 
-**Planner completion:**
+Error:
 ```
 SendMessage to team lead:
-  "plan-phase-$PHASE complete. PLAN_PATH: <path>"
-  # or on failure:
-  "plan-phase-$PHASE error: <reason>"
+  content: |
+    role: worker
+    task_id: $TASK_ID
+    status: error
+    issues: <normalized error>
+
+    Codex run $RUN_ID failed after ${DURATION_SECS}s.
+    <error context>
+  summary: "execute-$PHASE error"
 ```
 
-**Validator completion:**
+**Reviewer completion (role=reviewer):**
+
+Pass:
 ```
 SendMessage to team lead:
-  "VALIDATION_STATUS: Pass"
-  # or:
-  "VALIDATION_STATUS: Warning"
-  # or:
-  "VALIDATION_STATUS: Stop"
+  content: |
+    role: <spec-reviewer|code-quality-reviewer>
+    task_id: $TASK_ID
+    status: pass
+    confidence: <high|medium>
+
+    Codex review run $RUN_ID completed in ${DURATION_SECS}s.
+    <relevant review output>
+  summary: "review-$PHASE complete (pass)"
 ```
 
-**Timeout errors:**
+Gaps:
 ```
 SendMessage to team lead:
-  "$TASK_ID error: codex timed out after $DURATION_SECS seconds"
+  content: |
+    role: <spec-reviewer|code-quality-reviewer>
+    task_id: $TASK_ID
+    status: gaps
+    confidence: <high|medium|low>
+    issues: <normalized issues>
+
+    Codex review run $RUN_ID found issues in ${DURATION_SECS}s.
+    <issue details>
+  summary: "review-$PHASE complete (gaps)"
 ```
 
-**Launch errors:**
+Error:
 ```
 SendMessage to team lead:
-  "$TASK_ID error: codex unavailable - <error detail>"
+  content: |
+    role: <spec-reviewer|code-quality-reviewer>
+    task_id: $TASK_ID
+    status: error
+    issues: <normalized error>
+
+    Codex review run $RUN_ID failed after ${DURATION_SECS}s.
+  summary: "review-$PHASE error"
 ```
+
+**Planner and Validator:** Keep existing message formats (planner and validator parity is out of scope for this rollout).
+
+**IMPORTANT:** All v2 headers must be emitted as the first lines of the message content, separated from the freeform body by a blank line. This allows team-lead to parse headers deterministically when present.
+
+## Failure Class Reference
+
+These common Codex failure patterns are normalized deterministically before reporting:
+
+| Scenario | Raw output | v2 report |
+|----------|-----------|-----------|
+| Clean success | exit_code=0, stdout has code output | `status: pass`, extract git_range from stdout |
+| Test failures | exit_code=1, stderr has test output | `status: gaps`, `issues: test failures: {summary}` |
+| Timeout (300s) | timed_out status | `status: error`, `issues: codex timed out after 300s` |
+| Codex crash | failed status, stderr has stack trace | `status: error`, `issues: codex process failed: {first line}` |
+| Empty output | exit_code=0, empty stdout | `status: error`, `issues: codex returned empty output` |
+| Unparseable JSON | stdout is not valid JSON envelope | `status: error`, `issues: codex returned invalid output` |
+
+The adapter MUST normalize all of these before sending to team-lead. Team-lead should never receive raw Codex error output.
 
 ## Error Handling Summary
 
