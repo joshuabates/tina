@@ -44,4 +44,35 @@ describe("fetchDaemon", () => {
       "Daemon /diff: 400 Missing worktree param",
     )
   })
+
+  it("sends JSON body for POST requests", async () => {
+    const responseData = { sessionName: "s1", tmuxPaneId: "p1" }
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify(responseData), { status: 200 }),
+    )
+
+    const body = { label: "Test", cli: "claude" }
+    const result = await fetchDaemon("/sessions", {}, "POST", body)
+
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(url).toContain("/sessions")
+    expect(init).toMatchObject({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    expect(result).toEqual(responseData)
+  })
+
+  it("does not set body or content-type for GET requests", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify([]), { status: 200 }),
+    )
+
+    await fetchDaemon("/diff", { worktree: "/tmp" })
+
+    const init = vi.mocked(globalThis.fetch).mock.calls[0][1] as RequestInit
+    expect(init.body).toBeUndefined()
+    expect(init.headers).toBeUndefined()
+  })
 })

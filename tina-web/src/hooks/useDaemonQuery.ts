@@ -33,6 +33,7 @@ export async function fetchDaemon<T>(
   path: string,
   params: Record<string, string>,
   method: string = "GET",
+  body?: unknown,
 ): Promise<T> {
   const url = new URL(path, DAEMON_BASE)
   if (method === "GET") {
@@ -40,7 +41,12 @@ export async function fetchDaemon<T>(
       url.searchParams.set(k, v)
     }
   }
-  const resp = await fetch(url.toString(), { method })
+  const init: RequestInit = { method }
+  if (body !== undefined) {
+    init.headers = { "Content-Type": "application/json" }
+    init.body = JSON.stringify(body)
+  }
+  const resp = await fetch(url.toString(), init)
   if (!resp.ok) {
     throw new Error(`Daemon ${path}: ${resp.status} ${await resp.text()}`)
   }

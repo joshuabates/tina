@@ -1,7 +1,8 @@
 import { useCallback } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { DAEMON_BASE } from "@/lib/daemon"
+import type { CreateSessionResponse } from "@/lib/daemon"
 import { buildModePath } from "@/lib/navigation"
+import { fetchDaemon } from "@/hooks/useDaemonQuery"
 
 interface CreateSessionOptions {
   label: string
@@ -9,11 +10,6 @@ interface CreateSessionOptions {
   contextType?: "task" | "plan" | "commit" | "design" | "freeform"
   contextId?: string
   contextSummary?: string
-}
-
-interface CreateSessionResponse {
-  sessionName: string
-  tmuxPaneId: string
 }
 
 export function useCreateSession() {
@@ -33,23 +29,19 @@ export function useCreateSession() {
     async (options: CreateSessionOptions) => {
       if (!projectId) return
 
-      const resp = await fetch(`${DAEMON_BASE}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await fetchDaemon<CreateSessionResponse>(
+        "/sessions",
+        {},
+        "POST",
+        {
           label: options.label,
           cli: options.cli ?? "claude",
           contextType: options.contextType,
           contextId: options.contextId,
           contextSummary: options.contextSummary,
-        }),
-      })
+        },
+      )
 
-      if (!resp.ok) {
-        throw new Error(`Failed to create session: ${resp.status}`)
-      }
-
-      const data = (await resp.json()) as CreateSessionResponse
       connectToPane(data.tmuxPaneId)
     },
     [projectId, connectToPane],

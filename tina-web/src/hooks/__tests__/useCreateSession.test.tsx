@@ -171,7 +171,7 @@ describe("useCreateSession", () => {
         act(async () => {
           await result.current.createAndConnect({ label: "Fail" })
         }),
-      ).rejects.toThrow("Failed to create session: 500")
+      ).rejects.toThrow("Daemon /sessions: 500 Server error")
     })
 
     it("does nothing when projectId is missing", async () => {

@@ -1,16 +1,12 @@
 import { useState } from "react"
 import { FormDialog } from "@/components/FormDialog"
-import { DAEMON_BASE } from "@/lib/daemon"
+import type { CreateSessionResponse } from "@/lib/daemon"
+import { fetchDaemon } from "@/hooks/useDaemonQuery"
 import styles from "@/components/FormDialog.module.scss"
 
 interface NewSessionDialogProps {
   onClose: () => void
   onCreated: (paneId: string) => void
-}
-
-interface CreateSessionResponse {
-  sessionName: string
-  tmuxPaneId: string
 }
 
 export function NewSessionDialog({ onClose, onCreated }: NewSessionDialogProps) {
@@ -27,17 +23,12 @@ export function NewSessionDialog({ onClose, onCreated }: NewSessionDialogProps) 
     setError(null)
 
     try {
-      const resp = await fetch(`${DAEMON_BASE}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: label.trim(), cli }),
-      })
-
-      if (!resp.ok) {
-        throw new Error(`Failed to create session: ${resp.status}`)
-      }
-
-      const data = (await resp.json()) as CreateSessionResponse
+      const data = await fetchDaemon<CreateSessionResponse>(
+        "/sessions",
+        {},
+        "POST",
+        { label: label.trim(), cli },
+      )
       onCreated(data.tmuxPaneId)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create session")

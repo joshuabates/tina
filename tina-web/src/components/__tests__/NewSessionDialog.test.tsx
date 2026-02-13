@@ -167,7 +167,9 @@ describe("NewSessionDialog", () => {
       const user = userEvent.setup()
       vi.stubGlobal(
         "fetch",
-        vi.fn().mockResolvedValue({ ok: false, status: 500 }),
+        vi.fn().mockResolvedValue(
+          new Response("Internal Server Error", { status: 500 }),
+        ),
       )
 
       renderDialog()
@@ -176,7 +178,7 @@ describe("NewSessionDialog", () => {
       await user.click(screen.getByRole("button", { name: /^create$/i }))
 
       expect(
-        screen.getByText(/failed to create session: 500/i),
+        screen.getByText(/Daemon \/sessions: 500 Internal Server Error/),
       ).toBeInTheDocument()
     })
 
