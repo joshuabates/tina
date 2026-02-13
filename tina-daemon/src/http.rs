@@ -228,6 +228,113 @@ mod tests {
             .is_some());
     }
 
+    /// Create a temp git repo with a known diff between `main` and `feature` branches.
+    ///
+    /// - `main` has hello.txt ("hello\nworld\n")
+    /// - `feature` modifies hello.txt and adds new.txt
+    ///
+    /// Returns the TempDir (repo is on the `feature` branch).
+    fn setup_test_repo() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path();
+
+        run_git(dir, &["init", "-b", "main"]);
+        run_git(dir, &["config", "user.email", "test@test.com"]);
+        run_git(dir, &["config", "user.name", "Test"]);
+
+        std::fs::write(dir.join("hello.txt"), "hello\nworld\n").unwrap();
+        run_git(dir, &["add", "hello.txt"]);
+        run_git(dir, &["commit", "-m", "initial"]);
+
+        run_git(dir, &["checkout", "-b", "feature"]);
+        std::fs::write(dir.join("hello.txt"), "hello\nmodified world\n").unwrap();
+        std::fs::write(dir.join("new.txt"), "new file content\n").unwrap();
+        run_git(dir, &["add", "."]);
+        run_git(dir, &["commit", "-m", "feature changes"]);
+
+        tmp
+    }
+
+    fn run_git(dir: &std::path::Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_diff_list_returns_changed_files() {
+        let repo = setup_test_repo();
+        let worktree = repo.path().to_str().unwrap();
+        let uri = format!(
+            "/diff?worktree={}&base=main",
+            urlencoding::encode(worktree)
+        );
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), 1_000_000)
+            .await
+            .unwrap();
+        let files: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(
+            files.len() >= 2,
+            "expected at least 2 changed files, got {}",
+            files.len()
+        );
+
+        let paths: Vec<&str> = files.iter().filter_map(|f| f["path"].as_str()).collect();
+        assert!(paths.contains(&"hello.txt"), "missing hello.txt in {paths:?}");
+        assert!(paths.contains(&"new.txt"), "missing new.txt in {paths:?}");
+    }
+
+    #[tokio::test]
+    async fn test_diff_file_returns_hunks() {
+        let repo = setup_test_repo();
+        let worktree = repo.path().to_str().unwrap();
+        let uri = format!(
+            "/diff/file?worktree={}&base=main&file=hello.txt",
+            urlencoding::encode(worktree)
+        );
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), 1_000_000)
+            .await
+            .unwrap();
+        let hunks: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert!(
+            !hunks.is_empty(),
+            "expected at least one hunk for hello.txt"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_at_ref_returns_content() {
+        let repo = setup_test_repo();
+        let worktree = repo.path().to_str().unwrap();
+        let uri = format!(
+            "/file?worktree={}&path=hello.txt&ref=main",
+            urlencoding::encode(worktree)
+        );
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), 1_000_000)
+            .await
+            .unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("hello"), "expected 'hello' in file content");
+        assert!(text.contains("world"), "expected 'world' in file content");
+    }
+
     /// Resolve the git repo root from CARGO_MANIFEST_DIR.
     fn repo_root() -> String {
         let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
