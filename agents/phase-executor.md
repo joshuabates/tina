@@ -2,7 +2,7 @@
 name: phase-executor
 description: |
   Executes a single phase using tina-session CLI.
-  Starts the phase, monitors status files, reports completion.
+  Starts the phase, waits via tina-session wait, reports completion.
 model: opus
 ---
 

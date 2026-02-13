@@ -4,6 +4,9 @@ _Last updated: 2026-02-11_
 
 This is the architecture of TINA as an **agentic orchestration system**.
 
+For runtime command/message contracts, use
+`docs/architecture/orchestration-runtime-protocol.md` as the canonical reference.
+
 The core is not crate boundaries. The core is:
 - skill-defined control protocols,
 - team and task topology,

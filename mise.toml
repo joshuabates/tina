@@ -122,7 +122,7 @@ run = "./tests/claude-code/run-skill-tests.sh"
 # --- Check (fast compile check) ---
 
 [tasks.check]
-description = "Cargo check all crates"
+description = "Cargo check all crates + CLI/doc parity"
 run = """
 set -e
 cargo check --manifest-path tina-session/Cargo.toml
@@ -130,7 +130,12 @@ cargo check --manifest-path tina-data/Cargo.toml
 cargo check --manifest-path tina-daemon/Cargo.toml
 cargo check --manifest-path tina-monitor/Cargo.toml
 cargo check --manifest-path tina-harness/Cargo.toml
+./scripts/check-cli-doc-parity.sh
 """
+
+[tasks."check:cli-parity"]
+description = "Validate tina-session command paths referenced by active docs/skills/agents"
+run = "./scripts/check-cli-doc-parity.sh"
 
 # --- Harness ---
 

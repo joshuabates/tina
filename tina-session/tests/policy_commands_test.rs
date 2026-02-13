@@ -100,7 +100,7 @@ fn set_role_model_rejects_invalid_role() {
 }
 
 #[test]
-fn set_role_model_rejects_invalid_model() {
+fn set_role_model_rejects_backticks_in_model() {
     Command::new(tina_session_bin())
         .args([
             "orchestrate",
@@ -110,11 +110,11 @@ fn set_role_model_rejects_invalid_model() {
             "--role",
             "executor",
             "--model",
-            "gpt4",
+            "`gpt4`",
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("invalid model"));
+        .stderr(predicate::str::contains("must not contain backticks"));
 }
 
 // ====================================================================
@@ -124,7 +124,16 @@ fn set_role_model_rejects_invalid_model() {
 #[test]
 fn task_edit_rejects_missing_feature() {
     Command::new(tina_session_bin())
-        .args(["orchestrate", "task-edit", "--phase", "1", "--task", "1", "--revision", "0"])
+        .args([
+            "orchestrate",
+            "task-edit",
+            "--phase",
+            "1",
+            "--task",
+            "1",
+            "--revision",
+            "0",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("--feature"));
@@ -133,7 +142,16 @@ fn task_edit_rejects_missing_feature() {
 #[test]
 fn task_edit_rejects_missing_phase() {
     Command::new(tina_session_bin())
-        .args(["orchestrate", "task-edit", "--feature", "test", "--task", "1", "--revision", "0"])
+        .args([
+            "orchestrate",
+            "task-edit",
+            "--feature",
+            "test",
+            "--task",
+            "1",
+            "--revision",
+            "0",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("--phase"));
@@ -142,7 +160,16 @@ fn task_edit_rejects_missing_phase() {
 #[test]
 fn task_edit_rejects_missing_task() {
     Command::new(tina_session_bin())
-        .args(["orchestrate", "task-edit", "--feature", "test", "--phase", "1", "--revision", "0"])
+        .args([
+            "orchestrate",
+            "task-edit",
+            "--feature",
+            "test",
+            "--phase",
+            "1",
+            "--revision",
+            "0",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("--task"));
@@ -151,7 +178,16 @@ fn task_edit_rejects_missing_task() {
 #[test]
 fn task_edit_rejects_missing_revision() {
     Command::new(tina_session_bin())
-        .args(["orchestrate", "task-edit", "--feature", "test", "--phase", "1", "--task", "1"])
+        .args([
+            "orchestrate",
+            "task-edit",
+            "--feature",
+            "test",
+            "--phase",
+            "1",
+            "--task",
+            "1",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("--revision"));
@@ -161,16 +197,26 @@ fn task_edit_rejects_missing_revision() {
 fn task_edit_outputs_json_on_success() {
     let output = Command::new(tina_session_bin())
         .args([
-            "orchestrate", "task-edit",
-            "--feature", "test-feat",
-            "--phase", "1",
-            "--task", "3",
-            "--revision", "2",
-            "--subject", "New subject",
+            "orchestrate",
+            "task-edit",
+            "--feature",
+            "test-feat",
+            "--phase",
+            "1",
+            "--task",
+            "3",
+            "--revision",
+            "2",
+            "--subject",
+            "New subject",
         ])
         .output()
         .expect("failed to run");
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("stdout should be valid JSON");
     assert_eq!(json["success"], true);
@@ -191,7 +237,16 @@ fn task_edit_outputs_json_on_success() {
 #[test]
 fn task_insert_rejects_missing_feature() {
     Command::new(tina_session_bin())
-        .args(["orchestrate", "task-insert", "--phase", "1", "--after-task", "0", "--subject", "s"])
+        .args([
+            "orchestrate",
+            "task-insert",
+            "--phase",
+            "1",
+            "--after-task",
+            "0",
+            "--subject",
+            "s",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("--feature"));
@@ -201,10 +256,14 @@ fn task_insert_rejects_missing_feature() {
 fn task_insert_rejects_missing_subject() {
     Command::new(tina_session_bin())
         .args([
-            "orchestrate", "task-insert",
-            "--feature", "test",
-            "--phase", "1",
-            "--after-task", "0",
+            "orchestrate",
+            "task-insert",
+            "--feature",
+            "test",
+            "--phase",
+            "1",
+            "--after-task",
+            "0",
         ])
         .assert()
         .failure()
@@ -215,17 +274,28 @@ fn task_insert_rejects_missing_subject() {
 fn task_insert_outputs_json_on_success() {
     let output = Command::new(tina_session_bin())
         .args([
-            "orchestrate", "task-insert",
-            "--feature", "test-feat",
-            "--phase", "2",
-            "--after-task", "1",
-            "--subject", "New task",
-            "--model", "haiku",
-            "--depends-on", "1,2",
+            "orchestrate",
+            "task-insert",
+            "--feature",
+            "test-feat",
+            "--phase",
+            "2",
+            "--after-task",
+            "1",
+            "--subject",
+            "New task",
+            "--model",
+            "haiku",
+            "--depends-on",
+            "1,2",
         ])
         .output()
         .expect("failed to run");
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("stdout should be valid JSON");
     assert_eq!(json["success"], true);
@@ -245,7 +315,18 @@ fn task_insert_outputs_json_on_success() {
 #[test]
 fn task_set_model_rejects_missing_feature() {
     Command::new(tina_session_bin())
-        .args(["orchestrate", "task-set-model", "--phase", "1", "--task", "1", "--revision", "0", "--model", "opus"])
+        .args([
+            "orchestrate",
+            "task-set-model",
+            "--phase",
+            "1",
+            "--task",
+            "1",
+            "--revision",
+            "0",
+            "--model",
+            "opus",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("--feature"));
@@ -255,11 +336,16 @@ fn task_set_model_rejects_missing_feature() {
 fn task_set_model_rejects_missing_model() {
     Command::new(tina_session_bin())
         .args([
-            "orchestrate", "task-set-model",
-            "--feature", "test",
-            "--phase", "1",
-            "--task", "1",
-            "--revision", "0",
+            "orchestrate",
+            "task-set-model",
+            "--feature",
+            "test",
+            "--phase",
+            "1",
+            "--task",
+            "1",
+            "--revision",
+            "0",
         ])
         .assert()
         .failure()
@@ -270,16 +356,26 @@ fn task_set_model_rejects_missing_model() {
 fn task_set_model_outputs_json_on_success() {
     let output = Command::new(tina_session_bin())
         .args([
-            "orchestrate", "task-set-model",
-            "--feature", "test-feat",
-            "--phase", "1",
-            "--task", "5",
-            "--revision", "3",
-            "--model", "sonnet",
+            "orchestrate",
+            "task-set-model",
+            "--feature",
+            "test-feat",
+            "--phase",
+            "1",
+            "--task",
+            "5",
+            "--revision",
+            "3",
+            "--model",
+            "sonnet",
         ])
         .output()
         .expect("failed to run");
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("stdout should be valid JSON");
     assert_eq!(json["success"], true);
@@ -310,7 +406,11 @@ fn task_set_model_accepts_codex_model() {
         ])
         .output()
         .expect("failed to run");
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("stdout should be valid JSON");
     assert_eq!(json["success"], true);

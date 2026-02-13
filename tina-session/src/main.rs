@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -124,6 +124,12 @@ enum Commands {
     },
 
     /// Start phase execution (creates tmux, starts Claude, sends skill)
+    #[command(group(
+        ArgGroup::new("plan_source")
+            .required(true)
+            .multiple(false)
+            .args(["plan", "design_id"])
+    ))]
     Start {
         /// Feature name
         #[arg(long)]
@@ -133,12 +139,12 @@ enum Commands {
         #[arg(long)]
         phase: String,
 
-        /// Path to plan file
-        #[arg(long, required_unless_present = "design_id")]
+        /// Path to plan file (mutually exclusive with --design-id)
+        #[arg(long)]
         plan: Option<PathBuf>,
 
-        /// Convex design document ID used to materialize a phase plan.
-        #[arg(long, required_unless_present = "plan")]
+        /// Convex design document ID used to materialize a phase plan (mutually exclusive with --plan)
+        #[arg(long)]
         design_id: Option<String>,
 
         /// Working directory for tmux session. Defaults to orchestration worktree from Convex.
@@ -494,6 +500,9 @@ enum CheckCommands {
         #[arg(long)]
         path: PathBuf,
     },
+
+    /// Preflight checks for PATH/binary command-surface drift
+    Doctor,
 }
 
 #[derive(Subcommand)]
@@ -1399,6 +1408,8 @@ fn run() -> anyhow::Result<u8> {
             CheckCommands::Verify { cwd } => commands::check::verify(&cwd),
 
             CheckCommands::Plan { path } => commands::check::plan(&path),
+
+            CheckCommands::Doctor => commands::check::doctor(),
         },
 
         Commands::Name { feature, phase } => {

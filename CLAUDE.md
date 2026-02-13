@@ -35,14 +35,18 @@ mise run harness:run 01-single-phase-feature         # mock mode
 mise run harness:run 01-single-phase-feature -- --full  # real orchestration (~20 min)
 ```
 
-**Before e2e testing:** Always rebuild binaries first. Symlinks at `~/.local/bin/` point to `target/debug/` — stale binaries cause silent failures.
+**Before e2e testing:** Always rebuild binaries first. Symlinks at `~/.local/bin/` should point to release artifacts, and stale PATH resolution causes silent failures.
 ```bash
-cargo build -p tina-session -p tina-daemon && tina-session daemon stop && tina-session daemon start
+mise run install
+tina-session check doctor
+tina-session daemon stop && tina-session daemon start
 ```
 
 ## Architecture
 
 Mixed Rust/TypeScript monorepo. No Cargo workspace — each crate has its own `Cargo.toml`.
+
+Runtime protocol (canonical): `docs/architecture/orchestration-runtime-protocol.md`
 
 ### Crates
 
@@ -85,7 +89,7 @@ Schema in `convex/schema.ts`. Key tables: `orchestrations`, `phases`, `taskEvent
 | Config (macOS) | `~/Library/Application Support/tina/config.toml` |
 | Worktrees | `{project}/.worktrees/{feature}/` |
 | Plans | `docs/plans/YYYY-MM-DD-{feature}-phase-{N}.md` |
-| Team configs | `~/.claude/teams/{team-name}.json` |
+| Team configs | `~/.claude/teams/{team-name}/config.json` |
 | Task lists | `~/.claude/tasks/{team-name}/` |
 | Supervisor state | `{worktree}/.claude/tina/supervisor-state.json` |
 | Harness scenarios | `tina-harness/scenarios/` |

@@ -54,7 +54,7 @@ With ephemeral teams, only the current task's worker and reviewers might be acti
 - 1 spec-reviewer (if spec review in progress)
 - 1 code-quality-reviewer (if code quality review in progress)
 
-For each active agent (check team config at ~/.claude/teams/phase-N-execution/config.json):
+For each active agent (derive from `TaskList` entries with `status: in_progress` and `owner` set):
 
 Use SendMessage with:
 - type: "shutdown_request"

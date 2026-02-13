@@ -344,19 +344,15 @@ pub fn set_role_model(feature: &str, role: &str, model: &str) -> anyhow::Result<
         );
     }
 
-    let valid_models = [
-        "opus",
-        "sonnet",
-        "haiku",
-        "gpt-5.3-codex",
-        "gpt-5.3-codex-spark",
-    ];
-    if !valid_models.contains(&model) {
-        anyhow::bail!(
-            "invalid model: '{}'. Allowed: {}",
-            model,
-            valid_models.join(", ")
-        );
+    let model = model.trim();
+    if model.is_empty() {
+        anyhow::bail!("invalid model: value must not be empty");
+    }
+    if model.contains('`') {
+        anyhow::bail!("invalid model: value must not contain backticks");
+    }
+    if model.len() > 50 {
+        anyhow::bail!("invalid model: value must be 50 characters or fewer");
     }
 
     let mut state = tina_session::state::schema::SupervisorState::load(feature)?;

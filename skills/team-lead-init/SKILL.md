@@ -668,7 +668,7 @@ This creates the team container. NO workers or reviewers are spawned yet.
 
 **Team name coordination:**
 
-The team name is provided by the phase executor in the invocation prompt. The executor spawns team-lead-init with a specific team name, then monitors that team using `tina-monitor status team <name>`.
+The team name is provided by the phase executor in the invocation prompt. The executor spawns team-lead-init with a specific team name, then waits for completion using `tina-session wait --feature <feature> --phase <N>`.
 
 No file-based discovery is needed - the executor knows the team name because it defined it.
 

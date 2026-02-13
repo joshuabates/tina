@@ -136,6 +136,7 @@ mise run test:web               # test a single crate
 mise run test:skills            # run skill test suite
 mise run harness:run <scenario> # run a harness scenario
 mise run validate <path>        # validate orchestration state files
+tina-session check doctor       # preflight PATH/binary command-surface checks
 
 mise run bump:version 0.2.0    # set version across all Cargo.tomls
 mise run analyze:tokens <file>  # token usage analysis

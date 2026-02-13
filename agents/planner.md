@@ -8,6 +8,8 @@ model: opus
 
 You are creating an implementation plan for a specific phase of a design.
 
+> Scope note: This is the standalone planner agent. Orchestration runtime uses `agents/phase-planner.md`.
+
 ## Input
 
 You receive:

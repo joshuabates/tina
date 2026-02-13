@@ -1,6 +1,6 @@
 use std::fs;
-use std::path::Path;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use tina_session::error::SessionError;
 
@@ -320,6 +320,156 @@ pub fn verify(cwd: &Path) -> anyhow::Result<u8> {
     Ok(0)
 }
 
+const DOCTOR_REQUIRED_COMMANDS: &[&[&str]] = &[
+    &["start"],
+    &["wait"],
+    &["orchestrate", "advance"],
+    &["review", "start"],
+    &["config", "cli-for-model"],
+];
+
+fn path_index(entries: &[PathBuf], needle: &Path) -> Option<usize> {
+    entries.iter().position(|entry| entry == needle)
+}
+
+fn first_path_hit(name: &str, entries: &[PathBuf]) -> Option<PathBuf> {
+    entries
+        .iter()
+        .map(|dir| dir.join(name))
+        .find(|candidate| candidate.is_file())
+}
+
+fn check_subcommand_surface(binary: &Path, command_path: &[&str]) -> anyhow::Result<bool> {
+    let status = Command::new(binary)
+        .args(command_path)
+        .arg("--help")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()?;
+    Ok(status.success())
+}
+
+pub fn doctor() -> anyhow::Result<u8> {
+    println!("Running tina-session doctor...");
+
+    let mut failures: u32 = 0;
+    let mut warnings: u32 = 0;
+
+    let path_entries: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
+
+    let home = dirs::home_dir();
+    let local_bin_dir = home.as_ref().map(|h| h.join(".local").join("bin"));
+    let cargo_bin_dir = home.as_ref().map(|h| h.join(".cargo").join("bin"));
+
+    if let (Some(local_bin), Some(cargo_bin)) = (local_bin_dir.as_ref(), cargo_bin_dir.as_ref()) {
+        match (
+            path_index(&path_entries, local_bin),
+            path_index(&path_entries, cargo_bin),
+        ) {
+            (Some(local_idx), Some(cargo_idx)) if local_idx < cargo_idx => {
+                println!("PASS: PATH order prefers ~/.local/bin over ~/.cargo/bin");
+            }
+            (Some(_), Some(_)) => {
+                failures += 1;
+                println!(
+                    "FAIL: PATH order prefers ~/.cargo/bin before ~/.local/bin (stale binary risk)"
+                );
+            }
+            _ => {
+                warnings += 1;
+                println!(
+                    "WARN: PATH does not include both ~/.local/bin and ~/.cargo/bin; cannot verify precedence"
+                );
+            }
+        }
+    } else {
+        warnings += 1;
+        println!("WARN: home directory not detected; skipping PATH precedence checks");
+    }
+
+    let resolved_binary = first_path_hit("tina-session", &path_entries);
+    let Some(resolved_binary) = resolved_binary else {
+        failures += 1;
+        println!("FAIL: tina-session is not discoverable via PATH");
+        println!(
+            "Doctor summary: {} fail(s), {} warning(s)",
+            failures, warnings
+        );
+        return Ok(1);
+    };
+    println!(
+        "PASS: PATH resolves tina-session to {}",
+        resolved_binary.display()
+    );
+
+    if let Some(local_bin) = local_bin_dir.as_ref() {
+        let local_binary = local_bin.join("tina-session");
+        if local_binary.exists() {
+            println!("PASS: Local shim exists at {}", local_binary.display());
+
+            if let Ok(target) = fs::read_link(&local_binary) {
+                let target_str = target.to_string_lossy();
+                if target_str.contains("/target/debug/") {
+                    failures += 1;
+                    println!(
+                        "FAIL: ~/.local/bin/tina-session points to target/debug (use release symlink)"
+                    );
+                }
+            }
+        } else {
+            warnings += 1;
+            println!(
+                "WARN: ~/.local/bin/tina-session is missing (run `mise run install` to create it)"
+            );
+        }
+    }
+
+    if let Some(cargo_bin) = cargo_bin_dir.as_ref() {
+        if resolved_binary.starts_with(cargo_bin) {
+            failures += 1;
+            println!(
+                "FAIL: Active tina-session binary is from ~/.cargo/bin (this often drifts from repo docs/skills)"
+            );
+        } else if let Some(local_bin) = local_bin_dir.as_ref() {
+            if resolved_binary.starts_with(local_bin) {
+                println!("PASS: Active tina-session binary is from ~/.local/bin");
+            } else {
+                warnings += 1;
+                println!(
+                    "WARN: Active tina-session binary is outside ~/.local/bin and ~/.cargo/bin"
+                );
+            }
+        }
+    }
+
+    for command_path in DOCTOR_REQUIRED_COMMANDS {
+        let label = command_path.join(" ");
+        match check_subcommand_surface(&resolved_binary, command_path)? {
+            true => println!("PASS: Command surface includes `tina-session {}`", label),
+            false => {
+                failures += 1;
+                println!("FAIL: Missing command surface `tina-session {}`", label);
+            }
+        }
+    }
+
+    println!(
+        "Doctor summary: {} fail(s), {} warning(s)",
+        failures, warnings
+    );
+    if failures > 0 {
+        println!(
+            "Run `mise run install` and ensure ~/.local/bin appears before ~/.cargo/bin in PATH."
+        );
+        return Ok(1);
+    }
+
+    println!("PASS: Doctor checks passed");
+    Ok(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -561,6 +711,29 @@ Some text but no table.
 
         let result = plan(&path).unwrap();
         assert_eq!(result, 1, "Empty model should be rejected");
+    }
+
+    #[test]
+    fn test_path_index_finds_expected_entry() {
+        let entries = vec![
+            PathBuf::from("/a/bin"),
+            PathBuf::from("/b/bin"),
+            PathBuf::from("/c/bin"),
+        ];
+        assert_eq!(path_index(&entries, Path::new("/b/bin")), Some(1));
+        assert_eq!(path_index(&entries, Path::new("/missing")), None);
+    }
+
+    #[test]
+    fn test_first_path_hit_resolves_binary() {
+        let temp = TempDir::new().unwrap();
+        let bin_dir = temp.path().join("bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        let binary = bin_dir.join("tina-session");
+        fs::write(&binary, "#!/bin/sh\nexit 0\n").unwrap();
+
+        let hit = first_path_hit("tina-session", &[bin_dir]);
+        assert_eq!(hit, Some(binary));
     }
 }
 

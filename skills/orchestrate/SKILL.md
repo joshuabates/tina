@@ -126,17 +126,16 @@ This flag is used in STEP 4 to skip spawning the design validator.
 
 ## STEP 1b: Check for existing orchestration (RESUME DETECTION)
 
-Before creating a new team, check if one already exists for this design doc:
+Before creating new orchestration state, check whether the feature already exists in Convex:
 
 ```bash
-TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}.json"
-if [ -f "$TEAM_CONFIG" ]; then
-    echo "Found existing orchestration team: $TEAM_NAME"
+if tina-session orchestrate next --feature "$FEATURE_NAME" >/dev/null 2>&1; then
+    echo "Found existing orchestration state: $TEAM_NAME"
     # SKIP TO STEP 5b (Resume Logic) below
 fi
 ```
 
-If team exists, DO NOT create new team or tasks. Instead:
+If orchestration state exists, DO NOT create new team or tasks. Instead:
 1. Skip to STEP 5b: Resume Logic
 2. Read existing task list
 3. Find current state and resume
@@ -919,47 +918,15 @@ If no `model` field is present, omit it and the agent definition's default model
 
 ### Phase Executor Monitoring
 
-The phase executor monitors the phase execution team using `tina-monitor` CLI:
+Phase status monitoring is delegated to `agents/phase-executor.md` via:
 
 ```bash
-PHASE_TEAM_NAME="$1"  # from prompt
-
-# Wait for team to be created
-while ! tina-monitor status team "$PHASE_TEAM_NAME" --format=json &>/dev/null; do
-  sleep 2
-done
-
-# Monitor until complete or blocked
-while true; do
-  STATUS=$(tina-monitor status team "$PHASE_TEAM_NAME" --format=json)
-  TEAM_STATUS=$(echo "$STATUS" | jq -r '.status')
-
-  case "$TEAM_STATUS" in
-    complete)
-      GIT_RANGE=$(echo "$STATUS" | jq -r '.metadata.git_range // empty')
-      # Report completion to orchestrator
-      break
-      ;;
-    blocked)
-      REASON=$(echo "$STATUS" | jq -r '.blocked_reason')
-      # Report blocked status to orchestrator
-      break
-      ;;
-    *)
-      sleep 10
-      ;;
-  esac
-done
+tina-session start --feature "$FEATURE_NAME" --phase "$PHASE_NUM" ...
+tina-session wait --feature "$FEATURE_NAME" --phase "$PHASE_NUM" --stream 30
 ```
 
-**Fallback:** If `tina-monitor` is not installed, fall back to reading `.claude/tina/phase-N/status.json` directly:
-
-```bash
-STATUS_FILE="${WORKTREE_PATH}/.claude/tina/phase-${PHASE_NUM}/status.json"
-if [ -f "$STATUS_FILE" ]; then
-  PHASE_STATUS=$(jq -r '.status' "$STATUS_FILE")
-fi
-```
+The orchestration team-lead should remain event-driven and only react to teammate
+messages (`execute-N started`, `execute-N complete`, or `execute-N error`).
 
 ### Task Metadata Convention
 
@@ -1189,7 +1156,7 @@ To resume after fixing the issue:
   /tina:orchestrate <design-doc-path>  (or --design-id <id>)
 
 To reset and start fresh:
-  rm -rf ~/.claude/teams/${TEAM_NAME}.json
+  rm -rf ~/.claude/teams/${TEAM_NAME}/
   rm -rf ~/.claude/tasks/${TEAM_NAME}/
   /tina:orchestrate <design-doc-path>  (or --design-id <id>)
 
@@ -1341,10 +1308,9 @@ When orchestrate is invoked, check if orchestration already exists for this desi
 FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
 TEAM_NAME="${FEATURE_NAME}-orchestration"
 
-# Check if team config exists
-TEAM_CONFIG="$HOME/.claude/teams/${TEAM_NAME}.json"
-if [ -f "$TEAM_CONFIG" ]; then
-    echo "Found existing orchestration team: $TEAM_NAME"
+# Check if orchestration state already exists in Convex
+if tina-session orchestrate next --feature "$FEATURE_NAME" >/dev/null 2>&1; then
+    echo "Found existing orchestration state: $TEAM_NAME"
     # Resume from task list
 else
     echo "Starting new orchestration"
@@ -1437,7 +1403,7 @@ TaskUpdate { taskId: "review-phase-1", status: "completed", metadata: { manual_s
 4. **Clean up and restart:**
 ```
 # Delete team config and task directory
-rm -rf ~/.claude/teams/${TEAM_NAME}.json
+rm -rf ~/.claude/teams/${TEAM_NAME}/
 rm -rf ~/.claude/tasks/${TEAM_NAME}/
 # Then rerun orchestrate for fresh start
 ```
@@ -1617,7 +1583,7 @@ Before using orchestration on real work, verify these behaviors manually:
 
 **Basic Flow:**
 - [ ] Run `/tina:orchestrate docs/plans/test-fixtures/minimal-orchestration-test-design.md`
-- [ ] Verify team created: `ls ~/.claude/teams/` shows orchestration team
+- [ ] Verify team created: `test -f ~/.claude/teams/minimal-orchestration-test-orchestration/config.json`
 - [ ] Verify tasks created: `TaskList` shows all expected tasks with dependencies
 - [ ] Watch validator spawn and complete
 - [ ] Verify worktree was created by tina-session init (before team creation)
@@ -1642,7 +1608,7 @@ Before using orchestration on real work, verify these behaviors manually:
 - [ ] If third would be needed, verify orchestration exits with error
 
 **Cleanup:**
-- [ ] After testing: `rm -rf ~/.claude/teams/minimal-orchestration-test-orchestration.json`
+- [ ] After testing: `rm -rf ~/.claude/teams/minimal-orchestration-test-orchestration/`
 - [ ] After testing: `rm -rf ~/.claude/tasks/minimal-orchestration-test-orchestration/`
 - [ ] After testing: `rm -rf .worktrees/minimal-orchestration-test/`
 
@@ -1691,7 +1657,7 @@ Common issues and their resolutions:
 1. If resuming: skip team creation, go to STEP 5b (Resume Logic)
 2. If starting fresh: clean up first:
    ```bash
-   rm -rf ~/.claude/teams/<team-name>.json
+   rm -rf ~/.claude/teams/<team-name>/
    rm -rf ~/.claude/tasks/<team-name>/
    ```
 

@@ -79,7 +79,7 @@ Each phase gets fresh context through subagent delegation.
 
 ## Current State
 
-Building the composable pieces incrementally:
+Historical snapshot from early architecture planning:
 
 | Component | Status | Notes |
 |-----------|--------|-------|
@@ -88,7 +88,7 @@ Building the composable pieces incrementally:
 | `agents/spec-reviewer` | Exists | Spec compliance checking |
 | `agents/code-quality-reviewer` | Exists | Code quality review |
 | `skills/executing-plans` | Exists | Task execution with reviews |
-| Orchestrator | Not started | Will coordinate the loop |
+| Orchestrator | Implemented | Runtime coordinated via `tina-session orchestrate` + phase agents |
 
 ## Design Principles
 
