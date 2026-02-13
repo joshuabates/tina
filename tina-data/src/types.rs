@@ -70,6 +70,7 @@ pub struct RegisterTeamRecord {
     pub team_name: String,
     pub orchestration_id: String,
     pub lead_session_id: String,
+    pub local_dir_name: String,
     pub tmux_session_name: Option<String>,
     pub phase_number: Option<String>,
     pub parent_team_id: Option<String>,
@@ -125,6 +126,7 @@ pub struct TeamRecord {
     pub team_name: String,
     pub orchestration_id: String,
     pub lead_session_id: String,
+    pub local_dir_name: String,
     pub tmux_session_name: Option<String>,
     pub phase_number: Option<String>,
     pub parent_team_id: Option<String>,
@@ -139,6 +141,7 @@ pub struct ActiveTeamRecord {
     pub team_name: String,
     pub orchestration_id: String,
     pub lead_session_id: String,
+    pub local_dir_name: String,
     pub tmux_session_name: Option<String>,
     pub phase_number: Option<String>,
     pub parent_team_id: Option<String>,
@@ -295,4 +298,3 @@ pub struct CommentRecord {
     pub created_at: String,
     pub edited_at: Option<String>,
 }
-

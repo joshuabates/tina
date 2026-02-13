@@ -179,6 +179,10 @@ fn register_team_to_args(team: &RegisterTeamRecord) -> BTreeMap<String, Value> {
         "leadSessionId".into(),
         Value::from(team.lead_session_id.as_str()),
     );
+    args.insert(
+        "localDirName".into(),
+        Value::from(team.local_dir_name.as_str()),
+    );
     if let Some(ref tmux_session_name) = team.tmux_session_name {
         args.insert(
             "tmuxSessionName".into(),
@@ -255,7 +259,10 @@ fn ticket_to_args(ticket: &TicketRecord) -> BTreeMap<String, Value> {
     }
     args.insert("ticketKey".into(), Value::from(ticket.ticket_key.as_str()));
     args.insert("title".into(), Value::from(ticket.title.as_str()));
-    args.insert("description".into(), Value::from(ticket.description.as_str()));
+    args.insert(
+        "description".into(),
+        Value::from(ticket.description.as_str()),
+    );
     args.insert("status".into(), Value::from(ticket.status.as_str()));
     args.insert("priority".into(), Value::from(ticket.priority.as_str()));
     if let Some(ref assignee) = ticket.assignee {
@@ -276,10 +283,19 @@ fn ticket_to_args(ticket: &TicketRecord) -> BTreeMap<String, Value> {
 fn comment_to_args(comment: &CommentRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("projectId".into(), Value::from(comment.project_id.as_str()));
-    args.insert("targetType".into(), Value::from(comment.target_type.as_str()));
+    args.insert(
+        "targetType".into(),
+        Value::from(comment.target_type.as_str()),
+    );
     args.insert("targetId".into(), Value::from(comment.target_id.as_str()));
-    args.insert("authorType".into(), Value::from(comment.author_type.as_str()));
-    args.insert("authorName".into(), Value::from(comment.author_name.as_str()));
+    args.insert(
+        "authorType".into(),
+        Value::from(comment.author_type.as_str()),
+    );
+    args.insert(
+        "authorName".into(),
+        Value::from(comment.author_name.as_str()),
+    );
     args.insert("body".into(), Value::from(comment.body.as_str()));
     args.insert("createdAt".into(), Value::from(comment.created_at.as_str()));
     args
@@ -761,6 +777,7 @@ fn extract_team_record_from_obj(obj: &BTreeMap<String, Value>) -> TeamRecord {
         team_name: value_as_str(obj, "teamName"),
         orchestration_id: value_as_id(obj, "orchestrationId"),
         lead_session_id: value_as_str(obj, "leadSessionId"),
+        local_dir_name: value_as_str(obj, "localDirName"),
         tmux_session_name: value_as_opt_str(obj, "tmuxSessionName"),
         phase_number: value_as_opt_str(obj, "phaseNumber"),
         parent_team_id: value_as_opt_str(obj, "parentTeamId"),
@@ -789,6 +806,7 @@ fn extract_active_team_list(result: FunctionResult) -> Result<Vec<ActiveTeamReco
                         team_name: value_as_str(&obj, "teamName"),
                         orchestration_id: value_as_id(&obj, "orchestrationId"),
                         lead_session_id: value_as_str(&obj, "leadSessionId"),
+                        local_dir_name: value_as_str(&obj, "localDirName"),
                         tmux_session_name: value_as_opt_str(&obj, "tmuxSessionName"),
                         phase_number: value_as_opt_str(&obj, "phaseNumber"),
                         parent_team_id: value_as_opt_str(&obj, "parentTeamId"),
@@ -1550,10 +1568,7 @@ impl TinaConvexClient {
         let mut args = BTreeMap::new();
         args.insert("targetType".into(), Value::from(target_type));
         args.insert("targetId".into(), Value::from(target_id));
-        let result = self
-            .client
-            .query("workComments:listComments", args)
-            .await?;
+        let result = self.client.query("workComments:listComments", args).await?;
         extract_comment_list(result)
     }
 
@@ -1572,26 +1587,16 @@ impl TinaConvexClient {
             args.insert("phaseNumber".into(), Value::from(pn));
         }
         args.insert("reviewerAgent".into(), Value::from(reviewer_agent));
-        let result = self
-            .client
-            .mutation("reviews:createReview", args)
-            .await?;
+        let result = self.client.mutation("reviews:createReview", args).await?;
         extract_id(result)
     }
 
     /// Complete a review.
-    pub async fn complete_review(
-        &mut self,
-        review_id: &str,
-        state: &str,
-    ) -> Result<()> {
+    pub async fn complete_review(&mut self, review_id: &str, state: &str) -> Result<()> {
         let mut args = BTreeMap::new();
         args.insert("reviewId".into(), Value::from(review_id));
         args.insert("state".into(), Value::from(state));
-        let result = self
-            .client
-            .mutation("reviews:completeReview", args)
-            .await?;
+        let result = self.client.mutation("reviews:completeReview", args).await?;
         extract_unit(result)
     }
 
@@ -1714,10 +1719,7 @@ impl TinaConvexClient {
             args.insert("decidedBy".into(), Value::from(db));
         }
         args.insert("summary".into(), Value::from(summary));
-        let result = self
-            .client
-            .mutation("reviewGates:upsertGate", args)
-            .await?;
+        let result = self.client.mutation("reviewGates:upsertGate", args).await?;
         extract_id(result)
     }
 }
@@ -2142,6 +2144,10 @@ mod tests {
         map.insert("orchestrationId".to_string(), Value::from("orch-456"));
         map.insert("leadSessionId".to_string(), Value::from("session-789"));
         map.insert(
+            "localDirName".to_string(),
+            Value::from("my-feature-phase-1"),
+        );
+        map.insert(
             "tmuxSessionName".to_string(),
             Value::from("tina-my-feature-phase-1"),
         );
@@ -2155,6 +2161,7 @@ mod tests {
         assert_eq!(team.team_name, "my-feature-orchestration");
         assert_eq!(team.orchestration_id, "orch-456");
         assert_eq!(team.lead_session_id, "session-789");
+        assert_eq!(team.local_dir_name, "my-feature-phase-1");
         assert_eq!(
             team.tmux_session_name.as_deref(),
             Some("tina-my-feature-phase-1")
@@ -2171,6 +2178,7 @@ mod tests {
         map.insert("teamName".to_string(), Value::from("my-team"));
         map.insert("orchestrationId".to_string(), Value::from("orch-456"));
         map.insert("leadSessionId".to_string(), Value::from("session-789"));
+        map.insert("localDirName".to_string(), Value::from("my-team"));
         map.insert("createdAt".to_string(), Value::from(1706644800000.0f64));
         let result = FunctionResult::Value(Value::Object(map));
 
@@ -2209,6 +2217,10 @@ mod tests {
         map.insert("orchestrationId".to_string(), Value::from("orch-1"));
         map.insert("leadSessionId".to_string(), Value::from("session-1"));
         map.insert(
+            "localDirName".to_string(),
+            Value::from("feature-orchestration"),
+        );
+        map.insert(
             "tmuxSessionName".to_string(),
             Value::from("tina-feature-phase-1"),
         );
@@ -2226,6 +2238,7 @@ mod tests {
         assert_eq!(teams[0].team_name, "feature-orchestration");
         assert_eq!(teams[0].orchestration_status, "executing");
         assert_eq!(teams[0].feature_name, "my-feature");
+        assert_eq!(teams[0].local_dir_name, "feature-orchestration");
         assert_eq!(
             teams[0].tmux_session_name.as_deref(),
             Some("tina-feature-phase-1")
@@ -2329,7 +2342,10 @@ mod tests {
         );
         assert_eq!(args.get("status"), Some(&Value::from("in_progress")));
         assert_eq!(args.get("priority"), Some(&Value::from("high")));
-        assert_eq!(args.get("assignee"), Some(&Value::from("alice@example.com")));
+        assert_eq!(
+            args.get("assignee"),
+            Some(&Value::from("alice@example.com"))
+        );
         assert_eq!(args.get("estimate"), Some(&Value::from("3d")));
         assert_eq!(
             args.get("closedAt"),
@@ -2384,7 +2400,10 @@ mod tests {
         assert_eq!(args.get("targetType"), Some(&Value::from("design")));
         assert_eq!(args.get("targetId"), Some(&Value::from("design-456")));
         assert_eq!(args.get("authorType"), Some(&Value::from("human")));
-        assert_eq!(args.get("authorName"), Some(&Value::from("alice@example.com")));
+        assert_eq!(
+            args.get("authorName"),
+            Some(&Value::from("alice@example.com"))
+        );
         assert_eq!(args.get("body"), Some(&Value::from("Great design!")));
         assert_eq!(
             args.get("createdAt"),
@@ -2410,7 +2429,10 @@ mod tests {
         let args = comment_to_args(&comment);
 
         assert_eq!(args.get("authorType"), Some(&Value::from("agent")));
-        assert_eq!(args.get("authorName"), Some(&Value::from("claude-executor-1")));
+        assert_eq!(
+            args.get("authorName"),
+            Some(&Value::from("claude-executor-1"))
+        );
         assert_eq!(args.get("targetType"), Some(&Value::from("ticket")));
     }
 
@@ -2468,7 +2490,10 @@ mod tests {
         obj.insert("status".to_string(), Value::from("archived"));
         obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
         obj.insert("updatedAt".to_string(), Value::from("2026-02-11T11:00:00Z"));
-        obj.insert("archivedAt".to_string(), Value::from("2026-02-11T12:00:00Z"));
+        obj.insert(
+            "archivedAt".to_string(),
+            Value::from("2026-02-11T12:00:00Z"),
+        );
 
         let design = extract_design_record(&obj);
 
@@ -2563,5 +2588,4 @@ mod tests {
 
         assert_eq!(comment.edited_at, Some("2026-02-11T11:00:00Z".to_string()));
     }
-
 }

@@ -86,6 +86,7 @@ describe("orchestrations:deleteOrchestration", () => {
       teamName: "orch-delete-team",
       orchestrationId,
       leadSessionId: "orch-session-delete",
+      localDirName: "orch-delete-team",
       phaseNumber: "1",
       createdAt: 1707350400000,
     });

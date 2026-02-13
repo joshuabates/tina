@@ -514,6 +514,7 @@ fn register_orchestration_team(orchestration_id: &str, team_name: &str) -> anyho
             team_name: team_name.to_string(),
             orchestration_id: orchestration_id.to_string(),
             lead_session_id: "pending".to_string(),
+            local_dir_name: team_name.replace('.', "-"),
             tmux_session_name: None,
             phase_number: None,
             parent_team_id: None,

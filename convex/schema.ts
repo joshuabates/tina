@@ -122,6 +122,7 @@ export default defineSchema({
     teamName: v.string(),
     orchestrationId: v.id("orchestrations"),
     leadSessionId: v.string(),
+    localDirName: v.string(),
     tmuxSessionName: v.optional(v.string()),
     phaseNumber: v.optional(v.string()),
     parentTeamId: v.optional(v.id("teams")),

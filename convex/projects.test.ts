@@ -64,6 +64,7 @@ describe("projects:deleteProject", () => {
       teamName: "delete-team",
       orchestrationId,
       leadSessionId: "session-delete",
+      localDirName: "delete-team",
       phaseNumber: "1",
       createdAt: 1707350400000,
     });

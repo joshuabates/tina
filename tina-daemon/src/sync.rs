@@ -25,8 +25,10 @@ pub struct SyncCache {
     pub task_state: HashMap<(String, String, String), TaskCacheEntry>,
     /// Maps `(orchestration_id, phase_number, agent_name)` -> last recorded_at
     pub team_member_state: HashMap<(String, String, String), String>,
-    /// Maps `team_name` -> set of agent names (for detecting removals)
+    /// Maps Convex `team_id` -> set of agent names (for detecting removals)
     pub team_members: HashMap<String, HashMap<String, Agent>>,
+    /// Maps Convex `team_id` -> local directory name under ~/.claude/{teams,tasks}
+    pub team_dir_name_by_id: HashMap<String, String>,
     /// Maps `orchestration_id` -> last known commit SHA
     pub last_commit_sha: HashMap<String, String>,
     /// Maps skip-event cache keys -> last emitted unix timestamp.
@@ -51,6 +53,7 @@ impl SyncCache {
             task_state: HashMap::new(),
             team_member_state: HashMap::new(),
             team_members: HashMap::new(),
+            team_dir_name_by_id: HashMap::new(),
             last_commit_sha: HashMap::new(),
             skip_event_last_emitted: HashMap::new(),
             worktrees: Vec::new(),
@@ -123,6 +126,50 @@ fn should_emit_skip_event(cache: &mut SyncCache, key: String, now_unix: i64) -> 
     }
 }
 
+fn resolve_local_team_dir_name(team: &ActiveTeamRecord, cache: &mut SyncCache) -> Result<String> {
+    if let Some(dir_name) = cache.team_dir_name_by_id.get(&team.id) {
+        return Ok(dir_name.clone());
+    }
+
+    if team.local_dir_name.trim().is_empty() {
+        return Err(anyhow!(
+            "empty local_dir_name for team_id={} team_name={}",
+            team.id,
+            team.team_name
+        ));
+    }
+
+    let dir_name = team.local_dir_name.clone();
+    cache
+        .team_dir_name_by_id
+        .insert(team.id.clone(), dir_name.clone());
+    Ok(dir_name)
+}
+
+fn resolve_task_team_dir(
+    tasks_dir: &Path,
+    team: &ActiveTeamRecord,
+    cache: &mut SyncCache,
+) -> Result<(PathBuf, String)> {
+    let dir_name = resolve_local_team_dir_name(team, cache)?;
+    Ok((tasks_dir.join(&dir_name), dir_name))
+}
+
+fn validate_team_config_path(teams_dir: &Path, local_team_dir_name: &str) -> Result<()> {
+    if teams_dir
+        .join(local_team_dir_name)
+        .join("config.json")
+        .is_file()
+    {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "team config directory not found for local_dir_name={}",
+            local_team_dir_name
+        ))
+    }
+}
+
 /// Sync team members from a team config file to Convex.
 ///
 /// Uses the `ActiveTeamRecord` from Convex to get the orchestration ID and phase number
@@ -138,7 +185,9 @@ pub async fn sync_team_members(
     let started_at = chrono::Utc::now();
     let span_id = telemetry.map(|t| t.start_span("daemon.sync_team_members"));
 
-    let team_config = load_team_config(teams_dir, &team.team_name)?;
+    let local_team_dir_name = resolve_local_team_dir_name(team, cache)?;
+    validate_team_config_path(teams_dir, &local_team_dir_name)?;
+    let team_config = load_team_config(teams_dir, &local_team_dir_name)?;
 
     let orchestration_id = &team.orchestration_id;
     let phase_number = team.phase_number.clone().unwrap_or_else(|| "0".to_string());
@@ -152,7 +201,7 @@ pub async fn sync_team_members(
         .collect();
 
     // Detect removals (members in previous but not in current)
-    if let Some(previous_members) = cache.team_members.get(&team.team_name) {
+    if let Some(previous_members) = cache.team_members.get(&team.id) {
         for (name, agent) in previous_members {
             if !current_members.contains_key(name) {
                 // Member was removed - record shutdown event
@@ -203,8 +252,10 @@ pub async fn sync_team_members(
                 // Emit projection.write event
                 if let Some(t) = telemetry {
                     let attrs = serde_json::json!({
-                        "team_name": team.team_name,
-                        "agent_name": member.name,
+                        "team_id": &team.id,
+                        "team_name": &team.team_name,
+                        "local_team_dir_name": &local_team_dir_name,
+                        "agent_name": &member.name,
                         "orchestration_id": orchestration_id,
                         "phase_number": &phase_number,
                     })
@@ -225,9 +276,7 @@ pub async fn sync_team_members(
     }
 
     // Update cache with current team state
-    cache
-        .team_members
-        .insert(team.team_name.clone(), current_members);
+    cache.team_members.insert(team.id.clone(), current_members);
 
     // Complete span
     if let (Some(t), Some(sid)) = (telemetry, &span_id) {
@@ -296,20 +345,23 @@ pub async fn sync_tasks(
     let now_unix = Utc::now().timestamp();
 
     for team in active_teams {
-        // Claude CLI stores tasks under ~/.claude/tasks/{team_name}/
-        let task_team_dir = tasks_dir.join(&team.team_name);
+        // Claude CLI stores tasks under ~/.claude/tasks/{local_team_dir_name}/.
+        // local_team_dir_name is read from Convex teams.localDirName (not inferred from names).
+        let (task_team_dir, local_team_dir_name) = resolve_task_team_dir(tasks_dir, team, cache)?;
 
         if !task_team_dir.exists() {
             // Emit skip event for missing task dir
             let emit = should_emit_skip_event(
                 cache,
-                format!("task_dir_missing:{}", team.team_name),
+                format!("task_dir_missing:{}:{}", team.id, local_team_dir_name),
                 now_unix,
             );
             if emit {
                 if let Some(t) = telemetry {
                     let attrs = serde_json::json!({
+                        "team_id": &team.id,
                         "team_name": &team.team_name,
+                        "local_team_dir_name": &local_team_dir_name,
                         "reason": "task_dir_missing",
                     })
                     .to_string();
@@ -805,16 +857,6 @@ pub async fn discover_worktrees(
     Ok(worktrees)
 }
 
-/// Extract phase number from team name pattern: `{feature}-orchestration-phase-{N}`
-pub fn extract_phase_from_team_name(team_name: &str) -> Result<String> {
-    let re = Regex::new(r"-phase-(\d+)$")?;
-    let captures = re
-        .captures(team_name)
-        .ok_or_else(|| anyhow!("Team name does not match phase pattern: {}", team_name))?;
-
-    Ok(captures[1].to_string())
-}
-
 /// Extract phase number from plan filename pattern: `YYYY-MM-DD-{feature}-phase-{N}.md`
 pub fn extract_phase_from_plan_filename(filename: &str) -> Result<String> {
     let re = Regex::new(r"-phase-(\d+)\.md$")?;
@@ -830,8 +872,14 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    fn create_team_dir(dir: &Path, name: &str, cwd: &str) {
-        let team_dir = dir.join(name);
+    fn create_team_dir_with(
+        dir: &Path,
+        dir_name: &str,
+        config_team_name: &str,
+        lead_session_id: &str,
+        cwd: &str,
+    ) {
+        let team_dir = dir.join(dir_name);
         fs::create_dir_all(&team_dir).unwrap();
         let config = format!(
             r#"{{
@@ -839,7 +887,7 @@ mod tests {
                 "description": "Test",
                 "createdAt": 1706644800000,
                 "leadAgentId": "lead@{}",
-                "leadSessionId": "session-{}",
+                "leadSessionId": "{}",
                 "members": [{{
                     "agentId": "lead@{}",
                     "name": "team-lead",
@@ -860,9 +908,19 @@ mod tests {
                     "subscriptions": []
                 }}]
             }}"#,
-            name, name, name, name, cwd, name, cwd
+            config_team_name,
+            config_team_name,
+            lead_session_id,
+            config_team_name,
+            cwd,
+            config_team_name,
+            cwd
         );
         fs::write(team_dir.join("config.json"), config).unwrap();
+    }
+
+    fn create_team_dir(dir: &Path, name: &str, cwd: &str) {
+        create_team_dir_with(dir, name, name, &format!("session-{}", name), cwd);
     }
 
     fn create_task_file(dir: &Path, id: &str, subject: &str, status: &str) {
@@ -919,6 +977,80 @@ mod tests {
         assert_eq!(team.members.len(), 2);
         assert_eq!(team.members[0].name, "team-lead");
         assert_eq!(team.members[1].name, "worker");
+    }
+
+    #[test]
+    fn test_resolve_local_team_dir_name_uses_convex_local_dir_name() {
+        let team = ActiveTeamRecord {
+            id: "team_abc".to_string(),
+            team_name: "feature-phase-6.5".to_string(),
+            orchestration_id: "orch_123".to_string(),
+            lead_session_id: "lead-session-123".to_string(),
+            local_dir_name: "feature-phase-6-5".to_string(),
+            tmux_session_name: Some("tina-feature-phase-6-5".to_string()),
+            phase_number: Some("6.5".to_string()),
+            parent_team_id: None,
+            created_at: 1_706_644_800_000f64,
+            orchestration_status: "executing".to_string(),
+            feature_name: "feature".to_string(),
+        };
+
+        let mut cache = SyncCache::new();
+        let resolved = resolve_local_team_dir_name(&team, &mut cache).unwrap();
+        assert_eq!(resolved, "feature-phase-6-5");
+        assert_eq!(
+            cache.team_dir_name_by_id.get("team_abc"),
+            Some(&"feature-phase-6-5".to_string())
+        );
+    }
+
+    #[test]
+    fn test_resolve_task_team_dir_uses_convex_local_dir_name() {
+        let temp = TempDir::new().unwrap();
+        let tasks_dir = temp.path().join("tasks");
+        fs::create_dir_all(tasks_dir.join("feature-phase-6-5")).unwrap();
+
+        let team = ActiveTeamRecord {
+            id: "team_abc".to_string(),
+            team_name: "feature-phase-6.5".to_string(),
+            orchestration_id: "orch_123".to_string(),
+            lead_session_id: "pending".to_string(),
+            local_dir_name: "feature-phase-6-5".to_string(),
+            tmux_session_name: Some("tina-feature-phase-6-5".to_string()),
+            phase_number: Some("6.5".to_string()),
+            parent_team_id: None,
+            created_at: 1_706_644_800_000f64,
+            orchestration_status: "executing".to_string(),
+            feature_name: "feature".to_string(),
+        };
+
+        let mut cache = SyncCache::new();
+        let (path, dir_name) = resolve_task_team_dir(&tasks_dir, &team, &mut cache).unwrap();
+        assert_eq!(dir_name, "feature-phase-6-5");
+        assert_eq!(path, tasks_dir.join("feature-phase-6-5"));
+    }
+
+    #[test]
+    fn test_resolve_local_team_dir_name_errors_when_empty() {
+        let team = ActiveTeamRecord {
+            id: "team_abc".to_string(),
+            team_name: "feature-phase-6.5".to_string(),
+            orchestration_id: "orch_123".to_string(),
+            lead_session_id: "pending".to_string(),
+            local_dir_name: "".to_string(),
+            tmux_session_name: Some("tina-feature-phase-6-5".to_string()),
+            phase_number: Some("6.5".to_string()),
+            parent_team_id: None,
+            created_at: 1_706_644_800_000f64,
+            orchestration_status: "executing".to_string(),
+            feature_name: "feature".to_string(),
+        };
+
+        let mut cache = SyncCache::new();
+        let err = resolve_local_team_dir_name(&team, &mut cache).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("empty local_dir_name for team_id=team_abc"));
     }
 
     #[test]
@@ -980,19 +1112,6 @@ mod tests {
 
         // Different entry should not match
         assert_ne!(cache.task_state.get(&key), Some(&new));
-    }
-
-    #[test]
-    fn test_extract_phase_from_team_name() {
-        assert_eq!(
-            extract_phase_from_team_name("my-feature-orchestration-phase-1").unwrap(),
-            "1"
-        );
-        assert_eq!(
-            extract_phase_from_team_name("multi-word-orchestration-phase-12").unwrap(),
-            "12"
-        );
-        assert!(extract_phase_from_team_name("no-phase-suffix").is_err());
     }
 
     #[test]

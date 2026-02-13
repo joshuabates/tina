@@ -52,6 +52,7 @@ describe("teams:registerTeam", () => {
     });
     expect(team).not.toBeNull();
     expect(team!.tmuxSessionName).toBe("tina-auth-feature-phase-1");
+    expect(team!.localDirName).toBe("auth-feature-phase-1");
   });
 
   test("stores tmux session name when provided", async () => {
@@ -198,8 +199,44 @@ describe("teams:getByTeamName", () => {
     expect(result!.teamName).toBe("auth-feature-phase-1");
     expect(result!.orchestrationId).toBe(orchestrationId);
     expect(result!.leadSessionId).toBe("session-abc");
+    expect(result!.localDirName).toBe("auth-feature-phase-1");
     expect(result!.phaseNumber).toBe("1");
     expect(result!.createdAt).toBe(1707350400000);
+  });
+
+  test("stores provided localDirName when teamName contains decimal phase", async () => {
+    const t = convexTest(schema);
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
+
+    await registerTeam(t, {
+      teamName: "auth-feature-phase-6.5",
+      orchestrationId,
+      localDirName: "custom-dir-for-6.5",
+      phaseNumber: "6.5",
+      createdAt: Date.now(),
+    });
+
+    const result = await t.query(api.teams.getByTeamName, {
+      teamName: "auth-feature-phase-6.5",
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.localDirName).toBe("custom-dir-for-6.5");
+  });
+
+  test("rejects empty localDirName", async () => {
+    const t = convexTest(schema);
+    const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
+
+    await expect(
+      registerTeam(t, {
+        teamName: "auth-feature-phase-7",
+        orchestrationId,
+        localDirName: "   ",
+        phaseNumber: "7",
+        createdAt: Date.now(),
+      }),
+    ).rejects.toThrow("localDirName must be non-empty");
   });
 
   test("returns null when team does not exist", async () => {

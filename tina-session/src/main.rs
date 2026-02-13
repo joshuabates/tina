@@ -307,6 +307,10 @@ enum Commands {
         #[arg(long)]
         lead_session_id: String,
 
+        /// Local directory name under ~/.claude/{teams,tasks}
+        #[arg(long)]
+        local_dir_name: String,
+
         /// tmux session name used for this team (optional)
         #[arg(long)]
         tmux_session_name: Option<String>,
@@ -1464,6 +1468,7 @@ fn run() -> anyhow::Result<u8> {
             orchestration_id,
             team,
             lead_session_id,
+            local_dir_name,
             tmux_session_name,
             phase_number,
             parent_team_id,
@@ -1471,6 +1476,7 @@ fn run() -> anyhow::Result<u8> {
             &orchestration_id,
             &team,
             &lead_session_id,
+            &local_dir_name,
             tmux_session_name.as_deref(),
             phase_number.as_deref(),
             parent_team_id.as_deref(),
@@ -1528,7 +1534,11 @@ fn run() -> anyhow::Result<u8> {
                 feature,
                 model_json,
                 review_json,
-            } => commands::orchestrate::set_policy(&feature, model_json.as_deref(), review_json.as_deref()),
+            } => commands::orchestrate::set_policy(
+                &feature,
+                model_json.as_deref(),
+                review_json.as_deref(),
+            ),
 
             OrchestrateCommands::SetRoleModel {
                 feature,
@@ -1545,8 +1555,13 @@ fn run() -> anyhow::Result<u8> {
                 description,
                 model,
             } => commands::orchestrate::task_edit(
-                &feature, &phase, task, revision,
-                subject.as_deref(), description.as_deref(), model.as_deref(),
+                &feature,
+                &phase,
+                task,
+                revision,
+                subject.as_deref(),
+                description.as_deref(),
+                model.as_deref(),
             ),
 
             OrchestrateCommands::TaskInsert {
@@ -1557,8 +1572,12 @@ fn run() -> anyhow::Result<u8> {
                 model,
                 depends_on,
             } => commands::orchestrate::task_insert(
-                &feature, &phase, after_task, &subject,
-                model.as_deref(), depends_on.as_deref(),
+                &feature,
+                &phase,
+                after_task,
+                &subject,
+                model.as_deref(),
+                depends_on.as_deref(),
             ),
 
             OrchestrateCommands::TaskSetModel {
@@ -1750,31 +1769,111 @@ fn run() -> anyhow::Result<u8> {
                 },
             };
             let result = match command {
-                ReviewCommands::Start { feature, phase, reviewer, json } =>
-                    commands::review::start(&feature, phase.as_deref(), &reviewer, json),
-                ReviewCommands::Complete { feature, review_id, status, json } =>
-                    commands::review::complete(&feature, &review_id, &status, json),
-                ReviewCommands::AddFinding { review_id, orchestration_id, file, line, commit, severity, gate, summary, body, source, author, json } =>
-                    commands::review::add_finding(&review_id, &orchestration_id, &file, line, &commit, &severity, &gate, &summary, &body, &source, &author, json),
-                ReviewCommands::ResolveFinding { finding_id, resolved_by, json } =>
-                    commands::review::resolve_finding(&finding_id, &resolved_by, json),
-                ReviewCommands::RunChecks { feature, review_id, json } =>
-                    commands::review::run_checks(&feature, &review_id, json),
-                ReviewCommands::StartCheck { review_id, orchestration_id, name, kind, command, json } =>
-                    commands::review::start_check(&review_id, &orchestration_id, &name, &kind, command.as_deref(), json),
-                ReviewCommands::CompleteCheck { review_id, name, status, comment, output, json } =>
-                    commands::review::complete_check(&review_id, &name, &status, comment.as_deref(), output.as_deref(), json),
+                ReviewCommands::Start {
+                    feature,
+                    phase,
+                    reviewer,
+                    json,
+                } => commands::review::start(&feature, phase.as_deref(), &reviewer, json),
+                ReviewCommands::Complete {
+                    feature,
+                    review_id,
+                    status,
+                    json,
+                } => commands::review::complete(&feature, &review_id, &status, json),
+                ReviewCommands::AddFinding {
+                    review_id,
+                    orchestration_id,
+                    file,
+                    line,
+                    commit,
+                    severity,
+                    gate,
+                    summary,
+                    body,
+                    source,
+                    author,
+                    json,
+                } => commands::review::add_finding(
+                    &review_id,
+                    &orchestration_id,
+                    &file,
+                    line,
+                    &commit,
+                    &severity,
+                    &gate,
+                    &summary,
+                    &body,
+                    &source,
+                    &author,
+                    json,
+                ),
+                ReviewCommands::ResolveFinding {
+                    finding_id,
+                    resolved_by,
+                    json,
+                } => commands::review::resolve_finding(&finding_id, &resolved_by, json),
+                ReviewCommands::RunChecks {
+                    feature,
+                    review_id,
+                    json,
+                } => commands::review::run_checks(&feature, &review_id, json),
+                ReviewCommands::StartCheck {
+                    review_id,
+                    orchestration_id,
+                    name,
+                    kind,
+                    command,
+                    json,
+                } => commands::review::start_check(
+                    &review_id,
+                    &orchestration_id,
+                    &name,
+                    &kind,
+                    command.as_deref(),
+                    json,
+                ),
+                ReviewCommands::CompleteCheck {
+                    review_id,
+                    name,
+                    status,
+                    comment,
+                    output,
+                    json,
+                } => commands::review::complete_check(
+                    &review_id,
+                    &name,
+                    &status,
+                    comment.as_deref(),
+                    output.as_deref(),
+                    json,
+                ),
                 ReviewCommands::Gate { command } => match command {
-                    ReviewGateCommands::Approve { feature, gate, decided_by, summary, json } =>
-                        commands::review::gate_approve(&feature, &gate, &decided_by, &summary, json),
-                    ReviewGateCommands::Block { feature, gate, reason, decided_by, json } =>
-                        commands::review::gate_block(&feature, &gate, &reason, &decided_by, json),
+                    ReviewGateCommands::Approve {
+                        feature,
+                        gate,
+                        decided_by,
+                        summary,
+                        json,
+                    } => {
+                        commands::review::gate_approve(&feature, &gate, &decided_by, &summary, json)
+                    }
+                    ReviewGateCommands::Block {
+                        feature,
+                        gate,
+                        reason,
+                        decided_by,
+                        json,
+                    } => commands::review::gate_block(&feature, &gate, &reason, &decided_by, json),
                 },
             };
             match result {
                 Ok(code) => Ok(code),
                 Err(e) if json_mode => {
-                    eprintln!("{}", serde_json::json!({ "ok": false, "error": format!("{:#}", e) }));
+                    eprintln!(
+                        "{}",
+                        serde_json::json!({ "ok": false, "error": format!("{:#}", e) })
+                    );
                     Ok(1)
                 }
                 Err(e) => Err(e),

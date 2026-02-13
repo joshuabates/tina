@@ -27,6 +27,7 @@ interface RegisterTeamOptions {
   teamName: string;
   orchestrationId: string;
   leadSessionId?: string;
+  localDirName?: string;
   tmuxSessionName?: string;
   phaseNumber?: string;
   parentTeamId?: string;
@@ -98,6 +99,8 @@ export async function registerTeam(
     teamName: options.teamName,
     orchestrationId: options.orchestrationId,
     leadSessionId: options.leadSessionId ?? "session-abc",
+    localDirName:
+      options.localDirName ?? options.teamName.replace(/\./g, "-"),
     createdAt: options.createdAt ?? 1707350400000,
   };
 

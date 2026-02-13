@@ -211,10 +211,9 @@ fn materialize_plan_from_design(
     design_id: &str,
 ) -> anyhow::Result<PathBuf> {
     let design_id_owned = design_id.to_string();
-    let design = convex::run_convex(
-        |mut writer| async move { writer.get_design(&design_id_owned).await },
-    )?
-    .ok_or_else(|| anyhow::anyhow!("Design not found in Convex: {}", design_id))?;
+    let design =
+        convex::run_convex(|mut writer| async move { writer.get_design(&design_id_owned).await })?
+            .ok_or_else(|| anyhow::anyhow!("Design not found in Convex: {}", design_id))?;
 
     let plans_dir = cwd.join("docs").join("plans");
     fs::create_dir_all(&plans_dir)?;
@@ -279,6 +278,7 @@ fn register_phase_team(
             team_name: team_name.to_string(),
             orchestration_id: orchestration_id.to_string(),
             lead_session_id: "pending".to_string(),
+            local_dir_name: team_name.replace('.', "-"),
             tmux_session_name: Some(tmux_session_name),
             phase_number: Some(phase),
             parent_team_id: parent,

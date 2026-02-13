@@ -6,12 +6,17 @@ export const registerTeam = mutation({
     teamName: v.string(),
     orchestrationId: v.id("orchestrations"),
     leadSessionId: v.string(),
+    localDirName: v.string(),
     tmuxSessionName: v.optional(v.string()),
     phaseNumber: v.optional(v.string()),
     parentTeamId: v.optional(v.id("teams")),
     createdAt: v.number(),
   },
   handler: async (ctx, args) => {
+    if (args.localDirName.trim().length === 0) {
+      throw new Error("localDirName must be non-empty");
+    }
+
     const existing = await ctx.db
       .query("teams")
       .withIndex("by_team_name", (q) => q.eq("teamName", args.teamName))
@@ -25,6 +30,7 @@ export const registerTeam = mutation({
       }
       const patch: Record<string, unknown> = {
         leadSessionId: args.leadSessionId,
+        localDirName: args.localDirName,
         phaseNumber: args.phaseNumber,
         createdAt: args.createdAt,
       };
@@ -38,7 +44,9 @@ export const registerTeam = mutation({
       return existing._id;
     }
 
-    return await ctx.db.insert("teams", args);
+    return await ctx.db.insert("teams", {
+      ...args,
+    });
   },
 });
 
