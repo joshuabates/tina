@@ -133,6 +133,22 @@ pub fn verify_artifacts(
         ));
     }
 
+    if let Some(min) = assertions.min_codex_events {
+        let actual = events
+            .iter()
+            .filter(|event| event.event_type.starts_with("codex_run_"))
+            .count() as u32;
+        if actual < min {
+            failures.push(CategorizedFailure::new(
+                FailureCategory::Orchestration,
+                format!(
+                    "Expected at least {} Codex run events, found {}",
+                    min, actual
+                ),
+            ));
+        }
+    }
+
     failures
 }
 
@@ -235,6 +251,12 @@ mod tests {
             started_at: "2026-02-08T10:00:00Z".to_string(),
             completed_at: None,
             total_elapsed_mins: None,
+            policy_snapshot: None,
+            policy_snapshot_hash: None,
+            preset_origin: None,
+            design_only: None,
+            policy_revision: None,
+            updated_at: None,
         }
     }
 
@@ -321,6 +343,7 @@ mod tests {
             min_plans: None,
             min_shutdown_events: None,
             has_markdown_task: false,
+            min_codex_events: None,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -346,6 +369,7 @@ mod tests {
             min_plans: None,
             min_shutdown_events: None,
             has_markdown_task: false,
+            min_codex_events: None,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -371,6 +395,7 @@ mod tests {
             min_plans: None,
             min_shutdown_events: None,
             has_markdown_task: false,
+            min_codex_events: None,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -394,6 +419,7 @@ mod tests {
             min_plans: None,
             min_shutdown_events: None,
             has_markdown_task: false,
+            min_codex_events: None,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -421,6 +447,7 @@ mod tests {
             min_plans: None,
             min_shutdown_events: None,
             has_markdown_task: false,
+            min_codex_events: None,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -443,6 +470,7 @@ mod tests {
             min_plans: None,
             min_shutdown_events: None,
             has_markdown_task: false,
+            min_codex_events: None,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -465,6 +493,7 @@ mod tests {
             min_plans: None,
             min_shutdown_events: None,
             has_markdown_task: false,
+            min_codex_events: None,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -486,6 +515,7 @@ mod tests {
             min_plans: None,
             min_shutdown_events: None,
             has_markdown_task: false,
+            min_codex_events: None,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -613,6 +643,7 @@ mod tests {
             min_plans: None,
             min_shutdown_events: None,
             has_markdown_task: false,
+            min_codex_events: None,
         };
 
         let failures = verify_detail(&detail, &assertions);
@@ -677,6 +708,7 @@ mod tests {
             min_plans: Some(1),
             min_shutdown_events: Some(1),
             has_markdown_task: true,
+            min_codex_events: None,
         };
 
         let failures = verify_artifacts(&detail, &commits, &plans, &events, &assertions);
@@ -704,5 +736,81 @@ mod tests {
         assert_eq!(assertions.min_plans, Some(2));
         assert_eq!(assertions.min_shutdown_events, Some(1));
         assert!(assertions.has_markdown_task);
+    }
+
+    #[test]
+    fn test_verify_artifacts_codex_events() {
+        let detail = make_detail(vec![], vec![], vec![]);
+
+        let events = vec![
+            OrchestrationEventRecord {
+                orchestration_id: "orch-1".to_string(),
+                phase_number: Some("1".to_string()),
+                event_type: "codex_run_started".to_string(),
+                source: "tina-session".to_string(),
+                summary: "Codex run started".to_string(),
+                detail: None,
+                recorded_at: "2026-02-08T10:00:00Z".to_string(),
+            },
+            OrchestrationEventRecord {
+                orchestration_id: "orch-1".to_string(),
+                phase_number: Some("1".to_string()),
+                event_type: "codex_run_completed".to_string(),
+                source: "tina-session".to_string(),
+                summary: "Codex run completed".to_string(),
+                detail: None,
+                recorded_at: "2026-02-08T10:01:00Z".to_string(),
+            },
+        ];
+
+        let assertions_pass = ConvexAssertions {
+            has_orchestration: true,
+            expected_status: None,
+            min_phases: None,
+            min_tasks: None,
+            min_team_members: None,
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
+            min_codex_events: Some(2),
+        };
+
+        let failures = verify_artifacts(&detail, &[], &[], &events, &assertions_pass);
+        assert!(
+            failures.is_empty(),
+            "Expected no failures, got: {:?}",
+            failures
+        );
+
+        let assertions_fail = ConvexAssertions {
+            has_orchestration: true,
+            expected_status: None,
+            min_phases: None,
+            min_tasks: None,
+            min_team_members: None,
+            min_phase_tasks: None,
+            min_commits: None,
+            min_plans: None,
+            min_shutdown_events: None,
+            has_markdown_task: false,
+            min_codex_events: Some(5),
+        };
+
+        let failures = verify_artifacts(&detail, &[], &[], &events, &assertions_fail);
+        assert_eq!(failures.len(), 1);
+        assert!(failures[0].message.contains("Codex run events"));
+    }
+
+    #[test]
+    fn test_convex_assertions_deserialize_codex_events() {
+        let json = r#"{
+            "has_orchestration": true,
+            "min_codex_events": 4
+        }"#;
+
+        let assertions: ConvexAssertions = serde_json::from_str(json).unwrap();
+        assert_eq!(assertions.min_codex_events, Some(4));
     }
 }

@@ -212,6 +212,7 @@ fn main() -> anyhow::Result<()> {
                             min_plans: None,
                             min_shutdown_events: None,
                             has_markdown_task: false,
+                            min_codex_events: None,
                         });
 
                 let verify_result = commands::verify::verify(&result.feature_name, &assertions)?;
@@ -271,6 +272,7 @@ fn main() -> anyhow::Result<()> {
                 min_plans,
                 min_shutdown_events,
                 has_markdown_task,
+                min_codex_events: None,
             };
 
             let result = commands::verify::verify(&feature, &assertions)?;

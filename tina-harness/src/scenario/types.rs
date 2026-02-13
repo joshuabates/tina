@@ -91,6 +91,9 @@ pub struct ConvexAssertions {
     /// Require at least one task description containing markdown-style content
     #[serde(default)]
     pub has_markdown_task: bool,
+    /// Minimum number of Codex run events expected (`event_type` starts with `codex_run_`)
+    #[serde(default)]
+    pub min_codex_events: Option<u32>,
 }
 
 fn default_true() -> bool {
