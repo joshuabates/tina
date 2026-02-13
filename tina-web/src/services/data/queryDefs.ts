@@ -15,6 +15,9 @@ import {
   WorkComment,
   NodeSummary,
   TimelineEntry,
+  ReviewSummary,
+  ReviewThread,
+  ReviewGate,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -181,5 +184,39 @@ export const TimelineQuery = queryDef({
     limit: Schema.optional(Schema.Number),
   }),
   schema: Schema.Array(TimelineEntry),
+})
+
+export const ReviewDetailQuery = queryDef({
+  key: "reviews.detail",
+  query: api.reviews.getReview,
+  args: Schema.Struct({ reviewId: Schema.String }),
+  schema: Schema.NullOr(ReviewSummary),
+})
+
+export const ReviewListQuery = queryDef({
+  key: "reviews.list",
+  query: api.reviews.listReviewsByOrchestration,
+  args: Schema.Struct({
+    orchestrationId: Schema.String,
+    phaseNumber: Schema.optional(Schema.String),
+  }),
+  schema: Schema.Array(ReviewSummary),
+})
+
+export const ReviewThreadListQuery = queryDef({
+  key: "reviewThreads.list",
+  query: api.reviewThreads.listThreadsByReview,
+  args: Schema.Struct({
+    reviewId: Schema.String,
+    status: Schema.optional(Schema.String),
+  }),
+  schema: Schema.Array(ReviewThread),
+})
+
+export const ReviewGateListQuery = queryDef({
+  key: "reviewGates.list",
+  query: api.reviewGates.listGatesByOrchestration,
+  args: Schema.Struct({ orchestrationId: Schema.String }),
+  schema: Schema.Array(ReviewGate),
 })
 
