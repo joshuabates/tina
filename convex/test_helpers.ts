@@ -214,3 +214,20 @@ export async function enableAllControlPlaneFlags(t: ConvexHarness) {
     await seedFeatureFlag(t, key, true);
   }
 }
+
+interface CreateReviewOptions {
+  orchestrationId: string;
+  phaseNumber?: string;
+  reviewerAgent?: string;
+}
+
+export async function createReview(
+  t: ConvexHarness,
+  options: CreateReviewOptions,
+) {
+  return await t.mutation(api.reviews.createReview, {
+    orchestrationId: options.orchestrationId as any,
+    phaseNumber: options.phaseNumber,
+    reviewerAgent: options.reviewerAgent ?? "spec-reviewer",
+  });
+}
