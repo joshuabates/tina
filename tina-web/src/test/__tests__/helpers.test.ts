@@ -4,6 +4,7 @@ import {
   buildOrchestrationDetail,
   buildProjectSummary,
   buildTaskListDetail,
+  buildReviewCheck,
 } from "@/test/builders/domain"
 import {
   queryError,
@@ -39,6 +40,21 @@ describe("test builders", () => {
     expect(detail.phases).toHaveLength(2)
     expect(detail.phaseTasks["1"]).toHaveLength(3)
     expect(detail.phaseTasks["2"]).toHaveLength(0)
+  })
+
+  it("buildReviewCheck creates default check", () => {
+    const check = buildReviewCheck()
+    expect(check.reviewId).toBe("rev1")
+    expect(check.name).toBe("typecheck")
+    expect(check.kind).toBe("cli")
+    expect(check.status).toBe("passed")
+  })
+
+  it("buildReviewCheck applies overrides", () => {
+    const check = buildReviewCheck({ status: "failed", name: "test" })
+    expect(check.status).toBe("failed")
+    expect(check.name).toBe("test")
+    expect(check.reviewId).toBe("rev1")
   })
 
   it("buildAppIntegrationFixture supports overrides", () => {

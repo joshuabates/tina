@@ -4,6 +4,7 @@ import type {
   OrchestrationSummary,
   Phase,
   ProjectSummary,
+  ReviewCheck,
   ReviewGate,
   ReviewSummary,
   ReviewThread,
@@ -205,6 +206,27 @@ export function buildReviewGate(
     decidedBy: none<string>(),
     decidedAt: none<string>(),
     summary: "Awaiting review",
+    ...overrides,
+  }
+}
+
+export function buildReviewCheck(
+  overrides: Partial<ReviewCheck> = {},
+): ReviewCheck {
+  return {
+    _id: "check1",
+    _creationTime: 1234567890,
+    orchestrationId: "orch1",
+    reviewId: "rev1",
+    name: "typecheck",
+    kind: "cli",
+    command: some("mise typecheck"),
+    status: "passed",
+    comment: none<string>(),
+    output: none<string>(),
+    startedAt: "2024-01-01T10:00:00Z",
+    completedAt: some("2024-01-01T10:00:04Z"),
+    durationMs: some(4200),
     ...overrides,
   }
 }
