@@ -56,6 +56,26 @@ describe("reviewChecks", () => {
       expect(checks[0].kind).toBe("project");
       expect(checks[0].command).toBeUndefined();
     });
+
+    test("throws when starting a duplicate running check", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(t, "chk-start-dup");
+      const reviewId = await createReview(t, { orchestrationId });
+
+      await startReviewCheck(t, {
+        reviewId,
+        orchestrationId,
+        name: "typecheck",
+      });
+
+      await expect(
+        startReviewCheck(t, {
+          reviewId,
+          orchestrationId,
+          name: "typecheck",
+        }),
+      ).rejects.toThrow('Check "typecheck" is already running');
+    });
   });
 
   describe("completeCheck", () => {
@@ -149,6 +169,42 @@ describe("reviewChecks", () => {
           status: "failed",
         }),
       ).rejects.toThrow("already completed");
+    });
+
+    test("completes the newest running check when name is reused", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(t, "chk-complete-reuse");
+      const reviewId = await createReview(t, { orchestrationId });
+
+      await startReviewCheck(t, {
+        reviewId,
+        orchestrationId,
+        name: "typecheck",
+      });
+      await t.mutation(api.reviewChecks.completeCheck, {
+        reviewId: reviewId as any,
+        name: "typecheck",
+        status: "passed",
+      });
+
+      await startReviewCheck(t, {
+        reviewId,
+        orchestrationId,
+        name: "typecheck",
+      });
+      await t.mutation(api.reviewChecks.completeCheck, {
+        reviewId: reviewId as any,
+        name: "typecheck",
+        status: "failed",
+      });
+
+      const checks = await t.query(api.reviewChecks.listChecksByReview, {
+        reviewId: reviewId as any,
+      });
+      const sameNameChecks = checks.filter((c) => c.name === "typecheck");
+      expect(sameNameChecks).toHaveLength(2);
+      expect(sameNameChecks.some((c) => c.status === "passed")).toBe(true);
+      expect(sameNameChecks.some((c) => c.status === "failed")).toBe(true);
     });
   });
 

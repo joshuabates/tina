@@ -33,6 +33,22 @@ const REVIEW_STATE_LABELS: Record<string, string> = {
   superseded: "Superseded",
 }
 
+function resolveDiffBase(gitRange: string | undefined): string {
+  if (!gitRange) return "origin/main"
+
+  const tripleDot = gitRange.indexOf("...")
+  if (tripleDot > 0) {
+    return gitRange.slice(0, tripleDot)
+  }
+
+  const doubleDot = gitRange.indexOf("..")
+  if (doubleDot > 0) {
+    return gitRange.slice(0, doubleDot)
+  }
+
+  return "origin/main"
+}
+
 function GateIndicator({ gate }: { gate: ReviewGate }) {
   const statusClass = styles[gate.status] ?? ""
   return (
@@ -94,6 +110,14 @@ function ReviewDetailContent() {
   const phaseLabel = phaseNumber
     ? `Phase ${phaseNumber}`
     : "Orchestration Review"
+  const phase = phaseNumber
+    ? orchResult.status === "success"
+      ? orchResult.data?.phases.find((p) => p.phaseNumber === phaseNumber)
+      : undefined
+    : undefined
+  const diffBase = resolveDiffBase(
+    phase ? Option.getOrUndefined(phase.gitRange) : undefined,
+  )
 
   return (
     <div data-testid="review-detail-page" className={styles.reviewPage}>
@@ -166,7 +190,7 @@ function ReviewDetailContent() {
               reviewId={reviewId ?? ""}
               orchestrationId={orchestrationId ?? ""}
               worktreePath={Option.getOrElse(orchResult.data.worktreePath, () => "")}
-              baseBranch={orchResult.data.branch}
+              baseBranch={diffBase}
             />
           )}
       </div>

@@ -15,6 +15,16 @@ export const startCheck = mutation({
       throw new Error(`Review not found: ${args.reviewId}`);
     }
 
+    const existingChecks = await ctx.db
+      .query("reviewChecks")
+      .withIndex("by_review_name", (q) =>
+        q.eq("reviewId", args.reviewId).eq("name", args.name),
+      )
+      .collect();
+    if (existingChecks.some((check) => check.status === "running")) {
+      throw new Error(`Check "${args.name}" is already running`);
+    }
+
     return await ctx.db.insert("reviewChecks", {
       reviewId: args.reviewId,
       orchestrationId: args.orchestrationId,
@@ -36,24 +46,28 @@ export const completeCheck = mutation({
     output: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const check = await ctx.db
+    const checks = await ctx.db
       .query("reviewChecks")
       .withIndex("by_review_name", (q) =>
         q.eq("reviewId", args.reviewId).eq("name", args.name),
       )
-      .first();
+      .collect();
 
-    if (!check) {
+    if (checks.length === 0) {
       throw new Error(
         `Check "${args.name}" not found for review ${args.reviewId}`,
       );
     }
-    if (check.status !== "running") {
+
+    const runningChecks = checks.filter((check) => check.status === "running");
+    if (runningChecks.length === 0) {
+      const latestCheck = checks[checks.length - 1];
       throw new Error(
-        `Check "${args.name}" is already completed with status "${check.status}"`,
+        `Check "${args.name}" is already completed with status "${latestCheck.status}"`,
       );
     }
 
+    const check = runningChecks[runningChecks.length - 1];
     const completedAt = new Date().toISOString();
     const startMs = new Date(check.startedAt).getTime();
     const endMs = new Date(completedAt).getTime();

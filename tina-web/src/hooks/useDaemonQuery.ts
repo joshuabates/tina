@@ -28,7 +28,7 @@ export interface DiffHunk {
   lines: DiffLine[]
 }
 
-const DAEMON_BASE = import.meta.env.VITE_DAEMON_URL ?? "http://localhost:4321"
+const DAEMON_BASE = import.meta.env.VITE_DAEMON_URL ?? "http://localhost:7842"
 
 export async function fetchDaemon<T>(path: string, params: Record<string, string>): Promise<T> {
   const url = new URL(path, DAEMON_BASE)

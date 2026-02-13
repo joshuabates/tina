@@ -1,8 +1,8 @@
 use axum::extract::Query;
-use axum::http::StatusCode;
+use axum::http::{HeaderValue, Method, StatusCode};
 use axum::routing::get;
 use axum::{Json, Router};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::{Any, CorsLayer};
@@ -38,18 +38,45 @@ pub struct FileParams {
     pub git_ref: String,
 }
 
+fn validate_worktree_path(raw: &str) -> Result<PathBuf, (StatusCode, String)> {
+    let worktree = Path::new(raw);
+    if !worktree.is_absolute() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("worktree must be an absolute path: {}", raw),
+        ));
+    }
+
+    let canonical = std::fs::canonicalize(worktree).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("worktree not found: {}", raw),
+        )
+    })?;
+
+    if !canonical.is_dir() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("worktree is not a directory: {}", canonical.display()),
+        ));
+    }
+
+    if !canonical.join(".git").exists() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("worktree is not a git worktree: {}", canonical.display()),
+        ));
+    }
+
+    Ok(canonical)
+}
+
 pub async fn get_diff_list(
     Query(params): Query<DiffListParams>,
 ) -> Result<Json<Vec<git::DiffFileStat>>, (StatusCode, String)> {
-    let worktree = params.worktree.clone();
-    if !Path::new(&worktree).exists() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("worktree not found: {}", worktree),
-        ));
-    }
+    let worktree = validate_worktree_path(&params.worktree)?;
     tokio::task::spawn_blocking(move || {
-        git::get_diff_file_list(Path::new(&params.worktree), &params.base)
+        git::get_diff_file_list(&worktree, &params.base)
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -60,15 +87,9 @@ pub async fn get_diff_list(
 pub async fn get_diff_file(
     Query(params): Query<DiffFileParams>,
 ) -> Result<Json<Vec<git::DiffHunk>>, (StatusCode, String)> {
-    let worktree = params.worktree.clone();
-    if !Path::new(&worktree).exists() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("worktree not found: {}", worktree),
-        ));
-    }
+    let worktree = validate_worktree_path(&params.worktree)?;
     tokio::task::spawn_blocking(move || {
-        git::get_file_diff(Path::new(&params.worktree), &params.base, &params.file)
+        git::get_file_diff(&worktree, &params.base, &params.file)
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -79,15 +100,9 @@ pub async fn get_diff_file(
 pub async fn get_file(
     Query(params): Query<FileParams>,
 ) -> Result<String, (StatusCode, String)> {
-    let worktree = params.worktree.clone();
-    if !Path::new(&worktree).exists() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("worktree not found: {}", worktree),
-        ));
-    }
+    let worktree = validate_worktree_path(&params.worktree)?;
     tokio::task::spawn_blocking(move || {
-        git::get_file_at_ref(Path::new(&params.worktree), &params.git_ref, &params.path)
+        git::get_file_at_ref(&worktree, &params.git_ref, &params.path)
     })
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -96,8 +111,13 @@ pub async fn get_file(
 
 pub fn build_router() -> Router {
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
+        .allow_origin([
+            HeaderValue::from_static("http://localhost:5173"),
+            HeaderValue::from_static("http://127.0.0.1:5173"),
+            HeaderValue::from_static("http://localhost:4173"),
+            HeaderValue::from_static("http://127.0.0.1:4173"),
+        ])
+        .allow_methods([Method::GET, Method::OPTIONS])
         .allow_headers(Any);
 
     Router::new()
@@ -217,7 +237,7 @@ mod tests {
         let req: Request<Body> = Request::builder()
             .method("OPTIONS")
             .uri("/diff?worktree=/tmp&base=main")
-            .header("Origin", "http://localhost:3000")
+            .header("Origin", "http://localhost:5173")
             .header("Access-Control-Request-Method", "GET")
             .body(Body::empty())
             .unwrap();
@@ -226,6 +246,18 @@ mod tests {
             .headers()
             .get("access-control-allow-origin")
             .is_some());
+    }
+
+    #[tokio::test]
+    async fn test_rejects_non_git_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree = tmp.path().to_str().unwrap();
+        let uri = format!(
+            "/diff?worktree={}&base=main",
+            urlencoding::encode(worktree)
+        );
+        let resp = test_router().oneshot(get(&uri)).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     /// Create a temp git repo with a known diff between `main` and `feature` branches.
