@@ -947,4 +947,162 @@ describe("feedbackEntries", () => {
       expect(summary.entries).toHaveLength(0);
     });
   });
+
+  describe("e2e smoke test", () => {
+    test("full lifecycle: create mixed entries, filter, resolve, reopen, verify blocking", async () => {
+      const t = convexTest(schema, modules);
+      const { orchestrationId } = await createFeatureFixture(t, "fb-e2e");
+
+      // Seed targets
+      await seedTaskEvent(t, orchestrationId, "1");
+      await seedTaskEvent(t, orchestrationId, "2");
+      await seedCommit(t, orchestrationId, "e2e_sha_001");
+      await seedCommit(t, orchestrationId, "e2e_sha_002");
+
+      // Create mixed entries
+      const askTask1 = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "1",
+        entryType: "ask_for_change",
+        body: "Task 1 needs error handling",
+        authorName: "reviewer",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "task",
+        targetTaskId: "2",
+        entryType: "comment",
+        body: "Task 2 looks good",
+        authorName: "reviewer",
+      });
+
+      const askCommit = await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "commit",
+        targetCommitSha: "e2e_sha_001",
+        entryType: "ask_for_change",
+        body: "Commit needs test coverage",
+        authorType: "agent",
+        authorName: "test-agent",
+      });
+
+      await createFeedbackEntry(t, {
+        orchestrationId,
+        targetType: "commit",
+        targetCommitSha: "e2e_sha_002",
+        entryType: "suggestion",
+        body: "Consider extracting a helper",
+        authorName: "reviewer",
+      });
+
+      // Verify total count
+      const allEntries = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByOrchestration,
+        { orchestrationId: orchestrationId as any },
+      );
+      expect(allEntries).toHaveLength(4);
+
+      // Verify blocking summary before resolution
+      let summary = await t.query(
+        api.feedbackEntries.getBlockingFeedbackSummary,
+        { orchestrationId: orchestrationId as any },
+      );
+      expect(summary.openAskForChangeCount).toBe(2);
+      expect(summary.totalBlocking).toBe(2);
+      expect(summary.byTargetType.task).toBe(1);
+      expect(summary.byTargetType.commit).toBe(1);
+
+      // Resolve one blocking entry
+      await t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
+        entryId: askTask1 as any,
+        resolvedBy: "developer",
+      });
+
+      // Verify blocking count decremented
+      summary = await t.query(
+        api.feedbackEntries.getBlockingFeedbackSummary,
+        { orchestrationId: orchestrationId as any },
+      );
+      expect(summary.openAskForChangeCount).toBe(1);
+      expect(summary.totalBlocking).toBe(1);
+      expect(summary.byTargetType.task).toBe(0);
+      expect(summary.byTargetType.commit).toBe(1);
+
+      // Reopen the resolved entry
+      await t.mutation(api.feedbackEntries.reopenFeedbackEntry, {
+        entryId: askTask1 as any,
+      });
+
+      // Verify blocking count restored
+      summary = await t.query(
+        api.feedbackEntries.getBlockingFeedbackSummary,
+        { orchestrationId: orchestrationId as any },
+      );
+      expect(summary.openAskForChangeCount).toBe(2);
+      expect(summary.totalBlocking).toBe(2);
+
+      // Verify target-scoped queries
+      const task1Entries = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByTarget,
+        {
+          orchestrationId: orchestrationId as any,
+          targetType: "task",
+          targetRef: "1",
+        },
+      );
+      expect(task1Entries).toHaveLength(1);
+
+      const commitEntries = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByTarget,
+        {
+          orchestrationId: orchestrationId as any,
+          targetType: "commit",
+          targetRef: "e2e_sha_001",
+        },
+      );
+      expect(commitEntries).toHaveLength(1);
+
+      // Verify filter by entryType
+      const askEntries = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByOrchestration,
+        {
+          orchestrationId: orchestrationId as any,
+          entryType: "ask_for_change",
+        },
+      );
+      expect(askEntries).toHaveLength(2);
+
+      // Verify filter by authorType
+      const agentEntries = await t.query(
+        api.feedbackEntries.listFeedbackEntriesByOrchestration,
+        {
+          orchestrationId: orchestrationId as any,
+          authorType: "agent",
+        },
+      );
+      expect(agentEntries).toHaveLength(1);
+      expect(agentEntries[0].authorName).toBe("test-agent");
+
+      // Resolve all blocking, verify clean summary
+      await t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
+        entryId: askTask1 as any,
+        resolvedBy: "developer",
+      });
+      await t.mutation(api.feedbackEntries.resolveFeedbackEntry, {
+        entryId: askCommit as any,
+        resolvedBy: "developer",
+      });
+
+      summary = await t.query(
+        api.feedbackEntries.getBlockingFeedbackSummary,
+        { orchestrationId: orchestrationId as any },
+      );
+      expect(summary.openAskForChangeCount).toBe(0);
+      expect(summary.totalBlocking).toBe(0);
+      expect(summary.byTargetType.task).toBe(0);
+      expect(summary.byTargetType.commit).toBe(0);
+    });
+  });
 });
