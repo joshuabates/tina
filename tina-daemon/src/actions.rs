@@ -14,6 +14,11 @@ pub struct ActionPayload {
     pub phase: Option<String>,
     pub feedback: Option<String>,
     pub issues: Option<String>,
+    #[serde(alias = "planPath")]
+    pub plan: Option<String>,
+    pub plan_path: Option<String>,
+    #[serde(alias = "parentTeamId")]
+    pub parent_team_id: Option<String>,
     // Launch-specific fields (start_orchestration)
     pub design_id: Option<String>,
     pub cwd: Option<String>,
@@ -246,6 +251,41 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
                 "retry".to_string(),
             ])
         }
+        "start_execution" => {
+            let phase = payload
+                .phase
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("start_execution requires 'phase' in payload"))?;
+            let mut args = vec![
+                "start".to_string(),
+                "--feature".to_string(),
+                feature.to_string(),
+                "--phase".to_string(),
+                phase.to_string(),
+            ];
+
+            if let Some(plan) = payload.plan.as_deref().or(payload.plan_path.as_deref()) {
+                args.push("--plan".to_string());
+                args.push(plan.to_string());
+            } else if let Some(design_id) = payload.design_id.as_deref() {
+                args.push("--design-id".to_string());
+                args.push(design_id.to_string());
+            } else {
+                bail!("start_execution requires 'plan'/'plan_path' or 'design_id' in payload");
+            }
+
+            if let Some(cwd) = payload.cwd.as_deref() {
+                args.push("--cwd".to_string());
+                args.push(cwd.to_string());
+            }
+
+            if let Some(parent_team_id) = payload.parent_team_id.as_deref() {
+                args.push("--parent-team-id".to_string());
+                args.push(parent_team_id.to_string());
+            }
+
+            Ok(args)
+        }
         "start_orchestration" => {
             let design_id = payload.design_id.as_deref().ok_or_else(|| {
                 anyhow::anyhow!("start_orchestration requires 'design_id' in payload")
@@ -298,19 +338,16 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
                         args.push(v.to_string());
                     }
                     if let Some(v) = review.get("hard_block_detectors").and_then(|v| v.as_bool()) {
-                        if !v {
-                            args.push("--no-hard-block-detectors".to_string());
-                        }
+                        args.push("--hard-block-detectors".to_string());
+                        args.push(v.to_string());
                     }
                     if let Some(v) = review.get("allow_rare_override").and_then(|v| v.as_bool()) {
-                        if !v {
-                            args.push("--no-allow-rare-override".to_string());
-                        }
+                        args.push("--allow-rare-override".to_string());
+                        args.push(v.to_string());
                     }
                     if let Some(v) = review.get("require_fix_first").and_then(|v| v.as_bool()) {
-                        if !v {
-                            args.push("--no-require-fix-first".to_string());
-                        }
+                        args.push("--require-fix-first".to_string());
+                        args.push(v.to_string());
                     }
                 }
             }
@@ -472,6 +509,9 @@ mod tests {
             phase: phase.map(|p| p.to_string()),
             feedback: None,
             issues: None,
+            plan: None,
+            plan_path: None,
+            parent_team_id: None,
             design_id: None,
             cwd: None,
             branch: None,
@@ -508,6 +548,9 @@ mod tests {
             phase: Some("2".to_string()),
             feedback: Some("needs error handling".to_string()),
             issues: None,
+            plan: None,
+            plan_path: None,
+            parent_team_id: None,
             design_id: None,
             cwd: None,
             branch: None,
@@ -600,6 +643,9 @@ mod tests {
             phase: Some("1".to_string()),
             feedback: None,
             issues: None,
+            plan: None,
+            plan_path: None,
+            parent_team_id: None,
             design_id: None,
             cwd: None,
             branch: None,
@@ -637,6 +683,9 @@ mod tests {
             phase: Some("1".to_string()),
             feedback: None,
             issues: Some("missing tests".to_string()),
+            plan: None,
+            plan_path: None,
+            parent_team_id: None,
             design_id: None,
             cwd: None,
             branch: None,
@@ -675,6 +724,9 @@ mod tests {
             phase: None,
             feedback: None,
             issues: None,
+            plan: None,
+            plan_path: None,
+            parent_team_id: None,
             design_id: Some("design_abc".to_string()),
             cwd: Some("/tmp/worktree".to_string()),
             branch: Some("tina/auth".to_string()),
@@ -692,6 +744,121 @@ mod tests {
             revision: None,
             depends_on: None,
         }
+    }
+
+    fn start_execution_payload() -> ActionPayload {
+        ActionPayload {
+            feature: Some("auth".to_string()),
+            phase: Some("1".to_string()),
+            feedback: None,
+            issues: None,
+            plan: Some("docs/plans/2026-02-01-auth-phase-1.md".to_string()),
+            plan_path: None,
+            parent_team_id: None,
+            design_id: Some("design_abc".to_string()),
+            cwd: None,
+            branch: None,
+            total_phases: None,
+            policy: None,
+            model_policy: None,
+            review_policy: None,
+            role: None,
+            model: None,
+            phase_number: None,
+            task_number: None,
+            after_task: None,
+            subject: None,
+            description: None,
+            revision: None,
+            depends_on: None,
+        }
+    }
+
+    #[test]
+    fn test_build_cli_args_start_execution_basic() {
+        let p = start_execution_payload();
+        let args = build_cli_args("start_execution", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "start",
+                "--feature",
+                "auth",
+                "--phase",
+                "1",
+                "--plan",
+                "docs/plans/2026-02-01-auth-phase-1.md",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_build_cli_args_start_execution_with_optional_fields() {
+        let mut p = start_execution_payload();
+        p.cwd = Some("/tmp/worktree".to_string());
+        p.parent_team_id = Some("team_abc".to_string());
+
+        let args = build_cli_args("start_execution", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "start",
+                "--feature",
+                "auth",
+                "--phase",
+                "1",
+                "--plan",
+                "docs/plans/2026-02-01-auth-phase-1.md",
+                "--cwd",
+                "/tmp/worktree",
+                "--parent-team-id",
+                "team_abc",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_build_cli_args_start_execution_without_plan_uses_design_id() {
+        let mut p = start_execution_payload();
+        p.plan = None;
+        p.plan_path = None;
+        let args = build_cli_args("start_execution", &p).unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "start",
+                "--feature",
+                "auth",
+                "--phase",
+                "1",
+                "--design-id",
+                "design_abc",
+            ]
+        );
+    }
+
+    #[test]
+    fn test_build_cli_args_start_execution_requires_plan_or_design_id() {
+        let mut p = start_execution_payload();
+        p.plan = None;
+        p.plan_path = None;
+        p.design_id = None;
+
+        let result = build_cli_args("start_execution", &p);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("plan'/'plan_path' or 'design_id"));
+    }
+
+    #[test]
+    fn test_build_cli_args_start_execution_missing_phase() {
+        let mut p = start_execution_payload();
+        p.phase = None;
+        let result = build_cli_args("start_execution", &p);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("phase"));
     }
 
     #[test]
@@ -753,16 +920,19 @@ mod tests {
                 "manual_plus_auto",
                 "--test-integrity-profile",
                 "strict_baseline",
-                "--no-hard-block-detectors",
-                "--no-allow-rare-override",
-                "--no-require-fix-first",
+                "--hard-block-detectors",
+                "false",
+                "--allow-rare-override",
+                "false",
+                "--require-fix-first",
+                "false",
             ]
         );
     }
 
     #[test]
     fn test_start_orchestration_policy_defaults_omitted() {
-        // When boolean policy flags are true (the defaults), no flags are emitted
+        // Boolean policy fields are forwarded verbatim when provided.
         let mut p = launch_payload();
         p.policy = Some(serde_json::json!({
             "review": {
@@ -772,7 +942,7 @@ mod tests {
             }
         }));
         let args = build_cli_args("start_orchestration", &p).unwrap();
-        // Should only have the base args, no --no-* flags
+        // Should include the explicit true values for boolean policy fields.
         assert_eq!(
             args,
             vec![
@@ -787,6 +957,12 @@ mod tests {
                 "tina/auth",
                 "--total-phases",
                 "3",
+                "--hard-block-detectors",
+                "true",
+                "--allow-rare-override",
+                "true",
+                "--require-fix-first",
+                "true",
             ]
         );
     }

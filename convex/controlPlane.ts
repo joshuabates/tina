@@ -8,6 +8,7 @@ import type { PolicySnapshot } from "./policyPresets";
 import { HEARTBEAT_TIMEOUT_MS } from "./nodes";
 
 const RUNTIME_ACTION_TYPES = [
+  "start_execution",
   "pause",
   "resume",
   "retry",
@@ -53,6 +54,26 @@ function validateRuntimePayload(actionType: string, rawPayload: string): void {
     if (typeof parsed.phase !== "string" || !parsed.phase) {
       throw new Error(`Payload for "${actionType}" requires "phase" (string)`);
     }
+  }
+}
+
+function validateStartExecutionPayload(rawPayload: string): void {
+  const parsed = parseJsonWithFeature(rawPayload, "start_execution");
+
+  if (typeof parsed.phase !== "string" || !parsed.phase) {
+    throw new Error('Payload for "start_execution" requires "phase" (string)');
+  }
+
+  const hasPlan =
+    (typeof parsed.plan === "string" && parsed.plan.length > 0) ||
+    (typeof parsed.planPath === "string" && parsed.planPath.length > 0);
+  const hasDesignId =
+    (typeof parsed.design_id === "string" && parsed.design_id.length > 0) ||
+    (typeof parsed.designId === "string" && parsed.designId.length > 0);
+  if (!hasPlan && !hasDesignId) {
+    throw new Error(
+      'Payload for "start_execution" requires "plan"/"planPath" or "design_id"/"designId"',
+    );
   }
 }
 
@@ -476,6 +497,18 @@ export const launchOrchestration = mutation({
       requestedBy: args.requestedBy,
       idempotencyKey: args.idempotencyKey,
     });
+    await insertControlActionWithQueue(ctx, {
+      orchestrationId,
+      nodeId: onlineNode._id,
+      actionType: "start_execution",
+      payload: JSON.stringify({
+        feature: args.feature,
+        phase: "1",
+        design_id: args.designId,
+      }),
+      requestedBy: args.requestedBy,
+      idempotencyKey: `${args.idempotencyKey}-start-execution`,
+    });
 
     await ctx.db.insert("orchestrationEvents", {
       orchestrationId,
@@ -516,6 +549,8 @@ export const enqueueControlAction = mutation({
     // Validate payload structure per action type
     if (["pause", "resume", "retry"].includes(args.actionType)) {
       validateRuntimePayload(args.actionType, args.payload);
+    } else if (args.actionType === "start_execution") {
+      validateStartExecutionPayload(args.payload);
     } else if (args.actionType === "orchestration_set_policy") {
       const policyPayload = validatePolicyPayload(args.payload);
       await checkAndIncrementRevision(ctx, args.orchestrationId, policyPayload.targetRevision);

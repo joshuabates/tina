@@ -346,6 +346,7 @@ describe("controlPlane:enqueueControlAction", () => {
     });
 
     const runtimeTypes = [
+      "start_execution",
       "pause",
       "resume",
       "retry",
@@ -357,6 +358,7 @@ describe("controlPlane:enqueueControlAction", () => {
     ];
 
     const payloads: Record<string, string> = {
+      start_execution: '{"feature":"test","phase":"1","design_id":"design_abc"}',
       pause: '{"feature":"test","phase":"1"}',
       resume: '{"feature":"test"}',
       retry: '{"feature":"test","phase":"2"}',
@@ -480,6 +482,42 @@ describe("controlPlane:enqueueControlAction payload validation", () => {
         idempotencyKey: "resume-no-feature",
       }),
     ).rejects.toThrow('requires "feature"');
+  });
+
+  test("rejects start_execution payload without plan or design_id", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+    await expect(
+      t.mutation(api.controlPlane.enqueueControlAction, {
+        orchestrationId,
+        nodeId,
+        actionType: "start_execution",
+        payload: '{"feature":"my-feat","phase":"1"}',
+        requestedBy: "web-ui",
+        idempotencyKey: "start-exec-no-plan-source",
+      }),
+    ).rejects.toThrow('requires "plan"/"planPath" or "design_id"/"designId"');
+  });
+
+  test("accepts valid start_execution payload with design_id", async () => {
+    const t = convexTest(schema, modules);
+    const { nodeId, orchestrationId } = await createFeatureFixture(
+      t,
+      "cp-feature",
+    );
+    const actionId = await t.mutation(api.controlPlane.enqueueControlAction, {
+      orchestrationId,
+      nodeId,
+      actionType: "start_execution",
+      payload: '{"feature":"my-feat","phase":"1","design_id":"design_abc"}',
+      requestedBy: "web-ui",
+      idempotencyKey: "valid-start-execution",
+    });
+
+    expect(actionId).toBeTruthy();
   });
 
   test("accepts valid payload with feature and phase for pause", async () => {
@@ -794,8 +832,13 @@ describe("controlPlane:launchOrchestration", () => {
     const actions = await t.query(api.controlPlane.listControlActions, {
       orchestrationId: result.orchestrationId,
     });
-    expect(actions.length).toBe(1);
-    expect(actions[0].actionType).toBe("start_orchestration");
+    expect(actions.length).toBe(2);
+    const actionTypes = actions.map((a) => a.actionType).sort();
+    expect(actionTypes).toEqual(["start_execution", "start_orchestration"]);
+    const startExecution = actions.find((a) => a.actionType === "start_execution");
+    expect(startExecution).toBeDefined();
+    const startExecutionPayload = JSON.parse(startExecution!.payload);
+    expect(startExecutionPayload.design_id).toBe(designId);
   });
 
   test("rejects nonexistent project", async () => {
@@ -1023,8 +1066,9 @@ describe("controlPlane:launchOrchestration:integration", () => {
     const actions = await t.query(api.controlPlane.listControlActions, {
       orchestrationId: result.orchestrationId,
     });
-    expect(actions).toHaveLength(1);
-    expect(actions[0].actionType).toBe("start_orchestration");
+    expect(actions).toHaveLength(2);
+    const actionTypes = actions.map((a) => a.actionType).sort();
+    expect(actionTypes).toEqual(["start_execution", "start_orchestration"]);
     expect(actions[0].status).toBe("pending");
     expect(actions[0].queueActionId).toBeDefined();
 
@@ -2787,11 +2831,11 @@ describe("controlPlane:featureFlagGuards", () => {
       const result = await t.mutation(api.controlPlane.launchOrchestration, {
         projectId,
         designId,
-        feature: "gated-feature",
-        branch: "tina/gated-feature",
+        feature: "flagless-feature",
+        branch: "tina/flagless-feature",
         policySnapshot: PRESETS.balanced,
         requestedBy: "web-ui",
-        idempotencyKey: "flag-gate-launch-3",
+        idempotencyKey: "flagless-launch-1",
       });
 
       expect(result.orchestrationId).toBeTruthy();

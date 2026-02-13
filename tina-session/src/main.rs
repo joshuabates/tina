@@ -134,8 +134,12 @@ enum Commands {
         phase: String,
 
         /// Path to plan file
-        #[arg(long)]
-        plan: PathBuf,
+        #[arg(long, required_unless_present = "design_id")]
+        plan: Option<PathBuf>,
+
+        /// Convex design document ID used to materialize a phase plan.
+        #[arg(long, required_unless_present = "plan")]
+        design_id: Option<String>,
 
         /// Working directory for tmux session. Defaults to orchestration worktree from Convex.
         #[arg(long)]
@@ -1064,6 +1068,7 @@ fn run() -> anyhow::Result<u8> {
             feature,
             phase,
             plan,
+            design_id,
             cwd,
             install_deps,
             parent_team_id,
@@ -1072,7 +1077,8 @@ fn run() -> anyhow::Result<u8> {
             commands::start::run(
                 &feature,
                 &phase,
-                &plan,
+                plan.as_deref(),
+                design_id.as_deref(),
                 cwd.as_deref(),
                 install_deps,
                 parent_team_id.as_deref(),
