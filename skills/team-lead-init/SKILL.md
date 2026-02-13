@@ -123,6 +123,57 @@ Do NOT spawn workers or reviewers yet. The team is just a container at this poin
 
 ---
 
+## STEP 4b: Result contract and dual-grammar recognition
+
+### v2 Result Contract
+
+All worker and reviewer outputs normalize to this schema:
+
+| Field | Type | Required |
+|-------|------|----------|
+| `role` | `worker\|spec-reviewer\|code-quality-reviewer` | always |
+| `task_id` | string (TaskCreate UUID) | always |
+| `status` | `pass\|gaps\|error` | always |
+| `git_range` | string | when role=worker and status=pass |
+| `files_changed` | string | optional |
+| `issues` | string | when status=gaps or error |
+| `confidence` | `high\|medium\|low` | optional, reviewers only |
+
+### Acceptance matrix
+
+When processing a result message, validate required fields:
+
+| role | status | required fields |
+|------|--------|----------------|
+| worker | pass | task_id, status, git_range |
+| worker | gaps or error | task_id, status, issues |
+| spec-reviewer | pass | task_id, status |
+| spec-reviewer | gaps or error | task_id, status, issues |
+| code-quality-reviewer | pass | task_id, status |
+| code-quality-reviewer | gaps or error | task_id, status, issues |
+
+If a required field is missing from a v2 message, treat the result as invalid (see retry policy).
+
+### Dual-grammar recognition (permanent)
+
+Team-lead accepts BOTH formats permanently:
+
+**v2 format (structured headers):** Message starts with `role:` line followed by key-value header lines, then a blank line, then freeform body. Parse headers into the v2 schema above.
+
+**Legacy format (freeform):** Message does NOT start with `role:`. Interpret the message body using LLM reasoning to extract:
+- Pass/fail verdict from phrases like "review passed", "spec compliant", "APPROVED", "FAILED", "issues found"
+- Git range from patterns like `abc123..def456`
+- Issues from bullet lists or numbered findings
+
+**Recognition logic:**
+1. Check if first line of message content matches `^role:\s*(worker|spec-reviewer|code-quality-reviewer)$`
+2. If yes: parse as v2 — extract all header fields, validate against acceptance matrix
+3. If no: parse as legacy — interpret freeform message for verdict, git range, issues
+
+**IMPORTANT:** Claude agents produce freeform text. v2 headers are a best-effort convention for Claude, not a guaranteed parse. Always handle legacy gracefully. For Codex outputs (via codex-cli adapter), v2 is deterministic.
+
+---
+
 ## STEP 5: DAG scheduler - concurrent task execution
 
 Replace the sequential task loop with a ready-queue DAG scheduler that runs independent tasks in parallel.
@@ -176,6 +227,12 @@ If `CLI == "codex"`:
 
 Monitor for Teammate messages from any active worker indicating completion. Track active workers in a map: task-number -> worker-name.
 
+When a worker message arrives, apply dual-grammar recognition:
+1. If message has v2 headers: extract `role`, `task_id`, `status`, `git_range`, `files_changed`, `issues`
+2. If message is legacy freeform: interpret verdict and extract git range from text
+3. Validate against acceptance matrix (for v2 messages only)
+4. If v2 validation fails (missing required field): treat as invalid result, apply retry policy
+
 ### 5.4 Review the completed task
 
 When worker-N reports completion, spawn reviewers for task N. Run a routing check using the task's model:
@@ -224,6 +281,34 @@ If `CLI == "codex"`:
 ```
 
 Wait for both reviewers to approve.
+
+When a reviewer message arrives, apply dual-grammar recognition:
+1. If message has v2 headers: extract `role`, `task_id`, `status`, `issues`, `confidence`
+2. If message is legacy freeform: interpret pass/fail verdict and extract issues from text
+3. For v2 messages, validate against acceptance matrix
+4. Decision logic:
+   - `status: pass` → reviewer approved
+   - `status: gaps` → reviewer found issues, send back to worker for fixes
+   - `status: error` → reviewer encountered an error, apply retry policy
+
+### 5.4b Invalid result handling
+
+When a result message fails v2 acceptance matrix validation or cannot be interpreted:
+
+1. **First attempt:** Retry the agent (worker or reviewer) once with stricter instructions. Add to the retry prompt:
+   ```
+   IMPORTANT: Your previous response could not be parsed. You MUST include v2 structured headers at the start of your message:
+   role: <your-role>
+   task_id: <task-id>
+   status: pass|gaps|error
+   [additional required fields per acceptance matrix]
+
+   Then include your freeform explanation after a blank line.
+   ```
+2. **Second failure:** Mark the run as failed. For workers, shut down and retry with fresh worker (existing retry policy). For reviewers, treat as review error — shut down reviewer and spawn replacement.
+3. **After exhausting retries:** Mark task as blocked per existing escalation protocol.
+
+Note: This retry policy applies only to unparseable/invalid results. Valid results with `status=gaps` follow the normal remediation loop (reviewer sends issues to worker, worker fixes, re-review).
 
 ### 5.5 Shut down task-N's agents
 
