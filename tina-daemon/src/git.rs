@@ -127,13 +127,30 @@ fn parse_git_log_output(output: &str) -> Result<Vec<GitCommit>> {
 
 // -- Diff types and parsing --
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FileStatus {
+    Added,
+    Modified,
+    Deleted,
+    Renamed,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DiffFileStat {
     pub path: String,
-    pub status: String,
+    pub status: FileStatus,
     pub insertions: u32,
     pub deletions: u32,
     pub old_path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DiffLineKind {
+    Context,
+    Add,
+    Delete,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -147,7 +164,7 @@ pub struct DiffHunk {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct DiffLine {
-    pub kind: String,
+    pub kind: DiffLineKind,
     pub old_line: Option<u32>,
     pub new_line: Option<u32>,
     pub text: String,
@@ -205,74 +222,72 @@ pub fn get_diff_file_list(repo_path: &Path, base: &str) -> Result<Vec<DiffFileSt
 }
 
 fn parse_diff_file_list(name_status: &str, numstat: &str) -> Result<Vec<DiffFileStat>> {
-    // Parse name-status: each line is "STATUS\tpath" or "R###\told\tnew"
-    let mut status_entries: Vec<(String, String, Option<String>)> = Vec::new();
+    let status_entries = parse_name_status_lines(name_status);
+    let numstat_entries = parse_numstat_lines(numstat);
 
-    for line in name_status.lines() {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 2 {
-            continue;
-        }
-        let raw_status = parts[0];
-        let (status, path, old_path) = if raw_status.starts_with('R') {
-            // Rename: R###\told_path\tnew_path
-            let old = parts.get(1).unwrap_or(&"").to_string();
-            let new = parts.get(2).unwrap_or(&"").to_string();
-            ("renamed".to_string(), new, Some(old))
-        } else {
-            let status = match raw_status {
-                "A" => "added",
-                "M" => "modified",
-                "D" => "deleted",
-                "C" => "copied",
-                _ => "modified",
-            };
-            (status.to_string(), parts[1].to_string(), None)
-        };
-        status_entries.push((status, path, old_path));
-    }
-
-    // Parse numstat: each line is "insertions\tdeletions\tpath"
-    // For renames: "insertions\tdeletions\told_path => new_path" or with {old => new}
-    let mut numstat_map: Vec<(String, u32, u32)> = Vec::new();
-
-    for line in numstat.lines() {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 3 {
-            continue;
-        }
-        let insertions = parts[0].parse::<u32>().unwrap_or(0);
-        let deletions = parts[1].parse::<u32>().unwrap_or(0);
-        // For renames, numstat uses the new path (or a combined form).
-        // We'll use the last part as the path key.
-        let path = parts[2..].join("\t");
-        numstat_map.push((path, insertions, deletions));
-    }
-
-    // Join: match by index (both commands output in same order with same filters)
-    let mut results = Vec::new();
-    for (i, (status, path, old_path)) in status_entries.into_iter().enumerate() {
-        let (insertions, deletions) = if let Some(entry) = numstat_map.get(i) {
-            (entry.1, entry.2)
-        } else {
-            (0, 0)
-        };
-        results.push(DiffFileStat {
-            path,
-            status,
-            insertions,
-            deletions,
-            old_path,
-        });
-    }
+    // Join by index (both commands output in same order with same filters)
+    let results = status_entries
+        .into_iter()
+        .enumerate()
+        .map(|(i, (status, path, old_path))| {
+            let (insertions, deletions) = numstat_entries
+                .get(i)
+                .map(|(_, ins, del)| (*ins, *del))
+                .unwrap_or((0, 0));
+            DiffFileStat {
+                path,
+                status,
+                insertions,
+                deletions,
+                old_path,
+            }
+        })
+        .collect();
 
     Ok(results)
+}
+
+fn parse_name_status_lines(input: &str) -> Vec<(FileStatus, String, Option<String>)> {
+    input
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() < 2 {
+                return None;
+            }
+            let raw_status = parts[0];
+            if raw_status.starts_with('R') {
+                let old = parts.get(1).unwrap_or(&"").to_string();
+                let new = parts.get(2).unwrap_or(&"").to_string();
+                Some((FileStatus::Renamed, new, Some(old)))
+            } else {
+                let status = match raw_status {
+                    "A" => FileStatus::Added,
+                    "D" => FileStatus::Deleted,
+                    _ => FileStatus::Modified,
+                };
+                Some((status, parts[1].to_string(), None))
+            }
+        })
+        .collect()
+}
+
+fn parse_numstat_lines(input: &str) -> Vec<(String, u32, u32)> {
+    input
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() < 3 {
+                return None;
+            }
+            let insertions = parts[0].parse::<u32>().unwrap_or(0);
+            let deletions = parts[1].parse::<u32>().unwrap_or(0);
+            let path = parts[2..].join("\t");
+            Some((path, insertions, deletions))
+        })
+        .collect()
 }
 
 /// Get unified diff hunks for a single file between `base` and HEAD.
@@ -302,25 +317,19 @@ fn parse_file_diff(diff_output: &str) -> Result<Vec<DiffHunk>> {
     let mut new_line: u32 = 0;
 
     for line in diff_output.lines() {
-        // Skip diff headers (diff --git, index, ---, +++)
-        if line.starts_with("diff ") || line.starts_with("index ") {
-            continue;
-        }
-        if line.starts_with("--- ") || line.starts_with("+++ ") {
-            continue;
-        }
-        // Binary file detection
-        if line.starts_with("Binary files ") {
+        if line.starts_with("diff ")
+            || line.starts_with("index ")
+            || line.starts_with("--- ")
+            || line.starts_with("+++ ")
+            || line.starts_with("Binary files ")
+        {
             continue;
         }
 
-        // Hunk header: @@ -old_start,old_count +new_start,new_count @@
         if line.starts_with("@@ ") {
-            // Save previous hunk
             if let Some(hunk) = current_hunk.take() {
                 hunks.push(hunk);
             }
-
             let (os, oc, ns, nc) = parse_hunk_header(line)?;
             current_hunk = Some(DiffHunk {
                 old_start: os,
@@ -334,55 +343,57 @@ fn parse_file_diff(diff_output: &str) -> Result<Vec<DiffHunk>> {
             continue;
         }
 
-        // Diff lines
         if let Some(ref mut hunk) = current_hunk {
-            if let Some(text) = line.strip_prefix('+') {
-                hunk.lines.push(DiffLine {
-                    kind: "add".to_string(),
-                    old_line: None,
-                    new_line: Some(new_line),
-                    text: text.to_string(),
-                });
-                new_line += 1;
-            } else if let Some(text) = line.strip_prefix('-') {
-                hunk.lines.push(DiffLine {
-                    kind: "delete".to_string(),
-                    old_line: Some(old_line),
-                    new_line: None,
-                    text: text.to_string(),
-                });
-                old_line += 1;
-            } else if let Some(text) = line.strip_prefix(' ') {
-                hunk.lines.push(DiffLine {
-                    kind: "context".to_string(),
-                    old_line: Some(old_line),
-                    new_line: Some(new_line),
-                    text: text.to_string(),
-                });
-                old_line += 1;
-                new_line += 1;
-            } else if line == "\\ No newline at end of file" {
-                // Skip this marker
-            } else {
-                // Bare context line (no leading space — can happen for empty lines)
-                hunk.lines.push(DiffLine {
-                    kind: "context".to_string(),
-                    old_line: Some(old_line),
-                    new_line: Some(new_line),
-                    text: line.to_string(),
-                });
-                old_line += 1;
-                new_line += 1;
-            }
+            push_diff_line(hunk, line, &mut old_line, &mut new_line);
         }
     }
 
-    // Push final hunk
     if let Some(hunk) = current_hunk.take() {
         hunks.push(hunk);
     }
 
     Ok(hunks)
+}
+
+fn push_diff_line(hunk: &mut DiffHunk, line: &str, old_line: &mut u32, new_line: &mut u32) {
+    if let Some(text) = line.strip_prefix('+') {
+        hunk.lines.push(DiffLine {
+            kind: DiffLineKind::Add,
+            old_line: None,
+            new_line: Some(*new_line),
+            text: text.to_string(),
+        });
+        *new_line += 1;
+    } else if let Some(text) = line.strip_prefix('-') {
+        hunk.lines.push(DiffLine {
+            kind: DiffLineKind::Delete,
+            old_line: Some(*old_line),
+            new_line: None,
+            text: text.to_string(),
+        });
+        *old_line += 1;
+    } else if let Some(text) = line.strip_prefix(' ') {
+        hunk.lines.push(DiffLine {
+            kind: DiffLineKind::Context,
+            old_line: Some(*old_line),
+            new_line: Some(*new_line),
+            text: text.to_string(),
+        });
+        *old_line += 1;
+        *new_line += 1;
+    } else if line == "\\ No newline at end of file" {
+        // Skip this marker
+    } else {
+        // Bare context line (no leading space — can happen for empty lines in diff)
+        hunk.lines.push(DiffLine {
+            kind: DiffLineKind::Context,
+            old_line: Some(*old_line),
+            new_line: Some(*new_line),
+            text: line.to_string(),
+        });
+        *old_line += 1;
+        *new_line += 1;
+    }
 }
 
 fn parse_hunk_header(line: &str) -> Result<(u32, u32, u32, u32)> {
@@ -489,26 +500,26 @@ def456|def4567|fix: bug fix|Jane Smith <jane@example.com>|2026-02-10T11:00:00Z
 
         // Added file
         assert_eq!(files[0].path, "src/new.rs");
-        assert_eq!(files[0].status, "added");
+        assert_eq!(files[0].status, FileStatus::Added);
         assert_eq!(files[0].insertions, 50);
         assert_eq!(files[0].deletions, 0);
         assert!(files[0].old_path.is_none());
 
         // Modified file
         assert_eq!(files[1].path, "src/lib.rs");
-        assert_eq!(files[1].status, "modified");
+        assert_eq!(files[1].status, FileStatus::Modified);
         assert_eq!(files[1].insertions, 10);
         assert_eq!(files[1].deletions, 3);
 
         // Deleted file
         assert_eq!(files[2].path, "src/old.rs");
-        assert_eq!(files[2].status, "deleted");
+        assert_eq!(files[2].status, FileStatus::Deleted);
         assert_eq!(files[2].insertions, 0);
         assert_eq!(files[2].deletions, 25);
 
         // Renamed file
         assert_eq!(files[3].path, "src/after.rs");
-        assert_eq!(files[3].status, "renamed");
+        assert_eq!(files[3].status, FileStatus::Renamed);
         assert_eq!(files[3].old_path, Some("src/before.rs".to_string()));
         assert_eq!(files[3].insertions, 2);
         assert_eq!(files[3].deletions, 1);
@@ -531,7 +542,7 @@ def456|def4567|fix: bug fix|Jane Smith <jane@example.com>|2026-02-10T11:00:00Z
 
         // Binary: insertions/deletions should be 0 (parse of "-" fails gracefully)
         assert_eq!(files[0].path, "image.png");
-        assert_eq!(files[0].status, "added");
+        assert_eq!(files[0].status, FileStatus::Added);
         assert_eq!(files[0].insertions, 0);
         assert_eq!(files[0].deletions, 0);
 
@@ -571,22 +582,22 @@ index abc123..def456 100644
         // Lines: context, context, delete, add, add, context, context
         assert_eq!(h.lines.len(), 7);
 
-        assert_eq!(h.lines[0].kind, "context");
+        assert_eq!(h.lines[0].kind, DiffLineKind::Context);
         assert_eq!(h.lines[0].text, "use std::io;");
         assert_eq!(h.lines[0].old_line, Some(1));
         assert_eq!(h.lines[0].new_line, Some(1));
 
-        assert_eq!(h.lines[2].kind, "delete");
+        assert_eq!(h.lines[2].kind, DiffLineKind::Delete);
         assert_eq!(h.lines[2].text, "fn old_function() {");
         assert_eq!(h.lines[2].old_line, Some(3));
         assert_eq!(h.lines[2].new_line, None);
 
-        assert_eq!(h.lines[3].kind, "add");
+        assert_eq!(h.lines[3].kind, DiffLineKind::Add);
         assert_eq!(h.lines[3].text, "fn new_function() {");
         assert_eq!(h.lines[3].old_line, None);
         assert_eq!(h.lines[3].new_line, Some(3));
 
-        assert_eq!(h.lines[4].kind, "add");
+        assert_eq!(h.lines[4].kind, DiffLineKind::Add);
         assert_eq!(h.lines[4].text, "    println!(\"hello\");");
         assert_eq!(h.lines[4].new_line, Some(4));
     }
