@@ -19,6 +19,7 @@ import {
   ReviewThread,
   ReviewGate,
   ReviewCheck,
+  TerminalTarget,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -226,5 +227,12 @@ export const ReviewCheckListQuery = queryDef({
   query: api.reviewChecks.listChecksByReview,
   args: Schema.Struct({ reviewId: Schema.String }),
   schema: Schema.Array(ReviewCheck),
+})
+
+export const TerminalTargetListQuery = queryDef({
+  key: "terminalTargets.list",
+  query: api.terminalTargets.listTerminalTargets,
+  args: Schema.Struct({}),
+  schema: Schema.Array(TerminalTarget),
 })
 
