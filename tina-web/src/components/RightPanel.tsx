@@ -29,7 +29,11 @@ export function RightPanel({ detail }: RightPanelProps) {
         <StatusSection detail={detail} />
         <TeamSection detail={detail} />
         <GitOpsSection gitEvents={events.gitEvents} isLoading={events.isLoading} />
-        <ReviewSection reviewEvents={events.reviewEvents} isLoading={events.isLoading} />
+        <ReviewSection
+          orchestrationId={detail._id}
+          reviewEvents={events.reviewEvents}
+          isLoading={events.isLoading}
+        />
         <ActionTimeline orchestrationId={detail._id} />
       </div>
     </ScrollArea>

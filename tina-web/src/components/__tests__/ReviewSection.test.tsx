@@ -1,15 +1,23 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
+import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { ReviewSection } from "../ReviewSection"
 import { buildOrchestrationEvent, none, some } from "@/test/builders/domain"
+import { buildReviewSummary } from "@/test/builders/domain/entities"
 import { focusableState } from "@/test/harness/hooks"
+import { installAppRuntimeQueryMock } from "@/test/harness/app-runtime"
+import { querySuccess, type QueryStateMap } from "@/test/builders/query"
 import type { OrchestrationEvent } from "@/schemas"
 
 vi.mock("@/hooks/useFocusable")
+vi.mock("@/hooks/useTypedQuery")
 
 const mockUseFocusable = vi.mocked(
   await import("@/hooks/useFocusable"),
 ).useFocusable
+const mockUseTypedQuery = vi.mocked(
+  await import("@/hooks/useTypedQuery"),
+).useTypedQuery
 
 function reviewEvent(
   eventType: OrchestrationEvent["eventType"] = "phase_review_requested",
@@ -30,8 +38,30 @@ function reviewEvent(
   })
 }
 
-function renderWithEvents(events: OrchestrationEvent[]) {
-  return render(<ReviewSection reviewEvents={events} isLoading={false} />)
+function renderWithEvents(
+  events: OrchestrationEvent[],
+  states: Partial<QueryStateMap> = {
+    "reviews.list": querySuccess([buildReviewSummary()]),
+  },
+) {
+  installAppRuntimeQueryMock(mockUseTypedQuery, { states })
+
+  return render(
+    <MemoryRouter initialEntries={["/projects/p1/observe"]}>
+      <Routes>
+        <Route
+          path="/projects/:projectId/observe"
+          element={(
+            <ReviewSection
+              orchestrationId="orch1"
+              reviewEvents={events}
+              isLoading={false}
+            />
+          )}
+        />
+      </Routes>
+    </MemoryRouter>,
+  )
 }
 
 describe("ReviewSection", () => {
@@ -41,7 +71,28 @@ describe("ReviewSection", () => {
   })
 
   it("renders loading state while events are fetching", () => {
-    render(<ReviewSection reviewEvents={[]} isLoading />)
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "reviews.list": querySuccess([buildReviewSummary()]),
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={["/projects/p1/observe"]}>
+        <Routes>
+          <Route
+            path="/projects/:projectId/observe"
+            element={(
+              <ReviewSection
+                orchestrationId="orch1"
+                reviewEvents={[]}
+                isLoading
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
 
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
   })
@@ -95,28 +146,50 @@ describe("ReviewSection", () => {
     expect(mockUseFocusable).toHaveBeenCalledWith("rightPanel.review", 1)
 
     rerender(
-      <ReviewSection
-        reviewEvents={[
-          reviewEvent(),
-          reviewEvent("phase_review_approved", "Review approved", {
-            _id: "evt2",
-            _creationTime: 1234567891,
-            source: "reviewer",
-            recordedAt: "2024-01-01T10:05:00Z",
-          }),
-        ]}
-        isLoading={false}
-      />,
+      <MemoryRouter initialEntries={["/projects/p1/observe"]}>
+        <Routes>
+          <Route
+            path="/projects/:projectId/observe"
+            element={(
+              <ReviewSection
+                orchestrationId="orch1"
+                reviewEvents={[
+                  reviewEvent(),
+                  reviewEvent("phase_review_approved", "Review approved", {
+                    _id: "evt2",
+                    _creationTime: 1234567891,
+                    source: "reviewer",
+                    recordedAt: "2024-01-01T10:05:00Z",
+                  }),
+                ]}
+                isLoading={false}
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>,
     )
 
     expect(mockUseFocusable).toHaveBeenCalledWith("rightPanel.review", 2)
   })
 
-  it("review action button has accessible aria-label", () => {
+  it("renders review action link when latest review is available", () => {
     renderWithEvents([reviewEvent()])
 
+    const reviewLink = screen.getByRole("link", { name: "Review and approve phase" })
+    expect(reviewLink).toBeInTheDocument()
+    expect(reviewLink).toHaveAttribute(
+      "href",
+      "/projects/p1/observe/orchestrations/orch1/reviews/rev1",
+    )
+  })
+
+  it("disables review action button when review record is unavailable", () => {
+    renderWithEvents([reviewEvent()], {
+      "reviews.list": querySuccess([]),
+    })
+
     const reviewButton = screen.getByRole("button", { name: "Review and approve phase" })
-    expect(reviewButton).toBeInTheDocument()
-    expect(reviewButton).toHaveAccessibleName("Review and approve phase")
+    expect(reviewButton).toBeDisabled()
   })
 })
