@@ -8,6 +8,7 @@ export const TeamMember = Schema.Struct({
   agentType: optionalString,
   model: optionalString,
   joinedAt: optionalString,
+  tmuxPaneId: optionalString,
   recordedAt: Schema.String,
 })
 
