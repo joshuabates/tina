@@ -263,6 +263,7 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
 
             let mut args = vec![
                 "init".to_string(),
+                "--feature".to_string(),
                 feature.to_string(),
                 "--cwd".to_string(),
                 cwd.to_string(),
@@ -270,6 +271,7 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
                 design_id.to_string(),
                 "--branch".to_string(),
                 branch.to_string(),
+                "--total-phases".to_string(),
                 total_phases.to_string(),
             ];
 
@@ -700,6 +702,7 @@ mod tests {
             args,
             vec![
                 "init",
+                "--feature",
                 "auth",
                 "--cwd",
                 "/tmp/worktree",
@@ -707,6 +710,7 @@ mod tests {
                 "design_abc",
                 "--branch",
                 "tina/auth",
+                "--total-phases",
                 "3",
             ]
         );
@@ -731,6 +735,7 @@ mod tests {
             args,
             vec![
                 "init",
+                "--feature",
                 "auth",
                 "--cwd",
                 "/tmp/worktree",
@@ -738,6 +743,7 @@ mod tests {
                 "design_abc",
                 "--branch",
                 "tina/auth",
+                "--total-phases",
                 "3",
                 "--review-enforcement",
                 "task_and_phase",
@@ -771,6 +777,7 @@ mod tests {
             args,
             vec![
                 "init",
+                "--feature",
                 "auth",
                 "--cwd",
                 "/tmp/worktree",
@@ -778,6 +785,7 @@ mod tests {
                 "design_abc",
                 "--branch",
                 "tina/auth",
+                "--total-phases",
                 "3",
             ]
         );
