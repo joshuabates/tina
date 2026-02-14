@@ -7,6 +7,8 @@ interface SidebarItemProps extends React.HTMLAttributes<HTMLDivElement> {
   statusText?: string;
   statusColor?: string;
   statusIndicatorClass?: string;
+  statusIndicatorSize?: "small" | "large";
+  statusIcon?: React.ReactNode;
   onDelete?: React.MouseEventHandler<HTMLButtonElement>;
   deleting?: boolean;
   "data-orchestration-id"?: string;
@@ -19,14 +21,23 @@ function SidebarItem({
   statusText,
   statusColor = "text-muted-foreground",
   statusIndicatorClass,
+  statusIndicatorSize = "small",
+  statusIcon,
   onDelete,
   deleting = false,
   className,
   ...props
 }: SidebarItemProps) {
   const shouldRenderDelete = onDelete !== undefined;
+  const shouldRenderStatusIcon = statusIcon !== undefined
   const shouldRenderStatusDot = statusIndicatorClass !== undefined
   const dotClass = statusIndicatorClass ?? "bg-muted-foreground/50"
+  const dotSizeClass = statusIndicatorSize === "large"
+    ? "mr-2 h-2.5 w-2.5"
+    : "mr-1.5 h-1.5 w-1.5"
+  const iconSizeClass = statusIndicatorSize === "large"
+    ? "mr-2 h-4 w-4"
+    : "mr-1.5 h-3 w-3"
 
   return (
     <div
@@ -39,9 +50,18 @@ function SidebarItem({
       )}
       {...props}
     >
-      {shouldRenderStatusDot && (
+      {shouldRenderStatusIcon && (
         <span
-          className={cn("mr-1.5 h-1.5 w-1.5 rounded-full shrink-0", dotClass)}
+          className={cn("inline-flex items-center justify-center shrink-0", iconSizeClass)}
+          aria-hidden="true"
+          data-status-indicator="true"
+        >
+          {statusIcon}
+        </span>
+      )}
+      {!shouldRenderStatusIcon && shouldRenderStatusDot && (
+        <span
+          className={cn("rounded-full shrink-0", dotSizeClass, dotClass)}
           aria-hidden="true"
           data-status-indicator="true"
         />

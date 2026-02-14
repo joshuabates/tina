@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
 import { DataErrorBoundary } from "./DataErrorBoundary"
-import { PhaseTimelinePanel } from "./PhaseTimelinePanel"
 import { TaskListPanel } from "./TaskListPanel"
 import { RightPanel } from "./RightPanel"
 import { TelemetryTimeline } from "./TelemetryTimeline"
@@ -120,19 +119,12 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
   return matchQueryResult(result, {
     // Loading state - show skeleton matching three-column layout
     loading: () => (
-      <div className={styles.orchestrationPage} aria-busy="true">
-        <div className={styles.content}>
-          <div className={styles.centerPanel}>
-            <div className={styles.timelineColumn}>
-              <div className={styles.loading}>
-                <div className={styles.skeletonBar} />
-                <div className={styles.skeletonBar} />
-                <div className={styles.skeletonBar} />
-              </div>
-            </div>
-            <div className={styles.taskColumn}>
-              <div className={styles.loading}>
-                <div className={styles.skeletonBar} style={{ width: "80%" }} />
+        <div className={styles.orchestrationPage} aria-busy="true">
+          <div className={styles.content}>
+            <div className={styles.centerPanel}>
+              <div className={styles.taskColumn}>
+                <div className={styles.loading}>
+                  <div className={styles.skeletonBar} style={{ width: "80%" }} />
                 <div className={styles.skeletonBar} style={{ width: "60%" }} />
                 <div className={styles.skeletonBar} style={{ width: "70%" }} />
               </div>
@@ -185,9 +177,6 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
           </div>
           <div className={styles.content}>
             <div className={styles.centerPanel}>
-              <div className={styles.timelineColumn}>
-                <PhaseTimelinePanel detail={orchestration} />
-              </div>
               <div className={styles.taskColumn}>
                 <TaskListPanel detail={orchestration} />
               </div>

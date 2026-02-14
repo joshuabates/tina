@@ -17,12 +17,6 @@ const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
 
-vi.mock("../PhaseTimelinePanel", () => ({
-  PhaseTimelinePanel: ({ detail }: { detail: OrchestrationDetail }) => (
-    <div data-testid="phase-timeline-panel">Phase Timeline for {detail.featureName}</div>
-  ),
-}))
-
 vi.mock("../TaskListPanel", () => ({
   TaskListPanel: ({ detail }: { detail: OrchestrationDetail }) => (
     <div data-testid="task-list-panel">Task List for {detail.featureName}</div>
@@ -106,8 +100,7 @@ async function withSuppressedConsoleError(run: () => void | Promise<void>) {
 }
 
 function expectPanels(feature = "test-feature") {
-  expect(screen.getByTestId("phase-timeline-panel")).toBeInTheDocument()
-  expect(screen.getByText(new RegExp(`Phase Timeline for ${feature}`))).toBeInTheDocument()
+  expect(screen.queryByTestId("phase-timeline-panel")).not.toBeInTheDocument()
   expect(screen.getByTestId("task-list-panel")).toBeInTheDocument()
   expect(screen.getByTestId("right-panel")).toBeInTheDocument()
 }

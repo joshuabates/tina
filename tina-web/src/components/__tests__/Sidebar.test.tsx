@@ -3,10 +3,15 @@ import { screen, within } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
 import { Sidebar } from "../Sidebar"
 import { api } from "@convex/_generated/api"
-import { buildOrchestrationSummary, some } from "@/test/builders/domain"
+import {
+  buildOrchestrationDetail,
+  buildOrchestrationSummary,
+  buildPhase,
+  some,
+} from "@/test/builders/domain"
 import { queryLoading, querySuccess, type QueryStateMap } from "@/test/builders/query"
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
-import { statusIconBgClass, toStatusBadgeStatus } from "@/components/ui/status-styles"
+import { statusTextClass, toStatusBadgeStatus } from "@/components/ui/status-styles"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("@/convex", () => ({
@@ -52,16 +57,19 @@ const defaultStates: Partial<QueryStateMap> = {
 function renderSidebar({
   route = "/projects/p1/observe",
   states = {},
+  detailResults = {},
   projectId = "p1",
 }: {
   route?: string
   states?: Partial<QueryStateMap>
+  detailResults?: Record<string, ReturnType<typeof querySuccess<unknown>>>
   projectId?: string
 } = {}) {
   return renderWithAppRuntime(<Sidebar projectId={projectId} />, {
     route,
     mockUseTypedQuery,
     states: { ...defaultStates, ...states },
+    detailResults,
   })
 }
 
@@ -107,13 +115,10 @@ describe("Sidebar", () => {
     const item = within(container).getByText("feature-one").closest("div")
     expect(item).toHaveClass("bg-muted/50")
 
-    const statusDot = item?.querySelector("span[data-status-indicator]")
-    expect(statusDot).toBeTruthy()
-    const expectedStatusClass = statusIconBgClass(toStatusBadgeStatus("executing")).replace(
-      "phase-glow",
-      "",
-    )
-    expect(statusDot).toHaveClass(expectedStatusClass)
+    const statusIcon = item?.querySelector("span[data-status-indicator] svg")
+    expect(statusIcon).toBeTruthy()
+    const expectedStatusClass = statusTextClass(toStatusBadgeStatus("executing"))
+    expect(statusIcon).toHaveClass(expectedStatusClass)
   })
 
   it("clicking an orchestration updates active selection styling", async () => {
@@ -141,6 +146,54 @@ describe("Sidebar", () => {
         orchestrationId: "o2",
       },
     )
+  })
+
+  it("expands selected orchestration phases in the sidebar", () => {
+    renderSidebar({
+      route: "/projects/p1/observe?orch=o1",
+      detailResults: {
+        o1: querySuccess(
+          buildOrchestrationDetail({
+            _id: "o1",
+            featureName: "feature-one",
+            phases: [
+              buildPhase({ _id: "phase1", phaseNumber: "1", status: "executing" }),
+              buildPhase({ _id: "phase2", phaseNumber: "2", status: "planning" }),
+            ],
+            phaseTasks: { "1": [], "2": [] },
+            teamMembers: [],
+          }),
+        ),
+      },
+    })
+
+    expect(screen.getByRole("button", { name: /phase 1/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /phase 2/i })).toBeInTheDocument()
+  })
+
+  it("renders selected phase with vertical line indicator", () => {
+    const { container } = renderSidebar({
+      route: "/projects/p1/observe?orch=o1&phase=phase2",
+      detailResults: {
+        o1: querySuccess(
+          buildOrchestrationDetail({
+            _id: "o1",
+            featureName: "feature-one",
+            phases: [
+              buildPhase({ _id: "phase1", phaseNumber: "1", status: "executing" }),
+              buildPhase({ _id: "phase2", phaseNumber: "2", status: "planning" }),
+            ],
+            phaseTasks: { "1": [], "2": [] },
+            teamMembers: [],
+          }),
+        ),
+      },
+    })
+
+    const selectedPhaseIndicator = container.querySelector(
+      '[data-phase-id="phase2"] [data-phase-indicator]',
+    )
+    expect(selectedPhaseIndicator).toHaveAttribute("data-phase-indicator", "line")
   })
 
   it("renders empty state when project has no orchestrations", () => {

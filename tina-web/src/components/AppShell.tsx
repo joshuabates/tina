@@ -39,8 +39,8 @@ interface ModeConfig {
 
 const MODE_CONFIGS: readonly ModeConfig[] = [
   { mode: "observe", label: "Observe", icon: Activity },
-  { mode: "plan", label: "Plan", icon: ClipboardList },
   { mode: "sessions", label: "Sessions", icon: MessageSquare },
+  { mode: "plan", label: "Plan", icon: ClipboardList },
   { mode: "code", label: "Code", icon: Code2 },
   { mode: "design", label: "Design", icon: PenTool },
 ] as const

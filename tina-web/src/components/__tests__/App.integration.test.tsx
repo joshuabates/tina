@@ -30,6 +30,12 @@ const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
 
+vi.mock("../RightPanel", () => ({
+  RightPanel: ({ detail }: { detail: { featureName: string } }) => (
+    <div data-testid="right-panel">Right Panel for {detail.featureName}</div>
+  ),
+}))
+
 const primaryFixture = buildAppIntegrationFixture({
   projects: [buildProjectSummary({ _id: "p1", orchestrationCount: 2 })],
   orchestrations: [
@@ -128,16 +134,37 @@ function firstSidebarItem(): HTMLElement {
 }
 
 function expectFeaturePage(featureName: string, branch: string, main = latestMain()) {
-  expect(within(main).getByText(featureName)).toBeInTheDocument()
-  expect(within(main).getByText(branch)).toBeInTheDocument()
+  const scoped = within(main.ownerDocument.body)
+  expect(scoped.getAllByText(new RegExp(featureName, "i")).length).toBeGreaterThan(0)
+  expect(scoped.getAllByText(new RegExp(branch, "i")).length).toBeGreaterThan(0)
 }
 
 function expectPhaseTimeline(main = latestMain()) {
   for (const phase of primaryFixture.detail.phases) {
     expect(
-      within(main).getByText(
-        new RegExp(`P${phase.phaseNumber} Phase ${phase.phaseNumber}`, "i"),
-      ),
+      within(main.ownerDocument.body).getByRole("button", {
+        name: new RegExp(`phase ${phase.phaseNumber}`, "i"),
+      }),
+    ).toBeInTheDocument()
+  }
+}
+
+function expectNoPhaseTimeline(main = latestMain()) {
+  for (const phase of primaryFixture.detail.phases) {
+    expect(
+      within(main.ownerDocument.body).queryByRole("button", {
+        name: new RegExp(`phase ${phase.phaseNumber}`, "i"),
+      }),
+    ).not.toBeInTheDocument()
+  }
+}
+
+function expectPhaseTimelineFor(featurePhases: Array<{ phaseNumber: string }>, main = latestMain()) {
+  for (const phase of featurePhases) {
+    expect(
+      within(main.ownerDocument.body).getByRole("button", {
+        name: new RegExp(`phase ${phase.phaseNumber}`, "i"),
+      }),
     ).toBeInTheDocument()
   }
 }
@@ -169,6 +196,7 @@ describe("App - runtime-backed URL and selection flow", () => {
   it("shows not found state for unknown orchestration ID", () => {
     renderApp("/projects/p1/observe?orch=invalid-999")
     expect(screen.getByText(/select an orchestration/i)).toBeInTheDocument()
+    expectNoPhaseTimeline()
   })
 
   it("clicking sidebar item updates selected orchestration content", async () => {
@@ -204,6 +232,10 @@ describe("App - runtime-backed URL and selection flow", () => {
       // Phase auto-selection picks the current phase of the new orchestration,
       // which has no tasks, so we see "No tasks for this phase"
       expect(screen.getByText(/no tasks for this phase/i)).toBeInTheDocument()
+      expectPhaseTimelineFor(secondaryDetail.phases)
+      expect(
+        screen.queryByRole("button", { name: /phase 2/i }),
+      ).not.toBeInTheDocument()
     })
   })
 })
