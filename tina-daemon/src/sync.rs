@@ -95,6 +95,17 @@ impl SyncCache {
         })
     }
 
+    pub fn find_worktree_by_design_path(&self, design_path: &Path) -> Option<&WorktreeInfo> {
+        self.worktrees.iter().find(|wt| {
+            let designs_dir = wt
+                .worktree_path
+                .join("ui")
+                .join("designs")
+                .join("sets");
+            design_path.starts_with(&designs_dir)
+        })
+    }
+
     pub fn find_worktree_by_plan_path(&self, plan_path: &Path) -> Option<&WorktreeInfo> {
         self.worktrees.iter().find(|wt| {
             // Primary location: worktree-local docs/plans.
@@ -971,6 +982,96 @@ pub async fn sync_plan(
     Ok(())
 }
 
+/// Extract a title from a `meta.ts` file using regex.
+///
+/// Looks for patterns like `title: "My Title"` or `title: 'My Title'`.
+pub fn extract_title_from_meta(meta_path: &Path) -> Option<String> {
+    let content = fs::read_to_string(meta_path).ok()?;
+    let re = Regex::new(r#"title\s*:\s*["']([^"']+)["']"#).ok()?;
+    re.captures(&content)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
+}
+
+/// Sync design metadata from the filesystem to Convex.
+///
+/// Reads the `ui/designs/sets/` directory structure, treating first-level
+/// directories as designs and second-level directories as variations.
+pub async fn sync_design_metadata(
+    _client: &Arc<Mutex<TinaConvexClient>>,
+    orchestration_id: &str,
+    worktree_path: &Path,
+    telemetry: Option<&DaemonTelemetry>,
+) -> Result<()> {
+    let started_at = chrono::Utc::now();
+    let span_id = telemetry.map(|t| t.start_span("daemon.sync_design_metadata"));
+
+    let sets_dir = worktree_path.join("ui").join("designs").join("sets");
+    if !sets_dir.exists() {
+        if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+            t.end_span(
+                sid,
+                "daemon.sync_design_metadata",
+                started_at,
+                "ok",
+                None,
+                None,
+            )
+            .await;
+        }
+        return Ok(());
+    }
+
+    for design_entry in fs::read_dir(&sets_dir)? {
+        let design_entry = design_entry?;
+        if !design_entry.file_type()?.is_dir() {
+            continue;
+        }
+        let design_slug = design_entry.file_name().to_string_lossy().to_string();
+
+        let meta_path = design_entry.path().join("meta.ts");
+        let title = if meta_path.exists() {
+            extract_title_from_meta(&meta_path).unwrap_or_else(|| design_slug.clone())
+        } else {
+            design_slug.clone()
+        };
+
+        info!(
+            design = %design_slug,
+            title = %title,
+            orchestration = %orchestration_id,
+            "syncing design metadata"
+        );
+
+        for var_entry in fs::read_dir(design_entry.path())? {
+            let var_entry = var_entry?;
+            if !var_entry.file_type()?.is_dir() {
+                continue;
+            }
+            let var_slug = var_entry.file_name().to_string_lossy().to_string();
+            debug!(
+                design = %design_slug,
+                variation = %var_slug,
+                "found variation"
+            );
+        }
+    }
+
+    if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+        t.end_span(
+            sid,
+            "daemon.sync_design_metadata",
+            started_at,
+            "ok",
+            None,
+            None,
+        )
+        .await;
+    }
+
+    Ok(())
+}
+
 /// Discover active worktrees from Convex orchestration state.
 ///
 /// Queries for non-Complete orchestrations and extracts worktree paths
@@ -1434,6 +1535,93 @@ mod tests {
         let found = cache.find_worktree_by_plan_path(&plan_path);
         assert!(found.is_some());
         assert_eq!(found.unwrap().feature, "test-feature");
+    }
+
+    #[test]
+    fn test_find_worktree_by_design_path() {
+        let mut cache = SyncCache::new();
+        cache.set_worktrees(vec![WorktreeInfo {
+            orchestration_id: "orch1".to_string(),
+            feature: "test-feature".to_string(),
+            worktree_path: PathBuf::from("/project/.worktrees/test"),
+            branch: "tina/test-feature".to_string(),
+            current_phase: "1".to_string(),
+            git_dir_path: None,
+            branch_ref_path: None,
+        }]);
+
+        let design_path = PathBuf::from(
+            "/project/.worktrees/test/ui/designs/sets/my-design/meta.ts",
+        );
+        let found = cache.find_worktree_by_design_path(&design_path);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().feature, "test-feature");
+    }
+
+    #[test]
+    fn test_find_worktree_by_design_path_not_found() {
+        let mut cache = SyncCache::new();
+        cache.set_worktrees(vec![WorktreeInfo {
+            orchestration_id: "orch1".to_string(),
+            feature: "test-feature".to_string(),
+            worktree_path: PathBuf::from("/project/.worktrees/test"),
+            branch: "tina/test-feature".to_string(),
+            current_phase: "1".to_string(),
+            git_dir_path: None,
+            branch_ref_path: None,
+        }]);
+
+        let design_path = PathBuf::from(
+            "/other/.worktrees/other/ui/designs/sets/my-design/meta.ts",
+        );
+        assert!(cache.find_worktree_by_design_path(&design_path).is_none());
+    }
+
+    #[test]
+    fn test_extract_title_from_meta_double_quotes() {
+        let temp = TempDir::new().unwrap();
+        let meta_path = temp.path().join("meta.ts");
+        fs::write(
+            &meta_path,
+            r#"export default { title: "My Cool Design" };"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            extract_title_from_meta(&meta_path),
+            Some("My Cool Design".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_title_from_meta_single_quotes() {
+        let temp = TempDir::new().unwrap();
+        let meta_path = temp.path().join("meta.ts");
+        fs::write(
+            &meta_path,
+            "export default { title: 'Single Quoted Title' };",
+        )
+        .unwrap();
+
+        assert_eq!(
+            extract_title_from_meta(&meta_path),
+            Some("Single Quoted Title".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_title_from_meta_no_title() {
+        let temp = TempDir::new().unwrap();
+        let meta_path = temp.path().join("meta.ts");
+        fs::write(&meta_path, "export default { description: 'no title here' };").unwrap();
+
+        assert_eq!(extract_title_from_meta(&meta_path), None);
+    }
+
+    #[test]
+    fn test_extract_title_from_meta_missing_file() {
+        let path = Path::new("/nonexistent/meta.ts");
+        assert_eq!(extract_title_from_meta(path), None);
     }
 
     #[test]

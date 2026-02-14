@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc as std_mpsc;
+use std::sync::{Arc, RwLock};
 
 use anyhow::{Context, Result};
 use notify::{Event, RecursiveMode, Watcher};
@@ -29,6 +30,8 @@ pub enum WatchEvent {
     GitRef(PathBuf),
     /// A plan file changed
     Plan(PathBuf),
+    /// A design set file changed (meta.ts or screenshots)
+    Design(PathBuf),
 }
 
 /// Async file watcher that monitors teams, tasks, git refs, and plans.
@@ -43,6 +46,10 @@ pub struct DaemonWatcher {
     tasks_dir: PathBuf,
     git_ref_paths: Vec<PathBuf>,
     plan_dirs: Vec<PathBuf>,
+    design_dirs: Vec<PathBuf>,
+    /// Shared with the notify callback so dynamically-added design dirs
+    /// are visible to `classify_watch_path`.
+    design_dirs_shared: Arc<RwLock<Vec<PathBuf>>>,
 }
 
 fn is_heads_ref_path(path: &Path) -> bool {
@@ -61,7 +68,23 @@ fn is_heads_ref_path(path: &Path) -> bool {
     false
 }
 
-fn classify_watch_path(path: &Path, teams_prefix: &Path, tasks_prefix: &Path) -> Option<WatchEvent> {
+fn is_design_file(path: &Path) -> bool {
+    let file_name = path.file_name().and_then(|f| f.to_str());
+    if file_name == Some("meta.ts") {
+        return true;
+    }
+    matches!(
+        path.extension().and_then(|e| e.to_str()),
+        Some("png" | "jpg" | "webp")
+    )
+}
+
+fn classify_watch_path(
+    path: &Path,
+    teams_prefix: &Path,
+    tasks_prefix: &Path,
+    design_dirs: &[PathBuf],
+) -> Option<WatchEvent> {
     if path.starts_with(teams_prefix) {
         return Some(WatchEvent::Teams);
     }
@@ -75,6 +98,15 @@ fn classify_watch_path(path: &Path, teams_prefix: &Path, tasks_prefix: &Path) ->
         || is_heads_ref_path(path)
     {
         return Some(WatchEvent::GitRef(path.to_path_buf()));
+    }
+
+    // Check design dirs before plan (.md) check
+    if is_design_file(path) {
+        for dir in design_dirs {
+            if path.starts_with(dir) {
+                return Some(WatchEvent::Design(path.to_path_buf()));
+            }
+        }
     }
 
     if path.extension() == Some(std::ffi::OsStr::new("md")) {
@@ -102,6 +134,9 @@ impl DaemonWatcher {
         let tasks_prefix = tasks_dir.to_path_buf();
         let tp = teams_prefix.clone();
         let tkp = tasks_prefix.clone();
+        let design_dirs_shared: Arc<RwLock<Vec<PathBuf>>> =
+            Arc::new(RwLock::new(Vec::new()));
+        let dd = design_dirs_shared.clone();
 
         let mut watcher =
             notify::recommended_watcher(move |res: std::result::Result<Event, notify::Error>| {
@@ -110,8 +145,9 @@ impl DaemonWatcher {
                     Err(_) => return,
                 };
 
+                let dirs = dd.read().unwrap_or_else(|e| e.into_inner());
                 for path in &event.paths {
-                    let watch_event = classify_watch_path(path, &tp, &tkp);
+                    let watch_event = classify_watch_path(path, &tp, &tkp, &dirs);
 
                     if let Some(evt) = watch_event {
                         let _ = std_tx.send(evt);
@@ -156,6 +192,8 @@ impl DaemonWatcher {
             tasks_dir: tasks_dir.to_path_buf(),
             git_ref_paths: Vec::new(),
             plan_dirs: Vec::new(),
+            design_dirs: Vec::new(),
+            design_dirs_shared,
         })
     }
 
@@ -177,6 +215,20 @@ impl DaemonWatcher {
                 .watch(plan_dir, RecursiveMode::NonRecursive)
                 .with_context(|| format!("watching plan dir: {}", plan_dir.display()))?;
             self.plan_dirs.push(plan_dir.to_path_buf());
+        }
+        Ok(())
+    }
+
+    /// Watch a specific design sets directory (e.g., `ui/designs/sets`).
+    pub fn watch_design_dir(&mut self, design_dir: &Path) -> Result<()> {
+        if !self.design_dirs.contains(&design_dir.to_path_buf()) {
+            self.watcher
+                .watch(design_dir, RecursiveMode::Recursive)
+                .with_context(|| format!("watching design dir: {}", design_dir.display()))?;
+            self.design_dirs.push(design_dir.to_path_buf());
+            if let Ok(mut shared) = self.design_dirs_shared.write() {
+                shared.push(design_dir.to_path_buf());
+            }
         }
         Ok(())
     }
@@ -212,7 +264,7 @@ mod tests {
         let path = Path::new("/repo/.git/refs/heads/tina/my-feature");
 
         assert_eq!(
-            classify_watch_path(path, teams, tasks),
+            classify_watch_path(path, teams, tasks, &[]),
             Some(WatchEvent::GitRef(path.to_path_buf()))
         );
     }
@@ -226,11 +278,11 @@ mod tests {
         let packed = Path::new("/repo/.git/packed-refs");
 
         assert_eq!(
-            classify_watch_path(head, teams, tasks),
+            classify_watch_path(head, teams, tasks, &[]),
             Some(WatchEvent::GitRef(head.to_path_buf()))
         );
         assert_eq!(
-            classify_watch_path(packed, teams, tasks),
+            classify_watch_path(packed, teams, tasks, &[]),
             Some(WatchEvent::GitRef(packed.to_path_buf()))
         );
     }
@@ -250,6 +302,80 @@ mod tests {
         assert!(tasks.exists());
 
         drop(watcher);
+    }
+
+    #[test]
+    fn test_classify_design_meta_ts() {
+        let teams = Path::new("/tmp/teams");
+        let tasks = Path::new("/tmp/tasks");
+        let design_dirs = vec![PathBuf::from(
+            "/project/.worktrees/test/ui/designs/sets",
+        )];
+        let path = Path::new(
+            "/project/.worktrees/test/ui/designs/sets/my-design/meta.ts",
+        );
+
+        assert_eq!(
+            classify_watch_path(path, teams, tasks, &design_dirs),
+            Some(WatchEvent::Design(path.to_path_buf()))
+        );
+    }
+
+    #[test]
+    fn test_classify_design_image_files() {
+        let teams = Path::new("/tmp/teams");
+        let tasks = Path::new("/tmp/tasks");
+        let design_dirs = vec![PathBuf::from(
+            "/project/.worktrees/test/ui/designs/sets",
+        )];
+
+        for ext in &["png", "jpg", "webp"] {
+            let path_str = format!(
+                "/project/.worktrees/test/ui/designs/sets/my-design/variation-a/screenshot.{}",
+                ext
+            );
+            let path = Path::new(&path_str);
+            assert_eq!(
+                classify_watch_path(path, teams, tasks, &design_dirs),
+                Some(WatchEvent::Design(path.to_path_buf())),
+                "expected Design event for .{} file",
+                ext
+            );
+        }
+    }
+
+    #[test]
+    fn test_classify_non_design_file_in_design_dir() {
+        let teams = Path::new("/tmp/teams");
+        let tasks = Path::new("/tmp/tasks");
+        let design_dirs = vec![PathBuf::from(
+            "/project/.worktrees/test/ui/designs/sets",
+        )];
+
+        // A .ts file that's not meta.ts should not classify as Design
+        let path = Path::new(
+            "/project/.worktrees/test/ui/designs/sets/my-design/index.ts",
+        );
+        assert_eq!(
+            classify_watch_path(path, teams, tasks, &design_dirs),
+            None
+        );
+    }
+
+    #[test]
+    fn test_classify_design_file_outside_design_dir() {
+        let teams = Path::new("/tmp/teams");
+        let tasks = Path::new("/tmp/tasks");
+        let design_dirs = vec![PathBuf::from(
+            "/project/.worktrees/test/ui/designs/sets",
+        )];
+
+        // A meta.ts outside the design dir should not classify
+        let path = Path::new("/other/project/meta.ts");
+        assert_eq!(
+            classify_watch_path(path, teams, tasks, &design_dirs),
+            None
+        );
     }
 
     // Note: Integration tests for file change detection are omitted because
