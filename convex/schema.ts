@@ -171,6 +171,11 @@ export default defineSchema({
     sha: v.string(),
     shortSha: v.optional(v.string()),
     subject: v.optional(v.string()),
+    // Keep legacy commit metadata optional for backward-compatible validation.
+    author: v.optional(v.string()),
+    timestamp: v.optional(v.string()),
+    insertions: v.optional(v.number()),
+    deletions: v.optional(v.number()),
     recordedAt: v.string(),
   })
     .index("by_orchestration", ["orchestrationId"])
