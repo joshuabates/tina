@@ -133,6 +133,11 @@ describe("specDesigns", () => {
         specId: specId as any,
         designId: designId as any,
       });
+
+      const designs = await t.query(api.specDesigns.listDesignsForSpec, {
+        specId: specId as any,
+      });
+      expect(designs).toHaveLength(0);
     });
   });
 
