@@ -21,7 +21,7 @@ export default defineSchema({
   orchestrations: defineTable({
     ...orchestrationCoreTableFields,
     projectId: v.optional(v.id("projects")),
-    designId: v.optional(v.id("designs")),
+    specId: v.optional(v.id("specs")),
   })
     .index("by_feature", ["featureName"])
     .index("by_node", ["nodeId"])
@@ -263,9 +263,9 @@ export default defineSchema({
       "operation",
     ]),
 
-  designs: defineTable({
+  specs: defineTable({
     projectId: v.id("projects"),
-    designKey: v.string(),
+    specKey: v.string(),
     title: v.string(),
     markdown: v.string(),
     status: v.string(), // draft | in_review | approved | archived
@@ -281,11 +281,11 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_project_status", ["projectId", "status"])
-    .index("by_key", ["designKey"]),
+    .index("by_key", ["specKey"]),
 
   tickets: defineTable({
     projectId: v.id("projects"),
-    designId: v.optional(v.id("designs")),
+    specId: v.optional(v.id("specs")),
     ticketKey: v.string(),
     title: v.string(),
     description: v.string(),
@@ -298,12 +298,12 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_project_status", ["projectId", "status"])
-    .index("by_design", ["designId"])
+    .index("by_spec", ["specId"])
     .index("by_key", ["ticketKey"]),
 
   workComments: defineTable({
     projectId: v.id("projects"),
-    targetType: v.string(), // design | ticket
+    targetType: v.string(), // spec | ticket
     targetId: v.string(),
     authorType: v.string(), // human | agent
     authorName: v.string(),
@@ -316,7 +316,7 @@ export default defineSchema({
 
   projectCounters: defineTable({
     projectId: v.id("projects"),
-    counterType: v.string(), // design | ticket
+    counterType: v.string(), // spec | ticket
     nextValue: v.number(),
   })
     .index("by_project_type", ["projectId", "counterType"]),
