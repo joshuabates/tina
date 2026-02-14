@@ -52,8 +52,8 @@ function getTransitionActions(status: string): TransitionAction[] {
 }
 
 export function SpecDetailPage() {
-  const { designId, projectId: routeProjectId } = useParams<{
-    designId: string
+  const { specId, projectId: routeProjectId } = useParams<{
+    specId: string
     projectId: string
   }>()
   const [editing, setEditing] = useState(false)
@@ -64,7 +64,7 @@ export function SpecDetailPage() {
   const { createAndConnect } = useCreateSession()
 
   const specResult = useTypedQuery(SpecDetailQuery, {
-    designId: designId ?? "",
+    specId: specId ?? "",
   })
 
   if (isAnyQueryLoading(specResult)) {
@@ -101,7 +101,7 @@ export function SpecDetailPage() {
     setTransitioning(true)
     try {
       await transitionSpec({
-        specId: designId as Id<"specs">,
+        specId: specId as Id<"specs">,
         newStatus,
       })
     } finally {
@@ -117,7 +117,7 @@ export function SpecDetailPage() {
     createAndConnect({
       label: `Discuss: ${spec.title}`,
       contextType: "spec",
-      contextId: designId!,
+      contextId: specId!,
       contextSummary: spec.markdown.slice(0, 2000),
     })
   }
@@ -132,7 +132,7 @@ export function SpecDetailPage() {
       ? completedMarkers.filter((m: string) => m !== marker)
       : [...completedMarkers, marker]
     await updateMarkers({
-      specId: designId as Id<"specs">,
+      specId: specId as Id<"specs">,
       completedMarkers: next,
     })
   }
@@ -233,7 +233,7 @@ export function SpecDetailPage() {
         <CommentTimeline
           projectId={routeProjectId || spec.projectId}
           targetType="spec"
-          targetId={designId ?? ""}
+          targetId={specId ?? ""}
         />
       </div>
     </div>

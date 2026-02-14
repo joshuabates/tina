@@ -124,7 +124,7 @@ export function buildOrchestrationDetail(
     _creationTime: 1234567890,
     nodeId: "n1",
     featureName: "my-feature",
-    designDocPath: "/docs/my-feature.md",
+    specDocPath: "/docs/my-feature.md",
     branch: "tina/my-feature",
     worktreePath: none<string>(),
     totalPhases: 3,
@@ -136,7 +136,7 @@ export function buildOrchestrationDetail(
     policySnapshot: none<string>(),
     policySnapshotHash: none<string>(),
     presetOrigin: none<string>(),
-    designOnly: none<boolean>(),
+    specOnly: none<boolean>(),
     policyRevision: none<number>(),
     updatedAt: none<string>(),
     nodeName: "node1",
@@ -207,7 +207,7 @@ export function buildTaskListDetail(
   return buildOrchestrationDetail({
     _id: orchestrationId,
     featureName: "test-feature",
-    designDocPath: "/docs/test.md",
+    specDocPath: "/docs/test.md",
     branch: "tina/test-feature",
     phases,
     phaseTasks: {
@@ -296,7 +296,7 @@ export function buildPhaseTimelineDetail(
   return buildOrchestrationDetail({
     _id: orchestrationId,
     featureName: "test-feature",
-    designDocPath: "/docs/test.md",
+    specDocPath: "/docs/test.md",
     branch: "tina/test-feature",
     phases,
     phaseTasks: {
@@ -368,7 +368,7 @@ export function buildAppIntegrationFixture(
   const detail = buildOrchestrationDetail({
     _id: "abc123",
     featureName: "my-feature",
-    designDocPath: "/docs/my-feature.md",
+    specDocPath: "/docs/my-feature.md",
     branch: "tina/my-feature",
     currentPhase: 2,
     phases,

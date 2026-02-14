@@ -1,5 +1,5 @@
 import type {
-  DesignSummary,
+  SpecSummary,
   OrchestrationEvent,
   OrchestrationSummary,
   Phase,
@@ -38,7 +38,7 @@ export function buildOrchestrationSummary(
     nodeId: "n1",
     projectId: some("p1"),
     featureName: "my-feature",
-    designDocPath: "/docs/my-feature.md",
+    specDocPath: "/docs/my-feature.md",
     branch: "tina/my-feature",
     worktreePath: none<string>(),
     totalPhases: 3,
@@ -50,7 +50,7 @@ export function buildOrchestrationSummary(
     policySnapshot: none<string>(),
     policySnapshotHash: none<string>(),
     presetOrigin: none<string>(),
-    designOnly: none<boolean>(),
+    specOnly: none<boolean>(),
     policyRevision: none<number>(),
     updatedAt: none<string>(),
     nodeName: "node1",
@@ -129,14 +129,14 @@ export function buildOrchestrationEvent(
   }
 }
 
-export function buildDesignSummary(
-  overrides: Partial<DesignSummary> = {},
-): DesignSummary {
+export function buildSpecSummary(
+  overrides: Partial<SpecSummary> = {},
+): SpecSummary {
   return {
     _id: "d1",
     _creationTime: 1234567890,
     projectId: "p1",
-    designKey: "ALPHA-D1",
+    specKey: "ALPHA-D1",
     title: "Authentication Flow",
     markdown: "# Auth\nDesign for auth flow",
     status: "draft",

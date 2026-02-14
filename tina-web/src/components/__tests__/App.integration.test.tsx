@@ -49,7 +49,7 @@ const secondaryOrchestration = buildOrchestrationSummary({
   _creationTime: 1234567891,
   projectId: some("p1"),
   featureName: "my-other-feature",
-  designDocPath: "/docs/my-other-feature.md",
+  specDocPath: "/docs/my-other-feature.md",
   branch: "tina/my-other-feature",
   currentPhase: 1,
   status: "planning",
@@ -59,7 +59,7 @@ const secondaryDetail = buildOrchestrationDetail({
   _id: "def456",
   nodeId: "n2",
   featureName: "my-other-feature",
-  designDocPath: "/docs/my-other-feature.md",
+  specDocPath: "/docs/my-other-feature.md",
   branch: "tina/my-other-feature",
   currentPhase: 1,
   phases: [

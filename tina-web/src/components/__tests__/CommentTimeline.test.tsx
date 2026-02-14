@@ -32,7 +32,7 @@ function buildWorkComment(overrides: Partial<WorkComment> = {}): WorkComment {
     _id: "c1",
     _creationTime: 1234567890,
     projectId: "p1",
-    targetType: "design",
+    targetType: "spec",
     targetId: "d1",
     authorType: "human",
     authorName: "Alice",
@@ -70,7 +70,7 @@ function setupQueryMock(states: Partial<QueryStateMap>) {
 function renderTimeline(states: Partial<QueryStateMap> = { "workComments.list": querySuccess(comments) }) {
   setupQueryMock(states)
   return renderWithRouter(
-    <CommentTimeline projectId="p1" targetType="design" targetId="d1" />,
+    <CommentTimeline projectId="p1" targetType="spec" targetId="d1" />,
   )
 }
 
@@ -137,7 +137,7 @@ describe("CommentTimeline", () => {
         authorName: "Bob",
         body: "Nice work",
         authorType: "human",
-        targetType: "design",
+        targetType: "spec",
         targetId: "d1",
         projectId: "p1",
       }),

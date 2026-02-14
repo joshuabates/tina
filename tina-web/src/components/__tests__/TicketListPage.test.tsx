@@ -5,7 +5,7 @@ import App from "../../App"
 import {
   buildProjectSummary,
   buildOrchestrationSummary,
-  buildDesignSummary,
+  buildSpecSummary,
   some,
   none,
 } from "@/test/builders/domain"
@@ -15,7 +15,7 @@ import {
   type QueryStateMap,
 } from "@/test/builders/query"
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
-import type { TicketSummary, DesignSummary } from "@/schemas"
+import type { TicketSummary, SpecSummary } from "@/schemas"
 
 vi.mock("@/hooks/useTypedQuery")
 vi.mock("convex/react", async (importOriginal) => {
@@ -39,7 +39,7 @@ function buildTicketSummary(overrides: Partial<TicketSummary> = {}): TicketSumma
     _id: "t1",
     _creationTime: 1234567890,
     projectId: "p1",
-    designId: none<string>(),
+    specId: none<string>(),
     ticketKey: "ALPHA-T1",
     title: "Implement login",
     description: "Add login form",
@@ -53,16 +53,16 @@ function buildTicketSummary(overrides: Partial<TicketSummary> = {}): TicketSumma
   }
 }
 
-const designs: DesignSummary[] = [
-  buildDesignSummary({
+const specs: SpecSummary[] = [
+  buildSpecSummary({
     _id: "d1",
-    designKey: "ALPHA-D1",
+    specKey: "ALPHA-D1",
     title: "Authentication Flow",
   }),
-  buildDesignSummary({
+  buildSpecSummary({
     _id: "d2",
     _creationTime: 1234567891,
-    designKey: "ALPHA-D2",
+    specKey: "ALPHA-D2",
     title: "Data Model",
   }),
 ]
@@ -74,7 +74,7 @@ const tickets: TicketSummary[] = [
     title: "Implement login",
     status: "todo",
     priority: "high",
-    designId: some("d1"),
+    specId: some("d1"),
   }),
   buildTicketSummary({
     _id: "t2",
@@ -83,7 +83,7 @@ const tickets: TicketSummary[] = [
     title: "Add dashboard",
     status: "in_progress",
     priority: "medium",
-    designId: none<string>(),
+    specId: none<string>(),
   }),
 ]
 
@@ -99,7 +99,7 @@ const defaultStates: Partial<QueryStateMap> = {
   ]),
   "tickets.list": querySuccess(tickets),
   "tickets.get": querySuccess(tickets[0]),
-  "designs.list": querySuccess(designs),
+  "specs.list": querySuccess(specs),
   "workComments.list": querySuccess([]),
 }
 
@@ -170,33 +170,33 @@ describe("TicketListPage", () => {
     expect(screen.getByText("Medium")).toBeInTheDocument()
   })
 
-  it("renders Design Link column header", () => {
+  it("renders Spec Link column header", () => {
     renderApp("/projects/p1/plan/tickets")
 
     const table = screen.getByRole("table")
-    expect(within(table).getByText("Design Link")).toBeInTheDocument()
+    expect(within(table).getByText("Spec Link")).toBeInTheDocument()
   })
 
-  it("displays design key as link when ticket has designId", () => {
+  it("displays spec key as link when ticket has specId", () => {
     renderApp("/projects/p1/plan/tickets")
 
-    // Ticket t1 has designId "d1" which maps to design with key "ALPHA-D1"
+    // Ticket t1 has specId "d1" which maps to spec with key "ALPHA-D1"
     const link = screen.getByRole("link", { name: /ALPHA-D1/i })
     expect(link).toBeInTheDocument()
     expect(link).toHaveAttribute(
       "href",
-      expect.stringContaining("/projects/p1/plan/designs/d1"),
+      expect.stringContaining("/projects/p1/plan/specs/d1"),
     )
   })
 
-  it("displays dash when ticket has no designId", () => {
+  it("displays dash when ticket has no specId", () => {
     renderApp("/projects/p1/plan/tickets")
 
     const table = screen.getByRole("table")
     const rows = within(table).getAllByRole("row")
-    // Row 2 (index 2) is the second data row (ticket t2, no designId)
-    const designCell = within(rows[2]).getAllByRole("cell")[3]
-    expect(designCell).toHaveTextContent("—")
+    // Row 2 (index 2) is the second data row (ticket t2, no specId)
+    const specCell = within(rows[2]).getAllByRole("cell")[3]
+    expect(specCell).toHaveTextContent("—")
   })
 
   it("clicking a ticket row navigates to detail page", async () => {
@@ -234,19 +234,19 @@ describe("TicketListPage", () => {
       expect(within(dialog).getByRole("heading", { name: "Create Ticket" })).toBeInTheDocument()
     })
 
-    it("shows design link dropdown with project designs in modal", async () => {
+    it("shows spec link dropdown with project specs in modal", async () => {
       const user = userEvent.setup()
       renderApp("/projects/p1/plan/tickets")
 
       await user.click(screen.getByRole("button", { name: /create ticket/i }))
 
       const dialog = screen.getByRole("dialog")
-      const designSelect = within(dialog).getByLabelText(/design/i)
-      expect(designSelect).toBeInTheDocument()
-      expect(designSelect.tagName).toBe("SELECT")
+      const specSelect = within(dialog).getByLabelText(/spec/i)
+      expect(specSelect).toBeInTheDocument()
+      expect(specSelect.tagName).toBe("SELECT")
 
-      const options = within(designSelect as HTMLElement).getAllByRole("option")
-      expect(options).toHaveLength(3) // None + 2 designs
+      const options = within(specSelect as HTMLElement).getAllByRole("option")
+      expect(options).toHaveLength(3) // None + 2 specs
       expect(options[0]).toHaveTextContent("None")
       expect(options[1]).toHaveTextContent("ALPHA-D1")
       expect(options[2]).toHaveTextContent("ALPHA-D2")

@@ -6,7 +6,7 @@ export {
   buildTaskEvent,
   buildTeamMember,
   buildOrchestrationEvent,
-  buildDesignSummary,
+  buildSpecSummary,
   buildReviewGate,
   buildReviewCheck,
 } from "./domain/entities"

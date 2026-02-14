@@ -35,7 +35,7 @@ const defaultStates: Partial<QueryStateMap> = {
     }),
   ]),
   "tickets.list": querySuccess([]),
-  "designs.list": querySuccess([]),
+  "specs.list": querySuccess([]),
 }
 
 function renderApp(route: string, states: Partial<QueryStateMap> = defaultStates) {
@@ -56,10 +56,10 @@ describe("Plan routes", () => {
     expect(screen.getByTestId("pm-shell")).toBeInTheDocument()
   })
 
-  it("renders DesignDetailPage when navigating to /projects/:projectId/plan/designs/:designId", () => {
-    renderApp("/projects/p1/plan/designs/design-123")
+  it("renders SpecDetailPage when navigating to /projects/:projectId/plan/specs/:specId", () => {
+    renderApp("/projects/p1/plan/specs/design-123")
     expect(screen.getByTestId("pm-shell")).toBeInTheDocument()
-    expect(screen.getByTestId("design-detail-page")).toBeInTheDocument()
+    expect(screen.getByTestId("spec-detail-page")).toBeInTheDocument()
   })
 
   it("renders TicketDetailPage when navigating to /projects/:projectId/plan/tickets/:ticketId", () => {

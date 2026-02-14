@@ -27,7 +27,7 @@ const baseDetail = buildOrchestrationDetail({
   _creationTime: 1234567890,
   nodeId: "node1",
   featureName: "test-feature",
-  designDocPath: "/docs/test.md",
+  specDocPath: "/docs/test.md",
   branch: "tina/test-feature",
   worktreePath: none<string>(),
   totalPhases: 5,
@@ -116,7 +116,7 @@ describe("StatusSection", () => {
   })
 
   it("renders action buttons", () => {
-    renderStatus({ designDocPath: "/docs/design.md" })
+    renderStatus({ specDocPath: "/docs/design.md" })
 
     expect(screen.getByText("Design Plan")).toBeInTheDocument()
     expect(screen.getByText("Phase Plan")).toBeInTheDocument()

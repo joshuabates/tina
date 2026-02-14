@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { CreateDesignModal } from "../pm/CreateDesignModal"
+import { CreateSpecModal } from "../pm/CreateSpecModal"
 
 const mockCreateFn = vi.fn()
 
@@ -13,18 +13,18 @@ vi.mock("convex/react", async (importOriginal) => {
   }
 })
 
-describe("CreateDesignModal", () => {
+describe("CreateSpecModal", () => {
   const onClose = vi.fn()
   const onCreated = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCreateFn.mockResolvedValue("design-1")
+    mockCreateFn.mockResolvedValue("spec-1")
   })
 
   function renderModal() {
     return render(
-      <CreateDesignModal
+      <CreateSpecModal
         projectId="p1"
         onClose={onClose}
         onCreated={onCreated}
@@ -64,13 +64,13 @@ describe("CreateDesignModal", () => {
       renderModal()
 
       await user.click(screen.getByRole("radio", { name: /complex/i }))
-      await user.type(screen.getByLabelText(/title/i), "My Design")
+      await user.type(screen.getByLabelText(/title/i), "My Spec")
       await user.click(screen.getByRole("button", { name: /^create$/i }))
 
       expect(mockCreateFn).toHaveBeenCalledWith(
         expect.objectContaining({
           complexityPreset: "complex",
-          title: "My Design",
+          title: "My Spec",
         }),
       )
     })
@@ -94,8 +94,8 @@ describe("CreateDesignModal", () => {
       const user = userEvent.setup()
       renderModal()
 
-      const fileContent = "# My Design\n\nSome content here"
-      const file = new File([fileContent], "design.md", { type: "text/plain" })
+      const fileContent = "# My Spec\n\nSome content here"
+      const file = new File([fileContent], "spec.md", { type: "text/plain" })
       file.text = () => Promise.resolve(fileContent)
 
       const fileInput = screen.getByTestId("markdown-file-input")
@@ -109,7 +109,7 @@ describe("CreateDesignModal", () => {
       const user = userEvent.setup()
       renderModal()
 
-      const fileContent = "# Authentication Flow\n\nDesign doc content"
+      const fileContent = "# Authentication Flow\n\nSpec doc content"
       const file = new File([fileContent], "auth.md", { type: "text/plain" })
       file.text = () => Promise.resolve(fileContent)
 
@@ -143,26 +143,26 @@ describe("CreateDesignModal", () => {
       const user = userEvent.setup()
       renderModal()
 
-      await user.type(screen.getByLabelText(/title/i), "Test Design")
+      await user.type(screen.getByLabelText(/title/i), "Test Spec")
       await user.click(screen.getByRole("button", { name: /^create$/i }))
 
       expect(mockCreateFn).toHaveBeenCalledWith(
         expect.objectContaining({
-          title: "Test Design",
+          title: "Test Spec",
           complexityPreset: "standard",
         }),
       )
     })
 
-    it("calls onCreated with design ID on success", async () => {
+    it("calls onCreated with spec ID on success", async () => {
       const user = userEvent.setup()
-      mockCreateFn.mockResolvedValue("design-123")
+      mockCreateFn.mockResolvedValue("spec-123")
       renderModal()
 
       await user.type(screen.getByLabelText(/title/i), "Test")
       await user.click(screen.getByRole("button", { name: /^create$/i }))
 
-      expect(onCreated).toHaveBeenCalledWith("design-123")
+      expect(onCreated).toHaveBeenCalledWith("spec-123")
     })
 
     it("displays error message on mutation failure", async () => {
