@@ -7,18 +7,18 @@ import type { Id } from "@convex/_generated/dataModel"
 import styles from "@/components/FormDialog.module.scss"
 
 interface EditSpecModalProps {
-  design: SpecSummary
+  spec: SpecSummary
   onClose: () => void
   onSaved: () => void
 }
 
 export function EditSpecModal({
-  design,
+  spec,
   onClose,
   onSaved,
 }: EditSpecModalProps) {
-  const [title, setTitle] = useState(design.title)
-  const [markdown, setMarkdown] = useState(design.markdown)
+  const [title, setTitle] = useState(spec.title)
+  const [markdown, setMarkdown] = useState(spec.markdown)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const updateSpec = useMutation(api.specs.updateSpec)
@@ -31,7 +31,7 @@ export function EditSpecModal({
     setError(null)
     try {
       await updateSpec({
-        designId: design._id as Id<"specs">,
+        specId: spec._id as Id<"specs">,
         title: title.trim(),
         markdown: markdown.trim(),
       })

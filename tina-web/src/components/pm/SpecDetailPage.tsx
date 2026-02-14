@@ -101,7 +101,7 @@ export function SpecDetailPage() {
     setTransitioning(true)
     try {
       await transitionSpec({
-        designId: designId as Id<"specs">,
+        specId: designId as Id<"specs">,
         newStatus,
       })
     } finally {
@@ -132,7 +132,7 @@ export function SpecDetailPage() {
       ? completedMarkers.filter((m: string) => m !== marker)
       : [...completedMarkers, marker]
     await updateMarkers({
-      designId: designId as Id<"specs">,
+      specId: designId as Id<"specs">,
       completedMarkers: next,
     })
   }
@@ -222,7 +222,7 @@ export function SpecDetailPage() {
 
       {editing && (
         <EditSpecModal
-          design={spec}
+          spec={spec}
           onClose={() => setEditing(false)}
           onSaved={handleSaved}
         />
