@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, Link } from "react-router-dom"
 import { useMutation } from "convex/react"
 import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
@@ -56,7 +56,6 @@ export function SpecDetailPage() {
     specId: string
     projectId: string
   }>()
-  const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [transitioning, setTransitioning] = useState(false)
 
@@ -72,7 +71,7 @@ export function SpecDetailPage() {
     specId: specId ?? "",
   })
 
-  if (isAnyQueryLoading(specResult)) {
+  if (isAnyQueryLoading(specResult, linkedDesignsResult)) {
     return (
       <div data-testid="spec-detail-page" className={styles.detailPage}>
         <div data-testid="spec-detail-loading" className={styles.loading}>
@@ -84,7 +83,7 @@ export function SpecDetailPage() {
     )
   }
 
-  const queryError = firstQueryError(specResult)
+  const queryError = firstQueryError(specResult, linkedDesignsResult)
   if (queryError) {
     throw queryError
   }
@@ -225,26 +224,23 @@ export function SpecDetailPage() {
         </div>
       )}
 
-      <div className={styles.section} data-testid="linked-designs-section">
-        <h3 className={styles.sectionTitle}>Linked Designs</h3>
-        {linkedDesignsResult.status === "success" && linkedDesignsResult.data.length > 0 ? (
+      {linkedDesignsResult.status === "success" && linkedDesignsResult.data.length > 0 && (
+        <div className={styles.section} data-testid="linked-designs-section">
+          <h3 className={styles.sectionTitle}>Linked Designs</h3>
           <ul className={styles.linkedList}>
             {linkedDesignsResult.data.map((design) => (
               <li key={design._id} className={styles.linkedItem}>
-                <button
-                  className={styles.linkedLink}
-                  onClick={() => navigate(`/projects/${routeProjectId}/plan/designs/${design._id}`)}
+                <Link
+                  to={`/projects/${routeProjectId ?? spec.projectId}/plan/designs/${design._id}`}
                 >
                   <span className={styles.linkedKey}>{design.designKey}</span>
-                  <span>{design.title}</span>
-                </button>
+                  {design.title}
+                </Link>
               </li>
             ))}
           </ul>
-        ) : (
-          <p className={styles.emptyHint}>No linked designs.</p>
-        )}
-      </div>
+        </div>
+      )}
 
       {editing && (
         <EditSpecModal
