@@ -5,7 +5,7 @@ import { allocateKey } from "./projectCounters";
 export const createTicket = mutation({
   args: {
     projectId: v.id("projects"),
-    designId: v.optional(v.id("designs")),
+    specId: v.optional(v.id("specs")),
     title: v.string(),
     description: v.string(),
     priority: v.string(), // low | medium | high | urgent
@@ -17,14 +17,14 @@ export const createTicket = mutation({
       throw new Error(`Project not found: ${args.projectId}`);
     }
 
-    if (args.designId) {
-      const design = await ctx.db.get(args.designId);
-      if (!design) {
-        throw new Error(`Design not found: ${args.designId}`);
+    if (args.specId) {
+      const spec = await ctx.db.get(args.specId);
+      if (!spec) {
+        throw new Error(`Spec not found: ${args.specId}`);
       }
-      if (design.projectId !== args.projectId) {
+      if (spec.projectId !== args.projectId) {
         throw new Error(
-          `Design ${args.designId} does not belong to project ${args.projectId}`,
+          `Spec ${args.specId} does not belong to project ${args.projectId}`,
         );
       }
     }
@@ -35,7 +35,7 @@ export const createTicket = mutation({
 
     return await ctx.db.insert("tickets", {
       projectId: args.projectId,
-      designId: args.designId,
+      specId: args.specId,
       ticketKey,
       title: args.title,
       description: args.description,
@@ -75,17 +75,17 @@ export const listTickets = query({
   args: {
     projectId: v.id("projects"),
     status: v.optional(v.string()),
-    designId: v.optional(v.id("designs")),
+    specId: v.optional(v.id("specs")),
   },
   handler: async (ctx, args) => {
     let queryObj;
     const status = args.status;
 
     // Use proper indexes based on filters
-    if (args.designId) {
+    if (args.specId) {
       queryObj = ctx.db
         .query("tickets")
-        .withIndex("by_design", (q) => q.eq("designId", args.designId));
+        .withIndex("by_spec", (q) => q.eq("specId", args.specId));
       queryObj = queryObj.filter((q) =>
         q.eq(q.field("projectId"), args.projectId),
       );
@@ -101,7 +101,7 @@ export const listTickets = query({
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId));
     }
 
-    if (args.designId && status !== undefined) {
+    if (args.specId && status !== undefined) {
       queryObj = queryObj.filter((q) => q.eq(q.field("status"), status));
     }
 
@@ -115,8 +115,8 @@ export const updateTicket = mutation({
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     priority: v.optional(v.string()),
-    designId: v.optional(v.id("designs")),
-    clearDesignId: v.optional(v.boolean()),
+    specId: v.optional(v.id("specs")),
+    clearSpecId: v.optional(v.boolean()),
     estimate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -125,18 +125,18 @@ export const updateTicket = mutation({
       throw new Error(`Ticket not found: ${args.ticketId}`);
     }
 
-    if (args.clearDesignId && args.designId !== undefined) {
-      throw new Error("Cannot provide both designId and clearDesignId");
+    if (args.clearSpecId && args.specId !== undefined) {
+      throw new Error("Cannot provide both specId and clearSpecId");
     }
 
-    if (args.designId) {
-      const design = await ctx.db.get(args.designId);
-      if (!design) {
-        throw new Error(`Design not found: ${args.designId}`);
+    if (args.specId) {
+      const spec = await ctx.db.get(args.specId);
+      if (!spec) {
+        throw new Error(`Spec not found: ${args.specId}`);
       }
-      if (design.projectId !== ticket.projectId) {
+      if (spec.projectId !== ticket.projectId) {
         throw new Error(
-          `Design ${args.designId} does not belong to ticket project ${ticket.projectId}`,
+          `Spec ${args.specId} does not belong to ticket project ${ticket.projectId}`,
         );
       }
     }
@@ -153,10 +153,10 @@ export const updateTicket = mutation({
     if (args.priority !== undefined) {
       updates.priority = args.priority;
     }
-    if (args.designId !== undefined) {
-      updates.designId = args.designId;
-    } else if (args.clearDesignId) {
-      updates.designId = undefined;
+    if (args.specId !== undefined) {
+      updates.specId = args.specId;
+    } else if (args.clearSpecId) {
+      updates.specId = undefined;
     }
     if (args.estimate !== undefined) {
       updates.estimate = args.estimate;
