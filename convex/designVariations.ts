@@ -48,12 +48,14 @@ export const listVariations = query({
         .withIndex("by_design_status", (q) =>
           q.eq("designId", args.designId).eq("status", status),
         )
+        .order("desc")
         .collect();
     }
 
     return await ctx.db
       .query("designVariations")
       .withIndex("by_design", (q) => q.eq("designId", args.designId))
+      .order("desc")
       .collect();
   },
 });
