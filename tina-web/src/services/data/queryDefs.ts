@@ -20,6 +20,8 @@ import {
   ReviewGate,
   ReviewCheck,
   TerminalTarget,
+  DesignSummary,
+  DesignVariation,
 } from "@/schemas"
 
 export interface QueryDef<A = unknown, Args = Record<string, never>> {
@@ -234,5 +236,46 @@ export const TerminalTargetListQuery = queryDef({
   query: api.terminalTargets.listTerminalTargets,
   args: Schema.Struct({}),
   schema: Schema.Array(TerminalTarget),
+})
+
+export const DesignListQuery = queryDef({
+  key: "designs.list",
+  query: api.designs.listDesigns,
+  args: Schema.Struct({
+    projectId: Schema.String,
+    status: Schema.optional(Schema.String),
+  }),
+  schema: Schema.Array(DesignSummary),
+})
+
+export const DesignDetailQuery = queryDef({
+  key: "designs.get",
+  query: api.designs.getDesign,
+  args: Schema.Struct({ designId: Schema.String }),
+  schema: Schema.NullOr(DesignSummary),
+})
+
+export const DesignVariationListQuery = queryDef({
+  key: "designVariations.list",
+  query: api.designVariations.listVariations,
+  args: Schema.Struct({
+    designId: Schema.String,
+    status: Schema.optional(Schema.String),
+  }),
+  schema: Schema.Array(DesignVariation),
+})
+
+export const LinkedDesignsQuery = queryDef({
+  key: "specDesigns.designsForSpec",
+  query: api.specDesigns.listDesignsForSpec,
+  args: Schema.Struct({ specId: Schema.String }),
+  schema: Schema.Array(DesignSummary),
+})
+
+export const LinkedSpecsQuery = queryDef({
+  key: "specDesigns.specsForDesign",
+  query: api.specDesigns.listSpecsForDesign,
+  args: Schema.Struct({ designId: Schema.String }),
+  schema: Schema.Array(SpecSummary),
 })
 
