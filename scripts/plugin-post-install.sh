@@ -142,6 +142,7 @@ update_plugin() {
 
 bounce_daemon_if_running() {
   local session_bin="$PROJECT_DIR/tina-session/target/release/tina-session"
+  local daemon_bin="$PROJECT_DIR/tina-daemon/target/release/tina-daemon"
   local daemon_status_output
   local session_cmd=()
 
@@ -158,7 +159,14 @@ bounce_daemon_if_running() {
   if echo "$daemon_status_output" | grep -q "Daemon is running"; then
     echo "Bouncing daemon..."
     "${session_cmd[@]}" daemon stop
-    "${session_cmd[@]}" daemon start
+    local start_args=(daemon start)
+    if [[ -x "$daemon_bin" ]]; then
+      start_args+=(--daemon-bin "$daemon_bin")
+    fi
+    if [[ -n "${TINA_ENV:-}" ]]; then
+      start_args+=(--env "$TINA_ENV")
+    fi
+    "${session_cmd[@]}" "${start_args[@]}"
     echo "Daemon restarted."
   else
     echo "Daemon not running (start with: tina-session daemon start)"
