@@ -45,6 +45,7 @@ export function useTerminal({ paneId, onStatusChange }: UseTerminalOptions) {
 
   useEffect(() => {
     if (!paneId || !containerRef.current) return
+    const container = containerRef.current
 
     const terminal = new Terminal({
       scrollback: 5000,
@@ -61,8 +62,22 @@ export function useTerminal({ paneId, onStatusChange }: UseTerminalOptions) {
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
 
-    terminal.open(containerRef.current)
+    terminal.open(container)
     fitAddon.fit()
+
+    // xterm converts wheel to Up/Down key input when there is no scrollback.
+    // Suppress that so wheel never walks CLI prompt history.
+    const onWheel = (event: WheelEvent) => {
+      const hasScrollback = terminal.buffer.active.baseY > 0
+      if (!hasScrollback) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    }
+    container.addEventListener("wheel", onWheel, {
+      capture: true,
+      passive: false,
+    })
 
     // Try WebGL renderer, fall back silently
     try {
@@ -115,6 +130,7 @@ export function useTerminal({ paneId, onStatusChange }: UseTerminalOptions) {
 
     return () => {
       resizeObserver.disconnect()
+      container.removeEventListener("wheel", onWheel, true)
       ws.close()
       terminal.dispose()
       terminalRef.current = null

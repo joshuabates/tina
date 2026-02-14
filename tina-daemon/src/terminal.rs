@@ -57,6 +57,114 @@ impl std::error::Error for ControlMessageError {}
 
 const MSG_TYPE_RESIZE: u8 = 1;
 const RESIZE_PAYLOAD_LEN: usize = 5; // 1 type + 2 cols + 2 rows
+const MAX_PRIVATE_MODE_PREFIX_LEN: usize = 32;
+
+fn is_disallowed_private_mode(mode: u16) -> bool {
+    matches!(
+        mode,
+        // Mouse tracking modes.
+        1000 | 1002 | 1003 | 1005 | 1006 | 1015 | 1016
+            // Alternate scroll mode (wheel can become Up/Down input).
+            | 1007
+            // Alternate screen buffer enables.
+            | 47 | 1047 | 1049
+    )
+}
+
+/// Parse `ESC [ ? ... final` at the beginning of `data`.
+///
+/// Returns `(end_index, strip_sequence, complete)`.
+fn parse_private_mode_sequence(data: &[u8]) -> Option<(usize, bool, bool)> {
+    if data.is_empty() || data[0] != 0x1b {
+        return None;
+    }
+    if data.len() < 2 || data[1] != b'[' {
+        return None;
+    }
+    if data.len() < 3 || data[2] != b'?' {
+        return None;
+    }
+
+    let mut idx = 3;
+    let mut cur_mode: Option<u32> = None;
+    let mut strip = false;
+
+    while idx < data.len() {
+        let b = data[idx];
+        match b {
+            b'0'..=b'9' => {
+                let digit = (b - b'0') as u32;
+                cur_mode = Some(
+                    cur_mode
+                        .unwrap_or(0)
+                        .saturating_mul(10)
+                        .saturating_add(digit),
+                );
+                idx += 1;
+            }
+            b';' => {
+                if let Some(mode) = cur_mode {
+                    if mode <= u16::MAX as u32 && is_disallowed_private_mode(mode as u16) {
+                        strip = true;
+                    }
+                }
+                cur_mode = None;
+                idx += 1;
+            }
+            0x40..=0x7e => {
+                if let Some(mode) = cur_mode {
+                    if mode <= u16::MAX as u32 && is_disallowed_private_mode(mode as u16) {
+                        strip = true;
+                    }
+                }
+                let strip_sequence = b == b'h' && strip;
+                return Some((idx + 1, strip_sequence, true));
+            }
+            _ => return None,
+        }
+    }
+
+    Some((data.len(), false, false))
+}
+
+fn trailing_incomplete_private_mode_start(data: &[u8]) -> Option<usize> {
+    let search_start = data.len().saturating_sub(MAX_PRIVATE_MODE_PREFIX_LEN);
+    for i in (search_start..data.len()).rev() {
+        if data[i] == 0x1b {
+            if let Some((_, _, complete)) = parse_private_mode_sequence(&data[i..]) {
+                if !complete {
+                    return Some(i);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Remove tmux/CLI mouse-related private-mode enable sequences from output.
+///
+/// This keeps the embedded xterm in native browser mouse mode, so wheel
+/// scrolling and text selection are handled by xterm instead of tmux.
+pub fn strip_mouse_tracking_enable_sequences(data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(data.len());
+    let mut i = 0;
+
+    while i < data.len() {
+        if data[i] == 0x1b {
+            if let Some((end, strip, complete)) = parse_private_mode_sequence(&data[i..]) {
+                if complete && strip {
+                    i += end;
+                    continue;
+                }
+            }
+        }
+
+        out.push(data[i]);
+        i += 1;
+    }
+
+    out
+}
 
 /// Parse a binary WebSocket frame into a [`ControlMessage`].
 pub fn parse_control_message(data: &[u8]) -> Result<ControlMessage, ControlMessageError> {
@@ -228,16 +336,38 @@ async fn handle_terminal_session(socket: WebSocket, pane_id: String) {
     let pane_id_reader = pane_id.clone();
     let pty_read_handle = tokio::task::spawn_blocking(move || {
         let mut buf = [0u8; 4096];
+        let mut tail = Vec::new();
+
         loop {
             match pty_reader.read(&mut buf) {
                 Ok(0) => {
+                    if !tail.is_empty() {
+                        let cleaned_tail = strip_mouse_tracking_enable_sequences(&tail);
+                        if !cleaned_tail.is_empty() {
+                            let _ = pty_out_tx.blocking_send(cleaned_tail);
+                        }
+                    }
                     debug!(pane_id = %pane_id_reader, "PTY EOF");
                     break;
                 }
                 Ok(n) => {
-                    if pty_out_tx.blocking_send(buf[..n].to_vec()).is_err() {
+                    let mut combined = Vec::with_capacity(tail.len() + n);
+                    combined.extend_from_slice(&tail);
+                    combined.extend_from_slice(&buf[..n]);
+
+                    // Hold back a trailing incomplete mouse-enable sequence, if
+                    // present, so it can be parsed correctly on the next read.
+                    let safe_end =
+                        trailing_incomplete_private_mode_start(&combined).unwrap_or(combined.len());
+                    let cleaned =
+                        strip_mouse_tracking_enable_sequences(&combined[..safe_end]);
+
+                    if !cleaned.is_empty() && pty_out_tx.blocking_send(cleaned).is_err() {
                         break; // WebSocket side closed
                     }
+
+                    tail.clear();
+                    tail.extend_from_slice(&combined[safe_end..]);
                 }
                 Err(e) => {
                     debug!(pane_id = %pane_id_reader, error = %e, "PTY read error");
@@ -422,6 +552,85 @@ mod tests {
         let data = [0x01, 0x00, 0x50, 0x00, 0x18, 0xFF, 0xFF];
         let msg = parse_control_message(&data).unwrap();
         assert_eq!(msg, ControlMessage::Resize { cols: 80, rows: 24 });
+    }
+
+    // ── Mouse sequence filtering ──
+
+    #[test]
+    fn strip_mouse_tracking_removes_enable_sequences() {
+        let data = b"\x1b[?1000hhello\x1b[?1006h world";
+        let stripped = strip_mouse_tracking_enable_sequences(data);
+        assert_eq!(stripped, b"hello world");
+    }
+
+    #[test]
+    fn strip_mouse_tracking_keeps_non_mouse_sequences() {
+        let data = b"\x1b[?2004hprompt";
+        let stripped = strip_mouse_tracking_enable_sequences(data);
+        assert_eq!(stripped, data);
+    }
+
+    #[test]
+    fn strip_mouse_tracking_keeps_disable_sequences() {
+        let data = b"\x1b[?1000ltext";
+        let stripped = strip_mouse_tracking_enable_sequences(data);
+        assert_eq!(stripped, data);
+    }
+
+    #[test]
+    fn strip_mouse_tracking_handles_split_sequences_across_chunks() {
+        let chunks = [
+            b"abc\x1b[?10".as_slice(),
+            b"06hdef\x1b[?100".as_slice(),
+            b"0hghi".as_slice(),
+        ];
+
+        let mut tail = Vec::new();
+        let mut output = Vec::new();
+
+        for chunk in chunks {
+            let mut combined = Vec::with_capacity(tail.len() + chunk.len());
+            combined.extend_from_slice(&tail);
+            combined.extend_from_slice(chunk);
+            let safe_end =
+                trailing_incomplete_private_mode_start(&combined).unwrap_or(combined.len());
+            output.extend_from_slice(&strip_mouse_tracking_enable_sequences(
+                &combined[..safe_end],
+            ));
+            tail.clear();
+            tail.extend_from_slice(&combined[safe_end..]);
+        }
+
+        output.extend_from_slice(&strip_mouse_tracking_enable_sequences(&tail));
+        assert_eq!(output, b"abcdefghi");
+    }
+
+    #[test]
+    fn strip_mouse_tracking_removes_alt_scroll_mode() {
+        let data = b"\x1b[?1007hhello";
+        let stripped = strip_mouse_tracking_enable_sequences(data);
+        assert_eq!(stripped, b"hello");
+    }
+
+    #[test]
+    fn strip_mouse_tracking_removes_multi_param_enable_sequence() {
+        let data = b"\x1b[?25;1007;1000hhello";
+        let stripped = strip_mouse_tracking_enable_sequences(data);
+        assert_eq!(stripped, b"hello");
+    }
+
+    #[test]
+    fn strip_mouse_tracking_removes_alt_screen_enable() {
+        let data = b"\x1b[?1049hhello";
+        let stripped = strip_mouse_tracking_enable_sequences(data);
+        assert_eq!(stripped, b"hello");
+    }
+
+    #[test]
+    fn strip_mouse_tracking_keeps_alt_screen_disable() {
+        let data = b"\x1b[?1049lhello";
+        let stripped = strip_mouse_tracking_enable_sequences(data);
+        assert_eq!(stripped, data);
     }
 
     // ── Pane ID format validation ──

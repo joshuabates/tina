@@ -10,6 +10,11 @@ vi.mock("xterm", () => ({
       open: vi.fn(),
       dispose: vi.fn(),
       focus: vi.fn(),
+      buffer: {
+        active: {
+          baseY: 0,
+        },
+      },
     }
   }),
 }))
@@ -170,6 +175,34 @@ describe("useTerminal", () => {
 
     expect(ws.close).toHaveBeenCalled()
     expect(terminalInstance.dispose).toHaveBeenCalled()
+  })
+
+  it("suppresses wheel-to-key behavior when there is no scrollback", () => {
+    const { container } = renderConnected("test-pane")
+    const results = vi.mocked(Terminal).mock.results
+    const terminalInstance = results[results.length - 1]!.value as {
+      buffer: { active: { baseY: number } }
+    }
+    terminalInstance.buffer.active.baseY = 0
+
+    const wheel = new WheelEvent("wheel", { deltaY: 120, cancelable: true })
+    container.dispatchEvent(wheel)
+
+    expect(wheel.defaultPrevented).toBe(true)
+  })
+
+  it("allows normal wheel scrolling when scrollback exists", () => {
+    const { container } = renderConnected("test-pane")
+    const results = vi.mocked(Terminal).mock.results
+    const terminalInstance = results[results.length - 1]!.value as {
+      buffer: { active: { baseY: number } }
+    }
+    terminalInstance.buffer.active.baseY = 5
+
+    const wheel = new WheelEvent("wheel", { deltaY: 120, cancelable: true })
+    container.dispatchEvent(wheel)
+
+    expect(wheel.defaultPrevented).toBe(false)
   })
 
   it("does not connect when paneId is null", () => {
