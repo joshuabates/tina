@@ -27,7 +27,7 @@ pub enum ContextType {
     Task,
     Plan,
     Commit,
-    Design,
+    Spec,
     Freeform,
 }
 
@@ -84,7 +84,7 @@ pub fn build_context_seed(
         ContextType::Task => "Task",
         ContextType::Plan => "Plan",
         ContextType::Commit => "Commit",
-        ContextType::Design => "Design",
+        ContextType::Spec => "Spec",
         ContextType::Freeform => unreachable!(),
     };
 
@@ -502,16 +502,16 @@ mod tests {
     }
 
     #[test]
-    fn build_context_seed_design_type() {
+    fn build_context_seed_spec_type() {
         let result = build_context_seed(
-            Some(ContextType::Design),
-            Some("design-001"),
-            Some("Auth system design"),
+            Some(ContextType::Spec),
+            Some("spec-001"),
+            Some("Auth system spec"),
         );
         assert_eq!(
             result,
             Some(
-                "Context: Design session. Design ID: design-001 Summary: Auth system design"
+                "Context: Spec session. Spec ID: spec-001 Summary: Auth system spec"
                     .to_string()
             )
         );
