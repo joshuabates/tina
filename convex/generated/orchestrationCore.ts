@@ -6,7 +6,7 @@ import { v } from "convex/values";
 export const orchestrationCoreTableFields = {
   nodeId: v.id("nodes"),
   featureName: v.string(),
-  designDocPath: v.string(),
+  specDocPath: v.string(),
   branch: v.string(),
   worktreePath: v.optional(v.string()),
   totalPhases: v.number(),
@@ -18,7 +18,7 @@ export const orchestrationCoreTableFields = {
   policySnapshot: v.optional(v.string()),
   policySnapshotHash: v.optional(v.string()),
   presetOrigin: v.optional(v.string()),
-  designOnly: v.optional(v.boolean()),
+  specOnly: v.optional(v.boolean()),
   policyRevision: v.optional(v.number()),
   updatedAt: v.optional(v.string()),
 } as const;
