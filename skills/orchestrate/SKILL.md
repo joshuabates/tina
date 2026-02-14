@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Use when you have a design document with multiple phases and want fully automated execution from design to implementation
+description: Use when you have a spec document with multiple phases and want fully automated execution from spec to implementation
 ---
 
 # EXECUTE THESE STEPS IN ORDER
@@ -25,76 +25,76 @@ You are a TEAM LEAD coordinating TEAMMATES. Do not do the work yourself - spawn 
 
 ```bash
 # Parse optional arguments
-# Invocation: /tina:orchestrate [--model <model>] [--feature <name>] [--design-id <id>] [<design-doc-path>]
+# Invocation: /tina:orchestrate [--model <model>] [--feature <name>] [--spec-id <id>] [<spec-doc-path>]
 # Examples:
 #   /tina:orchestrate docs/plans/feature-design.md
 #   /tina:orchestrate --feature verbose-flag design.md
 #   /tina:orchestrate --model haiku --feature auth docs/plans/auth-design.md
-#   /tina:orchestrate --design-id abc123
-#   /tina:orchestrate --design-id abc123 --feature my-feature
+#   /tina:orchestrate --spec-id abc123
+#   /tina:orchestrate --spec-id abc123 --feature my-feature
 
 MODEL_OVERRIDE=""  # empty means planner decides per-task
-FEATURE_OVERRIDE=""  # empty means derive from design doc
-DESIGN_ID=""  # empty means use file path
+FEATURE_OVERRIDE=""  # empty means derive from spec doc
+SPEC_ID=""  # empty means use file path
 
 # Parse named arguments (order-independent)
 while [[ "$1" == --* ]]; do
     case "$1" in
         --model) MODEL_OVERRIDE="$2"; shift 2 ;;
         --feature) FEATURE_OVERRIDE="$2"; shift 2 ;;
-        --design-id) DESIGN_ID="$2"; shift 2 ;;
+        --spec-id) SPEC_ID="$2"; shift 2 ;;
         *) break ;;
     esac
 done
-DESIGN_DOC="$1"  # may be empty when --design-id is used
+SPEC_DOC="$1"  # may be empty when --spec-id is used
 
-# Validate: exactly one of DESIGN_DOC or DESIGN_ID must be set
-if [[ -n "$DESIGN_DOC" && -n "$DESIGN_ID" ]]; then
-    echo "ERROR: Cannot specify both a design doc path and --design-id"
+# Validate: exactly one of SPEC_DOC or SPEC_ID must be set
+if [[ -n "$SPEC_DOC" && -n "$SPEC_ID" ]]; then
+    echo "ERROR: Cannot specify both a spec doc path and --spec-id"
     exit 1
 fi
-if [[ -z "$DESIGN_DOC" && -z "$DESIGN_ID" ]]; then
-    echo "ERROR: Must specify either a design doc path or --design-id"
+if [[ -z "$SPEC_DOC" && -z "$SPEC_ID" ]]; then
+    echo "ERROR: Must specify either a spec doc path or --spec-id"
     exit 1
 fi
 ```
 
-**When `DESIGN_ID` is set**, resolve the design from Convex before continuing:
+**When `SPEC_ID` is set**, resolve the spec from Convex before continuing:
 
 ```bash
-if [[ -n "$DESIGN_ID" ]]; then
-    # Resolve design content from Convex
-    RESOLVE_JSON=$(tina-session work design resolve --design-id "$DESIGN_ID" --json)
+if [[ -n "$SPEC_ID" ]]; then
+    # Resolve spec content from Convex
+    RESOLVE_JSON=$(tina-session work spec resolve --spec-id "$SPEC_ID" --json)
 
     # Extract fields from resolved JSON
-    DESIGN_TITLE=$(echo "$RESOLVE_JSON" | jq -r '.title')
-    DESIGN_MARKDOWN=$(echo "$RESOLVE_JSON" | jq -r '.markdown')
-    DESIGN_STATUS=$(echo "$RESOLVE_JSON" | jq -r '.status')
+    SPEC_TITLE=$(echo "$RESOLVE_JSON" | jq -r '.title')
+    SPEC_MARKDOWN=$(echo "$RESOLVE_JSON" | jq -r '.markdown')
+    SPEC_STATUS=$(echo "$RESOLVE_JSON" | jq -r '.status')
 
     # Count phases from resolved markdown
-    TOTAL_PHASES=$(echo "$DESIGN_MARKDOWN" | grep -cE "^##+ Phase [0-9]")
+    TOTAL_PHASES=$(echo "$SPEC_MARKDOWN" | grep -cE "^##+ Phase [0-9]")
 
     # Check for pre-approval in resolved markdown
-    if echo "$DESIGN_MARKDOWN" | grep -q "^## Architectural Context"; then
-        DESIGN_PRE_APPROVED=true
+    if echo "$SPEC_MARKDOWN" | grep -q "^## Architectural Context"; then
+        SPEC_PRE_APPROVED=true
     fi
 
-    # Derive feature name from design title if --feature not provided
+    # Derive feature name from spec title if --feature not provided
     if [[ -n "$FEATURE_OVERRIDE" ]]; then
         FEATURE_NAME="$FEATURE_OVERRIDE"
     else
-        FEATURE_NAME=$(echo "$DESIGN_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g; s/[^a-z0-9-]//g; s/--*/-/g; s/^-//; s/-$//')
+        FEATURE_NAME=$(echo "$SPEC_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g; s/[^a-z0-9-]//g; s/--*/-/g; s/^-//; s/-$//')
     fi
 else
-    # File-based path: extract info from local design doc
-    TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
+    # File-based path: extract info from local spec doc
+    TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$SPEC_DOC")
 
     # Feature name: use --feature if provided, otherwise derive from H1 title
     if [[ -n "$FEATURE_OVERRIDE" ]]; then
         FEATURE_NAME="$FEATURE_OVERRIDE"
     else
         # Extract from first H1 heading, slugify: lowercase, spaces to hyphens, strip non-alphanum
-        H1_TITLE=$(grep -m1 "^# " "$DESIGN_DOC" | sed 's/^# //')
+        H1_TITLE=$(grep -m1 "^# " "$SPEC_DOC" | sed 's/^# //')
         FEATURE_NAME=$(echo "$H1_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/ /-/g; s/[^a-z0-9-]//g; s/--*/-/g; s/^-//; s/-$//')
     fi
 fi
@@ -107,16 +107,16 @@ If `MODEL_OVERRIDE` is set, pass it to phase-planner prompts so all tasks use th
 
 ---
 
-## STEP 1a: Check if design is pre-approved
+## STEP 1a: Check if spec is pre-approved
 
-Check for `## Architectural Context` section. If present, the design has already been reviewed by the architect skill and can skip validation:
+Check for `## Architectural Context` section. If present, the spec has already been reviewed by the architect skill and can skip validation:
 
 ```bash
-# For --design-id path, DESIGN_PRE_APPROVED was already set during resolution above.
+# For --spec-id path, SPEC_PRE_APPROVED was already set during resolution above.
 # For file-based path, check the local file:
-if [[ -z "$DESIGN_ID" ]]; then
-    if grep -q "^## Architectural Context" "$DESIGN_DOC"; then
-        DESIGN_PRE_APPROVED=true
+if [[ -z "$SPEC_ID" ]]; then
+    if grep -q "^## Architectural Context" "$SPEC_DOC"; then
+        SPEC_PRE_APPROVED=true
     fi
 fi
 ```
@@ -149,24 +149,24 @@ Before creating the team, initialize the orchestration. This creates the git wor
 
 ```bash
 # Build init command based on which path we're using
-if [[ -n "$DESIGN_ID" ]]; then
+if [[ -n "$SPEC_ID" ]]; then
     INIT_JSON=$(tina-session init \
       --feature "$FEATURE_NAME" \
       --cwd "$PWD" \
-      --design-id "$DESIGN_ID" \
+      --spec-id "$SPEC_ID" \
       --branch "${BRANCH_PREFIX}/$FEATURE_NAME" \
       --total-phases "$TOTAL_PHASES")
 else
     INIT_JSON=$(tina-session init \
       --feature "$FEATURE_NAME" \
       --cwd "$PWD" \
-      --design-doc "$DESIGN_DOC" \
+      --spec-doc "$SPEC_DOC" \
       --branch "${BRANCH_PREFIX}/$FEATURE_NAME" \
       --total-phases "$TOTAL_PHASES")
 fi
 ```
 
-The command outputs JSON to stdout: `{orchestration_id, team_id, worktree_path, feature, branch, design_doc, total_phases, design_id?}`. Parse it to extract the values you need:
+The command outputs JSON to stdout: `{orchestration_id, team_id, worktree_path, feature, branch, spec_doc, total_phases, spec_id?}`. Parse it to extract the values you need:
 
 ```bash
 ORCHESTRATION_ID=$(echo "$INIT_JSON" | jq -r '.orchestration_id')
@@ -185,7 +185,7 @@ Use Teammate tool:
 {
   "operation": "spawnTeam",
   "team_name": "<feature-name>-orchestration",
-  "description": "Orchestrating <feature-name> from design doc: <path>"
+  "description": "Orchestrating <feature-name> from spec doc: <path>"
 }
 ```
 
@@ -212,7 +212,7 @@ Capture and store the returned numeric task IDs as you create tasks.
 Treat these IDs as canonical; do not use task subjects as IDs in spawn prompts
 or metadata lookups because subjects collide across orchestration teams.
 
-Example for 2-phase design:
+Example for 2-phase spec:
 ```
 VALIDATE_TASK_ID=$(TaskCreate: validate-design)
 PLAN_1_TASK_ID=$(TaskCreate: plan-phase-1)
@@ -236,18 +236,18 @@ TaskUpdate: $FINALIZE_TASK_ID, addBlockedBy: [$REVIEW_2_TASK_ID]
 
 ## STEP 4: Spawn first teammate (or skip validation)
 
-**If `DESIGN_PRE_APPROVED` is true:**
-The design has `## Architectural Context` (added by `tina:architect` on approval). Skip validation:
+**If `SPEC_PRE_APPROVED` is true:**
+The spec has `## Architectural Context` (added by `tina:architect` on approval). Skip validation:
 1. Auto-complete the validate-design task:
    ```
    TaskUpdate: $VALIDATE_TASK_ID, status: completed
    TaskUpdate: $VALIDATE_TASK_ID, metadata: { validation_status: "pre-approved", worktree_path: "$WORKTREE_PATH", team_id: "$TEAM_ID" }
    ```
-2. Print: `"Design pre-approved (has Architectural Context). Skipping validation."`
-3. Check for `## Prerequisites` section in the design content (file or resolved markdown). If present, record them in task metadata and continue automatically (no user prompt unless HITL is explicitly enabled for this run).
+2. Print: `"Spec pre-approved (has Architectural Context). Skipping validation."`
+3. Check for `## Prerequisites` section in the spec content (file or resolved markdown). If present, record them in task metadata and continue automatically (no user prompt unless HITL is explicitly enabled for this run).
 4. Proceed directly to spawning planner for phase 1 (same as the "validate complete" handler in STEP 5). The worktree was already created by `tina-session init` in STEP 1c.
 
-**If `DESIGN_PRE_APPROVED` is false:**
+**If `SPEC_PRE_APPROVED` is false:**
 The validate-design task has no blockers. Spawn the design validator:
 
 Use Task tool:
@@ -260,7 +260,7 @@ Use Task tool:
 }
 ```
 
-The agent reads task metadata to get design_doc_path and other parameters. Agent definitions carry methodology (HOW), tasks carry data (WHAT), spawn prompts are minimal (just task ID).
+The agent reads task metadata to get spec_doc_path and other parameters. Agent definitions carry methodology (HOW), tasks carry data (WHAT), spawn prompts are minimal (just task ID).
 
 ---
 
@@ -404,7 +404,7 @@ Only non-terminal progress updates (for example `execute-N started`) should skip
 
 **On validator message:**
 1. Determine event: `validation_pass`, `validation_warning`, or `validation_stop`
-2. Check for prerequisites in design doc before calling advance; attach them to metadata for traceability, but continue without waiting for user confirmation unless HITL is explicitly enabled
+2. Check for prerequisites in spec doc before calling advance; attach them to metadata for traceability, but continue without waiting for user confirmation unless HITL is explicitly enabled
 3. Call: `tina-session orchestrate advance --feature X --phase validation --event <event>`
 4. Mark validate-design task complete
 5. Shut down `validator` teammate (required protocol above)
@@ -467,11 +467,11 @@ The full skill with details follows.
 
 ## Overview
 
-Automates the full development pipeline from design document to implementation using a team-based model. The orchestrator is a team lead that coordinates teammates, not a single agent doing everything.
+Automates the full development pipeline from spec document to implementation using a team-based model. The orchestrator is a team lead that coordinates teammates, not a single agent doing everything.
 
 **Core principle:** Orchestrator maintains minimal context - it only sees teammate messages, not implementation details. Each teammate (validator, planner, executor, reviewer) handles one specific responsibility.
 
-**Announce at start:** "I'm using the orchestrate skill to coordinate a team for implementing this design."
+**Announce at start:** "I'm using the orchestrate skill to coordinate a team for implementing this spec."
 
 ## Orchestrator as Team Lead
 
@@ -495,7 +495,7 @@ Dependencies enforce sequencing automatically.
 
 | Agent | Claims | Responsibility |
 |-------|--------|----------------|
-| `tina:design-validator` | validate-design | Validate design doc, capture baseline metrics |
+| `tina:design-validator` | validate-design | Validate spec doc, capture baseline metrics |
 | `tina:phase-planner` | plan-phase-N | Create implementation plan, validate plan |
 | `tina:phase-executor` | execute-phase-N | Execute phase plan, report completion |
 | `tina:phase-reviewer` | review-phase-N | Review completed phase, report pass/fail/gaps |
@@ -506,8 +506,8 @@ Task metadata carries orchestration state:
 
 | Data | Location |
 |------|----------|
-| Design doc path | Team description |
-| Design ID (Convex) | validate-design task metadata (set during init, null if file-based) |
+| Spec doc path | Team description |
+| Spec ID (Convex) | validate-design task metadata (set during init, null if file-based) |
 | Worktree path | validate-design task metadata (set during init) |
 | Team ID (orchestration) | validate-design task metadata (set during init) |
 | Plan path | plan-phase-N task metadata |
@@ -521,7 +521,7 @@ Task metadata carries orchestration state:
 **At orchestration start:**
 ```
 ===============================================================
-ORCHESTRATING: <design doc name>
+ORCHESTRATING: <spec doc name>
 Team: <team-name>-orchestration
 Phases: <N> total
 ===============================================================
@@ -546,27 +546,27 @@ Ready for merge/PR workflow.
 
 ## When to Use
 
-- You have a complete design document with `## Phase N` sections
+- You have a complete spec document with `## Phase N` sections
 - You want fully automated execution without manual intervention
-- The design has been reviewed by `tina:architect`
+- The spec has been reviewed by `tina:architect`
 
 ## When NOT to Use
 
-- Design is incomplete or unapproved
+- Spec is incomplete or unapproved
 - You want manual control over each phase
-- Single-phase designs (use `tina:writing-plans` + `tina:executing-plans` directly)
+- Single-phase specs (use `tina:writing-plans` + `tina:executing-plans` directly)
 
 ## Invocation
 
 ```
-# From a local design doc file:
+# From a local spec doc file:
 /tina:orchestrate docs/plans/2026-01-26-myfeature-design.md
 
-# From a Convex design document ID:
-/tina:orchestrate --design-id abc123
+# From a Convex spec document ID:
+/tina:orchestrate --spec-id abc123
 
 # With optional overrides:
-/tina:orchestrate --design-id abc123 --feature my-feature --model haiku
+/tina:orchestrate --spec-id abc123 --feature my-feature --model haiku
 ```
 
 ## Implementation Details
@@ -577,15 +577,15 @@ Create all tasks upfront with proper dependencies. This is done ONCE at orchestr
 
 **Step-by-step task creation:**
 
-1. **Extract design info** (see STEP 1 for full parsing with `--design-id` support):
+1. **Extract spec info** (see STEP 1 for full parsing with `--spec-id` support):
 ```bash
 # File-based:
-DESIGN_DOC="$1"
-TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$DESIGN_DOC")
-FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
+SPEC_DOC="$1"
+TOTAL_PHASES=$(grep -cE "^##+ Phase [0-9]" "$SPEC_DOC")
+FEATURE_NAME=$(basename "$SPEC_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
 
-# OR ID-based (--design-id):
-# RESOLVE_JSON=$(tina-session work design resolve --design-id "$DESIGN_ID" --json)
+# OR ID-based (--spec-id):
+# RESOLVE_JSON=$(tina-session work spec resolve --spec-id "$SPEC_ID" --json)
 # TOTAL_PHASES from resolved markdown, FEATURE_NAME from title
 
 TEAM_NAME="${FEATURE_NAME}-orchestration"
@@ -596,7 +596,7 @@ TEAM_NAME="${FEATURE_NAME}-orchestration"
 {
   "operation": "spawnTeam",
   "team_name": "<TEAM_NAME>",
-  "description": "Orchestrating <FEATURE_NAME> from <DESIGN_DOC>"
+  "description": "Orchestrating <FEATURE_NAME> from <SPEC_DOC>"
 }
 ```
 
@@ -604,11 +604,11 @@ TEAM_NAME="${FEATURE_NAME}-orchestration"
 ```json
 TaskCreate {
   "subject": "validate-design",
-  "description": "Validate design document",
-  "activeForm": "Validating design document",
+  "description": "Validate spec document",
+  "activeForm": "Validating spec document",
   "metadata": {
-    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
-    "design_id": "<DESIGN_ID or null>",
+    "spec_doc_path": "<SPEC_DOC or 'convex://<SPEC_ID>'>",
+    "spec_id": "<SPEC_ID or null>",
     "worktree_path": "<WORKTREE_PATH>",
     "team_id": "<TEAM_ID>",
     "output_path": "<WORKTREE_PATH>/.claude/tina/reports/design-validation.md"
@@ -616,7 +616,7 @@ TaskCreate {
 }
 ```
 
-Note: `worktree_path`, `orchestration_id`, and `team_id` are captured from `tina-session init` JSON output in STEP 1c. They're stored in validate-design metadata so all downstream tasks can access them. The `team_id` is the Convex document ID of the orchestration team, used as `parent_team_id` when registering phase execution teams. Set `output_path` so validator/reviewer agents don't need to infer report locations. When `--design-id` is used, `design_doc_path` is `convex://<DESIGN_ID>` and the resolved design markdown is at `{worktree}/.claude/tina/design.md` (written by `tina-session init`).
+Note: `worktree_path`, `orchestration_id`, and `team_id` are captured from `tina-session init` JSON output in STEP 1c. They're stored in validate-design metadata so all downstream tasks can access them. The `team_id` is the Convex document ID of the orchestration team, used as `parent_team_id` when registering phase execution teams. Set `output_path` so validator/reviewer agents don't need to infer report locations. When `--spec-id` is used, `spec_doc_path` is `convex://<SPEC_ID>` and the resolved design markdown is at `{worktree}/.claude/tina/design.md` (written by `tina-session init`).
 
 4. **Create phase tasks (for each phase 1 to N):**
 ```json
@@ -626,8 +626,8 @@ TaskCreate {
   "activeForm": "Planning phase <N>",
   "metadata": {
     "phase_num": <N>,
-    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
-    "design_id": "<DESIGN_ID or null>",
+    "spec_doc_path": "<SPEC_DOC or 'convex://<SPEC_ID>'>",
+    "spec_id": "<SPEC_ID or null>",
     "model_override": "<MODEL_OVERRIDE or empty>"
   }
 }
@@ -648,8 +648,8 @@ TaskCreate {
   "activeForm": "Reviewing phase <N>",
   "metadata": {
     "phase_num": <N>,
-    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
-    "design_id": "<DESIGN_ID or null>",
+    "spec_doc_path": "<SPEC_DOC or 'convex://<SPEC_ID>'>",
+    "spec_id": "<SPEC_ID or null>",
     "feature_name": "<FEATURE_NAME>",
     "output_path": "<WORKTREE_PATH>/.claude/tina/reports/phase-<N>-review.md"
   }
@@ -744,7 +744,7 @@ If `CLI == "codex"`:
   "subagent_type": "tina:codex-cli",
   "team_name": "<TEAM_NAME>",
   "name": "validator",
-  "prompt": "feature: <FEATURE_NAME>\nphase: validation\ntask_id: <validate-task-id>\nrole: validator\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <design doc content>"
+  "prompt": "feature: <FEATURE_NAME>\nphase: validation\ntask_id: <validate-task-id>\nrole: validator\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <spec doc content>"
 }
 ```
 
@@ -787,7 +787,7 @@ If `CLI == "codex"`:
   "subagent_type": "tina:codex-cli",
   "team_name": "<TEAM_NAME>",
   "name": "planner-<N>",
-  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: <plan-task-id-N>\nrole: planner\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <design doc and phase context>"
+  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: <plan-task-id-N>\nrole: planner\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <spec doc and phase context>"
 }
 ```
 
@@ -825,7 +825,7 @@ Then: Mark execute-phase-N as in_progress
 **Phase reviewer spawn:**
 
 When: execute-phase-N complete
-Before spawning: Update review-phase-N metadata with worktree_path, design_doc_path, feature_name, and git_range
+Before spawning: Update review-phase-N metadata with worktree_path, spec_doc_path, feature_name, and git_range
 
 Run routing check on the action's model:
 
@@ -845,7 +845,7 @@ If `CLI == "codex"`:
   "subagent_type": "tina:codex-cli",
   "team_name": "<TEAM_NAME>",
   "name": "reviewer-<N>",
-  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: <review-task-id-N>\nrole: reviewer\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <review context, git range, design doc path>"
+  "prompt": "feature: <FEATURE_NAME>\nphase: <N>\ntask_id: <review-task-id-N>\nrole: reviewer\ncwd: <WORKTREE_PATH>\nmodel: <MODEL>\nprompt_content: |\n  <review context, git range, spec doc path>"
 }
 ```
 
@@ -935,11 +935,11 @@ Orchestration tasks store metadata for monitoring and recovery:
 
 | Task | Required Metadata |
 |------|-------------------|
-| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path`, `team_id`, `design_id` (if ID-based), `output_path` |
-| `plan-phase-N` | `plan_path`, `design_id` (if ID-based) |
+| `validate-design` | `validation_status: "pass"\|"warning"\|"stop"`, `worktree_path`, `team_id`, `spec_id` (if ID-based), `output_path` |
+| `plan-phase-N` | `plan_path`, `spec_id` (if ID-based) |
 | `execute-phase-N` | `phase_team_name`, `parent_team_id`, `started_at` |
 | `execute-phase-N` (on complete) | `git_range`, `completed_at` |
-| `review-phase-N` | `phase_num`, `design_doc_path`, `design_id` (if ID-based), `feature_name`, `output_path` |
+| `review-phase-N` | `phase_num`, `spec_doc_path`, `spec_id` (if ID-based), `feature_name`, `output_path` |
 | `review-phase-N` (on complete) | `status: "pass"\|"gaps"`, `issues[]` (if gaps) |
 
 The `phase_team_name` field links the orchestrator's task to the phase execution team. This enables:
@@ -975,7 +975,7 @@ if message contains "VALIDATION_STATUS: Pass" or "VALIDATION_STATUS: Warning":
     EVENT = "validation_pass" (or "validation_warning")
 
     # Check for prerequisites BEFORE advancing state
-    Read design doc, look for "## Prerequisites" section
+    Read spec doc, look for "## Prerequisites" section
     If prerequisites exist:
         Record prerequisites in task metadata and continue automatically
 
@@ -992,7 +992,7 @@ if message contains "VALIDATION_STATUS: Stop":
     TaskUpdate: <validate-task-id>, status: completed, metadata: { validation_status: "stop" }
     SendMessage: { type: "shutdown_request", recipient: "validator", content: "Validation stopped" }
     Wait up to 30s for validator shutdown acknowledgment
-    Print: "Design validation FAILED."
+    Print: "Spec validation FAILED."
     Exit orchestration
 ```
 
@@ -1154,11 +1154,11 @@ Error: <error description>
 
 Current state preserved in task list.
 To resume after fixing the issue:
-  /tina:orchestrate <design-doc-path>  (or --design-id <id>)
+  /tina:orchestrate <spec-doc-path>  (or --spec-id <id>)
 
 To reset and start fresh:
   tina-session cleanup --feature "$FEATURE_NAME"
-  /tina:orchestrate <design-doc-path>  (or --design-id <id>)
+  /tina:orchestrate <spec-doc-path>  (or --spec-id <id>)
 
 To manually inspect state:
   TaskList
@@ -1191,8 +1191,8 @@ TaskCreate {
     "phase_num": "<N>.5",
     "parent_phase": <N>,
     "issues": ["test coverage below 80%", "missing error handling"],
-    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
-    "design_id": "<DESIGN_ID or null>",
+    "spec_doc_path": "<SPEC_DOC or 'convex://<SPEC_ID>'>",
+    "spec_id": "<SPEC_ID or null>",
     "model_override": "<MODEL_OVERRIDE or empty>"
   }
 }
@@ -1213,8 +1213,8 @@ TaskCreate {
   "activeForm": "Reviewing phase <N>.5 remediation",
   "metadata": {
     "phase_num": "<N>.5",
-    "design_doc_path": "<DESIGN_DOC or 'convex://<DESIGN_ID>'>",
-    "design_id": "<DESIGN_ID or null>"
+    "spec_doc_path": "<SPEC_DOC or 'convex://<SPEC_ID>'>",
+    "spec_id": "<SPEC_ID or null>"
   }
 }
 ```
@@ -1301,11 +1301,11 @@ The task list IS the recovery mechanism. All orchestration state lives in:
 
 ### Detecting Existing Orchestration
 
-When orchestrate is invoked, check if orchestration already exists for this design doc:
+When orchestrate is invoked, check if orchestration already exists for this spec doc:
 
 ```bash
-# Extract feature name from design doc
-FEATURE_NAME=$(basename "$DESIGN_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
+# Extract feature name from spec doc
+FEATURE_NAME=$(basename "$SPEC_DOC" | sed 's/^[0-9-]*//; s/-design\.md$//')
 TEAM_NAME="${FEATURE_NAME}-orchestration"
 
 # Check if orchestration state already exists in Convex
@@ -1417,7 +1417,7 @@ To minimize recovery needs:
 ## Integration
 
 **Spawns:**
-- `tina:design-validator` - Validates design before work begins (when model routes to claude)
+- `tina:design-validator` - Validates spec before work begins (when model routes to claude)
 - `tina:phase-planner` - Creates implementation plans (when model routes to claude)
 - `tina:phase-executor` - Executes phase plans (when model routes to claude)
 - `tina:phase-reviewer` - Reviews completed phases (when model routes to claude)
@@ -1477,7 +1477,7 @@ To minimize recovery needs:
 **Handling:**
 1. Orchestrator exits with "failed after 2 remediation attempts"
 2. Tasks preserved for manual inspection
-3. User must manually fix or adjust design
+3. User must manually fix or adjust spec
 
 **Future improvement:** Surface specific issues to user for targeted intervention.
 
@@ -1548,7 +1548,7 @@ Use these scenarios to verify recovery and remediation work correctly.
 
 ### Scenario 3: Single Remediation Cycle
 
-1. Create a design that will fail review (e.g., no tests requirement)
+1. Create a spec that will fail review (e.g., no tests requirement)
 2. Run orchestration through execute-phase-1
 3. Reviewer reports gaps: `review-1 complete (gaps): missing unit tests`
 4. Expected: Orchestrator creates plan-phase-1.5, execute-phase-1.5, review-phase-1.5
@@ -1557,7 +1557,7 @@ Use these scenarios to verify recovery and remediation work correctly.
 
 ### Scenario 4: Remediation Limit Hit
 
-1. Create a design that will always fail review
+1. Create a spec that will always fail review
 2. Run orchestration until review-1 fails
 3. Let remediation 1.5 run, review-1.5 also fails
 4. Let remediation 1.5.5 run, review-1.5.5 also fails
@@ -1566,7 +1566,7 @@ Use these scenarios to verify recovery and remediation work correctly.
 
 ### Scenario 5: Complete Flow with Recovery
 
-1. Start orchestration for 2-phase design
+1. Start orchestration for 2-phase spec
 2. Crash and resume at each stage:
    - After validate-design
    - After plan-phase-1
@@ -1597,8 +1597,8 @@ Before using orchestration on real work, verify these behaviors manually:
 - [ ] During execute-phase-1: Ctrl+C orchestrator, restart, verify executor resumes
 - [ ] With tmux alive: Kill executor only, verify new executor attaches to existing session
 
-**Remediation (requires design that fails review):**
-- [ ] Create design with unreachable review criteria
+**Remediation (requires spec that fails review):**
+- [ ] Create spec with unreachable review criteria
 - [ ] Run through execute, observe review fail with gaps
 - [ ] Verify remediation tasks created (plan-1.5, execute-1.5, review-1.5)
 - [ ] Verify dependencies updated correctly
@@ -1647,7 +1647,7 @@ Common issues and their resolutions:
 **Symptom:** `spawnTeam` fails saying team already exists.
 
 **Possible causes:**
-1. Previous orchestration for same design doc exists
+1. Previous orchestration for same spec doc exists
 2. Incomplete cleanup from failed run
 
 **Resolution:**
@@ -1698,7 +1698,7 @@ Common issues and their resolutions:
 1. After 2 remediation cycles, orchestrator exits automatically
 2. Read the review files to understand root cause
 3. Either:
-   - Fix design and restart
+   - Fix spec and restart
    - Adjust reviewer criteria
    - Accept current state and skip review: `TaskUpdate { taskId: "review-N", status: "completed", metadata: { manual_pass: true } }`
 
