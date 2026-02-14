@@ -22,6 +22,7 @@ export default defineSchema({
     ...orchestrationCoreTableFields,
     projectId: v.optional(v.id("projects")),
     specId: v.optional(v.id("specs")),
+    designId: v.optional(v.id("designs")),
   })
     .index("by_feature", ["featureName"])
     .index("by_node", ["nodeId"])
@@ -283,6 +284,38 @@ export default defineSchema({
     .index("by_project_status", ["projectId", "status"])
     .index("by_key", ["specKey"]),
 
+  designs: defineTable({
+    projectId: v.id("projects"),
+    designKey: v.string(),
+    title: v.string(),
+    prompt: v.string(), // the question being explored
+    status: v.string(), // exploring | locked | archived
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_status", ["projectId", "status"])
+    .index("by_key", ["designKey"]),
+
+  designVariations: defineTable({
+    designId: v.id("designs"),
+    slug: v.string(),
+    title: v.string(),
+    status: v.string(), // exploring | selected | rejected
+    screenshotStorageIds: v.optional(v.array(v.string())),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_design", ["designId"])
+    .index("by_design_status", ["designId", "status"]),
+
+  specDesigns: defineTable({
+    specId: v.id("specs"),
+    designId: v.id("designs"),
+  })
+    .index("by_spec", ["specId"])
+    .index("by_design", ["designId"]),
+
   tickets: defineTable({
     projectId: v.id("projects"),
     specId: v.optional(v.id("specs")),
@@ -316,7 +349,7 @@ export default defineSchema({
 
   projectCounters: defineTable({
     projectId: v.id("projects"),
-    counterType: v.string(), // spec | ticket
+    counterType: v.string(), // spec | ticket | design
     nextValue: v.number(),
   })
     .index("by_project_type", ["projectId", "counterType"]),
