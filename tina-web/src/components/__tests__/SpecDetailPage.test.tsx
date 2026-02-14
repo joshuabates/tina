@@ -53,6 +53,7 @@ const defaultStates: Partial<QueryStateMap> = {
     }),
   ]),
   "specs.get": querySuccess(buildSpecSummary()),
+  "specDesigns.designsForSpec": querySuccess([]),
   "workComments.list": querySuccess([]),
 }
 
