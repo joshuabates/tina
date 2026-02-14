@@ -1,41 +1,41 @@
 import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { DesignListQuery } from "@/services/data/queryDefs"
+import { SpecListQuery } from "@/services/data/queryDefs"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { formatRelativeTimeShort } from "@/lib/time"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus, statusLabel } from "@/components/ui/status-styles"
-import { CreateDesignModal } from "./CreateDesignModal"
-import type { DesignSummary } from "@/schemas"
-import styles from "./DesignListPage.module.scss"
+import { CreateSpecModal } from "./CreateSpecModal"
+import type { SpecSummary } from "@/schemas"
+import styles from "./SpecListPage.module.scss"
 
-export function DesignListPage() {
+export function SpecListPage() {
   const { projectId: projectIdParam } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const [showCreateForm, setShowCreateForm] = useState(false)
 
   const projectId = projectIdParam ?? null
 
-  const designsResult = useTypedQuery(DesignListQuery, {
+  const specsResult = useTypedQuery(SpecListQuery, {
     projectId: projectId as string,
   })
 
   if (!projectId) {
     return (
-      <div data-testid="design-list-page" className={styles.designList}>
+      <div data-testid="spec-list-page" className={styles.specList}>
         <div className={styles.noProject}>Select a project from the sidebar</div>
       </div>
     )
   }
 
-  if (isAnyQueryLoading(designsResult)) {
+  if (isAnyQueryLoading(specsResult)) {
     return (
-      <div data-testid="design-list-page" className={styles.designList}>
+      <div data-testid="spec-list-page" className={styles.specList}>
         <div className={styles.header}>
-          <h2 className={styles.title}>Designs</h2>
+          <h2 className={styles.title}>Specs</h2>
         </div>
-        <div data-testid="design-list-loading" className={styles.loading}>
+        <div data-testid="spec-list-loading" className={styles.loading}>
           <div className={styles.skeletonRow} />
           <div className={styles.skeletonRow} />
           <div className={styles.skeletonRow} />
@@ -44,75 +44,75 @@ export function DesignListPage() {
     )
   }
 
-  const queryError = firstQueryError(designsResult)
+  const queryError = firstQueryError(specsResult)
   if (queryError) {
     throw queryError
   }
 
-  if (designsResult.status !== "success") {
+  if (specsResult.status !== "success") {
     return null
   }
 
-  const designs = designsResult.data
+  const specs = specsResult.data
 
-  const handleRowClick = (design: DesignSummary) => {
-    navigate(`/projects/${projectId}/plan/designs/${design._id}`)
+  const handleRowClick = (spec: SpecSummary) => {
+    navigate(`/projects/${projectId}/plan/specs/${spec._id}`)
   }
 
-  const handleCreated = (designId: string) => {
+  const handleCreated = (specId: string) => {
     setShowCreateForm(false)
-    navigate(`/projects/${projectId}/plan/designs/${designId}`)
+    navigate(`/projects/${projectId}/plan/specs/${specId}`)
   }
 
   return (
-    <div data-testid="design-list-page" className={styles.designList}>
+    <div data-testid="spec-list-page" className={styles.specList}>
       <div className={styles.header}>
-        <h2 className={styles.title}>Designs</h2>
+        <h2 className={styles.title}>Specs</h2>
         <button
           className={styles.createButton}
           onClick={() => setShowCreateForm(!showCreateForm)}
         >
-          Create Design
+          Create Spec
         </button>
       </div>
 
       {showCreateForm && (
-        <CreateDesignModal
+        <CreateSpecModal
           projectId={projectId}
           onClose={() => setShowCreateForm(false)}
           onCreated={handleCreated}
         />
       )}
 
-      {designs.length === 0 ? (
-        <div className={styles.empty}>No designs yet. Create one to get started.</div>
+      {specs.length === 0 ? (
+        <div className={styles.empty}>No specs yet. Create one to get started.</div>
       ) : (
         <table className={styles.table} role="table">
           <thead>
             <tr>
-              <th>Design</th>
+              <th>Spec</th>
               <th>Status</th>
               <th>Updated</th>
             </tr>
           </thead>
           <tbody>
-            {designs.map((design) => (
+            {specs.map((spec) => (
               <tr
-                key={design._id}
-                onClick={() => handleRowClick(design)}
+                key={spec._id}
+                onClick={() => handleRowClick(spec)}
                 role="row"
               >
                 <td>
-                  <div className={styles.designKey}>{design.designKey}</div>
-                  <div className={styles.designTitle}>{design.title}</div>
+                  <div className={styles.specKey}>{spec.specKey}</div>
+                  <div className={styles.specTitle}>{spec.title}</div>
                 </td>
                 <td>
                   <StatusBadge
-                    status={toStatusBadgeStatus(design.status)}
-                    label={statusLabel(toStatusBadgeStatus(design.status))}
+                    status={toStatusBadgeStatus(spec.status)}
+                    label={statusLabel(toStatusBadgeStatus(spec.status))}
                   />
                 </td>
-                <td>{formatRelativeTimeShort(design.updatedAt)}</td>
+                <td>{formatRelativeTimeShort(spec.updatedAt)}</td>
               </tr>
             ))}
           </tbody>

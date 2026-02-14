@@ -2,26 +2,26 @@ import { useState } from "react"
 import { useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { FormDialog } from "@/components/FormDialog"
-import type { DesignSummary } from "@/schemas"
+import type { SpecSummary } from "@/schemas"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "@/components/FormDialog.module.scss"
 
-interface EditDesignModalProps {
-  design: DesignSummary
+interface EditSpecModalProps {
+  design: SpecSummary
   onClose: () => void
   onSaved: () => void
 }
 
-export function EditDesignModal({
+export function EditSpecModal({
   design,
   onClose,
   onSaved,
-}: EditDesignModalProps) {
+}: EditSpecModalProps) {
   const [title, setTitle] = useState(design.title)
   const [markdown, setMarkdown] = useState(design.markdown)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const updateDesign = useMutation(api.designs.updateDesign)
+  const updateSpec = useMutation(api.specs.updateSpec)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -30,28 +30,28 @@ export function EditDesignModal({
     setSubmitting(true)
     setError(null)
     try {
-      await updateDesign({
-        designId: design._id as Id<"designs">,
+      await updateSpec({
+        designId: design._id as Id<"specs">,
         title: title.trim(),
         markdown: markdown.trim(),
       })
       onSaved()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update design")
+      setError(err instanceof Error ? err.message : "Failed to update spec")
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <FormDialog title="Edit Design" onClose={onClose}>
-      <form onSubmit={handleSubmit} data-testid="design-edit-form">
+    <FormDialog title="Edit Spec" onClose={onClose}>
+      <form onSubmit={handleSubmit} data-testid="spec-edit-form">
         <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="design-edit-title">
+          <label className={styles.formLabel} htmlFor="spec-edit-title">
             Title
           </label>
           <input
-            id="design-edit-title"
+            id="spec-edit-title"
             className={styles.formInput}
             type="text"
             value={title}
@@ -60,11 +60,11 @@ export function EditDesignModal({
           />
         </div>
         <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="design-edit-content">
+          <label className={styles.formLabel} htmlFor="spec-edit-content">
             Content
           </label>
           <textarea
-            id="design-edit-content"
+            id="spec-edit-content"
             className={styles.formTextarea}
             value={markdown}
             onChange={(e) => setMarkdown(e.target.value)}

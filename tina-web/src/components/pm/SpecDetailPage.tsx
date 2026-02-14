@@ -3,28 +3,28 @@ import { useParams } from "react-router-dom"
 import { useMutation } from "convex/react"
 import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { DesignDetailQuery } from "@/services/data/queryDefs"
+import { SpecDetailQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import { CommentTimeline } from "./CommentTimeline"
-import { EditDesignModal } from "./EditDesignModal"
+import { EditSpecModal } from "./EditSpecModal"
 import type { Id } from "@convex/_generated/dataModel"
 import { useCreateSession } from "@/hooks/useCreateSession"
 import { MarkdownRenderer } from "@/components/MarkdownRenderer"
-import styles from "./DesignDetailPage.module.scss"
+import styles from "./SpecDetailPage.module.scss"
 import markdownStyles from "../PlanQuicklook.module.scss"
 
-const DESIGN_STATUS_LABELS: Record<string, string> = {
+const SPEC_STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
   in_review: "In Review",
   approved: "Approved",
   archived: "Archived",
 }
 
-function designStatusLabel(status: string): string {
-  return DESIGN_STATUS_LABELS[status] ?? status
+function specStatusLabel(status: string): string {
+  return SPEC_STATUS_LABELS[status] ?? status
 }
 
 interface TransitionAction {
@@ -51,7 +51,7 @@ function getTransitionActions(status: string): TransitionAction[] {
   }
 }
 
-export function DesignDetailPage() {
+export function SpecDetailPage() {
   const { designId, projectId: routeProjectId } = useParams<{
     designId: string
     projectId: string
@@ -59,18 +59,18 @@ export function DesignDetailPage() {
   const [editing, setEditing] = useState(false)
   const [transitioning, setTransitioning] = useState(false)
 
-  const transitionDesign = useMutation(api.designs.transitionDesign)
-  const updateMarkers = useMutation(api.designs.updateDesignMarkers)
+  const transitionSpec = useMutation(api.specs.transitionSpec)
+  const updateMarkers = useMutation(api.specs.updateSpecMarkers)
   const { createAndConnect } = useCreateSession()
 
-  const designResult = useTypedQuery(DesignDetailQuery, {
+  const specResult = useTypedQuery(SpecDetailQuery, {
     designId: designId ?? "",
   })
 
-  if (isAnyQueryLoading(designResult)) {
+  if (isAnyQueryLoading(specResult)) {
     return (
-      <div data-testid="design-detail-page" className={styles.detailPage}>
-        <div data-testid="design-detail-loading" className={styles.loading}>
+      <div data-testid="spec-detail-page" className={styles.detailPage}>
+        <div data-testid="spec-detail-loading" className={styles.loading}>
           <div className={styles.skeletonBar} />
           <div className={styles.skeletonBar} />
           <div className={styles.skeletonRow} />
@@ -79,20 +79,20 @@ export function DesignDetailPage() {
     )
   }
 
-  const queryError = firstQueryError(designResult)
+  const queryError = firstQueryError(specResult)
   if (queryError) {
     throw queryError
   }
 
-  if (designResult.status !== "success") {
+  if (specResult.status !== "success") {
     return null
   }
 
-  const design = designResult.data
-  if (!design) {
+  const spec = specResult.data
+  if (!spec) {
     return (
-      <div data-testid="design-detail-page" className={styles.detailPage}>
-        <div className={styles.notFound}>Design not found</div>
+      <div data-testid="spec-detail-page" className={styles.detailPage}>
+        <div className={styles.notFound}>Spec not found</div>
       </div>
     )
   }
@@ -100,8 +100,8 @@ export function DesignDetailPage() {
   const handleTransition = async (newStatus: string) => {
     setTransitioning(true)
     try {
-      await transitionDesign({
-        designId: designId as Id<"designs">,
+      await transitionSpec({
+        designId: designId as Id<"specs">,
         newStatus,
       })
     } finally {
@@ -113,38 +113,38 @@ export function DesignDetailPage() {
     setEditing(false)
   }
 
-  const handleDiscussDesign = () => {
+  const handleDiscussSpec = () => {
     createAndConnect({
-      label: `Discuss: ${design.title}`,
-      contextType: "design",
+      label: `Discuss: ${spec.title}`,
+      contextType: "spec",
       contextId: designId!,
-      contextSummary: design.markdown.slice(0, 2000),
+      contextSummary: spec.markdown.slice(0, 2000),
     })
   }
 
-  const actions = getTransitionActions(design.status)
-  const complexityPreset = Option.getOrUndefined(design.complexityPreset)
-  const requiredMarkers = Option.getOrElse(() => [] as string[])(design.requiredMarkers)
-  const completedMarkers = Option.getOrElse(() => [] as string[])(design.completedMarkers)
+  const actions = getTransitionActions(spec.status)
+  const complexityPreset = Option.getOrUndefined(spec.complexityPreset)
+  const requiredMarkers = Option.getOrElse(() => [] as string[])(spec.requiredMarkers)
+  const completedMarkers = Option.getOrElse(() => [] as string[])(spec.completedMarkers)
 
   const handleToggleMarker = async (marker: string) => {
     const next = completedMarkers.includes(marker)
       ? completedMarkers.filter((m: string) => m !== marker)
       : [...completedMarkers, marker]
     await updateMarkers({
-      designId: designId as Id<"designs">,
+      designId: designId as Id<"specs">,
       completedMarkers: next,
     })
   }
 
   return (
-    <div data-testid="design-detail-page" className={styles.detailPage}>
+    <div data-testid="spec-detail-page" className={styles.detailPage}>
       <div className={styles.detailHeader}>
-        <span className={styles.designKey}>{design.designKey}</span>
-        <h2 className={styles.detailTitle}>{design.title}</h2>
+        <span className={styles.specKey}>{spec.specKey}</span>
+        <h2 className={styles.detailTitle}>{spec.title}</h2>
         <StatusBadge
-          status={toStatusBadgeStatus(design.status)}
-          label={designStatusLabel(design.status)}
+          status={toStatusBadgeStatus(spec.status)}
+          label={specStatusLabel(spec.status)}
         />
       </div>
 
@@ -161,9 +161,9 @@ export function DesignDetailPage() {
         ))}
         <button
           className={styles.actionButton}
-          onClick={handleDiscussDesign}
+          onClick={handleDiscussSpec}
         >
-          Discuss Design
+          Discuss Spec
         </button>
         {!editing && (
           <button
@@ -176,7 +176,7 @@ export function DesignDetailPage() {
       </div>
 
       <MarkdownRenderer className={`${styles.markdownBody} ${markdownStyles.content}`}>
-        {design.markdown}
+        {spec.markdown}
       </MarkdownRenderer>
 
       {complexityPreset && (
@@ -189,11 +189,11 @@ export function DesignDetailPage() {
             </div>
             <div className={styles.metadataItem}>
               <span className={styles.metadataLabel}>Phases</span>
-              <span>{Option.getOrElse(() => 0)(design.phaseCount)}</span>
+              <span>{Option.getOrElse(() => 0)(spec.phaseCount)}</span>
             </div>
             <div className={styles.metadataItem}>
               <span className={styles.metadataLabel}>Phase Structure</span>
-              <span>{Option.getOrElse(() => false)(design.phaseStructureValid) ? "Valid" : "Invalid"}</span>
+              <span>{Option.getOrElse(() => false)(spec.phaseStructureValid) ? "Valid" : "Invalid"}</span>
             </div>
           </div>
           {requiredMarkers.length > 0 && (
@@ -221,8 +221,8 @@ export function DesignDetailPage() {
       )}
 
       {editing && (
-        <EditDesignModal
-          design={design}
+        <EditSpecModal
+          design={spec}
           onClose={() => setEditing(false)}
           onSaved={handleSaved}
         />
@@ -231,8 +231,8 @@ export function DesignDetailPage() {
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Comments</h3>
         <CommentTimeline
-          projectId={routeProjectId || design.projectId}
-          targetType="design"
+          projectId={routeProjectId || spec.projectId}
+          targetType="spec"
           targetId={designId ?? ""}
         />
       </div>

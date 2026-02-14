@@ -11,10 +11,10 @@ const COMPLEXITY_OPTIONS = [
   { value: "complex", label: "Complex", description: "Extended checklist" },
 ] as const
 
-interface CreateDesignModalProps {
+interface CreateSpecModalProps {
   projectId: string
   onClose: () => void
-  onCreated: (designId: string) => void
+  onCreated: (specId: string) => void
 }
 
 function extractTitleFromMarkdown(markdown: string): string {
@@ -22,18 +22,18 @@ function extractTitleFromMarkdown(markdown: string): string {
   return match ? match[1].trim() : ""
 }
 
-export function CreateDesignModal({
+export function CreateSpecModal({
   projectId,
   onClose,
   onCreated,
-}: CreateDesignModalProps) {
+}: CreateSpecModalProps) {
   const [title, setTitle] = useState("")
   const [markdown, setMarkdown] = useState("")
   const [complexityPreset, setComplexityPreset] = useState("standard")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const createDesign = useMutation(api.designs.createDesign)
+  const createSpec = useMutation(api.specs.createSpec)
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -58,34 +58,34 @@ export function CreateDesignModal({
     setSubmitting(true)
     setError(null)
     try {
-      const designId = await createDesign({
+      const specId = await createSpec({
         projectId: projectId as Id<"projects">,
         title: title.trim(),
         markdown: markdown.trim(),
         complexityPreset,
       })
-      onCreated(designId as unknown as string)
+      onCreated(specId as unknown as string)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create design")
+      setError(err instanceof Error ? err.message : "Failed to create spec")
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <FormDialog title="Create Design" onClose={onClose}>
-      <form onSubmit={handleSubmit} data-testid="design-create-form">
+    <FormDialog title="Create Spec" onClose={onClose}>
+      <form onSubmit={handleSubmit} data-testid="spec-create-form">
         <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="design-title">
+          <label className={styles.formLabel} htmlFor="spec-title">
             Title
           </label>
           <input
-            id="design-title"
+            id="spec-title"
             className={styles.formInput}
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Design title"
+            placeholder="Spec title"
             autoFocus
           />
         </div>
@@ -107,7 +107,7 @@ export function CreateDesignModal({
           </div>
         </div>
         <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="design-markdown">
+          <label className={styles.formLabel} htmlFor="spec-markdown">
             Content
           </label>
           <div style={{ display: "flex", gap: "var(--space-sm)", marginBottom: "var(--space-xs)" }}>
@@ -128,11 +128,11 @@ export function CreateDesignModal({
             />
           </div>
           <textarea
-            id="design-markdown"
+            id="spec-markdown"
             className={styles.formTextarea}
             value={markdown}
             onChange={(e) => setMarkdown(e.target.value)}
-            placeholder="Design content (markdown)"
+            placeholder="Spec content (markdown)"
           />
         </div>
         {error && <div className={styles.errorMessage}>{error}</div>}
