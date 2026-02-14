@@ -65,7 +65,7 @@ describe("projectCounters:allocateKey", () => {
       repoPath: "/Users/joshua/Projects/counter-test-3",
     });
 
-    const designKey1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
+    const specKey1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
       counterType: "spec",
     });
@@ -73,20 +73,20 @@ describe("projectCounters:allocateKey", () => {
       projectId,
       counterType: "ticket",
     });
-    const designKey2 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
+    const specKey2 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
       counterType: "spec",
     });
 
-    expect(designKey1).toBe(1);
+    expect(specKey1).toBe(1);
     expect(ticketKey1).toBe(1);
-    expect(designKey2).toBe(2);
+    expect(specKey2).toBe(2);
 
-    const designCounter = await t.query(internal.projectCounters.getCounter, {
+    const specCounter = await t.query(internal.projectCounters.getCounter, {
       projectId,
       counterType: "spec",
     });
-    expect(designCounter?.nextValue).toBe(3);
+    expect(specCounter?.nextValue).toBe(3);
 
     const ticketCounter = await t.query(internal.projectCounters.getCounter, {
       projectId,

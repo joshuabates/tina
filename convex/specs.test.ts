@@ -99,7 +99,7 @@ describe("specs", () => {
       expect(spec?.phaseStructureValid).toBe(false);
     });
 
-    test("allocates sequential keys for multiple designs", async () => {
+    test("allocates sequential keys for multiple specs", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "PROJ",
@@ -127,7 +127,7 @@ describe("specs", () => {
 
   });
 
-  describe("getDesign", () => {
+  describe("getSpec", () => {
     test("returns null for non-existent spec", async () => {
       const t = convexTest(schema, modules);
       const fakeId = (await createProject(t)).replace("projects", "specs");
@@ -220,7 +220,7 @@ describe("specs", () => {
         markdown: "# Approved",
       });
 
-      // Transition design2 to approved
+      // Transition spec2 to approved
       await t.mutation(api.specs.transitionSpec, {
         specId: spec2Id,
         newStatus: "in_review",
@@ -249,7 +249,7 @@ describe("specs", () => {
     });
   });
 
-  describe("updateDesign", () => {
+  describe("updateSpec", () => {
     test("updates title and markdown", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
