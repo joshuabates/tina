@@ -221,7 +221,7 @@ mod tests {
                 node_id: "node-1".to_string(),
                 project_id: None,
                 feature_name: "test-project".to_string(),
-                design_doc_path: "design.md".to_string(),
+                spec_doc_path: "design.md".to_string(),
                 branch: "tina/test-project".to_string(),
                 worktree_path: Some("/tmp/test".to_string()),
                 total_phases: 3.0,
@@ -230,6 +230,13 @@ mod tests {
                 started_at: "2026-02-07T10:00:00Z".to_string(),
                 completed_at: None,
                 total_elapsed_mins: None,
+                spec_id: None,
+                policy_snapshot: None,
+                policy_snapshot_hash: None,
+                preset_origin: None,
+                spec_only: None,
+                policy_revision: None,
+                updated_at: None,
             },
         };
         let orchestrations = vec![MonitorOrchestration::from_list_entry(entry)];

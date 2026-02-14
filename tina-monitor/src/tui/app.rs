@@ -663,7 +663,7 @@ impl App {
         // Plans are typically in ../docs/plans/ relative to the cwd
         let plan_name = format!(
             "{}-phase-{}.md",
-            orch.design_doc_path.file_stem()?.to_str()?,
+            orch.spec_doc_path.file_stem()?.to_str()?,
             phase
         );
 
@@ -692,18 +692,18 @@ impl App {
         Ok(())
     }
 
-    /// Handle viewing the design document
-    fn handle_view_design_doc(&mut self) -> AppResult<()> {
+    /// Handle viewing the spec document
+    fn handle_view_spec_doc(&mut self) -> AppResult<()> {
         if self.orchestrations.is_empty() {
             return Ok(());
         }
 
         let orch = &self.orchestrations[self.selected_index];
-        let design_path = orch.design_doc_path.clone();
+        let spec_path = orch.spec_doc_path.clone();
 
-        if design_path.exists() {
+        if spec_path.exists() {
             self.view_state = ViewState::PlanViewer {
-                plan_path: design_path,
+                plan_path: spec_path,
                 scroll_offset: 0,
             };
         }
@@ -944,7 +944,7 @@ impl App {
                         let _ = self.handle_view_phase_plan(detail.selected_phase);
                     }
                     KeyCode::Char('D') => {
-                        let _ = self.handle_view_design_doc();
+                        let _ = self.handle_view_spec_doc();
                     }
                     _ => {}
                 }
@@ -1393,7 +1393,7 @@ mod tests {
                 node_id: "node-1".to_string(),
                 project_id: None,
                 feature_name: title.to_string(),
-                design_doc_path: "design.md".to_string(),
+                spec_doc_path: "design.md".to_string(),
                 branch: format!("tina/{}", title),
                 worktree_path: Some("/test".to_string()),
                 total_phases: 3.0,
@@ -1402,6 +1402,13 @@ mod tests {
                 started_at: "2026-02-07T10:00:00Z".to_string(),
                 completed_at: None,
                 total_elapsed_mins: None,
+                spec_id: None,
+                policy_snapshot: None,
+                policy_snapshot_hash: None,
+                preset_origin: None,
+                spec_only: None,
+                policy_revision: None,
+                updated_at: None,
             },
         };
         let mut orch = MonitorOrchestration::from_list_entry(entry);

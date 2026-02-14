@@ -538,7 +538,7 @@ mod tests {
         fs::create_dir_all(&tina_dir).unwrap();
 
         let state_json = r#"{
-            "version":1,"feature":"test-feature","design_doc":"docs/design.md",
+            "version":1,"feature":"test-feature","spec_doc":"docs/design.md",
             "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":2,"status":"executing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}
@@ -563,7 +563,7 @@ mod tests {
         fs::create_dir_all(&tina_dir).unwrap();
 
         let state_json = r#"{
-            "version":1,"feature":"test-feature","design_doc":"docs/design.md",
+            "version":1,"feature":"test-feature","spec_doc":"docs/design.md",
             "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":2,"status":"executing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}
@@ -601,7 +601,7 @@ mod tests {
         fs::create_dir_all(&tina_dir).unwrap();
 
         let state_json = r#"{
-            "version":1,"feature":"test-feature","design_doc":"docs/design.md",
+            "version":1,"feature":"test-feature","spec_doc":"docs/design.md",
             "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":2,"status":"executing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}
@@ -613,7 +613,7 @@ mod tests {
 
         // Update the state file
         let updated_state_json = r#"{
-            "version":1,"feature":"test-feature","design_doc":"docs/design.md",
+            "version":1,"feature":"test-feature","spec_doc":"docs/design.md",
             "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":3,"status":"reviewing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}
@@ -688,7 +688,7 @@ mod tests {
         fs::create_dir_all(&tina_dir).unwrap();
 
         let state_json = r#"{
-            "version":1,"feature":"test-feature","design_doc":"docs/design.md",
+            "version":1,"feature":"test-feature","spec_doc":"docs/design.md",
             "worktree_path":"test-feature","branch":"tina/test-feature","total_phases":3,
             "current_phase":2,"status":"executing","orchestration_started_at":"2026-01-30T10:00:00Z",
             "phases":{}

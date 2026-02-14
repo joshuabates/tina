@@ -327,16 +327,18 @@ mod tests {
         let state = SupervisorState {
             version: 1,
             feature: "test-feature".to_string(),
-            design_doc: std::path::PathBuf::from("/path/to/design.md"),
+            spec_doc: std::path::PathBuf::from("/path/to/spec.md"),
             worktree_path: std::path::PathBuf::from("/path/to/worktree"),
             branch: "test-branch".to_string(),
             total_phases: 3,
             current_phase: 1,
             status: OrchestrationStatus::Executing,
             orchestration_started_at: now,
+            spec_id: None,
             phases: Default::default(),
             timing: Default::default(),
             model_policy: Default::default(),
+            review_policy: Default::default(),
         };
 
         dashboard.update(&state);
@@ -351,16 +353,18 @@ mod tests {
         let state = SupervisorState {
             version: 1,
             feature: "test-feature".to_string(),
-            design_doc: std::path::PathBuf::from("/path/to/design.md"),
+            spec_doc: std::path::PathBuf::from("/path/to/spec.md"),
             worktree_path: std::path::PathBuf::from("/path/to/worktree"),
             branch: "test-branch".to_string(),
             total_phases: 3,
             current_phase: 2,
             status: OrchestrationStatus::Reviewing,
             orchestration_started_at: now,
+            spec_id: None,
             phases: Default::default(),
             timing: Default::default(),
             model_policy: Default::default(),
+            review_policy: Default::default(),
         };
 
         dashboard.update(&state);
@@ -375,16 +379,18 @@ mod tests {
         let state = SupervisorState {
             version: 1,
             feature: "test-feature".to_string(),
-            design_doc: std::path::PathBuf::from("/path/to/design.md"),
+            spec_doc: std::path::PathBuf::from("/path/to/spec.md"),
             worktree_path: std::path::PathBuf::from("/path/to/worktree"),
             branch: "test-branch".to_string(),
             total_phases: 4,
             current_phase: 2,
             status: OrchestrationStatus::Executing,
             orchestration_started_at: now,
+            spec_id: None,
             phases: Default::default(),
             timing: Default::default(),
             model_policy: Default::default(),
+            review_policy: Default::default(),
         };
 
         dashboard.update(&state);
@@ -401,16 +407,18 @@ mod tests {
         let state = SupervisorState {
             version: 1,
             feature: "test-feature".to_string(),
-            design_doc: std::path::PathBuf::from("/path/to/design.md"),
+            spec_doc: std::path::PathBuf::from("/path/to/spec.md"),
             worktree_path: std::path::PathBuf::from("/path/to/worktree"),
             branch: "test-branch".to_string(),
             total_phases: 3,
             current_phase: 1,
             status: OrchestrationStatus::Executing,
             orchestration_started_at: start_time,
+            spec_id: None,
             phases: Default::default(),
             timing: Default::default(),
             model_policy: Default::default(),
+            review_policy: Default::default(),
         };
 
         dashboard.update(&state);
