@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, cleanup } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
+import { Option } from "effect"
 import { CommitQuicklook, type HydratedCommit } from "../CommitQuicklook"
 import { defineQuicklookDialogContract } from "@/test/harness/quicklook-contract"
 
 // Mock useTypedQuery to avoid Convex client requirement
 vi.mock("@/hooks/useTypedQuery", () => ({
   useTypedQuery: vi.fn(() => ({ status: "success", data: [] })),
+}))
+vi.mock("@/hooks/useDaemonQuery", () => ({
+  useDiffFiles: vi.fn(() => ({ data: [], isLoading: false, isError: false })),
+  useDiffFile: vi.fn(() => ({ data: [], isLoading: false, isError: false })),
 }))
 
 // Mock useMutation to avoid Convex client requirement
@@ -22,6 +27,7 @@ vi.mock("convex/react", async (importOriginal) => {
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
+const mockDaemon = vi.mocked(await import("@/hooks/useDaemonQuery"))
 
 const mockCreateAndConnect = vi.fn()
 vi.mock("@/hooks/useCreateSession", () => ({
@@ -76,8 +82,27 @@ describe("CommitQuicklook", () => {
         return { status: "success", data: [] }
       }
 
+      if (def.key === "orchestrations.detail") {
+        return {
+          status: "success",
+          data: {
+            worktreePath: Option.some("/tmp/tina-worktree"),
+          },
+        } as any
+      }
+
       return { status: "success", data: [] }
     })
+    mockDaemon.useDiffFiles.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    } as any)
+    mockDaemon.useDiffFile.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    } as any)
   })
 
   afterEach(() => {
@@ -103,7 +128,6 @@ describe("CommitQuicklook", () => {
     expect(screen.getByText("Commit Details")).toBeInTheDocument()
     expect(screen.getByText("abc123def456789")).toBeInTheDocument()
     expect(screen.getByText("feat: add amazing feature")).toBeInTheDocument()
-    expect(screen.getByText("Bob <bob@example.com>")).toBeInTheDocument()
     expect(screen.getByText("+25")).toBeInTheDocument()
     expect(screen.getByText("-10")).toBeInTheDocument()
   })
@@ -117,7 +141,6 @@ describe("CommitQuicklook", () => {
     render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
 
     expect(screen.getByText("Commit message unavailable (daemon offline)")).toBeInTheDocument()
-    expect(screen.getByText("Unknown")).toBeInTheDocument()
     expect(screen.getByText("Unavailable")).toBeInTheDocument()
     expect(screen.getAllByText("--").length).toBeGreaterThanOrEqual(2)
   })
@@ -233,7 +256,6 @@ describe("CommitQuicklook", () => {
       contextSummary: [
         "Commit: abc123def456789",
         "Message: feat: add awesome feature",
-        "Author: Alice <alice@example.com>",
         "+15 -5",
       ].join("\n"),
     })
@@ -322,6 +344,15 @@ describe("CommitQuicklook", () => {
         } as any
       }
 
+      if (def.key === "orchestrations.detail") {
+        return {
+          status: "success",
+          data: {
+            worktreePath: Option.some("/tmp/tina-worktree"),
+          },
+        } as any
+      }
+
       return { status: "success", data: [] }
     })
 
@@ -334,6 +365,83 @@ describe("CommitQuicklook", () => {
 
     expect(screen.getByText("Fix null handling")).toBeInTheDocument()
     expect(screen.queryByText("Other commit issue")).not.toBeInTheDocument()
+  })
+
+  it("renders a commit diff preview when daemon diff data is available", () => {
+    mockDaemon.useDiffFiles.mockReturnValue({
+      data: [
+        {
+          path: "src/feature.ts",
+          status: "modified",
+          insertions: 3,
+          deletions: 1,
+          old_path: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    } as any)
+    mockDaemon.useDiffFile.mockReturnValue({
+      data: [
+        {
+          old_start: 10,
+          old_count: 1,
+          new_start: 10,
+          new_count: 1,
+          lines: [
+            { kind: "context", old_line: 10, new_line: 10, text: "const a = 1" },
+            { kind: "add", old_line: null, new_line: 11, text: "const b = 2" },
+          ],
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    } as any)
+
+    render(<CommitQuicklook commit={createMockCommit()} onClose={mockOnClose} />)
+
+    expect(screen.getByText("Diff")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /choose changed file/i })).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText("Filter files...")).not.toBeInTheDocument()
+    expect(screen.getAllByText("src/feature.ts").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("const a = 1")).toHaveLength(2)
+    expect(screen.getByText("const b = 2")).toBeInTheDocument()
+  })
+
+  it("uses diff totals for insertions and deletions when commit metadata reports zero", () => {
+    mockDaemon.useDiffFiles.mockReturnValue({
+      data: [
+        {
+          path: "src/feature.ts",
+          status: "modified",
+          insertions: 12,
+          deletions: 4,
+          old_path: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    } as any)
+
+    render(
+      <CommitQuicklook
+        commit={createMockCommit({
+          detail: {
+            sha: "abc123def456789",
+            short_sha: "abc123",
+            subject: "feat: add awesome feature",
+            author: "Alice <alice@example.com>",
+            timestamp: "2026-02-10T10:00:00Z",
+            insertions: 0,
+            deletions: 0,
+          },
+        })}
+        onClose={mockOnClose}
+      />,
+    )
+
+    expect(screen.getByText("+12")).toBeInTheDocument()
+    expect(screen.getByText("-4")).toBeInTheDocument()
   })
 
   defineQuicklookDialogContract({

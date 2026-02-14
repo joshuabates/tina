@@ -1,0 +1,83 @@
+.modal {
+  max-width: min(96vw, 1450px) !important;
+  width: 96vw !important;
+  max-height: 92vh !important;
+}
+
+.contentWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.shaText {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  letter-spacing: 0.01em;
+}
+
+.copyButton {
+  border: 1px solid hsl(var(--border));
+  border-radius: 6px;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+
+  &:hover {
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--ring) / 0.6);
+  }
+}
+
+.messageLabel {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 4px;
+}
+
+.messageText {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.timeText {
+  color: hsl(var(--muted-foreground));
+}
+
+.insertions {
+  color: #36d399;
+  font-family: var(--font-mono);
+}
+
+.deletions {
+  color: #fb7185;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 960px) {
+  .modal {
+    width: 98vw !important;
+    max-width: 98vw !important;
+    max-height: 94vh !important;
+  }
+}

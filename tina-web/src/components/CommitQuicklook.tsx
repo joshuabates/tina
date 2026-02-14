@@ -1,17 +1,21 @@
 import { useId, useRef } from "react"
+import { Option } from "effect"
 import { useFocusTrap } from "@/hooks/useFocusTrap"
 import { useCreateSession } from "@/hooks/useCreateSession"
 import { useQuicklookKeyboard } from "@/hooks/useQuicklookKeyboard"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import {
+  OrchestrationDetailQuery,
   ReviewListQuery,
   ReviewThreadByOrchestrationListQuery,
 } from "@/services/data/queryDefs"
 import { matchQueryResult } from "@/lib/query-state"
 import type { Commit } from "@/schemas"
-import type { DaemonCommitDetail } from "@/hooks/useDaemonQuery"
+import { useDiffFiles, type DaemonCommitDetail } from "@/hooks/useDaemonQuery"
 import { ReviewFeedbackComposer, ReviewThreadCard } from "@/components/ReviewFeedback"
+import { CommitDiffPreview } from "@/components/CommitDiffPreview"
 import styles from "./QuicklookDialog.module.scss"
+import commitStyles from "./CommitQuicklook.module.scss"
 
 export interface HydratedCommit extends Commit {
   detail?: DaemonCommitDetail
@@ -38,20 +42,20 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
   const threadsResult = useTypedQuery(ReviewThreadByOrchestrationListQuery, {
     orchestrationId: commit.orchestrationId,
   })
+  const orchestrationResult = useTypedQuery(OrchestrationDetailQuery, {
+    orchestrationId: commit.orchestrationId,
+  })
 
   const handleCopyToClipboard = () => {
     navigator.clipboard.writeText(commit.sha)
   }
 
   const subject = commit.detail?.subject ?? commit.subject ?? "Commit message unavailable (daemon offline)"
-  const author = commit.detail?.author ?? "Unknown"
   const time = commit.detail?.timestamp
     ? new Date(commit.detail.timestamp).toLocaleString()
     : "Unavailable"
   const insertionsValue = commit.detail?.insertions
   const deletionsValue = commit.detail?.deletions
-  const insertions = insertionsValue !== undefined ? `+${insertionsValue}` : "--"
-  const deletions = deletionsValue !== undefined ? `-${deletionsValue}` : "--"
 
   const latestReviewId =
     reviewsResult.status === "success"
@@ -71,15 +75,42 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
         ? "Review context unavailable for this commit"
         : "No review available for this phase yet"
 
+  const worktreePath =
+    orchestrationResult.status === "success" && orchestrationResult.data
+      ? Option.getOrElse(orchestrationResult.data.worktreePath, () => "")
+      : ""
+  const diffBase = `${commit.sha}^`
+  const diffFilesResult = useDiffFiles(worktreePath, diffBase)
+
+  const diffTotals = diffFilesResult.data
+    ? diffFilesResult.data.reduce(
+        (totals, file) => ({
+          insertions: totals.insertions + file.insertions,
+          deletions: totals.deletions + file.deletions,
+        }),
+        { insertions: 0, deletions: 0 },
+      )
+    : null
+
+  const finalInsertionsValue =
+    diffTotals && (diffTotals.insertions > 0 || diffTotals.deletions > 0)
+      ? diffTotals.insertions
+      : insertionsValue
+  const finalDeletionsValue =
+    diffTotals && (diffTotals.insertions > 0 || diffTotals.deletions > 0)
+      ? diffTotals.deletions
+      : deletionsValue
+  const insertions = finalInsertionsValue !== undefined ? `+${finalInsertionsValue}` : "--"
+  const deletions = finalDeletionsValue !== undefined ? `-${finalDeletionsValue}` : "--"
+
   const handleReviewCommit = () => {
     const stats =
-      insertionsValue !== undefined && deletionsValue !== undefined
-        ? `+${insertionsValue} -${deletionsValue}`
+      finalInsertionsValue !== undefined && finalDeletionsValue !== undefined
+        ? `+${finalInsertionsValue} -${finalDeletionsValue}`
         : "Stats unavailable"
     const summary = [
       `Commit: ${commit.sha}`,
       `Message: ${subject}`,
-      `Author: ${author}`,
       stats,
     ].join("\n")
 
@@ -99,7 +130,7 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={styles.modal}
+        className={`${styles.modal} ${commitStyles.modal}`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className={styles.header}>
@@ -116,14 +147,14 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
           </button>
         </div>
         <div className={styles.content}>
-          <div className="space-y-4">
+          <div className={commitStyles.contentWrap}>
             <div>
-              <div className="text-sm text-muted-foreground">SHA</div>
-              <div className="flex items-center gap-2">
-                <code className="text-primary font-mono">{commit.sha}</code>
+              <div className={commitStyles.metaRow}>
+                <code className={commitStyles.shaText}>{commit.sha}</code>
                 <button
+                  type="button"
                   onClick={handleCopyToClipboard}
-                  className="text-xs text-muted-foreground hover:text-foreground"
+                  className={commitStyles.copyButton}
                 >
                   Copy
                 </button>
@@ -131,30 +162,14 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
             </div>
 
             <div>
-              <div className="text-sm text-muted-foreground">Message</div>
-              <div className="font-semibold">{subject}</div>
+              <div className={commitStyles.messageLabel}>Message</div>
+              <div className={commitStyles.messageText}>{subject}</div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm text-muted-foreground">Author</div>
-                <div>{author}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Time</div>
-                <div>{time}</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm text-muted-foreground">Insertions</div>
-                <div className="text-green-400">{insertions}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Deletions</div>
-                <div className="text-red-400">{deletions}</div>
-              </div>
+            <div className={commitStyles.summaryRow}>
+              <span className={commitStyles.timeText}>{time}</span>
+              <span className={commitStyles.insertions}>{insertions}</span>
+              <span className={commitStyles.deletions}>{deletions}</span>
             </div>
 
             <button
@@ -164,6 +179,22 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
             >
               Review this commit
             </button>
+
+            <div className="border-t border-border/70 pt-4">
+              <div className="text-sm font-semibold mb-3">Diff</div>
+              {orchestrationResult.status === "loading" ? (
+                <div className="text-muted-foreground text-sm">Loading diff context...</div>
+              ) : worktreePath.length === 0 ? (
+                <div className="text-muted-foreground text-sm">
+                  Worktree path unavailable for diff preview
+                </div>
+              ) : (
+                <CommitDiffPreview
+                  worktreePath={worktreePath}
+                  baseBranch={diffBase}
+                />
+              )}
+            </div>
 
             <div className="border-t border-border/70 pt-4">
               <div className="text-sm font-semibold mb-3">Feedback</div>

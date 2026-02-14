@@ -28,6 +28,12 @@ const mockUseTypedQuery = vi.mocked(
 const mockUseCommitDetails = vi.mocked(
   await import("@/hooks/useDaemonQuery"),
 ).useCommitDetails
+const mockUseDiffFiles = vi.mocked(
+  await import("@/hooks/useDaemonQuery"),
+).useDiffFiles
+const mockUseDiffFile = vi.mocked(
+  await import("@/hooks/useDaemonQuery"),
+).useDiffFile
 const mockUseFocusable = vi.mocked(
   await import("@/hooks/useFocusable"),
 ).useFocusable
@@ -94,6 +100,16 @@ describe("GitOpsSection", () => {
       data: { commits: [], missingShas: [] },
       isError: false,
     } as unknown as ReturnType<typeof mockUseCommitDetails>)
+    mockUseDiffFiles.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof mockUseDiffFiles>)
+    mockUseDiffFile.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof mockUseDiffFile>)
     mockUseCreateSession.mockReturnValue({
       createAndConnect: vi.fn(),
       connectToPane: vi.fn(),
