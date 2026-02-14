@@ -24,8 +24,18 @@ import {
   setLastSubviewForProjectMode,
   type NavMode,
 } from "@/lib/navigation"
-import { OrchestrationListQuery, ProjectListQuery, TerminalTargetListQuery } from "@/services/data/queryDefs"
-import type { OrchestrationSummary, ProjectSummary, TerminalTarget } from "@/schemas"
+import {
+  DesignListQuery,
+  OrchestrationListQuery,
+  ProjectListQuery,
+  TerminalTargetListQuery,
+} from "@/services/data/queryDefs"
+import type {
+  DesignSummary,
+  OrchestrationSummary,
+  ProjectSummary,
+  TerminalTarget,
+} from "@/schemas"
 import { SidebarItem } from "@/components/ui/sidebar-item"
 import { NewSessionDialog } from "@/components/NewSessionDialog"
 import { statusLabel, toStatusBadgeStatus } from "@/components/ui/status-styles"
@@ -131,16 +141,89 @@ function CodeSidebar() {
   )
 }
 
-function DesignSidebar() {
+function designStatusIndicatorClass(status: string): string {
+  const normalized = toStatusBadgeStatus(status)
+  switch (normalized) {
+    case "exploring":
+    case "reviewing":
+    case "in_review":
+    case "in_progress":
+      return "bg-sky-400"
+    case "locked":
+    case "selected":
+    case "approved":
+    case "complete":
+      return "bg-emerald-500"
+    case "archived":
+    case "rejected":
+    case "canceled":
+      return "bg-slate-500"
+    default:
+      return "bg-muted-foreground/50"
+  }
+}
+
+function DesignSidebar({
+  projectId,
+  activeDesignId,
+}: {
+  projectId: string
+  activeDesignId?: string
+}) {
+  const navigate = useNavigate()
+  const designsResult = useTypedQuery(DesignListQuery, { projectId })
+  const designs = designsResult.status === "success" ? designsResult.data : []
+  const hasDesigns = designs.length > 0
+
   return (
-    <div className={styles.modeSidebarContent}>
-      <div className={styles.modeSidebarHeader}>Design</div>
-      <p className={styles.modeSidebarHint}>Browse and manage designs for this project.</p>
-    </div>
+    <SidebarListLayout
+      title="Designs"
+      bodyProps={hasDesigns ? { role: "list" } : undefined}
+    >
+      {hasDesigns && (
+        <>
+          {designs.map((design: DesignSummary, index) => (
+            <SidebarItem
+              key={design._id}
+              label={`${design.designKey} · ${design.title}`}
+              active={design._id === activeDesignId}
+              statusIndicatorClass={designStatusIndicatorClass(design.status)}
+              statusIndicatorSize="large"
+              className={styles.sessionsSidebarItem}
+              data-sidebar-action={index === 0 ? "true" : undefined}
+              onClick={() => navigate(`/projects/${projectId}/design/${design._id}`)}
+            />
+          ))}
+        </>
+      )}
+      {designsResult.status === "loading" && (
+        <p className={styles.sessionsSidebarHint}>
+          Loading designs...
+        </p>
+      )}
+      {designsResult.status === "success" && designs.length === 0 && (
+        <p className={styles.sessionsSidebarHint}>
+          No designs yet.
+        </p>
+      )}
+      {designsResult.status === "error" && (
+        <p className={styles.sessionsSidebarHint}>
+          Failed to load designs.
+        </p>
+      )}
+    </SidebarListLayout>
   )
 }
 
-function ModeSidebar({ mode, projectId }: { mode: NavMode; projectId: string }) {
+function ModeSidebar({
+  mode,
+  projectId,
+  activeDesignId,
+}: {
+  mode: NavMode
+  projectId: string
+  activeDesignId?: string
+}) {
   switch (mode) {
     case "observe":
       return <Sidebar projectId={projectId} />
@@ -151,7 +234,7 @@ function ModeSidebar({ mode, projectId }: { mode: NavMode; projectId: string }) 
     case "code":
       return <CodeSidebar />
     case "design":
-      return <DesignSidebar />
+      return <DesignSidebar projectId={projectId} activeDesignId={activeDesignId} />
   }
 }
 
@@ -161,7 +244,7 @@ function resolvePhaseLabel(orchestration: OrchestrationSummary): string {
 }
 
 export function AppShell() {
-  const { projectId } = useParams<{ projectId: string }>()
+  const { projectId, designId } = useParams<{ projectId: string; designId?: string }>()
   const navigate = useNavigate()
   const location = useLocation()
   const mode = parseModeFromPathname(location.pathname)
@@ -372,7 +455,7 @@ export function AppShell() {
           aria-label={`${modeLabel(mode)} sidebar`}
         >
           <div className={styles.sidebarBody} data-mode-sidebar="true">
-            <ModeSidebar mode={mode} projectId={projectId} />
+            <ModeSidebar mode={mode} projectId={projectId} activeDesignId={designId} />
           </div>
         </div>
       )}

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { screen } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
 import App from "../../App"
 import {
+  buildDesignSummary,
   buildProjectSummary,
   buildOrchestrationSummary,
   some,
@@ -93,5 +94,27 @@ describe("Design routes", () => {
     renderApp("/projects/p1/design/design-123")
     expect(screen.getByTestId("design-detail-page")).toBeInTheDocument()
     expect(screen.queryByTestId("pm-shell")).not.toBeInTheDocument()
+  })
+
+  it("renders design navigator in design sidebar", () => {
+    renderApp("/projects/p1/design/design-123", {
+      ...defaultStates,
+      "designs.list": querySuccess([
+        buildDesignSummary({
+          _id: "design-123",
+          designKey: "ALPHA-DES1",
+          title: "Primary Flow",
+        }),
+        buildDesignSummary({
+          _id: "design-456",
+          designKey: "ALPHA-DES2",
+          title: "Alternative Flow",
+        }),
+      ]),
+    })
+
+    const sidebar = screen.getByRole("navigation", { name: /design sidebar/i })
+    expect(within(sidebar).getByText(/ALPHA-DES1/i)).toBeInTheDocument()
+    expect(within(sidebar).getByText(/ALPHA-DES2/i)).toBeInTheDocument()
   })
 })

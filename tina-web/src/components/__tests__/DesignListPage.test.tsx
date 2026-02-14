@@ -96,7 +96,9 @@ describe("DesignListPage", () => {
       "designs.list": querySuccess([]),
     })
 
-    expect(screen.getByText(/no designs/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/no designs yet\. create one to get started\./i),
+    ).toBeInTheDocument()
   })
 
   it("renders table with design rows when designs exist", () => {
