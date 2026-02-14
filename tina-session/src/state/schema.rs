@@ -247,7 +247,7 @@ pub struct TimingStats {
 /// Model routing policy for orchestration agents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelPolicy {
-    /// Model for the design validator agent. Default: "opus".
+    /// Model for the spec validator agent. Default: "opus".
     #[serde(default = "default_opus")]
     pub validator: String,
 
@@ -263,7 +263,7 @@ pub struct ModelPolicy {
     #[serde(default = "default_opus")]
     pub reviewer: String,
 
-    /// If true, design validation uses dual-model consensus (validator runs twice
+    /// If true, spec validation uses dual-model consensus (validator runs twice
     /// with different models and results must agree). Default: false.
     #[serde(default)]
     pub dual_validation: bool,
@@ -424,7 +424,7 @@ pub struct ReviewVerdict {
 pub struct SupervisorState {
     pub version: u32,
     pub feature: String,
-    pub design_doc: PathBuf,
+    pub spec_doc: PathBuf,
     pub worktree_path: PathBuf,
     pub branch: String,
     pub total_phases: u32,
@@ -433,7 +433,7 @@ pub struct SupervisorState {
     pub orchestration_started_at: DateTime<Utc>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub design_id: Option<String>,
+    pub spec_id: Option<String>,
 
     #[serde(default)]
     pub phases: HashMap<String, PhaseState>,
@@ -452,7 +452,7 @@ impl SupervisorState {
     /// Create a new supervisor state.
     pub fn new(
         feature: &str,
-        design_doc: PathBuf,
+        spec_doc: PathBuf,
         worktree_path: PathBuf,
         branch: &str,
         total_phases: u32,
@@ -460,14 +460,14 @@ impl SupervisorState {
         Self {
             version: 1,
             feature: feature.to_string(),
-            design_doc,
+            spec_doc,
             worktree_path,
             branch: branch.to_string(),
             total_phases,
             current_phase: 1,
             status: OrchestrationStatus::Planning,
             orchestration_started_at: Utc::now(),
-            design_id: None,
+            spec_id: None,
             phases: HashMap::new(),
             timing: TimingStats::default(),
             model_policy: ModelPolicy::default(),
@@ -475,28 +475,28 @@ impl SupervisorState {
         }
     }
 
-    /// Create a new supervisor state from a Convex design document ID.
+    /// Create a new supervisor state from a Convex spec document ID.
     ///
-    /// The `design_doc` path is set to a `convex://<id>` placeholder for backward
+    /// The `spec_doc` path is set to a `convex://<id>` placeholder for backward
     /// compatibility with code that reads the path field.
-    pub fn new_with_design_id(
+    pub fn new_with_spec_id(
         feature: &str,
         worktree_path: PathBuf,
         branch: &str,
         total_phases: u32,
-        design_id: &str,
+        spec_id: &str,
     ) -> Self {
         Self {
             version: 1,
             feature: feature.to_string(),
-            design_doc: PathBuf::from(format!("convex://{}", design_id)),
+            spec_doc: PathBuf::from(format!("convex://{}", spec_id)),
             worktree_path,
             branch: branch.to_string(),
             total_phases,
             current_phase: 1,
             status: OrchestrationStatus::Planning,
             orchestration_started_at: Utc::now(),
-            design_id: Some(design_id.to_string()),
+            spec_id: Some(spec_id.to_string()),
             phases: HashMap::new(),
             timing: TimingStats::default(),
             model_policy: ModelPolicy::default(),
@@ -596,7 +596,7 @@ mod tests {
     fn test_supervisor_state_new() {
         let state = SupervisorState::new(
             "auth",
-            PathBuf::from("/docs/design.md"),
+            PathBuf::from("/docs/spec.md"),
             PathBuf::from("/worktree"),
             "tina/auth",
             3,
@@ -836,7 +836,7 @@ mod tests {
     fn test_supervisor_state_with_model_policy() {
         let state = SupervisorState::new(
             "test",
-            PathBuf::from("/docs/design.md"),
+            PathBuf::from("/docs/spec.md"),
             PathBuf::from("/worktree"),
             "tina/test",
             2,
@@ -850,11 +850,11 @@ mod tests {
     }
 
     #[test]
-    fn test_supervisor_state_design_id_defaults_to_none() {
+    fn test_supervisor_state_spec_id_defaults_to_none() {
         let json = r#"{
             "version": 1,
             "feature": "auth",
-            "design_doc": "/docs/design.md",
+            "spec_doc": "/docs/spec.md",
             "worktree_path": "/worktree",
             "branch": "tina/auth",
             "total_phases": 3,
@@ -863,53 +863,53 @@ mod tests {
             "orchestration_started_at": "2024-01-01T00:00:00Z"
         }"#;
         let state: SupervisorState = serde_json::from_str(json).unwrap();
-        assert_eq!(state.design_id, None);
+        assert_eq!(state.spec_id, None);
     }
 
     #[test]
-    fn test_supervisor_state_design_id_deserializes() {
+    fn test_supervisor_state_spec_id_deserializes() {
         let json = r#"{
             "version": 1,
             "feature": "auth",
-            "design_doc": "convex://abc123",
+            "spec_doc": "convex://abc123",
             "worktree_path": "/worktree",
             "branch": "tina/auth",
             "total_phases": 3,
             "current_phase": 1,
             "status": "planning",
             "orchestration_started_at": "2024-01-01T00:00:00Z",
-            "design_id": "abc123"
+            "spec_id": "abc123"
         }"#;
         let state: SupervisorState = serde_json::from_str(json).unwrap();
-        assert_eq!(state.design_id, Some("abc123".to_string()));
+        assert_eq!(state.spec_id, Some("abc123".to_string()));
     }
 
     #[test]
-    fn test_supervisor_state_design_id_not_serialized_when_none() {
+    fn test_supervisor_state_spec_id_not_serialized_when_none() {
         let state = SupervisorState::new(
             "auth",
-            PathBuf::from("/docs/design.md"),
+            PathBuf::from("/docs/spec.md"),
             PathBuf::from("/worktree"),
             "tina/auth",
             3,
         );
         let json = serde_json::to_string(&state).unwrap();
-        assert!(!json.contains("design_id"));
+        assert!(!json.contains("spec_id"));
     }
 
     #[test]
-    fn test_supervisor_state_new_with_design_id() {
-        let state = SupervisorState::new_with_design_id(
+    fn test_supervisor_state_new_with_spec_id() {
+        let state = SupervisorState::new_with_spec_id(
             "auth",
             PathBuf::from("/worktree"),
             "tina/auth",
             3,
-            "convex_design_123",
+            "convex_spec_123",
         );
-        assert_eq!(state.design_id, Some("convex_design_123".to_string()));
+        assert_eq!(state.spec_id, Some("convex_spec_123".to_string()));
         assert_eq!(
-            state.design_doc,
-            PathBuf::from("convex://convex_design_123")
+            state.spec_doc,
+            PathBuf::from("convex://convex_spec_123")
         );
     }
 

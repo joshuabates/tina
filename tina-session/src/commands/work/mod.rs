@@ -1,3 +1,3 @@
 pub mod comment;
-pub mod design;
+pub mod spec;
 pub mod ticket;

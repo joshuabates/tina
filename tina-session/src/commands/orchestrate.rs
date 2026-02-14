@@ -190,22 +190,22 @@ fn event_from_action(
     match action {
         Action::SpawnValidator { .. } => (
             "phase_started".to_string(),
-            "Design validation requested".to_string(),
+            "Spec validation requested".to_string(),
             None,
         ),
         Action::SpawnPlanner { .. } if phase == "validation" => (
             "phase_started".to_string(),
-            "Design validation passed".to_string(),
+            "Spec validation passed".to_string(),
             None,
         ),
         Action::ReusePlan { phase: p, plan_path } if phase == "validation" => (
             "phase_started".to_string(),
-            "Design validation passed with warnings".to_string(),
+            "Spec validation passed with warnings".to_string(),
             Some(serde_json::json!({"plan_path": plan_path, "phase": p}).to_string()),
         ),
         Action::Stopped { reason } => (
             "error".to_string(),
-            format!("Design validation failed - {}", reason),
+            format!("Spec validation failed - {}", reason),
             None,
         ),
         Action::SpawnExecutor { phase: p, plan_path, .. } => (

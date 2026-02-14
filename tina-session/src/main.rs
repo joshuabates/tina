@@ -34,14 +34,14 @@ fn resolve_markdown(inline: Option<String>, file: Option<PathBuf>) -> anyhow::Re
 /// Extract the json flag from a WorkCommands enum variant.
 fn extract_json_flag_from_work_command(cmd: &WorkCommands) -> bool {
     match cmd {
-        WorkCommands::Design { command } => match command {
-            DesignCommands::Create { json, .. } => *json,
-            DesignCommands::Get { json, .. } => *json,
-            DesignCommands::List { json, .. } => *json,
-            DesignCommands::Update { json, .. } => *json,
-            DesignCommands::Transition { json, .. } => *json,
-            DesignCommands::Resolve { json, .. } => *json,
-            DesignCommands::ResolveToFile { json, .. } => *json,
+        WorkCommands::Spec { command } => match command {
+            SpecCommands::Create { json, .. } => *json,
+            SpecCommands::Get { json, .. } => *json,
+            SpecCommands::List { json, .. } => *json,
+            SpecCommands::Update { json, .. } => *json,
+            SpecCommands::Transition { json, .. } => *json,
+            SpecCommands::Resolve { json, .. } => *json,
+            SpecCommands::ResolveToFile { json, .. } => *json,
         },
         WorkCommands::Ticket { command } => match command {
             TicketCommands::Create { json, .. } => *json,
@@ -78,13 +78,13 @@ enum Commands {
         #[arg(long)]
         cwd: PathBuf,
 
-        /// Path to design document (mutually exclusive with --design-id)
+        /// Path to spec document (mutually exclusive with --spec-id)
         #[arg(long)]
-        design_doc: Option<PathBuf>,
+        spec_doc: Option<PathBuf>,
 
-        /// Convex design document ID (mutually exclusive with --design-doc)
+        /// Convex spec document ID (mutually exclusive with --spec-doc)
         #[arg(long)]
-        design_id: Option<String>,
+        spec_id: Option<String>,
 
         /// Git branch name
         #[arg(long)]
@@ -132,7 +132,7 @@ enum Commands {
         ArgGroup::new("plan_source")
             .required(true)
             .multiple(false)
-            .args(["plan", "design_id"])
+            .args(["plan", "spec_id"])
     ))]
     Start {
         /// Feature name
@@ -143,13 +143,13 @@ enum Commands {
         #[arg(long)]
         phase: String,
 
-        /// Path to plan file (mutually exclusive with --design-id)
+        /// Path to plan file (mutually exclusive with --spec-id)
         #[arg(long)]
         plan: Option<PathBuf>,
 
-        /// Convex design document ID used to materialize a phase plan (mutually exclusive with --plan)
+        /// Convex spec document ID used to materialize a phase plan (mutually exclusive with --plan)
         #[arg(long)]
-        design_id: Option<String>,
+        spec_id: Option<String>,
 
         /// Working directory for tmux session. Defaults to orchestration worktree from Convex.
         #[arg(long)]
@@ -390,7 +390,7 @@ enum Commands {
         command: OrchestrateCommands,
     },
 
-    /// Work management subcommands (designs, tickets, comments)
+    /// Work management subcommands (specs, tickets, comments)
     Work {
         #[command(subcommand)]
         command: WorkCommands,
@@ -719,10 +719,10 @@ enum OrchestrateCommands {
 
 #[derive(Subcommand)]
 enum WorkCommands {
-    /// Design management
-    Design {
+    /// Spec management
+    Spec {
         #[command(subcommand)]
-        command: DesignCommands,
+        command: SpecCommands,
     },
 
     /// Ticket management
@@ -739,18 +739,18 @@ enum WorkCommands {
 }
 
 #[derive(Subcommand)]
-enum DesignCommands {
-    /// Create a new design
+enum SpecCommands {
+    /// Create a new spec
     Create {
         /// Project ID
         #[arg(long)]
         project_id: String,
 
-        /// Design title
+        /// Spec title
         #[arg(long)]
         title: String,
 
-        /// Design content (markdown)
+        /// Spec content (markdown)
         #[arg(long)]
         markdown: Option<String>,
 
@@ -763,13 +763,13 @@ enum DesignCommands {
         json: bool,
     },
 
-    /// Get a design by ID or key
+    /// Get a spec by ID or key
     Get {
-        /// Design ID
+        /// Spec ID
         #[arg(long)]
         id: Option<String>,
 
-        /// Design key
+        /// Spec key
         #[arg(long)]
         key: Option<String>,
 
@@ -778,7 +778,7 @@ enum DesignCommands {
         json: bool,
     },
 
-    /// List designs in a project
+    /// List specs in a project
     List {
         /// Project ID
         #[arg(long)]
@@ -793,9 +793,9 @@ enum DesignCommands {
         json: bool,
     },
 
-    /// Update an existing design
+    /// Update an existing spec
     Update {
-        /// Design ID
+        /// Spec ID
         #[arg(long)]
         id: String,
 
@@ -816,9 +816,9 @@ enum DesignCommands {
         json: bool,
     },
 
-    /// Transition a design to a new status
+    /// Transition a spec to a new status
     Transition {
-        /// Design ID
+        /// Spec ID
         #[arg(long)]
         id: String,
 
@@ -831,22 +831,22 @@ enum DesignCommands {
         json: bool,
     },
 
-    /// Fetch and display a design by ID (resolve)
+    /// Fetch and display a spec by ID (resolve)
     Resolve {
-        /// Design ID
+        /// Spec ID
         #[arg(long)]
-        design_id: String,
+        spec_id: String,
 
         /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 
-    /// Fetch a design and write its markdown to a file
+    /// Fetch a spec and write its markdown to a file
     ResolveToFile {
-        /// Design ID
+        /// Spec ID
         #[arg(long)]
-        design_id: String,
+        spec_id: String,
 
         /// Output file path
         #[arg(long)]
@@ -878,9 +878,9 @@ enum TicketCommands {
         #[arg(long, default_value = "medium")]
         priority: String,
 
-        /// Associated design ID (optional)
+        /// Associated spec ID (optional)
         #[arg(long)]
-        design_id: Option<String>,
+        spec_id: Option<String>,
 
         /// Assignee (optional)
         #[arg(long)]
@@ -920,9 +920,9 @@ enum TicketCommands {
         #[arg(long)]
         status: Option<String>,
 
-        /// Filter by design ID (optional)
+        /// Filter by spec ID (optional)
         #[arg(long)]
-        design_id: Option<String>,
+        spec_id: Option<String>,
 
         /// Filter by assignee (optional)
         #[arg(long)]
@@ -951,13 +951,13 @@ enum TicketCommands {
         #[arg(long)]
         priority: Option<String>,
 
-        /// New design ID (optional)
+        /// New spec ID (optional)
         #[arg(long)]
-        design_id: Option<String>,
+        spec_id: Option<String>,
 
-        /// Clear design link from ticket
+        /// Clear spec link from ticket
         #[arg(long)]
-        clear_design_id: bool,
+        clear_spec_id: bool,
 
         /// New assignee (optional)
         #[arg(long)]
@@ -996,11 +996,11 @@ enum CommentCommands {
         #[arg(long)]
         project_id: String,
 
-        /// Target type (design or ticket)
+        /// Target type (spec or ticket)
         #[arg(long)]
         target_type: String,
 
-        /// Target ID (design or ticket ID)
+        /// Target ID (spec or ticket ID)
         #[arg(long)]
         target_id: String,
 
@@ -1023,11 +1023,11 @@ enum CommentCommands {
 
     /// List comments for a target
     List {
-        /// Target type (design or ticket)
+        /// Target type (spec or ticket)
         #[arg(long)]
         target_type: String,
 
-        /// Target ID (design or ticket ID)
+        /// Target ID (spec or ticket ID)
         #[arg(long)]
         target_id: String,
 
@@ -1291,8 +1291,8 @@ fn run() -> anyhow::Result<u8> {
         Commands::Init {
             feature,
             cwd,
-            design_doc,
-            design_id,
+            spec_doc,
+            spec_id,
             branch,
             total_phases,
             review_enforcement,
@@ -1308,8 +1308,8 @@ fn run() -> anyhow::Result<u8> {
                 commands::init::run_with_options(
                     &feature,
                     &cwd,
-                    design_doc.as_deref(),
-                    design_id.as_deref(),
+                    spec_doc.as_deref(),
+                    spec_id.as_deref(),
                     &branch,
                     total_phases,
                     review_enforcement.as_deref(),
@@ -1325,8 +1325,8 @@ fn run() -> anyhow::Result<u8> {
                 commands::init::run(
                     &feature,
                     &cwd,
-                    design_doc.as_deref(),
-                    design_id.as_deref(),
+                    spec_doc.as_deref(),
+                    spec_id.as_deref(),
                     &branch,
                     total_phases,
                     review_enforcement.as_deref(),
@@ -1344,7 +1344,7 @@ fn run() -> anyhow::Result<u8> {
             feature,
             phase,
             plan,
-            design_id,
+            spec_id,
             cwd,
             install_deps,
             parent_team_id,
@@ -1354,7 +1354,7 @@ fn run() -> anyhow::Result<u8> {
                 &feature,
                 &phase,
                 plan.as_deref(),
-                design_id.as_deref(),
+                spec_id.as_deref(),
                 cwd.as_deref(),
                 install_deps,
                 parent_team_id.as_deref(),
@@ -1629,8 +1629,8 @@ fn run() -> anyhow::Result<u8> {
         Commands::Work { command } => {
             let json_mode = extract_json_flag_from_work_command(&command);
             let result = match command {
-                WorkCommands::Design { command } => match command {
-                    DesignCommands::Create {
+                WorkCommands::Spec { command } => match command {
+                    SpecCommands::Create {
                         project_id,
                         title,
                         markdown,
@@ -1638,20 +1638,20 @@ fn run() -> anyhow::Result<u8> {
                         json,
                     } => {
                         let md = resolve_markdown(markdown, markdown_file)?;
-                        commands::work::design::create(&project_id, &title, &md, json)
+                        commands::work::spec::create(&project_id, &title, &md, json)
                     }
 
-                    DesignCommands::Get { id, key, json } => {
-                        commands::work::design::get(id.as_deref(), key.as_deref(), json)
+                    SpecCommands::Get { id, key, json } => {
+                        commands::work::spec::get(id.as_deref(), key.as_deref(), json)
                     }
 
-                    DesignCommands::List {
+                    SpecCommands::List {
                         project_id,
                         status,
                         json,
-                    } => commands::work::design::list(&project_id, status.as_deref(), json),
+                    } => commands::work::spec::list(&project_id, status.as_deref(), json),
 
-                    DesignCommands::Update {
+                    SpecCommands::Update {
                         id,
                         title,
                         markdown,
@@ -1659,7 +1659,7 @@ fn run() -> anyhow::Result<u8> {
                         json,
                     } => {
                         let final_md = resolve_optional_markdown(markdown, markdown_file)?;
-                        commands::work::design::update(
+                        commands::work::spec::update(
                             &id,
                             title.as_deref(),
                             final_md.as_deref(),
@@ -1667,19 +1667,19 @@ fn run() -> anyhow::Result<u8> {
                         )
                     }
 
-                    DesignCommands::Transition { id, status, json } => {
-                        commands::work::design::transition(&id, &status, json)
+                    SpecCommands::Transition { id, status, json } => {
+                        commands::work::spec::transition(&id, &status, json)
                     }
 
-                    DesignCommands::Resolve { design_id, json } => {
-                        commands::work::design::resolve(&design_id, json)
+                    SpecCommands::Resolve { spec_id, json } => {
+                        commands::work::spec::resolve(&spec_id, json)
                     }
 
-                    DesignCommands::ResolveToFile {
-                        design_id,
+                    SpecCommands::ResolveToFile {
+                        spec_id,
                         output,
                         json,
-                    } => commands::work::design::resolve_to_file(&design_id, &output, json),
+                    } => commands::work::spec::resolve_to_file(&spec_id, &output, json),
                 },
 
                 WorkCommands::Ticket { command } => match command {
@@ -1688,7 +1688,7 @@ fn run() -> anyhow::Result<u8> {
                         title,
                         description,
                         priority,
-                        design_id,
+                        spec_id,
                         assignee,
                         estimate,
                         json,
@@ -1697,7 +1697,7 @@ fn run() -> anyhow::Result<u8> {
                         &title,
                         &description,
                         &priority,
-                        design_id.as_deref(),
+                        spec_id.as_deref(),
                         assignee.as_deref(),
                         estimate.as_deref(),
                         json,
@@ -1710,13 +1710,13 @@ fn run() -> anyhow::Result<u8> {
                     TicketCommands::List {
                         project_id,
                         status,
-                        design_id,
+                        spec_id,
                         assignee,
                         json,
                     } => commands::work::ticket::list(
                         &project_id,
                         status.as_deref(),
-                        design_id.as_deref(),
+                        spec_id.as_deref(),
                         assignee.as_deref(),
                         json,
                     ),
@@ -1726,8 +1726,8 @@ fn run() -> anyhow::Result<u8> {
                         title,
                         description,
                         priority,
-                        design_id,
-                        clear_design_id,
+                        spec_id,
+                        clear_spec_id,
                         assignee,
                         estimate,
                         json,
@@ -1736,8 +1736,8 @@ fn run() -> anyhow::Result<u8> {
                         title.as_deref(),
                         description.as_deref(),
                         priority.as_deref(),
-                        design_id.as_deref(),
-                        clear_design_id,
+                        spec_id.as_deref(),
+                        clear_spec_id,
                         assignee.as_deref(),
                         estimate.as_deref(),
                         json,

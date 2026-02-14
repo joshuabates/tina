@@ -36,8 +36,8 @@ const CLAUDE_READY_TIMEOUT_SECS: u64 = 60;
 pub fn run(
     feature: &str,
     cwd: &Path,
-    design_doc: Option<&Path>,
-    design_id: Option<&str>,
+    spec_doc: Option<&Path>,
+    spec_id: Option<&str>,
     branch: &str,
     total_phases: u32,
     review_enforcement: Option<&str>,
@@ -51,8 +51,8 @@ pub fn run(
     run_with_options(
         feature,
         cwd,
-        design_doc,
-        design_id,
+        spec_doc,
+        spec_id,
         branch,
         total_phases,
         review_enforcement,
@@ -69,8 +69,8 @@ pub fn run(
 pub fn run_with_options(
     feature: &str,
     cwd: &Path,
-    design_doc: Option<&Path>,
-    design_id: Option<&str>,
+    spec_doc: Option<&Path>,
+    spec_id: Option<&str>,
     branch: &str,
     total_phases: u32,
     review_enforcement: Option<&str>,
@@ -82,10 +82,10 @@ pub fn run_with_options(
     require_fix_first: Option<bool>,
     launch_orchestrator: bool,
 ) -> anyhow::Result<u8> {
-    // Validate exactly one design source
-    match (design_doc, design_id) {
-        (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --design-doc and --design-id"),
-        (None, None) => anyhow::bail!("Must specify either --design-doc or --design-id"),
+    // Validate exactly one spec source
+    match (spec_doc, spec_id) {
+        (Some(_), Some(_)) => anyhow::bail!("Cannot specify both --spec-doc and --spec-id"),
+        (None, None) => anyhow::bail!("Must specify either --spec-doc or --spec-id"),
         _ => {}
     }
 
@@ -102,9 +102,9 @@ pub fn run_with_options(
 
     let cwd_abs = fs::canonicalize(cwd)?;
 
-    // Resolve design source: either a local file or a Convex design ID
-    let (design_doc_path, resolved_design_id, design_markdown) =
-        resolve_design_source(design_doc, design_id)?;
+    // Resolve spec source: either a local file or a Convex spec ID
+    let (spec_doc_path, resolved_spec_id, spec_markdown) =
+        resolve_spec_source(spec_doc, spec_id)?;
 
     // Check if already initialized via Convex (only block on active orchestrations)
     if let Some(existing) = check_existing_orchestration(feature)? {
@@ -121,8 +121,8 @@ pub fn run_with_options(
                 let session_name = start_orchestration_session(
                     feature,
                     &worktree_path,
-                    resolved_design_id.as_deref(),
-                    &design_doc_path,
+                    resolved_spec_id.as_deref(),
+                    &spec_doc_path,
                 )?;
                 let team_name = orchestration_team_name(feature);
                 let team_id =
@@ -135,12 +135,12 @@ pub fn run_with_options(
                     "worktree_path": worktree,
                     "feature": feature,
                     "branch": existing.branch,
-                    "design_doc": existing.design_doc_path,
+                    "spec_doc": existing.spec_doc_path,
                     "total_phases": existing.total_phases,
                     "tmux_session_name": session_name,
                 });
-                if let Some(did) = existing.design_id {
-                    output["design_id"] = serde_json::Value::String(did);
+                if let Some(did) = existing.spec_id {
+                    output["spec_id"] = serde_json::Value::String(did);
                 }
                 println!("{}", serde_json::to_string(&output)?);
                 return Ok(0);
@@ -173,14 +173,14 @@ pub fn run_with_options(
         eprintln!("Warning: Failed to generate AGENTS.md: {}", e);
     }
 
-    // When using --design-id, write design markdown to worktree for local access
-    if let Some(markdown) = design_markdown.as_deref() {
-        write_design_to_worktree(&worktree_path, markdown)?;
+    // When using --spec-id, write spec markdown to worktree for local access
+    if let Some(markdown) = spec_markdown.as_deref() {
+        write_spec_to_worktree(&worktree_path, markdown)?;
     }
 
     // Create supervisor state file in worktree
-    let mut state = if let Some(did) = resolved_design_id.as_deref() {
-        SupervisorState::new_with_design_id(
+    let mut state = if let Some(did) = resolved_spec_id.as_deref() {
+        SupervisorState::new_with_spec_id(
             feature,
             worktree_path.clone(),
             &actual_branch,
@@ -190,7 +190,7 @@ pub fn run_with_options(
     } else {
         SupervisorState::new(
             feature,
-            design_doc_path.clone(),
+            spec_doc_path.clone(),
             worktree_path.clone(),
             &actual_branch,
             total_phases,
@@ -212,19 +212,19 @@ pub fn run_with_options(
     let orch_id = write_to_convex(
         feature,
         &worktree_path,
-        &design_doc_path,
+        &spec_doc_path,
         &actual_branch,
         total_phases,
         &cwd_abs,
-        resolved_design_id.as_deref(),
+        resolved_spec_id.as_deref(),
     )?;
 
     let orchestration_tmux_session = if launch_orchestrator {
         Some(start_orchestration_session(
             feature,
             &worktree_path,
-            resolved_design_id.as_deref(),
-            &design_doc_path,
+            resolved_spec_id.as_deref(),
+            &spec_doc_path,
         )?)
     } else {
         None
@@ -249,11 +249,11 @@ pub fn run_with_options(
         "worktree_path": worktree_path.display().to_string(),
         "feature": feature,
         "branch": actual_branch,
-        "design_doc": design_doc_path.display().to_string(),
+        "spec_doc": spec_doc_path.display().to_string(),
         "total_phases": total_phases,
     });
-    if let Some(did) = resolved_design_id.as_deref() {
-        output["design_id"] = serde_json::Value::String(did.to_string());
+    if let Some(did) = resolved_spec_id.as_deref() {
+        output["spec_id"] = serde_json::Value::String(did.to_string());
     }
     if let Some(session_name) = orchestration_tmux_session {
         output["tmux_session_name"] = serde_json::Value::String(session_name);
@@ -263,42 +263,42 @@ pub fn run_with_options(
     Ok(0)
 }
 
-/// Resolve the design source to an absolute path, optional design ID, and optional markdown.
+/// Resolve the spec source to an absolute path, optional spec ID, and optional markdown.
 ///
-/// When `--design-doc` is provided, validates and canonicalizes the path.
-/// When `--design-id` is provided, fetches the design from Convex and returns
-/// a `convex://{id}` placeholder path along with the design markdown (to avoid
+/// When `--spec-doc` is provided, validates and canonicalizes the path.
+/// When `--spec-id` is provided, fetches the spec from Convex and returns
+/// a `convex://{id}` placeholder path along with the spec markdown (to avoid
 /// re-fetching later).
-fn resolve_design_source(
-    design_doc: Option<&Path>,
-    design_id: Option<&str>,
+fn resolve_spec_source(
+    spec_doc: Option<&Path>,
+    spec_id: Option<&str>,
 ) -> anyhow::Result<(std::path::PathBuf, Option<String>, Option<String>)> {
-    if let Some(doc) = design_doc {
+    if let Some(doc) = spec_doc {
         if !doc.exists() {
             anyhow::bail!(SessionError::FileNotFound(doc.display().to_string()));
         }
         let abs = fs::canonicalize(doc)?;
         Ok((abs, None, None))
     } else {
-        let did = design_id.expect("validated: exactly one source must be set");
-        // Fetch design from Convex (used for both validation and writing to worktree)
-        let design = convex::run_convex(|mut writer| async move { writer.get_design(did).await })?;
-        match design {
+        let did = spec_id.expect("validated: exactly one source must be set");
+        // Fetch spec from Convex (used for both validation and writing to worktree)
+        let spec = convex::run_convex(|mut writer| async move { writer.get_spec(did).await })?;
+        match spec {
             Some(d) => Ok((
                 std::path::PathBuf::from(format!("convex://{}", did)),
                 Some(did.to_string()),
                 Some(d.markdown),
             )),
-            None => anyhow::bail!("Design not found in Convex: {}", did),
+            None => anyhow::bail!("Spec not found in Convex: {}", did),
         }
     }
 }
 
-/// Write the design document markdown to the worktree.
-fn write_design_to_worktree(worktree_path: &Path, markdown: &str) -> anyhow::Result<()> {
+/// Write the spec document markdown to the worktree.
+fn write_spec_to_worktree(worktree_path: &Path, markdown: &str) -> anyhow::Result<()> {
     let tina_dir = worktree_path.join(".claude").join("tina");
     fs::create_dir_all(&tina_dir)?;
-    fs::write(tina_dir.join("design.md"), markdown)?;
+    fs::write(tina_dir.join("spec.md"), markdown)?;
     Ok(())
 }
 
@@ -658,8 +658,8 @@ fn shell_quote(arg: &str) -> String {
 fn start_orchestration_session(
     feature: &str,
     worktree_path: &Path,
-    design_id: Option<&str>,
-    design_doc_path: &Path,
+    spec_id: Option<&str>,
+    spec_doc_path: &Path,
 ) -> anyhow::Result<String> {
     let session_name = orchestration_session_name(feature);
 
@@ -708,13 +708,13 @@ fn start_orchestration_session(
         }
     }
 
-    let skill_cmd = if let Some(did) = design_id {
-        format!("/tina:orchestrate --feature {} --design-id {}", feature, did)
+    let skill_cmd = if let Some(did) = spec_id {
+        format!("/tina:orchestrate --feature {} --spec-id {}", feature, did)
     } else {
         format!(
             "/tina:orchestrate --feature {} {}",
             feature,
-            design_doc_path.display()
+            spec_doc_path.display()
         )
     };
     eprintln!("Sending: {}", skill_cmd);
@@ -758,11 +758,11 @@ fn check_existing_orchestration(
 fn write_to_convex(
     feature: &str,
     worktree_path: &Path,
-    design_doc: &Path,
+    spec_doc: &Path,
     branch: &str,
     total_phases: u32,
     cwd: &Path,
-    design_id: Option<&str>,
+    spec_id: Option<&str>,
 ) -> anyhow::Result<String> {
     let now = chrono::Utc::now().to_rfc3339();
     let repo_name = cwd
@@ -771,7 +771,7 @@ fn write_to_convex(
         .unwrap_or("unknown")
         .to_string();
     let repo_path = cwd.to_string_lossy().to_string();
-    let design_id_owned = design_id.map(|s| s.to_string());
+    let spec_id_owned = spec_id.map(|s| s.to_string());
 
     convex::run_convex(|mut writer| async move {
         let project_id = match writer.find_or_create_project(&repo_name, &repo_path).await {
@@ -785,9 +785,9 @@ fn write_to_convex(
         let orch = convex::OrchestrationArgs {
             node_id: writer.node_id().to_string(),
             project_id,
-            design_id: design_id_owned,
+            spec_id: spec_id_owned,
             feature_name: feature.to_string(),
-            design_doc_path: design_doc.to_string_lossy().to_string(),
+            spec_doc_path: spec_doc.to_string_lossy().to_string(),
             branch: branch.to_string(),
             worktree_path: Some(worktree_path.to_string_lossy().to_string()),
             total_phases: total_phases as f64,
@@ -799,7 +799,7 @@ fn write_to_convex(
             policy_snapshot: None,
             policy_snapshot_hash: None,
             preset_origin: None,
-            design_only: None,
+            spec_only: None,
             policy_revision: None,
             updated_at: None,
         };
@@ -858,16 +858,16 @@ mod tests {
         let temp_dir = create_test_repo();
         let cwd = temp_dir.path();
 
-        // Create a fake design doc
-        let design_doc = cwd.join("design.md");
-        fs::write(&design_doc, "# Design").unwrap();
+        // Create a fake spec doc
+        let spec_doc = cwd.join("spec.md");
+        fs::write(&spec_doc, "# Design").unwrap();
 
         let feature = format!("test-init-{}", std::process::id());
 
         let result = run(
             &feature,
             cwd,
-            Some(&design_doc),
+            Some(&spec_doc),
             None,
             "tina/test",
             3,
@@ -918,14 +918,14 @@ mod tests {
         let temp_dir = create_test_repo();
         let cwd = temp_dir.path();
 
-        let design_doc = cwd.join("design.md");
-        fs::write(&design_doc, "# Design").unwrap();
+        let spec_doc = cwd.join("spec.md");
+        fs::write(&spec_doc, "# Design").unwrap();
 
         let feature = format!("test-gitignore-{}", std::process::id());
         let result = run(
             &feature,
             cwd,
-            Some(&design_doc),
+            Some(&spec_doc),
             None,
             "tina/test",
             2,
@@ -973,8 +973,8 @@ mod tests {
         let temp_dir = create_test_repo();
         let cwd = temp_dir.path();
 
-        let design_doc = cwd.join("design.md");
-        fs::write(&design_doc, "# Design").unwrap();
+        let spec_doc = cwd.join("spec.md");
+        fs::write(&spec_doc, "# Design").unwrap();
 
         // Create a branch that will collide
         Command::new("git")
@@ -991,7 +991,7 @@ mod tests {
         let result = run(
             &feature,
             cwd,
-            Some(&design_doc),
+            Some(&spec_doc),
             None,
             "tina/collision-test",
             1,
@@ -1032,7 +1032,7 @@ mod tests {
         let result = run(
             "test-bad-cwd",
             Path::new("/nonexistent/path"),
-            Some(Path::new("/tmp/design.md")),
+            Some(Path::new("/tmp/spec.md")),
             None,
             "tina/test",
             3,
@@ -1048,12 +1048,12 @@ mod tests {
     }
 
     #[test]
-    fn test_init_validates_design_doc() {
+    fn test_init_validates_spec_doc() {
         let temp_dir = TempDir::new().unwrap();
         let result = run(
             "test-bad-doc",
             temp_dir.path(),
-            Some(Path::new("/nonexistent/design.md")),
+            Some(Path::new("/nonexistent/spec.md")),
             None,
             "tina/test",
             3,
@@ -1263,7 +1263,7 @@ Supervisor state tracks progress.
     fn test_apply_review_policy_overrides() {
         let mut state = SupervisorState::new(
             "feature",
-            Path::new("/tmp/design.md").to_path_buf(),
+            Path::new("/tmp/spec.md").to_path_buf(),
             Path::new("/tmp/worktree").to_path_buf(),
             "tina/feature",
             2,
@@ -1300,58 +1300,58 @@ Supervisor state tracks progress.
     }
 
     #[test]
-    fn test_write_design_to_worktree() {
+    fn test_write_spec_to_worktree() {
         let temp = TempDir::new().unwrap();
         let worktree = temp.path();
 
         let markdown = "# My Design\n\nSome design content.";
-        write_design_to_worktree(worktree, markdown).unwrap();
+        write_spec_to_worktree(worktree, markdown).unwrap();
 
-        let design_path = worktree.join(".claude").join("tina").join("design.md");
-        assert!(design_path.exists(), "design.md should be written");
-        let content = fs::read_to_string(&design_path).unwrap();
+        let spec_path = worktree.join(".claude").join("tina").join("spec.md");
+        assert!(spec_path.exists(), "spec.md should be written");
+        let content = fs::read_to_string(&spec_path).unwrap();
         assert_eq!(content, markdown);
     }
 
     #[test]
-    fn test_write_design_to_worktree_creates_directories() {
+    fn test_write_spec_to_worktree_creates_directories() {
         let temp = TempDir::new().unwrap();
         let worktree = temp.path();
 
         // .claude/tina/ doesn't exist yet
         assert!(!worktree.join(".claude").exists());
 
-        write_design_to_worktree(worktree, "# Test").unwrap();
+        write_spec_to_worktree(worktree, "# Test").unwrap();
 
         assert!(worktree.join(".claude").join("tina").exists());
         assert!(worktree
             .join(".claude")
             .join("tina")
-            .join("design.md")
+            .join("spec.md")
             .exists());
     }
 
     #[test]
-    fn test_resolve_design_source_with_local_file() {
+    fn test_resolve_spec_source_with_local_file() {
         let temp = TempDir::new().unwrap();
-        let doc = temp.path().join("design.md");
+        let doc = temp.path().join("spec.md");
         fs::write(&doc, "# Design").unwrap();
 
-        let (path, design_id, markdown) = resolve_design_source(Some(doc.as_path()), None).unwrap();
+        let (path, spec_id, markdown) = resolve_spec_source(Some(doc.as_path()), None).unwrap();
 
         assert_eq!(path, fs::canonicalize(&doc).unwrap());
-        assert!(design_id.is_none());
+        assert!(spec_id.is_none());
         assert!(markdown.is_none());
     }
 
     #[test]
-    fn test_resolve_design_source_rejects_missing_file() {
-        let result = resolve_design_source(Some(Path::new("/nonexistent/design.md")), None);
+    fn test_resolve_spec_source_rejects_missing_file() {
+        let result = resolve_spec_source(Some(Path::new("/nonexistent/spec.md")), None);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_init_design_doc_backward_compatible() {
+    fn test_init_spec_doc_backward_compatible() {
         if !convex_available() {
             return;
         }
@@ -1359,15 +1359,15 @@ Supervisor state tracks progress.
         let temp_dir = create_test_repo();
         let cwd = temp_dir.path();
 
-        let design_doc = cwd.join("design.md");
-        fs::write(&design_doc, "# Backward Compat Test").unwrap();
+        let spec_doc = cwd.join("spec.md");
+        fs::write(&spec_doc, "# Backward Compat Test").unwrap();
 
         let feature = format!("test-compat-{}", std::process::id());
 
         let result = run(
             &feature,
             cwd,
-            Some(&design_doc),
+            Some(&spec_doc),
             None,
             "tina/test-compat",
             2,
@@ -1382,7 +1382,7 @@ Supervisor state tracks progress.
 
         assert!(
             result.is_ok(),
-            "init with --design-doc should still work: {:?}",
+            "init with --spec-doc should still work: {:?}",
             result.err()
         );
 
@@ -1390,7 +1390,7 @@ Supervisor state tracks progress.
         let worktree_path = cwd.join(".worktrees").join(&feature);
         assert!(worktree_path.exists());
 
-        // Verify supervisor state has no design_id
+        // Verify supervisor state has no spec_id
         let state_path = worktree_path
             .join(".claude")
             .join("tina")
@@ -1399,15 +1399,15 @@ Supervisor state tracks progress.
         let state_json = fs::read_to_string(&state_path).unwrap();
         let state: serde_json::Value = serde_json::from_str(&state_json).unwrap();
         assert!(
-            state.get("design_id").is_none() || state["design_id"].is_null(),
-            "design_id should be absent or null for --design-doc path"
+            state.get("spec_id").is_none() || state["spec_id"].is_null(),
+            "spec_id should be absent or null for --spec-doc path"
         );
 
-        // Verify no design.md was written (only happens with --design-id)
-        let design_md = worktree_path.join(".claude").join("tina").join("design.md");
+        // Verify no spec.md was written (only happens with --spec-id)
+        let spec_md = worktree_path.join(".claude").join("tina").join("spec.md");
         assert!(
-            !design_md.exists(),
-            "design.md should NOT be written when using --design-doc"
+            !spec_md.exists(),
+            "spec.md should NOT be written when using --spec-doc"
         );
 
         // Clean up worktree
@@ -1424,7 +1424,7 @@ Supervisor state tracks progress.
     }
 
     #[test]
-    fn test_init_with_design_id_creates_worktree() {
+    fn test_init_with_spec_id_creates_worktree() {
         if !convex_available() {
             return;
         }
@@ -1432,25 +1432,25 @@ Supervisor state tracks progress.
         let temp_dir = create_test_repo();
         let cwd = temp_dir.path();
 
-        // First, create a project and design in Convex
-        let (project_id, design_id) = match create_test_design() {
+        // First, create a project and spec in Convex
+        let (project_id, spec_id) = match create_test_spec() {
             Ok(ids) => ids,
             Err(e) => {
-                eprintln!("Skipping test: could not create test design: {}", e);
+                eprintln!("Skipping test: could not create test spec: {}", e);
                 return;
             }
         };
 
         let _ = project_id; // used in setup, not needed directly
 
-        let feature = format!("test-designid-{}", std::process::id());
+        let feature = format!("test-specid-{}", std::process::id());
 
         let result = run(
             &feature,
             cwd,
             None,
-            Some(&design_id),
-            "tina/test-designid",
+            Some(&spec_id),
+            "tina/test-specid",
             2,
             None,
             None,
@@ -1463,7 +1463,7 @@ Supervisor state tracks progress.
 
         assert!(
             result.is_ok(),
-            "init with --design-id should succeed: {:?}",
+            "init with --spec-id should succeed: {:?}",
             result.err()
         );
 
@@ -1471,16 +1471,16 @@ Supervisor state tracks progress.
         let worktree_path = cwd.join(".worktrees").join(&feature);
         assert!(worktree_path.exists(), "Worktree directory should exist");
 
-        // Verify design.md was written to worktree
-        let design_md = worktree_path.join(".claude").join("tina").join("design.md");
+        // Verify spec.md was written to worktree
+        let spec_md = worktree_path.join(".claude").join("tina").join("spec.md");
         assert!(
-            design_md.exists(),
-            "design.md should be written when using --design-id"
+            spec_md.exists(),
+            "spec.md should be written when using --spec-id"
         );
-        let design_content = fs::read_to_string(&design_md).unwrap();
-        assert!(!design_content.is_empty(), "design.md should have content");
+        let spec_content = fs::read_to_string(&spec_md).unwrap();
+        assert!(!spec_content.is_empty(), "spec.md should have content");
 
-        // Verify supervisor state has design_id
+        // Verify supervisor state has spec_id
         let state_path = worktree_path
             .join(".claude")
             .join("tina")
@@ -1489,16 +1489,16 @@ Supervisor state tracks progress.
         let state_json = fs::read_to_string(&state_path).unwrap();
         let state: serde_json::Value = serde_json::from_str(&state_json).unwrap();
         assert_eq!(
-            state["design_id"].as_str().unwrap(),
-            design_id,
-            "supervisor state should store design_id"
+            state["spec_id"].as_str().unwrap(),
+            spec_id,
+            "supervisor state should store spec_id"
         );
-        // design_doc should be the convex:// placeholder
-        let design_doc_val = state["design_doc"].as_str().unwrap();
+        // spec_doc should be the convex:// placeholder
+        let spec_doc_val = state["spec_doc"].as_str().unwrap();
         assert!(
-            design_doc_val.starts_with("convex://"),
-            "design_doc should be convex:// placeholder, got: {}",
-            design_doc_val
+            spec_doc_val.starts_with("convex://"),
+            "spec_doc should be convex:// placeholder, got: {}",
+            spec_doc_val
         );
 
         // Clean up worktree
@@ -1514,30 +1514,30 @@ Supervisor state tracks progress.
             .output();
     }
 
-    /// Helper to create a test design in Convex. Returns (project_id, design_id).
-    fn create_test_design() -> anyhow::Result<(String, String)> {
+    /// Helper to create a test spec in Convex. Returns (project_id, spec_id).
+    fn create_test_spec() -> anyhow::Result<(String, String)> {
         convex::run_convex(|mut writer| async move {
             let project_id = writer
                 .find_or_create_project("test-project", "/tmp/test-project")
                 .await?;
-            let design_id = writer
-                .create_design(&project_id, "Test Design", "# Test Design\n\nTest content.")
+            let spec_id = writer
+                .create_spec(&project_id, "Test Design", "# Test Design\n\nTest content.")
                 .await?;
-            Ok((project_id, design_id))
+            Ok((project_id, spec_id))
         })
     }
 
     #[test]
-    fn test_init_rejects_both_design_doc_and_design_id() {
+    fn test_init_rejects_both_spec_doc_and_spec_id() {
         let temp_dir = TempDir::new().unwrap();
-        let design_doc = temp_dir.path().join("design.md");
-        fs::write(&design_doc, "# Design").unwrap();
+        let spec_doc = temp_dir.path().join("spec.md");
+        fs::write(&spec_doc, "# Design").unwrap();
 
         let result = run(
             "test-both",
             temp_dir.path(),
-            Some(&design_doc),
-            Some("some-design-id"),
+            Some(&spec_doc),
+            Some("some-spec-id"),
             "tina/test",
             1,
             None,
@@ -1558,7 +1558,7 @@ Supervisor state tracks progress.
     }
 
     #[test]
-    fn test_init_rejects_neither_design_doc_nor_design_id() {
+    fn test_init_rejects_neither_spec_doc_nor_spec_id() {
         let temp_dir = TempDir::new().unwrap();
 
         let result = run(

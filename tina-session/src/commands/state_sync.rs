@@ -20,9 +20,9 @@ pub fn orchestration_args_from_state(
     convex::OrchestrationArgs {
         node_id: String::new(), // filled by writer
         project_id: None,
-        design_id: state.design_id.clone(),
+        spec_id: state.spec_id.clone(),
         feature_name: feature.to_string(),
-        design_doc_path: state.design_doc.to_string_lossy().to_string(),
+        spec_doc_path: state.spec_doc.to_string_lossy().to_string(),
         branch: state.branch.clone(),
         worktree_path: Some(state.worktree_path.to_string_lossy().to_string()),
         total_phases: state.total_phases as f64,
@@ -34,7 +34,7 @@ pub fn orchestration_args_from_state(
         policy_snapshot: None,
         policy_snapshot_hash: None,
         preset_origin: None,
-        design_only: None,
+        spec_only: None,
         policy_revision: None,
         updated_at: None,
     }
@@ -87,7 +87,7 @@ mod tests {
     fn make_test_state() -> SupervisorState {
         SupervisorState::new(
             "test-feature",
-            PathBuf::from("/tmp/design.md"),
+            PathBuf::from("/tmp/spec.md"),
             PathBuf::from("/tmp/worktree"),
             "tina/test-feature",
             3,
@@ -95,20 +95,20 @@ mod tests {
     }
 
     #[test]
-    fn orchestration_args_forwards_design_id_when_present() {
+    fn orchestration_args_forwards_spec_id_when_present() {
         let mut state = make_test_state();
-        state.design_id = Some("design_abc123".to_string());
+        state.spec_id = Some("spec_abc123".to_string());
 
         let args = orchestration_args_from_state("test-feature", &state);
-        assert_eq!(args.design_id, Some("design_abc123".to_string()));
+        assert_eq!(args.spec_id, Some("spec_abc123".to_string()));
     }
 
     #[test]
-    fn orchestration_args_forwards_design_id_none() {
+    fn orchestration_args_forwards_spec_id_none() {
         let state = make_test_state();
-        assert_eq!(state.design_id, None);
+        assert_eq!(state.spec_id, None);
 
         let args = orchestration_args_from_state("test-feature", &state);
-        assert_eq!(args.design_id, None);
+        assert_eq!(args.spec_id, None);
     }
 }

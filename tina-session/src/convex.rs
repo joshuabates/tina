@@ -9,7 +9,7 @@ pub type EventArgs = tina_data::OrchestrationEventRecord;
 pub type UpsertTeamMemberArgs = tina_data::TeamMemberRecord;
 pub type RegisterTeamArgs = tina_data::RegisterTeamRecord;
 
-pub use tina_data::{CommentRecord, DesignRecord, TicketRecord};
+pub use tina_data::{CommentRecord, SpecRecord, TicketRecord};
 
 /// Orchestration record returned from Convex feature/list queries.
 #[derive(Debug, Clone)]
@@ -18,8 +18,8 @@ pub struct OrchestrationRecord {
     pub feature_name: String,
     pub worktree_path: Option<String>,
     pub branch: String,
-    pub design_doc_path: String,
-    pub design_id: Option<String>,
+    pub spec_doc_path: String,
+    pub spec_id: Option<String>,
     pub total_phases: u32,
     pub current_phase: u32,
     pub status: String,
@@ -198,62 +198,62 @@ impl ConvexWriter {
 
     // --- PM (Project Management) methods ---
 
-    /// Create a new design.
-    pub async fn create_design(
+    /// Create a new spec.
+    pub async fn create_spec(
         &mut self,
         project_id: &str,
         title: &str,
         markdown: &str,
     ) -> anyhow::Result<String> {
-        self.client.create_design(project_id, title, markdown).await
+        self.client.create_spec(project_id, title, markdown).await
     }
 
-    /// Get a design by ID.
-    pub async fn get_design(&mut self, design_id: &str) -> anyhow::Result<Option<DesignRecord>> {
-        self.client.get_design(design_id).await
+    /// Get a spec by ID.
+    pub async fn get_spec(&mut self, spec_id: &str) -> anyhow::Result<Option<SpecRecord>> {
+        self.client.get_spec(spec_id).await
     }
 
-    /// Get a design by key.
-    pub async fn get_design_by_key(
+    /// Get a spec by key.
+    pub async fn get_spec_by_key(
         &mut self,
-        design_key: &str,
-    ) -> anyhow::Result<Option<DesignRecord>> {
-        self.client.get_design_by_key(design_key).await
+        spec_key: &str,
+    ) -> anyhow::Result<Option<SpecRecord>> {
+        self.client.get_spec_by_key(spec_key).await
     }
 
-    /// List designs for a project, optionally filtered by status.
-    pub async fn list_designs(
+    /// List specs for a project, optionally filtered by status.
+    pub async fn list_specs(
         &mut self,
         project_id: &str,
         status: Option<&str>,
-    ) -> anyhow::Result<Vec<DesignRecord>> {
-        self.client.list_designs(project_id, status).await
+    ) -> anyhow::Result<Vec<SpecRecord>> {
+        self.client.list_specs(project_id, status).await
     }
 
-    /// Update a design.
-    pub async fn update_design(
+    /// Update a spec.
+    pub async fn update_spec(
         &mut self,
-        design_id: &str,
+        spec_id: &str,
         title: Option<&str>,
         markdown: Option<&str>,
     ) -> anyhow::Result<String> {
-        self.client.update_design(design_id, title, markdown).await
+        self.client.update_spec(spec_id, title, markdown).await
     }
 
-    /// Transition a design to a new status.
-    pub async fn transition_design(
+    /// Transition a spec to a new status.
+    pub async fn transition_spec(
         &mut self,
-        design_id: &str,
+        spec_id: &str,
         new_status: &str,
     ) -> anyhow::Result<String> {
-        self.client.transition_design(design_id, new_status).await
+        self.client.transition_spec(spec_id, new_status).await
     }
 
     /// Create a new ticket.
     pub async fn create_ticket(
         &mut self,
         project_id: &str,
-        design_id: Option<&str>,
+        spec_id: Option<&str>,
         title: &str,
         description: &str,
         priority: &str,
@@ -263,7 +263,7 @@ impl ConvexWriter {
         self.client
             .create_ticket(
                 project_id,
-                design_id,
+                spec_id,
                 title,
                 description,
                 priority,
@@ -286,16 +286,16 @@ impl ConvexWriter {
         self.client.get_ticket_by_key(ticket_key).await
     }
 
-    /// List tickets for a project, optionally filtered by status, design, or assignee.
+    /// List tickets for a project, optionally filtered by status, spec, or assignee.
     pub async fn list_tickets(
         &mut self,
         project_id: &str,
         status: Option<&str>,
-        design_id: Option<&str>,
+        spec_id: Option<&str>,
         assignee: Option<&str>,
     ) -> anyhow::Result<Vec<TicketRecord>> {
         self.client
-            .list_tickets(project_id, status, design_id, assignee)
+            .list_tickets(project_id, status, spec_id, assignee)
             .await
     }
 
@@ -306,8 +306,8 @@ impl ConvexWriter {
         title: Option<&str>,
         description: Option<&str>,
         priority: Option<&str>,
-        design_id: Option<&str>,
-        clear_design_id: bool,
+        spec_id: Option<&str>,
+        clear_spec_id: bool,
         assignee: Option<&str>,
         estimate: Option<&str>,
     ) -> anyhow::Result<String> {
@@ -317,8 +317,8 @@ impl ConvexWriter {
                 title,
                 description,
                 priority,
-                design_id,
-                clear_design_id,
+                spec_id,
+                clear_spec_id,
                 assignee,
                 estimate,
             )
@@ -334,7 +334,7 @@ impl ConvexWriter {
         self.client.transition_ticket(ticket_id, new_status).await
     }
 
-    /// Add a comment to a design or ticket (internal function).
+    /// Add a comment to a spec or ticket (internal function).
     pub async fn add_comment(
         &mut self,
         project_id: &str,
@@ -356,7 +356,7 @@ impl ConvexWriter {
             .await
     }
 
-    /// List comments for a design or ticket (internal function).
+    /// List comments for a spec or ticket (internal function).
     pub async fn list_comments(
         &mut self,
         target_type: &str,
@@ -484,8 +484,8 @@ fn convert_list_entry(entry: tina_data::OrchestrationListEntry) -> Orchestration
         feature_name: entry.record.feature_name,
         worktree_path: entry.record.worktree_path,
         branch: entry.record.branch,
-        design_doc_path: entry.record.design_doc_path,
-        design_id: entry.record.design_id,
+        spec_doc_path: entry.record.spec_doc_path,
+        spec_id: entry.record.spec_id,
         total_phases: entry.record.total_phases as u32,
         current_phase: entry.record.current_phase as u32,
         status: entry.record.status,
@@ -501,8 +501,8 @@ fn convert_feature_orchestration(
         feature_name: record.record.feature_name,
         worktree_path: record.record.worktree_path,
         branch: record.record.branch,
-        design_doc_path: record.record.design_doc_path,
-        design_id: record.record.design_id,
+        spec_doc_path: record.record.spec_doc_path,
+        spec_id: record.record.spec_id,
         total_phases: record.record.total_phases as u32,
         current_phase: record.record.current_phase as u32,
         status: record.record.status,
