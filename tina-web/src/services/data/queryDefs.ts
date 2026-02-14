@@ -10,7 +10,7 @@ import {
   TelemetrySpan,
   TelemetryEvent,
   TelemetryRollup,
-  DesignSummary,
+  SpecSummary,
   TicketSummary,
   WorkComment,
   NodeSummary,
@@ -126,21 +126,21 @@ export const TelemetryRollupQuery = queryDef({
   schema: Schema.Array(TelemetryRollup),
 })
 
-export const DesignListQuery = queryDef({
-  key: "designs.list",
-  query: api.designs.listDesigns,
+export const SpecListQuery = queryDef({
+  key: "specs.list",
+  query: api.specs.listSpecs,
   args: Schema.Struct({
     projectId: Schema.String,
     status: Schema.optional(Schema.String),
   }),
-  schema: Schema.Array(DesignSummary),
+  schema: Schema.Array(SpecSummary),
 })
 
-export const DesignDetailQuery = queryDef({
-  key: "designs.get",
-  query: api.designs.getDesign,
-  args: Schema.Struct({ designId: Schema.String }),
-  schema: Schema.NullOr(DesignSummary),
+export const SpecDetailQuery = queryDef({
+  key: "specs.get",
+  query: api.specs.getSpec,
+  args: Schema.Struct({ specId: Schema.String }),
+  schema: Schema.NullOr(SpecSummary),
 })
 
 export const TicketListQuery = queryDef({
@@ -149,7 +149,7 @@ export const TicketListQuery = queryDef({
   args: Schema.Struct({
     projectId: Schema.String,
     status: Schema.optional(Schema.String),
-    designId: Schema.optional(Schema.String),
+    specId: Schema.optional(Schema.String),
   }),
   schema: Schema.Array(TicketSummary),
 })

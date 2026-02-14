@@ -4,7 +4,7 @@ import { convexDocumentFields, optionalString } from "./common"
 export const TicketSummary = Schema.Struct({
   ...convexDocumentFields,
   projectId: Schema.String,
-  designId: optionalString,
+  specId: optionalString,
   ticketKey: Schema.String,
   title: Schema.String,
   description: Schema.String,

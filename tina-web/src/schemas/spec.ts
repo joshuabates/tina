@@ -1,10 +1,10 @@
 import { Schema } from "effect"
 import { convexDocumentFields, optionalString, optionalNumber, optionalBoolean, optionalStringArray } from "./common"
 
-export const DesignSummary = Schema.Struct({
+export const SpecSummary = Schema.Struct({
   ...convexDocumentFields,
   projectId: Schema.String,
-  designKey: Schema.String,
+  specKey: Schema.String,
   title: Schema.String,
   markdown: Schema.String,
   status: Schema.String,
@@ -19,4 +19,4 @@ export const DesignSummary = Schema.Struct({
   validationUpdatedAt: optionalString,
 })
 
-export type DesignSummary = typeof DesignSummary.Type
+export type SpecSummary = typeof SpecSummary.Type
