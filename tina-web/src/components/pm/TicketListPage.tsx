@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Option } from "effect"
 import { useNavigate, Link, useParams } from "react-router-dom"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
@@ -8,6 +8,8 @@ import { formatRelativeTimeShort } from "@/lib/time"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus, priorityLabel } from "@/components/ui/status-styles"
 import { CreateTicketModal } from "./CreateTicketModal"
+import { PlanListToggle } from "./PlanListToggle"
+import { usePlanHeaderActions } from "./PlanHeaderActionsContext"
 import type { TicketSummary } from "@/schemas"
 import styles from "./TicketListPage.module.scss"
 
@@ -29,6 +31,22 @@ export function TicketListPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
 
   const projectId = projectIdParam ?? null
+  const headerActions = useMemo(() => {
+    if (!projectId) return null
+
+    return (
+      <div className={styles.headerControls}>
+        <PlanListToggle projectId={projectId} />
+        <button
+          className={styles.createButton}
+          onClick={() => setShowCreateForm((open) => !open)}
+        >
+          Create Ticket
+        </button>
+      </div>
+    )
+  }, [projectId])
+  usePlanHeaderActions(headerActions, [headerActions])
 
   const ticketsResult = useTypedQuery(TicketListQuery, {
     projectId: projectId as string,
@@ -49,9 +67,6 @@ export function TicketListPage() {
   if (isAnyQueryLoading(ticketsResult, designsResult)) {
     return (
       <div data-testid="ticket-list-page" className={styles.ticketList}>
-        <div className={styles.header}>
-          <h2 className={styles.title}>Tickets</h2>
-        </div>
         <div data-testid="ticket-list-loading" className={styles.loading}>
           <div className={styles.skeletonRow} />
           <div className={styles.skeletonRow} />
@@ -86,16 +101,6 @@ export function TicketListPage() {
 
   return (
     <div data-testid="ticket-list-page" className={styles.ticketList}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>Tickets</h2>
-        <button
-          className={styles.createButton}
-          onClick={() => setShowCreateForm(!showCreateForm)}
-        >
-          Create Ticket
-        </button>
-      </div>
-
       {showCreateForm && (
         <CreateTicketModal
           projectId={projectId}

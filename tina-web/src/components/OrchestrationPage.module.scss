@@ -9,12 +9,9 @@
 }
 
 .header {
-  padding: 8px 14px;
-  border-bottom: 1px solid $border-color;
-  background: color-mix(in srgb, $bg-sidebar 36%, $bg-primary 64%);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  min-width: 0;
 }
 
 .title {

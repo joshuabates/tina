@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   Navigate,
-  NavLink,
   Outlet,
   useLocation,
   useNavigate,
@@ -29,6 +28,7 @@ import type { OrchestrationSummary, ProjectSummary, TerminalTarget } from "@/sch
 import { SidebarItem } from "@/components/ui/sidebar-item"
 import { NewSessionDialog } from "@/components/NewSessionDialog"
 import { statusLabel, toStatusBadgeStatus } from "@/components/ui/status-styles"
+import { AppShellHeaderProvider } from "./AppShellHeaderContext"
 import styles from "./AppShell.module.scss"
 
 interface ModeConfig {
@@ -47,42 +47,6 @@ const MODE_CONFIGS: readonly ModeConfig[] = [
 
 function modeLabel(mode: NavMode): string {
   return MODE_CONFIGS.find((item) => item.mode === mode)?.label ?? mode
-}
-
-function PlanSidebar({ projectId }: { projectId: string }) {
-  return (
-    <div className={styles.modeSidebarContent}>
-      <div className={styles.modeSidebarHeader}>Plan</div>
-      <div className={styles.modeSidebarSection}>
-        <div className={styles.modeSidebarSectionTitle}>Tickets</div>
-        <NavLink
-          className={({ isActive }) =>
-            isActive
-              ? `${styles.modeSidebarLink} ${styles.modeSidebarLinkActive}`
-              : styles.modeSidebarLink
-          }
-          to={`/projects/${projectId}/plan/tickets`}
-          data-sidebar-action
-        >
-          All tickets
-        </NavLink>
-      </div>
-      <div className={styles.modeSidebarSection}>
-        <div className={styles.modeSidebarSectionTitle}>Designs</div>
-        <NavLink
-          className={({ isActive }) =>
-            isActive
-              ? `${styles.modeSidebarLink} ${styles.modeSidebarLinkActive}`
-              : styles.modeSidebarLink
-          }
-          to={`/projects/${projectId}/plan/designs`}
-          data-sidebar-action
-        >
-          All designs
-        </NavLink>
-      </div>
-    </div>
-  )
 }
 
 function SessionsSidebar() {
@@ -169,7 +133,7 @@ function ModeSidebar({ mode, projectId }: { mode: NavMode; projectId: string }) 
     case "observe":
       return <Sidebar projectId={projectId} />
     case "plan":
-      return <PlanSidebar projectId={projectId} />
+      return null
     case "sessions":
       return <SessionsSidebar />
     case "code":
@@ -189,6 +153,8 @@ export function AppShell() {
   const navigate = useNavigate()
   const location = useLocation()
   const mode = parseModeFromPathname(location.pathname)
+  const hasModeSidebar = mode !== "plan"
+  const [headerContent, setHeaderContent] = useState<ReactNode | null>(null)
   const { orchestrationId, selectOrchestration } = useSelection()
 
   const orchestrationsResult = useTypedQuery(OrchestrationListQuery, {})
@@ -327,8 +293,26 @@ export function AppShell() {
     )
   }
 
+  const renderRouteHeader = () => {
+    if (headerContent) {
+      return headerContent
+    }
+
+    return (
+      <div className={styles.shellHeaderFallback}>
+        {modeLabel(mode)}
+      </div>
+    )
+  }
+
   return (
-    <div className={styles.appShell}>
+    <div
+      className={
+        hasModeSidebar
+          ? styles.appShell
+          : `${styles.appShell} ${styles.appShellNoSidebar}`
+      }
+    >
       <nav className={styles.modeRail} aria-label="Mode rail">
         {MODE_CONFIGS.map((entry) => {
           const Icon = entry.icon
@@ -353,22 +337,39 @@ export function AppShell() {
         })}
       </nav>
 
-      <div
-        className={styles.sidebar}
-        role="navigation"
-        aria-label={`${modeLabel(mode)} sidebar`}
+      <header
+        className={
+          hasModeSidebar
+            ? styles.shellHeader
+            : `${styles.shellHeader} ${styles.shellHeaderNoSidebar}`
+        }
+        aria-label="Workspace header"
       >
-        <div className={styles.sidebarTop}>
+        <div className={styles.shellHeaderProject}>
           {renderProjectPicker()}
         </div>
-        <div className={styles.sidebarBody} data-mode-sidebar="true">
-          <ModeSidebar mode={mode} projectId={projectId} />
+        <div className={styles.shellHeaderContent}>
+          {renderRouteHeader()}
         </div>
-      </div>
+      </header>
 
-      <main className={styles.main} aria-label="Page content">
-        <Outlet />
-      </main>
+      {hasModeSidebar && (
+        <div
+          className={styles.sidebar}
+          role="navigation"
+          aria-label={`${modeLabel(mode)} sidebar`}
+        >
+          <div className={styles.sidebarBody} data-mode-sidebar="true">
+            <ModeSidebar mode={mode} projectId={projectId} />
+          </div>
+        </div>
+      )}
+
+      <AppShellHeaderProvider setHeaderContent={setHeaderContent}>
+        <main className={styles.main} aria-label="Page content">
+          <Outlet />
+        </main>
+      </AppShellHeaderProvider>
 
       <div className={styles.footer}>
         <AppStatusBar connected={true} projectName={projectName} phaseName={phaseName} />

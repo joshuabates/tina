@@ -1,0 +1,36 @@
+@use '../../styles/tokens' as *;
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid $border-color;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.item {
+  font-size: 12px;
+  font-weight: 500;
+  color: $text-muted;
+  text-decoration: none;
+  padding: 4px 14px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: $text-primary;
+    background: hsl(var(--accent) / 0.06);
+  }
+}
+
+.item + .item {
+  border-left: 1px solid $border-color;
+}
+
+.itemActive {
+  color: $text-primary;
+  background: hsl(var(--accent) / 0.12);
+  font-weight: 600;
+}

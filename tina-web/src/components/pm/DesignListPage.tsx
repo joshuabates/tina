@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { DesignListQuery } from "@/services/data/queryDefs"
@@ -7,6 +7,8 @@ import { formatRelativeTimeShort } from "@/lib/time"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus, statusLabel } from "@/components/ui/status-styles"
 import { CreateDesignModal } from "./CreateDesignModal"
+import { PlanListToggle } from "./PlanListToggle"
+import { usePlanHeaderActions } from "./PlanHeaderActionsContext"
 import type { DesignSummary } from "@/schemas"
 import styles from "./DesignListPage.module.scss"
 
@@ -16,6 +18,22 @@ export function DesignListPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
 
   const projectId = projectIdParam ?? null
+  const headerActions = useMemo(() => {
+    if (!projectId) return null
+
+    return (
+      <div className={styles.headerControls}>
+        <PlanListToggle projectId={projectId} />
+        <button
+          className={styles.createButton}
+          onClick={() => setShowCreateForm((open) => !open)}
+        >
+          Create Design
+        </button>
+      </div>
+    )
+  }, [projectId])
+  usePlanHeaderActions(headerActions, [headerActions])
 
   const designsResult = useTypedQuery(DesignListQuery, {
     projectId: projectId as string,
@@ -32,9 +50,6 @@ export function DesignListPage() {
   if (isAnyQueryLoading(designsResult)) {
     return (
       <div data-testid="design-list-page" className={styles.designList}>
-        <div className={styles.header}>
-          <h2 className={styles.title}>Designs</h2>
-        </div>
         <div data-testid="design-list-loading" className={styles.loading}>
           <div className={styles.skeletonRow} />
           <div className={styles.skeletonRow} />
@@ -66,16 +81,6 @@ export function DesignListPage() {
 
   return (
     <div data-testid="design-list-page" className={styles.designList}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>Designs</h2>
-        <button
-          className={styles.createButton}
-          onClick={() => setShowCreateForm(!showCreateForm)}
-        >
-          Create Design
-        </button>
-      </div>
-
       {showCreateForm && (
         <CreateDesignModal
           projectId={projectId}

@@ -5,13 +5,22 @@ $mode-rail-width: 56px;
 .appShell {
   display: grid;
   grid-template-columns: $mode-rail-width $sidebar-width 1fr;
-  grid-template-rows: 1fr $footer-height;
+  grid-template-rows: minmax(2.5rem, auto) 1fr $footer-height;
   grid-template-areas:
+    "rail shellHeader shellHeader"
     "rail sidebar main"
     "footer footer footer";
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+}
+
+.appShellNoSidebar {
+  grid-template-columns: $mode-rail-width 1fr;
+  grid-template-areas:
+    "rail shellHeader"
+    "rail main"
+    "footer footer";
 }
 
 .modeRail {
@@ -55,6 +64,39 @@ $mode-rail-width: 56px;
   height: 1rem;
 }
 
+.shellHeader {
+  grid-area: shellHeader;
+  border-bottom: 1px solid $border-color;
+  background: color-mix(in srgb, $bg-sidebar 48%, $bg-primary 52%);
+  display: grid;
+  grid-template-columns: $sidebar-width minmax(0, 1fr);
+  min-width: 0;
+}
+
+.shellHeaderNoSidebar {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.shellHeaderProject {
+  padding: 0.45rem 0.75rem;
+  border-right: 1px solid $border-color;
+}
+
+.shellHeaderContent {
+  padding: 0.45rem 0.85rem;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.shellHeaderFallback {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
 .sidebar {
   grid-area: sidebar;
   width: $sidebar-width;
@@ -63,12 +105,6 @@ $mode-rail-width: 56px;
   background: $bg-sidebar;
   display: flex;
   flex-direction: column;
-}
-
-.sidebarTop {
-  padding: 0.55rem 0.75rem;
-  border-bottom: 1px solid hsl(var(--border) / 0.55);
-  background: hsl(var(--sidebar) / 0.8);
 }
 
 .sidebarBody {
@@ -89,9 +125,9 @@ $mode-rail-width: 56px;
 
 .projectPickerLabel {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 .projectPickerText {
@@ -106,9 +142,9 @@ $mode-rail-width: 56px;
   border-radius: 0.35rem;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   padding: 0.2rem 0.4rem;
-  min-width: 0;
+  min-width: 8rem;
   width: 100%;
 }
 

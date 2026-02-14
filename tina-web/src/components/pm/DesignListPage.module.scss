@@ -5,17 +5,10 @@
   padding: 16px;
 }
 
-.header {
+.headerControls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.title {
-  font-size: 14px;
-  font-weight: 600;
-  color: $text-primary;
+  gap: 8px;
 }
 
 .table {

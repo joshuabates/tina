@@ -1,9 +1,16 @@
+import { useMemo } from "react"
+import { useAppShellHeader } from "@/components/AppShellHeaderContext"
 import styles from "./ModeEmptyState.module.scss"
 
 export function DesignModePage() {
+  const shellHeader = useMemo(
+    () => <span className={styles.shellTitle}>Design</span>,
+    [],
+  )
+  useAppShellHeader(shellHeader)
+
   return (
     <section data-testid="design-mode-page" className={styles.page}>
-      <h1 className={styles.title}>Design</h1>
       <p className={styles.description}>
         No design workspace yet.
       </p>

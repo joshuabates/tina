@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { screen } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
 import { Route, Routes } from "react-router-dom"
 import { AppShell } from "../AppShell"
 import {
@@ -61,9 +61,11 @@ describe("AppShell", () => {
     expect(screen.getByRole("contentinfo")).toBeInTheDocument()
   })
 
-  it("renders project picker at the top of the left sidebar", () => {
+  it("renders project picker in the shared shell header", () => {
     renderShell()
-    expect(screen.getByTestId("project-picker")).toBeInTheDocument()
+
+    const header = screen.getByRole("banner", { name: /workspace header/i })
+    expect(within(header).getByTestId("project-picker")).toBeInTheDocument()
   })
 
   it("uses semantic main element without redundant role attribute", () => {

@@ -15,6 +15,15 @@
   color: hsl(var(--foreground));
 }
 
+.shellTitle {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: hsl(var(--foreground));
+}
+
 .description {
   margin: 0;
   color: hsl(var(--muted-foreground));

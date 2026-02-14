@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { screen, within } from "@testing-library/react"
+import { screen } from "@testing-library/react"
 import App from "../../App"
 import {
   buildProjectSummary,
@@ -58,20 +58,20 @@ beforeEach(() => {
 })
 
 describe("PmShell - unified workspace", () => {
-  it("does not render a PM-specific sidebar", () => {
+  it("does not render the plan sidebar navigation", () => {
     renderApp("/projects/p1/plan")
 
     expect(
-      screen.queryByRole("navigation", { name: /project navigation/i }),
+      screen.queryByRole("navigation", { name: /plan sidebar/i }),
     ).not.toBeInTheDocument()
   })
 
-  it("does not render a segmented tickets/designs tab switcher in main content", () => {
+  it("renders tickets/designs toggle in main content", () => {
     renderApp("/projects/p1/plan")
 
-    expect(screen.queryByRole("tablist", { name: /plan workspace tabs/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole("tab", { name: /tickets/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole("tab", { name: /designs/i })).not.toBeInTheDocument()
+    expect(screen.getByRole("navigation", { name: /plan list view toggle/i })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Tickets" })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Designs" })).toBeInTheDocument()
   })
 
   it("renders ticket list content on tickets route", () => {
@@ -85,11 +85,10 @@ describe("PmShell - unified workspace", () => {
     expect(screen.getByTestId("design-list-page")).toBeInTheDocument()
   })
 
-  it("shows project name in workspace header", () => {
+  it("does not show project name in workspace header", () => {
     renderApp("/projects/p1/plan")
 
-    const shell = screen.getByTestId("pm-shell")
-    expect(within(shell).getByRole("heading", { name: "Project Alpha" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Project Alpha" })).not.toBeInTheDocument()
   })
 
   it("recovers from unknown project IDs via root resolver", () => {

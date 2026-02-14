@@ -1,5 +1,7 @@
+import { useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
 import { DataErrorBoundary } from "@/components/DataErrorBoundary"
+import { useAppShellHeader } from "@/components/AppShellHeaderContext"
 import { TerminalView } from "@/components/TerminalView"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { TerminalTargetListQuery } from "@/services/data/queryDefs"
@@ -10,6 +12,11 @@ import emptyStyles from "./ModeEmptyState.module.scss"
 function SessionsContent() {
   const [searchParams] = useSearchParams()
   const paneId = searchParams.get("pane")
+  const shellHeader = useMemo(
+    () => <span className={emptyStyles.shellTitle}>Sessions</span>,
+    [],
+  )
+  useAppShellHeader(shellHeader)
 
   const targetsResult = useTypedQuery(TerminalTargetListQuery, {})
 
@@ -61,7 +68,6 @@ function SessionsContent() {
   if (targetsResult.data.length === 0) {
     return (
       <section data-testid="sessions-mode-page" className={emptyStyles.page}>
-        <h1 className={emptyStyles.title}>Sessions</h1>
         <p className={emptyStyles.description}>
           No active sessions. Start an orchestration or create a new session.
         </p>
@@ -71,7 +77,6 @@ function SessionsContent() {
 
   return (
     <section data-testid="sessions-mode-page" className={emptyStyles.page}>
-      <h1 className={emptyStyles.title}>Sessions</h1>
       <p className={emptyStyles.description}>
         Select a session from the sidebar to connect.
       </p>

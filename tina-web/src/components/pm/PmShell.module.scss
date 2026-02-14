@@ -8,16 +8,14 @@
 .workspaceHeader {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  border-bottom: 1px solid $border-color;
+  justify-content: space-between;
+  width: 100%;
 }
 
-.projectTitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: $text-primary;
-  margin: 0;
+.workspaceHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .segmentedControl {

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { screen, waitFor } from "@testing-library/react"
 import { userEvent } from "@testing-library/user-event"
+import { type ReactNode, useState } from "react"
 import { OrchestrationPage } from "../OrchestrationPage"
+import { AppShellHeaderProvider } from "../AppShellHeaderContext"
 import type { OrchestrationDetail } from "@/schemas"
 import { buildOrchestrationDetail, buildPhase } from "@/test/builders/domain"
 import { queryError, queryLoading, querySuccess, type QueryStateMap } from "@/test/builders/query"
@@ -62,11 +64,15 @@ function renderScenario({
   states?: Partial<QueryStateMap>
   includeHarness?: boolean
 } = {}) {
-  return renderWithAppRuntime(
+  const content = (
     <>
       <OrchestrationPage />
       {includeHarness ? <SelectionHarness /> : null}
-    </>,
+    </>
+  )
+
+  return renderWithAppRuntime(
+    <ShellHeaderHarness>{content}</ShellHeaderHarness>,
     {
       route,
       states,
@@ -74,6 +80,19 @@ function renderScenario({
       detailFallback,
       mockUseTypedQuery,
     },
+  )
+}
+
+function ShellHeaderHarness({ children }: { children: ReactNode }) {
+  const [headerContent, setHeaderContent] = useState<ReactNode | null>(null)
+
+  return (
+    <>
+      <div data-testid="shell-header">{headerContent}</div>
+      <AppShellHeaderProvider setHeaderContent={setHeaderContent}>
+        {children}
+      </AppShellHeaderProvider>
+    </>
   )
 }
 
@@ -136,9 +155,11 @@ describe("OrchestrationPage", () => {
   })
 
   it("shows orchestration feature name and branch in header", () => {
-    const { container } = renderScenario()
-    expect(container.textContent).toContain("test-feature")
-    expect(container.textContent).toContain("tina/test-feature")
+    renderScenario()
+
+    const shellHeader = screen.getByTestId("shell-header")
+    expect(shellHeader).toHaveTextContent("test-feature")
+    expect(shellHeader).toHaveTextContent("tina/test-feature")
   })
 
   it("has aria-live region for status changes", () => {

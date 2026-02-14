@@ -139,9 +139,30 @@ describe("DesignListPage", () => {
     expect(screen.getByRole("button", { name: /create design/i })).toBeInTheDocument()
   })
 
-  it("renders page title", () => {
+  it("does not render Designs subheading", () => {
     renderApp("/projects/p1/plan/designs")
-    expect(screen.getByRole("heading", { name: "Designs" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Designs" })).not.toBeInTheDocument()
+  })
+
+  it("renders list-view toggle with Designs active", () => {
+    renderApp("/projects/p1/plan/designs")
+
+    const toggle = screen.getByRole("navigation", { name: /plan list view toggle/i })
+    expect(toggle).toBeInTheDocument()
+
+    const ticketsLink = within(toggle).getByRole("link", { name: "Tickets" })
+    const designsLink = within(toggle).getByRole("link", { name: "Designs" })
+
+    expect(designsLink).toHaveAttribute("aria-current", "page")
+    expect(ticketsLink).not.toHaveAttribute("aria-current")
+  })
+
+  it("navigates to tickets list when toggle is clicked", async () => {
+    const user = userEvent.setup()
+    renderApp("/projects/p1/plan/designs")
+
+    await user.click(screen.getByRole("link", { name: "Tickets" }))
+    expect(screen.getByTestId("ticket-list-page")).toBeInTheDocument()
   })
 
   describe("create form modal", () => {

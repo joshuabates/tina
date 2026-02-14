@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { DataErrorBoundary } from "./DataErrorBoundary"
 import { PhaseTimelinePanel } from "./PhaseTimelinePanel"
 import { TaskListPanel } from "./TaskListPanel"
 import { RightPanel } from "./RightPanel"
 import { TelemetryTimeline } from "./TelemetryTimeline"
+import { useAppShellHeader } from "./AppShellHeaderContext"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { OrchestrationDetailQuery } from "@/services/data/queryDefs"
@@ -30,6 +31,8 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
 
   // No orchestration selected - show empty state
   if (!orchestrationId) {
+    useAppShellHeader(null, [orchestrationId])
+
     return (
       <div className={styles.orchestrationPage}>
         <div className={styles.empty}>
@@ -44,6 +47,45 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
     orchestrationId,
   })
   const loadedDetail = result.status === "success" ? result.data : null
+  const shellHeaderData = result.status === "success" ? result.data : null
+
+  const shellHeader = useMemo(() => {
+    if (result.status === "loading") {
+      return (
+        <div className={styles.header}>
+          <div className={styles.skeletonText} style={{ width: "150px", height: "14px" }} />
+        </div>
+      )
+    }
+
+    if (!shellHeaderData) {
+      return null
+    }
+
+    return (
+      <div className={styles.header}>
+        <div>
+          <div className={styles.title}>{shellHeaderData.featureName}</div>
+          <div className={styles.subtitle}>{shellHeaderData.branch}</div>
+        </div>
+      </div>
+    )
+  }, [result.status, shellHeaderData])
+
+  const shellHeaderFeature =
+    result.status === "success" && result.data
+      ? result.data.featureName
+      : undefined
+  const shellHeaderBranch =
+    result.status === "success" && result.data
+      ? result.data.branch
+      : undefined
+
+  useAppShellHeader(shellHeader, [
+    result.status,
+    shellHeaderFeature,
+    shellHeaderBranch,
+  ])
 
   useEffect(() => {
     if (!orchestrationId) return
@@ -79,9 +121,6 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
     // Loading state - show skeleton matching three-column layout
     loading: () => (
       <div className={styles.orchestrationPage} aria-busy="true">
-        <div className={styles.header}>
-          <div className={styles.skeletonText} style={{ width: "150px", height: "14px" }} />
-        </div>
         <div className={styles.content}>
           <div className={styles.centerPanel}>
             <div className={styles.timelineColumn}>
@@ -126,12 +165,6 @@ function OrchestrationPageContent({ orchestrationId }: OrchestrationPageContentP
 
       return (
         <div className={styles.orchestrationPage}>
-          <div className={styles.header}>
-            <div>
-              <div className={styles.title}>{orchestration.featureName}</div>
-              <div className={styles.subtitle}>{orchestration.branch}</div>
-            </div>
-          </div>
           {/* Accessibility: Live region for status changes */}
           <div
             aria-live="polite"
