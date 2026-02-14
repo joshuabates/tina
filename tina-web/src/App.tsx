@@ -7,6 +7,8 @@ import { SpecDetailPage } from "./components/pm/SpecDetailPage"
 import { TicketDetailPage } from "./components/pm/TicketDetailPage"
 import { TicketListPage } from "./components/pm/TicketListPage"
 import { SpecListPage } from "./components/pm/SpecListPage"
+import { DesignListPage } from "./components/pm/DesignListPage"
+import { DesignDetailPage } from "./components/pm/DesignDetailPage"
 import { SessionsModePage } from "./components/modes/SessionsModePage"
 import { CodeModePage } from "./components/modes/CodeModePage"
 import { DesignModePage } from "./components/modes/DesignModePage"
@@ -115,6 +117,8 @@ export default function App() {
           <Route path="tickets/:ticketId" element={<TicketDetailPage />} />
           <Route path="specs" element={<SpecListPage />} />
           <Route path="specs/:specId" element={<SpecDetailPage />} />
+          <Route path="designs" element={<DesignListPage />} />
+          <Route path="designs/:designId" element={<DesignDetailPage />} />
         </Route>
       </Route>
 

@@ -81,6 +81,20 @@ function PlanSidebar({ projectId }: { projectId: string }) {
           All specs
         </NavLink>
       </div>
+      <div className={styles.modeSidebarSection}>
+        <div className={styles.modeSidebarSectionTitle}>Designs</div>
+        <NavLink
+          className={({ isActive }) =>
+            isActive
+              ? `${styles.modeSidebarLink} ${styles.modeSidebarLinkActive}`
+              : styles.modeSidebarLink
+          }
+          to={`/projects/${projectId}/plan/designs`}
+          data-sidebar-action
+        >
+          All designs
+        </NavLink>
+      </div>
     </div>
   )
 }
