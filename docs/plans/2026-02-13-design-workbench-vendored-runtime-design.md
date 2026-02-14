@@ -494,3 +494,48 @@ Mitigation: pixel diff provides objective baseline; LLM vision is additive judgm
 - Design implementation skill self-corrects using pixel diff + LLM vision comparison.
 - Screenshots stored in Convex file storage and viewable in tina-web.
 - Runtime refresh is manual, non-destructive to project content, and reviewable in normal PR flow.
+
+## Architectural Context
+
+**Patterns to follow:**
+
+- Convex table CRUD: Follow `convex/designs.ts` pattern (createDesign, getDesign, listDesigns, updateDesign, transitionDesign). New `specs.ts` keeps same structure, new `designs.ts` and `designVariations.ts` follow same mutation/query shape.
+- tina-web list/detail pages: Follow `tina-web/src/components/pm/DesignListPage.tsx` + `DesignDetailPage.tsx` pattern — table with row-click navigation, status badges, markdown rendering, comment timeline.
+- Query definitions: Add to `tina-web/src/services/data/queryDefs.ts:129-172` following existing DesignListQuery/DesignDetailQuery shape with Effect schema validation.
+- `useTypedQuery` hook: `tina-web/src/hooks/useTypedQuery.ts` — all PM queries use this wrapper around Convex `useQuery`.
+- PM routing: Nest under `<Route path="projects/:projectId/plan">` in `tina-web/src/App.tsx:111-119`.
+- Form dialogs: Use `tina-web/src/components/FormDialog.tsx` for create/edit modals.
+- Daemon file watching: Follow `tina-daemon/src/watcher.rs:64-85` event classification pattern. Add new `WatchEvent::Design` variant.
+- Daemon sync functions: Follow `tina-daemon/src/sync.rs:905-972` (plan sync) pattern for design metadata sync. Same `Arc<Mutex<TinaConvexClient>>` concurrency model.
+- Worktree discovery: Daemon already discovers worktree paths via `sync.rs:978-1033` querying Convex for active orchestrations. Design watching hooks into same worktree list.
+- Design set registry: `designs/src/designSets/registry.ts:1-56` uses `import.meta.glob()` for dynamic discovery. Vendored runtime should use same pattern adapted for nested design/variation directories.
+
+**Code to reuse:**
+
+- `tina-data/src/convex_client.rs` — extend with design/variation record types and mutations (follow `CommitRecord`/`PlanRecord` pattern at lines 207-222 in `tina-data/src/types.rs`).
+- `tina-data/src/convex_client.rs:234-267` — arg builder functions for Convex mutations. Add `design_to_args()`, `variation_to_args()`.
+- `tina-web/src/components/ui/status-badge.tsx` — reuse for design status (exploring/locked/archived) and variation status (exploring/selected/rejected).
+- `tina-web/src/components/MarkdownRenderer.tsx` — reuse for rendering HANDOFF.md/DECISIONS.md content.
+- `tina-web/src/lib/navigation.ts` — extend `NAV_MODES` and `buildModePath` for new design routes.
+- `designs/src/designSets/registry.ts` — starting point for vendored runtime's design/variation discovery.
+- `designs/src/pages/DesignSetPage.tsx:1-80` — lazy-loading pattern for variation components.
+- `designs/src/components/PageFrame.tsx` — shell component for runtime pages.
+
+**Anti-patterns:**
+
+- Don't store screenshot binary data as base64 strings in Convex document fields. Use Convex file storage (`storage.generateUploadUrl` + `storage.getUrl`) — this is new to the codebase and will need to be added to `tina-data` Rust client.
+- Don't add plan content to the `designs` table. Plans and designs are separate top-level concepts — plans are per-phase implementation details, designs are visual explorations.
+- Don't hardcode tina-web paths in the vendored runtime. The current `designs/` app is already correctly generic — maintain this separation.
+
+**Integration points:**
+
+- **Phase 1 (rename) entry**: `convex/schema.ts:260-278` (designs table), `convex/designs.ts` (all functions), `tina-web/src/App.tsx:117` (design routes), `tina-web/src/components/pm/DesignListPage.tsx`, `tina-web/src/components/pm/DesignDetailPage.tsx`, `tina-web/src/services/data/queryDefs.ts:129-144`, `tina-web/src/schemas/design.ts`.
+- **Phase 1 also touches**: `convex/schema.ts:22-28` (orchestrations.designId → specId), `convex/schema.ts:280-296` (tickets.designId → specId), `convex/schema.ts:297-309` (workComments targetType), `convex/schema.ts:310-316` (projectCounters counterType), `tina-web/src/components/pm/TicketDetailPage.tsx` (design link references), `tina-web/src/components/pm/LaunchOrchestrationPage.tsx` (design selection for orchestration launch).
+- **Phase 2 connects to**: `tina-daemon/src/watcher.rs` (new event type), `tina-daemon/src/sync.rs` (new sync function), `tina-daemon/src/main.rs:97-116` (plan dir watching pattern to replicate for design dirs), `tina-data/src/convex_client.rs` (new mutation methods), `tina-data/src/types.rs` (new record types).
+- **Phase 3 connects to**: `designs/` directory (extraction source), `ui/designs/runtime/` (new target).
+- **Convex file storage (new)**: Will need `generateUploadUrl` mutation in Convex, upload logic in tina-daemon Rust client, `getUrl` query in tina-web for rendering screenshots. No existing pattern in codebase — this is greenfield.
+
+**Risks identified during review:**
+
+- The `designs` → `specs` rename in Phase 1 is a wide-surface refactor touching Convex schema, functions, tina-web routes/components/schemas/queries, daemon code, and possibly tina-session. All existing Convex data in the `designs` table will need migration. Convex table renames are not atomic — this will likely require creating a new `specs` table, migrating data, then dropping old `designs` table. Plan for a data migration step.
+- Convex file storage for screenshots has no existing pattern in the Rust client (`tina-data`). The Convex Rust SDK's file upload API may have different ergonomics than the JS SDK. Spike this during Phase 2 before committing to the full sync flow.
