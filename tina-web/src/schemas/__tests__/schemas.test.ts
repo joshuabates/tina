@@ -11,6 +11,8 @@ import { ReviewThread } from "../reviewThread"
 import { ReviewGate } from "../reviewGate"
 import { ReviewCheck } from "../reviewCheck"
 import { TeamMember } from "../team"
+import { DesignSummary } from "../design"
+import { DesignVariation } from "../designVariation"
 
 describe("OrchestrationSummary schema", () => {
   it("decodes a valid orchestration payload", () => {
@@ -511,6 +513,77 @@ describe("ReviewCheck schema", () => {
   it("rejects a check missing required fields", () => {
     const raw = { _id: "check1", _creationTime: 1700000000000 }
     expect(() => Schema.decodeUnknownSync(ReviewCheck)(raw)).toThrow()
+  })
+})
+
+describe("DesignSummary schema", () => {
+  it("decodes a valid design payload", () => {
+    const raw = {
+      _id: "design1",
+      _creationTime: 1700000000000,
+      projectId: "proj1",
+      designKey: "PROJ-DES1",
+      title: "Login Page Design",
+      prompt: "Design a login page",
+      status: "exploring",
+      createdAt: "2026-02-09T00:00:00Z",
+      updatedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(DesignSummary)(raw)
+    expect(result.designKey).toBe("PROJ-DES1")
+    expect(result.title).toBe("Login Page Design")
+    expect(result.prompt).toBe("Design a login page")
+    expect(result.status).toBe("exploring")
+  })
+
+  it("rejects a design missing required fields", () => {
+    const raw = { _id: "design1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(DesignSummary)(raw)).toThrow()
+  })
+})
+
+describe("DesignVariation schema", () => {
+  it("decodes a valid variation payload", () => {
+    const raw = {
+      _id: "var1",
+      _creationTime: 1700000000000,
+      designId: "design1",
+      slug: "v1",
+      title: "Minimal Version",
+      status: "exploring",
+      createdAt: "2026-02-09T00:00:00Z",
+      updatedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(DesignVariation)(raw)
+    expect(result.slug).toBe("v1")
+    expect(result.title).toBe("Minimal Version")
+    expect(result.status).toBe("exploring")
+    expect(Option.isNone(result.screenshotStorageIds)).toBe(true)
+  })
+
+  it("decodes a variation with screenshotStorageIds present", () => {
+    const raw = {
+      _id: "var2",
+      _creationTime: 1700000000000,
+      designId: "design1",
+      slug: "v2",
+      title: "Full Version",
+      status: "selected",
+      screenshotStorageIds: ["storage1", "storage2"],
+      createdAt: "2026-02-09T00:00:00Z",
+      updatedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(DesignVariation)(raw)
+    expect(Option.isSome(result.screenshotStorageIds)).toBe(true)
+    expect(Option.getOrThrow(result.screenshotStorageIds)).toEqual(["storage1", "storage2"])
+  })
+
+  it("rejects a variation missing required fields", () => {
+    const raw = { _id: "var1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(DesignVariation)(raw)).toThrow()
   })
 })
 

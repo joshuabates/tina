@@ -1,5 +1,7 @@
 import type {
   SpecSummary,
+  DesignSummary,
+  DesignVariation,
   OrchestrationEvent,
   OrchestrationSummary,
   Phase,
@@ -207,6 +209,40 @@ export function buildReviewGate(
     decidedBy: none<string>(),
     decidedAt: none<string>(),
     summary: "Awaiting review",
+    ...overrides,
+  }
+}
+
+export function buildDesignSummary(
+  overrides: Partial<DesignSummary> = {},
+): DesignSummary {
+  return {
+    _id: "design1",
+    _creationTime: 1234567890,
+    projectId: "p1",
+    designKey: "ALPHA-DES1",
+    title: "Login Page Design",
+    prompt: "Design a login page with OAuth support",
+    status: "exploring",
+    createdAt: "2024-01-01T10:00:00Z",
+    updatedAt: "2024-01-01T12:00:00Z",
+    ...overrides,
+  }
+}
+
+export function buildDesignVariation(
+  overrides: Partial<DesignVariation> = {},
+): DesignVariation {
+  return {
+    _id: "variation1",
+    _creationTime: 1234567890,
+    designId: "design1",
+    slug: "v1",
+    title: "Minimal Login",
+    status: "exploring",
+    screenshotStorageIds: none<string[]>(),
+    createdAt: "2024-01-01T10:00:00Z",
+    updatedAt: "2024-01-01T12:00:00Z",
     ...overrides,
   }
 }
