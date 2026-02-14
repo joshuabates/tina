@@ -41,6 +41,10 @@ interface TransitionAction {
   primary?: boolean
 }
 
+const DESIGN_WORKBENCH_BASE_URL =
+  (import.meta.env.VITE_DESIGN_WORKBENCH_URL as string | undefined)?.trim()
+  || "http://localhost:5200"
+
 function getTransitionActions(status: string): TransitionAction[] {
   switch (status) {
     case "exploring":
@@ -55,6 +59,14 @@ function getTransitionActions(status: string): TransitionAction[] {
     default:
       return []
   }
+}
+
+function slugFromTitle(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
 }
 
 export function DesignDetailPage() {
@@ -116,6 +128,7 @@ export function DesignDetailPage() {
     variationsResult.status === "success" ? variationsResult.data : []
   const linkedSpecs =
     linkedSpecsResult.status === "success" ? linkedSpecsResult.data : []
+  const designSlug = slugFromTitle(design.title)
 
   const handleTransition = async (newStatus: string) => {
     setTransitioning(true)
@@ -187,12 +200,30 @@ export function DesignDetailPage() {
         ) : (
           variations.map((variation) => (
             <div key={variation._id} className={styles.variationCard}>
-              <span className={styles.variationSlug}>{variation.slug}</span>
-              <span className={styles.variationTitle}>{variation.title}</span>
-              <StatusBadge
-                status={toStatusBadgeStatus(variation.status)}
-                label={variationStatusLabel(variation.status)}
-              />
+              <div className={styles.variationHeader}>
+                <span className={styles.variationSlug}>{variation.slug}</span>
+                <span className={styles.variationTitle}>{variation.title}</span>
+                <StatusBadge
+                  status={toStatusBadgeStatus(variation.status)}
+                  label={variationStatusLabel(variation.status)}
+                />
+              </div>
+              <div className={styles.variationEmbed}>
+                <iframe
+                  title={`${variation.title} wireframe`}
+                  src={`${DESIGN_WORKBENCH_BASE_URL}/render/${encodeURIComponent(designSlug)}/${encodeURIComponent(variation.slug)}`}
+                  className={styles.variationIframe}
+                  loading="lazy"
+                />
+              </div>
+              <a
+                href={`${DESIGN_WORKBENCH_BASE_URL}/designs/${encodeURIComponent(designSlug)}/${encodeURIComponent(variation.slug)}`}
+                target="_blank"
+                rel="noreferrer"
+                className={styles.variationLink}
+              >
+                Open in workbench
+              </a>
             </div>
           ))
         )}

@@ -193,6 +193,25 @@ describe("DesignDetailPage", () => {
     expect(screen.getByText("Full Featured Login")).toBeInTheDocument()
   })
 
+  it("renders embedded wireframe iframe for each variation", () => {
+    renderApp("/projects/p1/design/design1", {
+      ...defaultStates,
+      "designVariations.list": querySuccess([
+        buildDesignVariation({
+          _id: "v1",
+          slug: "v1",
+          title: "Minimal Login",
+        }),
+      ]),
+    })
+
+    const iframe = screen.getByTitle("Minimal Login wireframe")
+    expect(iframe).toHaveAttribute(
+      "src",
+      expect.stringContaining("/render/login-page-design/v1"),
+    )
+  })
+
   it("renders comment timeline", () => {
     renderApp("/projects/p1/design/design1")
 
