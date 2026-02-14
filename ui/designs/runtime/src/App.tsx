@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { HomePage } from "./pages/HomePage.tsx";
 import { DesignPage } from "./pages/DesignPage.tsx";
+import { RenderPage } from "./pages/RenderPage.tsx";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           path="/designs/:designSlug/:variationSlug"
           element={<DesignPage />}
         />
+        <Route path="/render/:designSlug/:variationSlug" element={<RenderPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
