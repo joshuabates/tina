@@ -135,10 +135,7 @@ function DesignSidebar() {
   return (
     <div className={styles.modeSidebarContent}>
       <div className={styles.modeSidebarHeader}>Design</div>
-      <p className={styles.modeSidebarHint}>Create or open a design workspace for this project.</p>
-      <button type="button" className={styles.modeSidebarButton} data-sidebar-action>
-        Create/Open design
-      </button>
+      <p className={styles.modeSidebarHint}>Browse and manage designs for this project.</p>
     </div>
   )
 }

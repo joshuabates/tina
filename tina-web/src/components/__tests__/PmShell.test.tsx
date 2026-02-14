@@ -66,15 +66,15 @@ describe("PmShell - unified workspace", () => {
     ).not.toBeInTheDocument()
   })
 
-  it("renders tickets/designs toggle in main content", () => {
+  it("renders tickets/specs toggle in main content", () => {
     renderApp("/projects/p1/plan")
 
     expect(screen.getByRole("navigation", { name: /plan list view toggle/i })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Tickets" })).toBeInTheDocument()
-    expect(screen.getByRole("link", { name: "Designs" })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Specs" })).toBeInTheDocument()
     expect(screen.queryByRole("tablist", { name: /plan workspace tabs/i })).not.toBeInTheDocument()
     expect(screen.queryByRole("tab", { name: /tickets/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole("tab", { name: /designs/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("tab", { name: /specs/i })).not.toBeInTheDocument()
   })
 
   it("renders ticket list content on tickets route", () => {

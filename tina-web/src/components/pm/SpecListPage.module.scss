@@ -12,10 +12,17 @@
   margin-bottom: 12px;
 }
 
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .title {
   font-size: 14px;
   font-weight: 600;
   color: $text-primary;
+  margin: 0;
 }
 
 .table {

@@ -247,18 +247,18 @@ describe("TicketListPage", () => {
     expect(toggle).toBeInTheDocument()
 
     const ticketsLink = within(toggle).getByRole("link", { name: "Tickets" })
-    const designsLink = within(toggle).getByRole("link", { name: "Designs" })
+    const specsLink = within(toggle).getByRole("link", { name: "Specs" })
 
     expect(ticketsLink).toHaveAttribute("aria-current", "page")
-    expect(designsLink).not.toHaveAttribute("aria-current")
+    expect(specsLink).not.toHaveAttribute("aria-current")
   })
 
-  it("navigates to designs list when toggle is clicked", async () => {
+  it("navigates to specs list when toggle is clicked", async () => {
     const user = userEvent.setup()
     renderApp("/projects/p1/plan/tickets")
 
-    await user.click(screen.getByRole("link", { name: "Designs" }))
-    expect(screen.getByTestId("design-list-page")).toBeInTheDocument()
+    await user.click(screen.getByRole("link", { name: "Specs" }))
+    expect(screen.getByTestId("spec-list-page")).toBeInTheDocument()
   })
 
   describe("create form modal", () => {

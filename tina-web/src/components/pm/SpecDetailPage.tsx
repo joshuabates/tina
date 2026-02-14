@@ -231,7 +231,7 @@ export function SpecDetailPage() {
             {linkedDesignsResult.data.map((design) => (
               <li key={design._id} className={styles.linkedItem}>
                 <Link
-                  to={`/projects/${routeProjectId ?? spec.projectId}/plan/designs/${design._id}`}
+                  to={`/projects/${routeProjectId ?? spec.projectId}/design/${design._id}`}
                 >
                   <span className={styles.linkedKey}>{design.designKey}</span>
                   {design.title}

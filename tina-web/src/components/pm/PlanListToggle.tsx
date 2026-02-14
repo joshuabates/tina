@@ -19,14 +19,14 @@ export function PlanListToggle({ projectId }: PlanListToggleProps) {
         Tickets
       </NavLink>
       <NavLink
-        to={`/projects/${projectId}/plan/designs`}
+        to={`/projects/${projectId}/plan/specs`}
         className={({ isActive }) =>
           isActive
             ? `${styles.item} ${styles.itemActive}`
             : styles.item
         }
       >
-        Designs
+        Specs
       </NavLink>
     </nav>
   )

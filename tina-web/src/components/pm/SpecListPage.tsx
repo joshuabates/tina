@@ -7,6 +7,7 @@ import { formatRelativeTimeShort } from "@/lib/time"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus, statusLabel } from "@/components/ui/status-styles"
 import { CreateSpecModal } from "./CreateSpecModal"
+import { PlanListToggle } from "./PlanListToggle"
 import type { SpecSummary } from "@/schemas"
 import styles from "./SpecListPage.module.scss"
 
@@ -33,7 +34,10 @@ export function SpecListPage() {
     return (
       <div data-testid="spec-list-page" className={styles.specList}>
         <div className={styles.header}>
-          <h2 className={styles.title}>Specs</h2>
+          <div className={styles.headerLeft}>
+            <PlanListToggle projectId={projectId} />
+            <h2 className={styles.title}>Specs</h2>
+          </div>
         </div>
         <div data-testid="spec-list-loading" className={styles.loading}>
           <div className={styles.skeletonRow} />
@@ -67,7 +71,10 @@ export function SpecListPage() {
   return (
     <div data-testid="spec-list-page" className={styles.specList}>
       <div className={styles.header}>
-        <h2 className={styles.title}>Specs</h2>
+        <div className={styles.headerLeft}>
+          <PlanListToggle projectId={projectId} />
+          <h2 className={styles.title}>Specs</h2>
+        </div>
         <button
           className={styles.createButton}
           onClick={() => setShowCreateForm(!showCreateForm)}

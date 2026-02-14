@@ -67,7 +67,7 @@ beforeEach(() => {
 
 describe("DesignDetailPage", () => {
   it("renders loading state", () => {
-    renderApp("/projects/p1/plan/designs/design1", {
+    renderApp("/projects/p1/design/design1", {
       ...defaultStates,
       "designs.get": queryLoading(),
     })
@@ -76,7 +76,7 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders not found when design is null", () => {
-    renderApp("/projects/p1/plan/designs/design1", {
+    renderApp("/projects/p1/design/design1", {
       ...defaultStates,
       "designs.get": querySuccess(null),
     })
@@ -85,32 +85,32 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders design key and title", () => {
-    renderApp("/projects/p1/plan/designs/design1")
+    renderApp("/projects/p1/design/design1")
 
     expect(screen.getByText("ALPHA-DES1")).toBeInTheDocument()
     expect(screen.getByText("Login Page Design")).toBeInTheDocument()
   })
 
   it("renders status badge", () => {
-    renderApp("/projects/p1/plan/designs/design1")
+    renderApp("/projects/p1/design/design1")
 
     expect(screen.getByText("Exploring")).toBeInTheDocument()
   })
 
   it("renders prompt text", () => {
-    renderApp("/projects/p1/plan/designs/design1")
+    renderApp("/projects/p1/design/design1")
 
     expect(screen.getByText("Design a login page with OAuth support")).toBeInTheDocument()
   })
 
   it("renders Lock button when status is exploring", () => {
-    renderApp("/projects/p1/plan/designs/design1")
+    renderApp("/projects/p1/design/design1")
 
     expect(screen.getByRole("button", { name: /lock/i })).toBeInTheDocument()
   })
 
   it("renders Archive and Unlock buttons when status is locked", () => {
-    renderApp("/projects/p1/plan/designs/design1", {
+    renderApp("/projects/p1/design/design1", {
       ...defaultStates,
       "designs.get": querySuccess(buildDesignSummary({ status: "locked" })),
     })
@@ -120,7 +120,7 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders Reopen button when status is archived", () => {
-    renderApp("/projects/p1/plan/designs/design1", {
+    renderApp("/projects/p1/design/design1", {
       ...defaultStates,
       "designs.get": querySuccess(buildDesignSummary({ status: "archived" })),
     })
@@ -130,7 +130,7 @@ describe("DesignDetailPage", () => {
 
   it("calls transitionDesign when transition button is clicked", async () => {
     const user = userEvent.setup()
-    renderApp("/projects/p1/plan/designs/design1")
+    renderApp("/projects/p1/design/design1")
 
     await user.click(screen.getByRole("button", { name: /lock/i }))
 
@@ -143,7 +143,7 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders linked specs when present", () => {
-    renderApp("/projects/p1/plan/designs/design1", {
+    renderApp("/projects/p1/design/design1", {
       ...defaultStates,
       "specDesigns.specsForDesign": querySuccess([
         buildSpecSummary({ _id: "spec1", specKey: "ALPHA-D1", title: "Auth Spec" }),
@@ -156,20 +156,20 @@ describe("DesignDetailPage", () => {
   })
 
   it("does not render linked specs section when empty", () => {
-    renderApp("/projects/p1/plan/designs/design1")
+    renderApp("/projects/p1/design/design1")
 
     expect(screen.queryByTestId("linked-specs-section")).not.toBeInTheDocument()
   })
 
   it("renders variations section", () => {
-    renderApp("/projects/p1/plan/designs/design1")
+    renderApp("/projects/p1/design/design1")
 
     expect(screen.getByTestId("variations-section")).toBeInTheDocument()
     expect(screen.getByText(/no variations/i)).toBeInTheDocument()
   })
 
   it("renders variations list when variations exist", () => {
-    renderApp("/projects/p1/plan/designs/design1", {
+    renderApp("/projects/p1/design/design1", {
       ...defaultStates,
       "designVariations.list": querySuccess([
         buildDesignVariation({
@@ -194,7 +194,7 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders comment timeline", () => {
-    renderApp("/projects/p1/plan/designs/design1")
+    renderApp("/projects/p1/design/design1")
 
     expect(screen.getByText(/no comments/i)).toBeInTheDocument()
   })

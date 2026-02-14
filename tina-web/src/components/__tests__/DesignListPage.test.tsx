@@ -81,7 +81,7 @@ beforeEach(() => {
 
 describe("DesignListPage", () => {
   it("renders loading state when query is loading", () => {
-    renderApp("/projects/p1/plan/designs", {
+    renderApp("/projects/p1/design", {
       ...defaultStates,
       "designs.list": queryLoading(),
     })
@@ -91,7 +91,7 @@ describe("DesignListPage", () => {
   })
 
   it("renders empty state when no designs exist", () => {
-    renderApp("/projects/p1/plan/designs", {
+    renderApp("/projects/p1/design", {
       ...defaultStates,
       "designs.list": querySuccess([]),
     })
@@ -100,7 +100,7 @@ describe("DesignListPage", () => {
   })
 
   it("renders table with design rows when designs exist", () => {
-    renderApp("/projects/p1/plan/designs")
+    renderApp("/projects/p1/design")
 
     const table = screen.getByRole("table")
     expect(table).toBeInTheDocument()
@@ -110,7 +110,7 @@ describe("DesignListPage", () => {
   })
 
   it("displays design key and title", () => {
-    renderApp("/projects/p1/plan/designs")
+    renderApp("/projects/p1/design")
 
     expect(screen.getByText("ALPHA-DES1")).toBeInTheDocument()
     expect(screen.getByText("Login Page Design")).toBeInTheDocument()
@@ -119,14 +119,14 @@ describe("DesignListPage", () => {
   })
 
   it("renders status badges for each design", () => {
-    renderApp("/projects/p1/plan/designs")
+    renderApp("/projects/p1/design")
     expect(screen.getByText("Exploring")).toBeInTheDocument()
     expect(screen.getByText("Locked")).toBeInTheDocument()
   })
 
   it("clicking a design row navigates to detail page", async () => {
     const user = userEvent.setup()
-    renderApp("/projects/p1/plan/designs")
+    renderApp("/projects/p1/design")
 
     const rows = screen.getAllByRole("row")
     await user.click(rows[1])
@@ -135,40 +135,19 @@ describe("DesignListPage", () => {
   })
 
   it("shows create design button", () => {
-    renderApp("/projects/p1/plan/designs")
+    renderApp("/projects/p1/design")
     expect(screen.getByRole("button", { name: /create design/i })).toBeInTheDocument()
   })
 
-  it("does not render Designs subheading", () => {
-    renderApp("/projects/p1/plan/designs")
-    expect(screen.queryByRole("heading", { name: "Designs" })).not.toBeInTheDocument()
-  })
-
-  it("renders list-view toggle with Designs active", () => {
-    renderApp("/projects/p1/plan/designs")
-
-    const toggle = screen.getByRole("navigation", { name: /plan list view toggle/i })
-    expect(toggle).toBeInTheDocument()
-
-    const ticketsLink = within(toggle).getByRole("link", { name: "Tickets" })
-    const designsLink = within(toggle).getByRole("link", { name: "Designs" })
-
-    expect(designsLink).toHaveAttribute("aria-current", "page")
-    expect(ticketsLink).not.toHaveAttribute("aria-current")
-  })
-
-  it("navigates to tickets list when toggle is clicked", async () => {
-    const user = userEvent.setup()
-    renderApp("/projects/p1/plan/designs")
-
-    await user.click(screen.getByRole("link", { name: "Tickets" }))
-    expect(screen.getByTestId("ticket-list-page")).toBeInTheDocument()
+  it("renders Designs page heading", () => {
+    renderApp("/projects/p1/design")
+    expect(screen.getByRole("heading", { name: "Designs" })).toBeInTheDocument()
   })
 
   describe("create form modal", () => {
     it("opens modal when Create Design button is clicked", async () => {
       const user = userEvent.setup()
-      renderApp("/projects/p1/plan/designs")
+      renderApp("/projects/p1/design")
 
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
@@ -179,7 +158,7 @@ describe("DesignListPage", () => {
 
     it("shows title and prompt inputs in modal", async () => {
       const user = userEvent.setup()
-      renderApp("/projects/p1/plan/designs")
+      renderApp("/projects/p1/design")
 
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
@@ -190,7 +169,7 @@ describe("DesignListPage", () => {
 
     it("submit button disabled when title is empty", async () => {
       const user = userEvent.setup()
-      renderApp("/projects/p1/plan/designs")
+      renderApp("/projects/p1/design")
 
       await user.click(screen.getByRole("button", { name: /create design/i }))
 
@@ -200,7 +179,7 @@ describe("DesignListPage", () => {
 
     it("closes modal on cancel", async () => {
       const user = userEvent.setup()
-      renderApp("/projects/p1/plan/designs")
+      renderApp("/projects/p1/design")
 
       await user.click(screen.getByRole("button", { name: /create design/i }))
       expect(screen.getByRole("dialog")).toBeInTheDocument()
