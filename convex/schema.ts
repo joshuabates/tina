@@ -20,6 +20,11 @@ export default defineSchema({
 
   orchestrations: defineTable({
     ...orchestrationCoreTableFields,
+    // Legacy orchestration fields retained for backwards-compatible validation.
+    specDocPath: v.optional(v.string()),
+    designDocPath: v.optional(v.string()),
+    specOnly: v.optional(v.boolean()),
+    designOnly: v.optional(v.boolean()),
     projectId: v.optional(v.id("projects")),
     specId: v.optional(v.id("specs")),
     designId: v.optional(v.id("designs")),
@@ -288,10 +293,20 @@ export default defineSchema({
     projectId: v.id("projects"),
     designKey: v.string(),
     title: v.string(),
-    prompt: v.string(), // the question being explored
+    // Legacy design rows used markdown-only payloads before prompt existed.
+    markdown: v.optional(v.string()),
+    prompt: v.optional(v.string()), // the question being explored
     status: v.string(), // exploring | locked | archived
     createdAt: v.string(),
     updatedAt: v.string(),
+    // Legacy planning fields from pre-workbench payloads.
+    archivedAt: v.optional(v.string()),
+    complexityPreset: v.optional(v.string()),
+    requiredMarkers: v.optional(v.array(v.string())),
+    completedMarkers: v.optional(v.array(v.string())),
+    phaseCount: v.optional(v.number()),
+    phaseStructureValid: v.optional(v.boolean()),
+    validationUpdatedAt: v.optional(v.string()),
   })
     .index("by_project", ["projectId"])
     .index("by_project_status", ["projectId", "status"])

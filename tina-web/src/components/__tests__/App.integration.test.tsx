@@ -171,6 +171,7 @@ function expectPhaseTimelineFor(featurePhases: Array<{ phaseNumber: string }>, m
 
 beforeEach(() => {
   vi.clearAllMocks()
+  window.localStorage.clear()
 })
 
 describe("App - runtime-backed URL and selection flow", () => {
@@ -218,6 +219,29 @@ describe("App - runtime-backed URL and selection flow", () => {
     expectFeaturePage("my-feature", "tina/my-feature")
     expect(screen.queryByText(/no phase selected/i)).not.toBeInTheDocument()
     expect(screen.getByText(/no tasks for this phase/i)).toBeInTheDocument()
+  })
+
+  it("prefers non-temporary project when resolving root route", async () => {
+    const projects = [
+      buildProjectSummary({
+        _id: "tmp1",
+        name: ".tmpA1B2C3",
+        repoPath: "/private/var/folders/yy/tmp/project",
+        orchestrationCount: 0,
+      }),
+      buildProjectSummary({
+        _id: "p-stable",
+        name: "tina",
+        repoPath: "/Users/joshua/Projects/tina",
+        orchestrationCount: 1,
+      }),
+    ]
+
+    renderApp("/", { projects })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("project-picker")).toHaveValue("p-stable")
+    })
   })
 
   it("switching orchestrations auto-selects phase of new orchestration", async () => {

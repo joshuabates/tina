@@ -160,6 +160,41 @@ describe("specDesigns", () => {
 
       expect(designs).toHaveLength(0);
     });
+
+    test("ignores legacy spec-era linked designs", async () => {
+      const t = convexTest(schema, modules);
+      const projectId = await createProject(t, {
+        name: "LEGACY",
+        repoPath: "/Users/joshua/Projects/legacy",
+      });
+      const specId = await createSpec(t, { projectId });
+      const now = new Date().toISOString();
+
+      const legacyDesignId = await t.run(async (ctx) => {
+        return await ctx.db.insert("designs", {
+          projectId: projectId as any,
+          designKey: "LEGACY-D1",
+          title: "Legacy Design",
+          markdown: "# Legacy prompt",
+          status: "draft",
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+
+      await t.run(async (ctx) => {
+        await ctx.db.insert("specDesigns", {
+          specId: specId as any,
+          designId: legacyDesignId as any,
+        });
+      });
+
+      const designs = await t.query(api.specDesigns.listDesignsForSpec, {
+        specId: specId as any,
+      });
+
+      expect(designs).toEqual([]);
+    });
   });
 
   describe("listSpecsForDesign", () => {

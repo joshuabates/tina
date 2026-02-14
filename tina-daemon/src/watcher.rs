@@ -11,6 +11,7 @@ use tracing::info;
 #[derive(Debug, Clone)]
 pub struct WorktreeInfo {
     pub orchestration_id: String,
+    pub project_id: Option<String>,
     pub feature: String,
     pub worktree_path: PathBuf,
     pub branch: String,

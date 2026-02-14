@@ -36,6 +36,23 @@ function NoProjectsState() {
   )
 }
 
+function isTemporaryProject(project: ProjectSummary): boolean {
+  if (project.name.startsWith(".tmp")) return true
+  if (project.repoPath.startsWith("/tmp/")) return true
+  return project.repoPath.includes("/private/var/folders/")
+}
+
+function selectInitialProject(
+  projects: ReadonlyArray<ProjectSummary>,
+  lastProjectId: string | null,
+): ProjectSummary {
+  const lastSelected = projects.find((project) => project._id === lastProjectId)
+  if (lastSelected) return lastSelected
+
+  const firstStableProject = projects.find((project) => !isTemporaryProject(project))
+  return firstStableProject ?? projects[0]!
+}
+
 function RootResolver() {
   const projectsResult = useTypedQuery(ProjectListQuery, {})
 
@@ -57,9 +74,7 @@ function RootResolver() {
   }
 
   const lastProjectId = getLastProjectId()
-  const selectedProject =
-    projectsResult.data.find((project: ProjectSummary) => project._id === lastProjectId) ??
-    projectsResult.data[0]
+  const selectedProject = selectInitialProject(projectsResult.data, lastProjectId)
 
   const initialMode = getLastModeForProject(selectedProject._id) ?? DEFAULT_MODE
   const initialTarget = resolveProjectModeTarget(selectedProject._id, initialMode)

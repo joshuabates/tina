@@ -83,6 +83,30 @@ describe("designs", () => {
       const design = await t.query(api.designs.getDesign, { designId: fakeId as any });
       expect(design).toBeNull();
     });
+
+    test("hides legacy spec-era rows", async () => {
+      const t = convexTest(schema, modules);
+      const projectId = await createProject(t, {
+        name: "LEGACY",
+        repoPath: "/Users/joshua/Projects/legacy",
+      });
+      const now = new Date().toISOString();
+
+      const designId = await t.run(async (ctx) => {
+        return await ctx.db.insert("designs", {
+          projectId: projectId as any,
+          designKey: "LEGACY-D1",
+          title: "Legacy Design",
+          markdown: "# Legacy design markdown",
+          status: "draft",
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+
+      const design = await t.query(api.designs.getDesign, { designId });
+      expect(design).toBeNull();
+    });
   });
 
   describe("getDesignByKey", () => {
@@ -184,6 +208,30 @@ describe("designs", () => {
 
       expect(locked).toHaveLength(1);
       expect(locked[0]?.title).toBe("Locked design");
+    });
+
+    test("excludes legacy rows from list query", async () => {
+      const t = convexTest(schema, modules);
+      const projectId = await createProject(t, {
+        name: "LEGACY",
+        repoPath: "/Users/joshua/Projects/legacy",
+      });
+      const now = new Date().toISOString();
+
+      await t.run(async (ctx) => {
+        return await ctx.db.insert("designs", {
+          projectId: projectId as any,
+          designKey: "LEGACY-D1",
+          title: "Legacy Design",
+          markdown: "# Legacy design markdown",
+          status: "draft",
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+
+      const designs = await t.query(api.designs.listDesigns, { projectId });
+      expect(designs).toEqual([]);
     });
   });
 

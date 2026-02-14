@@ -14,6 +14,11 @@ const STATUS_VALUES = [
   "in_review",
   "approved",
   "archived",
+  // Design statuses
+  "exploring",
+  "locked",
+  "selected",
+  "rejected",
   // Ticket statuses (todo, canceled — others already present above)
   "todo",
   "canceled",
@@ -132,6 +137,35 @@ const statusStyleMap: Record<StatusBadgeStatus, StatusStyleTokens> = {
   },
   archived: {
     label: "Archived",
+    textClass: "text-muted-foreground",
+    iconBgClass: "bg-card",
+    borderClass: "border-l-muted",
+    badgeClass: "text-muted-foreground border-muted bg-transparent",
+  },
+  // Design statuses
+  exploring: {
+    label: "Exploring",
+    textClass: "text-status-executing",
+    iconBgClass: "bg-primary phase-glow",
+    borderClass: "border-l-status-executing",
+    badgeClass: "text-status-executing border-status-executing/30 bg-status-executing/12",
+  },
+  locked: {
+    label: "Locked",
+    textClass: "text-status-complete",
+    iconBgClass: "bg-status-complete",
+    borderClass: "border-l-status-complete",
+    badgeClass: "text-status-complete border-status-complete/30 bg-status-complete/8",
+  },
+  selected: {
+    label: "Selected",
+    textClass: "text-status-complete",
+    iconBgClass: "bg-status-complete",
+    borderClass: "border-l-status-complete",
+    badgeClass: "text-status-complete border-status-complete/30 bg-status-complete/8",
+  },
+  rejected: {
+    label: "Rejected",
     textClass: "text-muted-foreground",
     iconBgClass: "bg-card",
     borderClass: "border-l-muted",

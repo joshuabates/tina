@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -982,15 +982,50 @@ pub async fn sync_plan(
     Ok(())
 }
 
-/// Extract a title from a `meta.ts` file using regex.
+/// Extract a string field from a `meta.ts` file using regex.
 ///
-/// Looks for patterns like `title: "My Title"` or `title: 'My Title'`.
-pub fn extract_title_from_meta(meta_path: &Path) -> Option<String> {
+/// Looks for patterns like `field: "Value"` or `field: 'Value'`.
+fn extract_string_field_from_meta(meta_path: &Path, field: &str) -> Option<String> {
     let content = fs::read_to_string(meta_path).ok()?;
-    let re = Regex::new(r#"title\s*:\s*["']([^"']+)["']"#).ok()?;
+    let pattern = format!(r#"{}\s*:\s*["']([^"']+)["']"#, regex::escape(field));
+    let re = Regex::new(&pattern).ok()?;
     re.captures(&content)
         .and_then(|caps| caps.get(1))
         .map(|m| m.as_str().to_string())
+}
+
+/// Extract a title from a `meta.ts` file.
+pub fn extract_title_from_meta(meta_path: &Path) -> Option<String> {
+    extract_string_field_from_meta(meta_path, "title")
+}
+
+/// Extract a prompt from a design-level `meta.ts` file.
+pub fn extract_prompt_from_meta(meta_path: &Path) -> Option<String> {
+    extract_string_field_from_meta(meta_path, "prompt")
+}
+
+fn title_from_slug(slug: &str) -> String {
+    let words: Vec<String> = slug
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut title = first.to_uppercase().collect::<String>();
+                    title.push_str(chars.as_str());
+                    title
+                }
+                None => String::new(),
+            }
+        })
+        .collect();
+
+    if words.is_empty() {
+        slug.to_string()
+    } else {
+        words.join(" ")
+    }
 }
 
 /// Sync design metadata from the filesystem to Convex.
@@ -998,8 +1033,9 @@ pub fn extract_title_from_meta(meta_path: &Path) -> Option<String> {
 /// Reads the `ui/designs/sets/` directory structure, treating first-level
 /// directories as designs and second-level directories as variations.
 pub async fn sync_design_metadata(
-    _client: &Arc<Mutex<TinaConvexClient>>,
+    client: &Arc<Mutex<TinaConvexClient>>,
     orchestration_id: &str,
+    project_id: Option<&str>,
     worktree_path: &Path,
     telemetry: Option<&DaemonTelemetry>,
 ) -> Result<()> {
@@ -1022,38 +1058,165 @@ pub async fn sync_design_metadata(
         return Ok(());
     }
 
-    for design_entry in fs::read_dir(&sets_dir)? {
-        let design_entry = design_entry?;
-        if !design_entry.file_type()?.is_dir() {
-            continue;
+    let Some(project_id) = project_id else {
+        warn!(
+            orchestration = %orchestration_id,
+            "skipping design sync: orchestration has no project_id"
+        );
+        if let (Some(t), Some(sid)) = (telemetry, &span_id) {
+            t.end_span(
+                sid,
+                "daemon.sync_design_metadata",
+                started_at,
+                "ok",
+                None,
+                None,
+            )
+            .await;
         }
-        let design_slug = design_entry.file_name().to_string_lossy().to_string();
+        return Ok(());
+    };
 
-        let meta_path = design_entry.path().join("meta.ts");
+    let existing_designs = {
+        let mut client_guard = client.lock().await;
+        client_guard
+            .list_designs(project_id, None)
+            .await
+            .context("listing designs for metadata sync")?
+    };
+
+    let mut design_ids_by_title: HashMap<String, String> = existing_designs
+        .into_iter()
+        .map(|design| (design.title, design.id))
+        .collect();
+
+    let mut design_entries = Vec::new();
+    for entry in fs::read_dir(&sets_dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            design_entries.push(entry);
+        }
+    }
+    design_entries.sort_by_key(|entry| entry.file_name());
+
+    for design_entry in design_entries {
+        let design_slug = design_entry.file_name().to_string_lossy().to_string();
+        let design_dir = design_entry.path();
+        let meta_path = design_dir.join("meta.ts");
+
         let title = if meta_path.exists() {
-            extract_title_from_meta(&meta_path).unwrap_or_else(|| design_slug.clone())
+            extract_title_from_meta(&meta_path).unwrap_or_else(|| title_from_slug(&design_slug))
         } else {
-            design_slug.clone()
+            title_from_slug(&design_slug)
+        };
+        let prompt = if meta_path.exists() {
+            extract_prompt_from_meta(&meta_path)
+                .unwrap_or_else(|| format!("Explore visual direction for {}", title))
+        } else {
+            format!("Explore visual direction for {}", title)
         };
 
-        info!(
-            design = %design_slug,
-            title = %title,
-            orchestration = %orchestration_id,
-            "syncing design metadata"
-        );
+        let design_id = match design_ids_by_title.get(&title) {
+            Some(existing_id) => existing_id.clone(),
+            None => {
+                let create_result = {
+                    let mut client_guard = client.lock().await;
+                    client_guard.create_design(project_id, &title, &prompt).await
+                };
+                match create_result {
+                    Ok(new_id) => {
+                        info!(
+                            design = %design_slug,
+                            title = %title,
+                            orchestration = %orchestration_id,
+                            "created design from workbench metadata"
+                        );
+                        design_ids_by_title.insert(title.clone(), new_id.clone());
+                        new_id
+                    }
+                    Err(e) => {
+                        warn!(
+                            design = %design_slug,
+                            title = %title,
+                            orchestration = %orchestration_id,
+                            error = %e,
+                            "failed to create design from metadata"
+                        );
+                        continue;
+                    }
+                }
+            }
+        };
 
-        for var_entry in fs::read_dir(design_entry.path())? {
+        let existing_variation_slugs: HashSet<String> = match {
+            let mut client_guard = client.lock().await;
+            client_guard.list_variations(&design_id).await
+        } {
+            Ok(variations) => variations.into_iter().map(|variation| variation.slug).collect(),
+            Err(e) => {
+                warn!(
+                    design = %design_slug,
+                    design_id = %design_id,
+                    orchestration = %orchestration_id,
+                    error = %e,
+                    "failed to list existing variations"
+                );
+                HashSet::new()
+            }
+        };
+        let mut seen_variation_slugs = existing_variation_slugs;
+
+        let mut variation_entries = Vec::new();
+        for var_entry in fs::read_dir(&design_dir)? {
             let var_entry = var_entry?;
-            if !var_entry.file_type()?.is_dir() {
+            if var_entry.file_type()?.is_dir() {
+                variation_entries.push(var_entry);
+            }
+        }
+        variation_entries.sort_by_key(|entry| entry.file_name());
+
+        for var_entry in variation_entries {
+            let var_slug = var_entry.file_name().to_string_lossy().to_string();
+            if seen_variation_slugs.contains(&var_slug) {
                 continue;
             }
-            let var_slug = var_entry.file_name().to_string_lossy().to_string();
-            debug!(
-                design = %design_slug,
-                variation = %var_slug,
-                "found variation"
-            );
+
+            let variation_meta_path = var_entry.path().join("meta.ts");
+            let variation_title = if variation_meta_path.exists() {
+                extract_title_from_meta(&variation_meta_path)
+                    .unwrap_or_else(|| title_from_slug(&var_slug))
+            } else {
+                title_from_slug(&var_slug)
+            };
+
+            let create_variation_result = {
+                let mut client_guard = client.lock().await;
+                client_guard
+                    .create_variation(&design_id, &var_slug, &variation_title)
+                    .await
+            };
+            match create_variation_result {
+                Ok(_) => {
+                    seen_variation_slugs.insert(var_slug.clone());
+                    info!(
+                        design = %design_slug,
+                        variation = %var_slug,
+                        design_id = %design_id,
+                        orchestration = %orchestration_id,
+                        "created design variation from workbench metadata"
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        design = %design_slug,
+                        variation = %var_slug,
+                        design_id = %design_id,
+                        orchestration = %orchestration_id,
+                        error = %e,
+                        "failed to create design variation"
+                    );
+                }
+            }
         }
     }
 
@@ -1113,6 +1276,7 @@ pub async fn discover_worktrees(
         if path_buf.exists() {
             worktrees.push(WorktreeInfo {
                 orchestration_id: entry.id.clone(),
+                project_id: orch.project_id.clone(),
                 feature: orch.feature_name.clone(),
                 worktree_path: path_buf,
                 branch: orch.branch.clone(),
@@ -1483,6 +1647,7 @@ mod tests {
         let mut cache = SyncCache::new();
         cache.set_worktrees(vec![WorktreeInfo {
             orchestration_id: "orch1".to_string(),
+            project_id: None,
             feature: "test-feature".to_string(),
             worktree_path: PathBuf::from("/project/.worktrees/test"),
             branch: "tina/test-feature".to_string(),
@@ -1502,6 +1667,7 @@ mod tests {
         let mut cache = SyncCache::new();
         cache.set_worktrees(vec![WorktreeInfo {
             orchestration_id: "orch1".to_string(),
+            project_id: None,
             feature: "test-feature".to_string(),
             worktree_path: PathBuf::from("/project/.worktrees/test"),
             branch: "tina/test-feature".to_string(),
@@ -1522,6 +1688,7 @@ mod tests {
         let mut cache = SyncCache::new();
         cache.set_worktrees(vec![WorktreeInfo {
             orchestration_id: "orch1".to_string(),
+            project_id: None,
             feature: "test-feature".to_string(),
             worktree_path: PathBuf::from("/project/.worktrees/test"),
             branch: "tina/test-feature".to_string(),
@@ -1542,6 +1709,7 @@ mod tests {
         let mut cache = SyncCache::new();
         cache.set_worktrees(vec![WorktreeInfo {
             orchestration_id: "orch1".to_string(),
+            project_id: None,
             feature: "test-feature".to_string(),
             worktree_path: PathBuf::from("/project/.worktrees/test"),
             branch: "tina/test-feature".to_string(),
@@ -1563,6 +1731,7 @@ mod tests {
         let mut cache = SyncCache::new();
         cache.set_worktrees(vec![WorktreeInfo {
             orchestration_id: "orch1".to_string(),
+            project_id: None,
             feature: "test-feature".to_string(),
             worktree_path: PathBuf::from("/project/.worktrees/test"),
             branch: "tina/test-feature".to_string(),
@@ -1622,6 +1791,28 @@ mod tests {
     fn test_extract_title_from_meta_missing_file() {
         let path = Path::new("/nonexistent/meta.ts");
         assert_eq!(extract_title_from_meta(path), None);
+    }
+
+    #[test]
+    fn test_extract_prompt_from_meta() {
+        let temp = TempDir::new().unwrap();
+        let meta_path = temp.path().join("meta.ts");
+        fs::write(
+            &meta_path,
+            r#"export default { prompt: "Explore dashboard variants" };"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            extract_prompt_from_meta(&meta_path),
+            Some("Explore dashboard variants".to_string())
+        );
+    }
+
+    #[test]
+    fn test_title_from_slug_humanizes_kebab_case() {
+        assert_eq!(title_from_slug("my-design-v2"), "My Design V2");
+        assert_eq!(title_from_slug("single"), "Single");
     }
 
     #[test]

@@ -3,6 +3,36 @@ import { v } from "convex/values";
 import { deduplicateTaskEvents, loadTaskEventsForOrchestration } from "./tasks";
 import { deleteOrchestrationAssociationsStep } from "./deleteHelpers";
 
+function normalizeLegacyOrchestration<
+  T extends {
+    specDocPath?: string;
+    designDocPath?: string;
+    specOnly?: boolean;
+    designOnly?: boolean;
+  },
+>(orchestration: T): Omit<T, "designDocPath" | "designOnly"> & {
+  specDocPath: string;
+  specOnly?: boolean;
+} {
+  const specDocPath = orchestration.specDocPath ?? orchestration.designDocPath ?? "";
+  const specOnly = orchestration.specOnly ?? orchestration.designOnly;
+  const { designDocPath: _legacyDesignDocPath, designOnly: _legacyDesignOnly, ...rest } =
+    orchestration;
+
+  if (specOnly === undefined) {
+    return {
+      ...rest,
+      specDocPath,
+    };
+  }
+
+  return {
+    ...rest,
+    specDocPath,
+    specOnly,
+  };
+}
+
 function isOrchestratorControlTask(subject: string) {
   const normalized = subject.trim().toLowerCase();
   return (
@@ -72,7 +102,7 @@ export const listOrchestrations = query({
       orchestrations.map(async (orch) => {
         const node = await ctx.db.get(orch.nodeId);
         return {
-          ...orch,
+          ...normalizeLegacyOrchestration(orch),
           nodeName: node?.name ?? "unknown",
         };
       }),
@@ -100,7 +130,7 @@ export const listByProject = query({
       orchestrations.map(async (orch) => {
         const node = await ctx.db.get(orch.nodeId);
         return {
-          ...orch,
+          ...normalizeLegacyOrchestration(orch),
           nodeName: node?.name ?? "unknown",
         };
       }),
@@ -135,7 +165,7 @@ export const getByFeature = query({
       return 0;
     });
 
-    return orchestrations[0];
+    return normalizeLegacyOrchestration(orchestrations[0]);
   },
 });
 
@@ -184,7 +214,7 @@ export const getOrchestrationDetail = query({
     const node = await ctx.db.get(orchestration.nodeId);
 
     return {
-      ...orchestration,
+      ...normalizeLegacyOrchestration(orchestration),
       nodeName: node?.name ?? "unknown",
       phases,
       tasks: deduplicated,

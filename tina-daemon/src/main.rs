@@ -157,6 +157,31 @@ async fn refresh_worktrees(
     Ok(())
 }
 
+async fn sync_designs_for_worktrees(
+    client: &Arc<Mutex<TinaConvexClient>>,
+    cache: &SyncCache,
+    telemetry: &DaemonTelemetry,
+) {
+    for worktree in &cache.worktrees {
+        if let Err(e) = sync::sync_design_metadata(
+            client,
+            &worktree.orchestration_id,
+            worktree.project_id.as_deref(),
+            &worktree.worktree_path,
+            Some(telemetry),
+        )
+        .await
+        {
+            error!(
+                feature = %worktree.feature,
+                orchestration = %worktree.orchestration_id,
+                error = %e,
+                "failed to sync design metadata"
+            );
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize tracing
@@ -234,6 +259,7 @@ async fn main() -> Result<()> {
     {
         error!(error = %e, "initial sync failed");
     }
+    sync_designs_for_worktrees(&client, &cache, &telemetry).await;
 
     // Run crash-recovery reconciliation: mark terminal sessions whose tmux
     // panes no longer exist as ended, and log team members with dead panes.
@@ -311,6 +337,7 @@ async fn main() -> Result<()> {
                         ).await {
                             error!(error = %e, "sync failed");
                         }
+                        sync_designs_for_worktrees(&client, &cache, &telemetry).await;
                     }
                     Some(WatchEvent::GitRef(ref_path)) => {
                         // Git ref changed - sync commits for this worktree
@@ -380,6 +407,7 @@ async fn main() -> Result<()> {
                             if let Err(e) = sync::sync_design_metadata(
                                 &client,
                                 &worktree.orchestration_id,
+                                worktree.project_id.as_deref(),
                                 &worktree.worktree_path,
                                 Some(&telemetry),
                             ).await {

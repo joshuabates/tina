@@ -120,9 +120,8 @@ describe("DesignListPage", () => {
 
   it("renders status badges for each design", () => {
     renderApp("/projects/p1/plan/designs")
-    // Both "exploring" and "locked" are unmapped statuses that fall back to "Planning"
-    const badges = screen.getAllByText("Planning")
-    expect(badges).toHaveLength(2)
+    expect(screen.getByText("Exploring")).toBeInTheDocument()
+    expect(screen.getByText("Locked")).toBeInTheDocument()
   })
 
   it("clicking a design row navigates to detail page", async () => {
