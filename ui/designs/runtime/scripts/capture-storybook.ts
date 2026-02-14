@@ -1,7 +1,10 @@
 import path from "node:path";
 import { parseArgs } from "node:util";
-import config from "../../project.config.ts";
+import * as configModule from "../../project.config.ts";
 import { captureScreenshot, closeBrowser } from "./lib/capture.ts";
+
+// Handle tsx's double-wrapping of default exports
+const config = ((configModule as any).default?.default || (configModule as any).default) as typeof import("../../project.config.ts").default;
 
 const { values } = parseArgs({
   options: {

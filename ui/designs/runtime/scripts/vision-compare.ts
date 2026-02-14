@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import * as configModule from "../../project.config.ts";
 import { compareWithVision } from "./lib/vision.ts";
+
+// Handle tsx's double-wrapping of default exports
+const config = ((configModule as any).default?.default || (configModule as any).default) as typeof import("../../project.config.ts").default;
 
 const { values } = parseArgs({
   options: {
@@ -14,11 +18,10 @@ const { values } = parseArgs({
   },
 });
 
-// Screenshot directory: ui/designs/.artifacts/screenshots
-// From scripts/ directory, that's ../../../../ui/designs/.artifacts/screenshots
 const screenshotDir = path.resolve(
   import.meta.dirname,
-  "../../../../ui/designs/.artifacts/screenshots",
+  "../../../..",
+  config.screenshotDir,
 );
 
 function resolvePaths(): { designPath: string; storybookPath: string } {
