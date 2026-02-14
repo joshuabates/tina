@@ -1,67 +1,136 @@
-# Vendored Design Workbench Runtime (Generic Across React Projects)
+# Design Workbench & Vendored Runtime
 
 ## Overview
 
-This design defines a generic UI design workbench that is copied into each project as source code (vendored), not consumed as a live shared package. The workbench supports two phases:
+This design introduces a visual design system for Tina projects with two main parts:
 
-1. Wireframe/design exploration before Storybook parity exists.
-2. Storybook-driven implementation matching after design lock.
+1. **A vendored workbench runtime** — copied into each project as source code, runs its own Vite dev server, and renders wireframes using the project's actual components and tokens.
+2. **A central design console in tina-web** — shows design metadata, status, screenshot galleries, spec linkage, and comparison results via Convex subscriptions.
 
-The host in this repository is `tina-web`, but the runtime is structured to be portable to any React project that has:
-- design tokens
-- UI primitives/components
-- Storybook (used during implementation phase)
+The workbench supports two workflow phases:
+1. **Wireframing** — visual exploration before implementation, no Storybook required.
+2. **Implementation matching** — self-correcting loop comparing locked design screenshots against Storybook renders using pixel diff + LLM vision.
+
+## Naming Clarification
+
+This design also renames existing concepts to eliminate confusion:
+
+| Old Name | New Name | What It Is |
+|----------|----------|------------|
+| `designs` (Convex table) | **specs** | Architecture/requirement documents that define what to build |
+| "design plans" (in `docs/plans/`) | **specs** (`-design.md` files) and **implementation plans** (`-phase-N.md` files) | |
+| (new) | **designs** | Visual explorations of how something looks |
+| (new) | **variations** | Individual approaches tried within a design |
 
 ## Why Vendored Runtime
 
-We want project stability and autonomy:
+Project stability and autonomy:
 - No surprise breakage from upstream package updates.
 - Projects can customize locally.
 - Runtime changes are pulled in only when we choose to refresh manually.
 
-Tradeoff:
-- Runtime refreshes are manual and rely on code review rather than automated merge tooling.
-
-This is acceptable and preferred for long-lived product repos.
+Tradeoff: runtime refreshes are manual and rely on code review rather than automated merge tooling. This is acceptable and preferred for long-lived product repos.
 
 ## Goals
 
-- Extract the generic runtime from current `designs/` shell/routing/registry.
-- Keep project-specific design sets and UI assumptions outside runtime core.
+- Extract generic runtime from current `designs/` shell/routing/registry.
+- Keep project-specific content outside runtime core.
 - Support direct source imports for UI components during wireframing.
 - Defer Storybook dependency until implementation phase.
-- Provide a simple bootstrap flow with project config only.
+- Provide self-correcting design implementation via pixel diff + LLM vision.
+- Surface design metadata and screenshots centrally in tina-web.
 
 ## Non-Goals
 
 - Centralized runtime package with automatic updates.
 - Enforcing one global design style across projects.
 - Replacing Storybook.
+- Interactive wireframing in tina-web (that stays in the local workbench).
+
+## Data Model
+
+### Hierarchy
+
+```
+project
+  ├── specs (what to build — architecture/requirement docs)
+  └── designs (how it looks — visual explorations)
+       └── variations (individual approaches tried)
+
+specDesigns (many-to-many join)
+  ├── specId
+  └── designId
+```
+
+Designs and specs are both top-level entities under a project. They are connected via a many-to-many join table: multiple specs can reference the same design, and a spec can reference multiple designs. Designs can also exist independently for exploratory work with no spec linkage.
+
+### Convex Schema Changes
+
+**Rename existing tables:**
+- `designs` → `specs` (fields: `designKey` → `specKey`, etc.)
+- `orchestrations.designId` → `orchestrations.specId`
+- `tickets.designId` → `tickets.specId`
+- `workComments.targetType: "design"` → `"spec"`
+- `projectCounters.counterType: "design"` → `"spec"`
+
+**New tables:**
+
+```
+designs:
+  projectId, designKey, title, prompt (the question being explored),
+  status (exploring | locked | archived), timestamps
+
+designVariations:
+  designId, slug, title,
+  status (exploring | selected | rejected),
+  screenshotStorageIds (Convex file storage),
+  timestamps
+
+specDesigns:
+  specId, designId
+```
+
+### Orchestration Linkage
+
+Orchestrations can reference both a spec and optionally a design:
+
+```
+orchestrations:
+  specId (optional — which spec is being built)
+  designId (optional — which visual design to target)
+```
 
 ## Architecture
 
+### Hosting Split
+
+- **Vendored runtime** (per-project): Lives in `ui/designs/runtime/` with its own Vite dev server and `package.json`. Imports the project's components and tokens via aliases defined in `project.config.ts`. Handles wireframing, rendering, and screenshot capture.
+- **tina-web** (central): Reads design metadata, status, and screenshots from Convex. Shows galleries, spec linkage, and comparison results. Links out to the local workbench for interactive editing.
+
 ### Layers
 
-1. Runtime (generic, vendored)
-- Routing, design set discovery, prompt panel shell, screenshot hooks, compare mode shell.
+1. **Runtime** (generic, vendored into `ui/designs/runtime/`)
+   - Own Vite dev server, `package.json`, `tsconfig.json`
+   - Routing, design/variation discovery, prompt panel shell, screenshot hooks, compare mode
+   - Never hardcodes project paths or domains
+   - Port: auto-detect next available starting from 5200 (broader port strategy across worktrees TBD)
 
-2. Project Adapter (project-owned)
-- File paths, aliases, component locations, token locations, Storybook settings.
+2. **Project adapter** (`ui/designs/project.config.ts`, project-owned)
+   - `viteAliases` to resolve project component/token imports
+   - Component globs, token file paths, style entrypoints
+   - Optional `prebuild` command for projects with generated artifacts (tokens, types, etc.)
+   - Storybook settings (used only in implementation phase)
+   - Screenshot presets (viewport dimensions)
 
-3. Project Content (project-owned)
-- Wireframe/design sets, mock data, design notes, selected variants.
+3. **Project content** (`ui/designs/sets/`, project-owned)
+   - Designs and variations organized as nested directories
+   - Never touched by runtime refresh
 
-### Host Pattern
-
-- `tina-web` hosts the workbench route and embeds/mounts the vendored workbench.
-- Workbench reads only adapter config and project content.
-- Runtime never hardcodes Tina paths or domains.
-
-## File Layout (Per Project)
+### File Layout (Per Project)
 
 ```text
 <repo>/ui/designs/
-  runtime/
+  runtime/                          (vendored, generic)
     src/
       app/
       pages/
@@ -72,35 +141,33 @@ This is acceptable and preferred for long-lived product repos.
     vite.config.ts
     tsconfig.json
   sets/
-    <set-slug>/
-      meta.ts
-      data.ts
-      index.tsx
-      HANDOFF.md (optional)
-      DECISIONS.md (optional)
-  project.config.ts
+    <design-slug>/                  ← design (an exploration)
+      <variation-slug>/             ← variation (one approach)
+        meta.ts
+        data.ts
+        index.tsx
+        HANDOFF.md (optional)
+        DECISIONS.md (optional)
+      <variation-slug>/
+        ...
+  project.config.ts                 (project-owned adapter)
 ```
 
 Notes:
 - `runtime/` is copied from template and can be refreshed manually.
 - `sets/` is owned by the project and is never overwritten by runtime refresh.
 - `project.config.ts` is owned by the project and is never overwritten by runtime refresh.
+- First-level directories under `sets/` are designs; second-level are variations.
 
-## Extraction Boundary From Current `designs/`
+## Dev Server
 
-Current files that become runtime base:
-- `designs/src/App.tsx`
-- `designs/src/pages/HomePage.tsx`
-- `designs/src/pages/DesignSetPage.tsx`
-- `designs/src/designSets/registry.ts`
-- `designs/src/components/PageFrame.tsx`
+The runtime always uses its own Vite instance. Projects do not need to be Vite-based — the adapter config bridges into the project's source code.
 
-Current files that remain project content examples only:
-- `designs/src/designSets/*`
-
-Result:
-- Existing Tina design sets move under `ui/designs/sets/*`.
-- Runtime consumes them via configurable set root.
+- `project.config.ts` provides `viteAliases` to resolve project imports
+- Optional `prebuild` command runs before the dev server starts (for generated CSS vars, codegen, etc.)
+- Default to raw source imports (`.tsx`/`.ts` files via aliases)
+- Start with: `cd ui/designs/runtime && npm run dev`
+- Port: auto-detect next available from base 5200
 
 ## Project Adapter Schema (`project.config.ts`)
 
@@ -136,13 +203,20 @@ export interface DesignsProjectConfig {
   // Optional: source app entry styles to align visual baseline
   styleEntrypoints?: string[]
 
+  // Optional: command to run before starting the design dev server
+  prebuild?: string
+
   // Used only in implementation phase
   storybook: StorybookConfig
 
   // Capture presets used by both wireframe and comparison workflows
   screenshotPresets: ScreenshotPreset[]
 }
+```
 
+Example for this repository:
+
+```ts
 const config: DesignsProjectConfig = {
   projectName: "tina",
   setsRoot: "ui/designs/sets",
@@ -170,6 +244,36 @@ const config: DesignsProjectConfig = {
 export default config
 ```
 
+## Sync & Storage
+
+### tina-daemon
+
+tina-daemon already watches filesystem paths and syncs to Convex. It will be extended to watch `ui/designs/sets/` in worktrees:
+
+- Infers design/variation structure from nested directory layout
+- Syncs metadata (titles, status from `meta.ts`) to Convex `designs` and `designVariations` tables
+- Uploads screenshots to Convex file storage, stores file IDs on variation records
+- Learns worktree path from orchestration state (same pattern as commit/plan syncing)
+
+### tina-web
+
+- `/pm/designs/` — design listing, filterable by status
+- `/pm/designs/:designKey` — variations, linked specs, screenshot gallery, comparison results
+- Spec detail pages get a "Linked Designs" section
+- No interactive wireframing — that happens in the local vendored workbench
+
+## Extraction Boundary From Current `designs/`
+
+Current files that become runtime base:
+- `designs/src/App.tsx`
+- `designs/src/pages/HomePage.tsx`
+- `designs/src/pages/DesignSetPage.tsx`
+- `designs/src/designSets/registry.ts`
+- `designs/src/components/PageFrame.tsx`
+
+Current files that become project content:
+- `designs/src/designSets/*` → migrate to `ui/designs/sets/<design>/<variation>/`
+
 ## Bootstrap and Manual Refresh
 
 ### `designs init`
@@ -177,16 +281,13 @@ export default config
 Purpose:
 - Copy runtime snapshot into `ui/designs/runtime`.
 - Create `ui/designs/project.config.ts` (from template).
-- Optionally migrate existing `designs/src/designSets/*` into `ui/designs/sets/*`.
+- Optionally migrate existing `designs/src/designSets/*` into nested `ui/designs/sets/` structure.
 
 Behavior:
 - Never overwrites existing `project.config.ts` unless `--force`.
 - Never deletes existing sets.
 
 ### Manual Runtime Refresh
-
-Purpose:
-- Pull runtime improvements without automated version/merge infrastructure.
 
 Procedure:
 1. Copy updated runtime files into `ui/designs/runtime/*`.
@@ -198,150 +299,198 @@ Procedure:
    - Storybook settings are valid when `storybook.enabled=true`.
 4. Open a PR with runtime-only diffs and validate workbench behavior in dev.
 
+## Workflow Stages
+
+### 1. Wireframe
+
+- Create a design (an exploration answering a visual question).
+- Skill generates variations as subdirectories under `sets/<design>/`.
+- Reuse app UI components and tokens directly via source imports.
+- Capture screenshots for each variation.
+
+### 2. Select & Refine
+
+- Pick a variation → status: `selected`, others → `rejected`.
+- Refine the selected variation through iterations.
+- Daemon keeps syncing updated screenshots to Convex.
+
+### 3. Design Lock
+
+- Lock the design → status: `locked`.
+- Record rationale and constraints in `HANDOFF.md` / `DECISIONS.md`.
+
+### 4. Implementation (Self-Correcting Loop)
+
+- Ensure Storybook stories exist for target components.
+- Capture Storybook screenshot of current implementation.
+- Compare against locked design screenshot:
+  - **Pixel diff**: quantitative gap report (layout, spacing, color values).
+  - **LLM vision**: send both images to a vision-capable model for qualitative assessment (does it feel right, missing states, visual weight).
+- If gaps found → fix components/stories and re-compare.
+- Loop until both checks pass.
+
+### 5. Verification
+
+- Regenerate final screenshots and attach comparison summary.
+
 ## Skill Contracts
 
-### Wireframing/Design Skill
+### Wireframing Skill
 
 Inputs:
 - `ui/designs/project.config.ts`
 - `ui/designs/sets/*`
-- app UI source files via direct imports
+- App UI source files via direct imports
 
 Outputs:
-- new/updated set under `ui/designs/sets/<slug>`
-- optional handoff docs (`HANDOFF.md`, `DECISIONS.md`)
-- captured screenshots in configured artifact dir
+- New/updated design with variations under `ui/designs/sets/<design>/<variation>/`
+- Optional handoff docs (`HANDOFF.md`, `DECISIONS.md`)
+- Captured screenshots in configured artifact dir
 
 Constraints:
 - Must not require Storybook to operate.
 - Should prefer reusing app UI components and tokens where possible.
 
-### Frontend Design Implementer Skill
+### Design Implementation Skill
+
+A self-correcting implementation skill that uses locked design screenshots as visual reference.
 
 Inputs:
-- locked wireframe/design screenshots
-- selected set metadata/handoff notes
-- Storybook stories (implementation phase)
+- Locked design screenshots (from Convex file storage or local artifacts)
+- Selected variation metadata and handoff notes
+- Storybook stories (creates them if missing)
 
 Outputs:
-- story updates + component updates in app source
-- visual gap report (layout, spacing, typography, color, state coverage)
-- refreshed screenshot pairs for before/after comparison
+- Story updates + component updates in app source
+- Visual gap report (layout, spacing, typography, color, state coverage)
+- Refreshed screenshot pairs for before/after comparison
+
+Behavior:
+1. Take locked design screenshot as reference.
+2. Implement or update component.
+3. Capture Storybook screenshot.
+4. Run pixel diff → quantitative gap report.
+5. Run LLM vision comparison → qualitative assessment.
+6. If gaps found → fix and loop back to step 2.
+7. When both checks pass → attach final comparison artifacts.
 
 Constraints:
-- Storybook is preferred implementation target.
-- If no story exists, skill creates one before screen-level edits.
+- Storybook is the implementation target.
+- If no story exists, creates one before component edits.
+- Must produce evidence of convergence (before/after screenshots + gap metrics).
 
 ## Delivery Phases
 
-### Phase 1: Workbench Foundation (2-3 days)
+### Phase 1: Rename designs → specs
 
 Scope:
-- Introduce `ui/designs/` structure with `runtime/`, `sets/`, and `project.config.ts`.
-- Extract/copy generic runtime from existing `designs/src` shell/routing files.
-- Move existing Tina design sets into `ui/designs/sets/*`.
-- Add `tina-web` host route: `/pm/designs/:designId/workbench`.
-- Validate direct source imports from `tina-web/src/components/ui/*` and token files.
+- Rename Convex `designs` table to `specs` (all fields, indexes).
+- Update `orchestrations.designId` → `specId`.
+- Update `tickets.designId` → `specId`.
+- Update `workComments` and `projectCounters` references.
+- Rename `convex/designs.ts` → `convex/specs.ts`.
+- Update tina-web routes (`/pm/designs/` → `/pm/specs/`) and components.
+- Update daemon references.
 
 Exit criteria:
-- Workbench route loads in `tina-web`.
-- At least one migrated set renders from `ui/designs/sets/*`.
+- All references to the old `designs` concept use `specs` naming.
+- No regressions in existing spec CRUD flows.
+
+### Phase 2: Design & variation data model
+
+Scope:
+- New Convex tables: `designs`, `designVariations`, `specDesigns`.
+- Convex functions for design/variation CRUD.
+- tina-daemon extended to watch `ui/designs/sets/` in worktrees.
+- Screenshot upload to Convex file storage.
+- tina-web pages: `/pm/designs/`, `/pm/designs/:designKey`.
+- Spec detail page gets "Linked Designs" section.
+
+Exit criteria:
+- Designs and variations can be created, listed, and viewed in tina-web.
+- Daemon syncs design metadata and screenshots from worktree to Convex.
+- Specs can be linked to designs via the join table.
+
+### Phase 3: Vendored workbench runtime
+
+Scope:
+- Extract generic runtime from current `designs/` app.
+- Set up `ui/designs/runtime/` with own Vite server and `package.json`.
+- Implement `project.config.ts` adapter with aliases and optional prebuild.
+- Migrate existing wireframe sets into `ui/designs/sets/<design>/<variation>/` structure.
+- Validate direct source imports from project components and tokens.
+
+Exit criteria:
+- Workbench dev server starts and renders at least one migrated design.
 - Wireframing works without Storybook dependency.
+- Runtime is generic — no hardcoded tina-web paths.
 
-### Phase 2: Visual Compare + Implementation Loop (3-4 days)
+### Phase 4: Compare mode & screenshot capture
 
 Scope:
-- Add screenshot capture flow for locked design sets.
-- Add Storybook screenshot capture flow for implementation target stories.
-- Add side-by-side compare surface in workbench with visual gap report.
-- Enforce story-first implementation behavior:
-  - create/update stories before screen-level component composition changes.
+- Screenshot capture flow for locked design variations.
+- Storybook screenshot capture flow for implementation target stories.
+- Pixel diff comparison with quantitative gap metrics.
+- Side-by-side compare UI in workbench.
 
 Exit criteria:
-- Given a locked set, workbench can compare design screenshots to Storybook screenshots.
-- Gap report is generated for layout, spacing, typography, color, and state coverage.
-- At least one real UI component flow is matched through this loop end-to-end.
+- Given a locked variation, workbench can capture and compare design vs Storybook screenshots.
+- Pixel diff gap report covers layout, spacing, typography, and color.
 
-### Phase 3: Skillization + Portability Hardening (2-3 days)
+### Phase 5: Design implementation skill
 
 Scope:
-- Update wireframing/design skill to consume `ui/designs/project.config.ts`.
-- Update frontend design implementer skill to consume compare artifacts and Storybook targets.
-- Add bootstrap/manual-refresh docs and operator checklist.
-- Add smoke checks for config paths, aliases, token files, and Storybook wiring.
+- New skill: self-correcting design implementation loop.
+- Integrates pixel diff (quantitative) and LLM vision (qualitative) comparison.
+- Automated loop: implement → capture → compare → fix → repeat.
+- Produces convergence evidence (before/after screenshots, gap metrics).
+
+Exit criteria:
+- Skill can take a locked design and drive an implementation to visual parity.
+- At least one real UI component matched end-to-end through the loop.
+- Gap metrics decrease across iterations (demonstrable convergence).
+
+### Phase 6: Skill integration & portability
+
+Scope:
+- Update wireframing skill to consume `project.config.ts`.
+- Bootstrap/refresh docs and operator checklist.
+- Smoke checks for config paths, aliases, token files, Storybook wiring.
 - Complete cleanup/migration of legacy `designs/` references.
 
 Exit criteria:
-- Skills can run the full flow with minimal project-specific prompts.
+- Skills can run the full wireframe → implement → verify flow.
 - A second React project can copy `ui/designs`, edit only `project.config.ts`, and run.
-- Legacy path dependency on old `designs/` structure is removed from active flow.
-
-## Workflow Stages (Within Any Phase)
-
-1. Wireframe
-- Create/edit in `ui/designs/sets`.
-- Reuse app UI components directly.
-- Capture screenshots and choose a direction.
-
-2. Design Lock
-- Record selected variant + rationale + constraints in set docs.
-
-3. Implementation
-- Ensure Storybook stories exist for target components.
-- Compare Storybook renders to locked design screenshots.
-- Patch components/stories until visual gaps are within acceptance.
-
-4. Verification
-- Regenerate screenshots and attach diff summary.
-
-## Integration Into `tina-web`
-
-Add PM route:
-- `/pm/designs/:designId/workbench`
-
-Route behavior:
-- Load project config.
-- Show design set browser/editor panel (from vendored runtime).
-- Show screenshot artifacts and comparison entry points.
-- During implementation mode, expose Storybook compare actions.
-
-## Migration Plan For This Repository
-
-### Phase 1 mapping
-1. Introduce `ui/designs/` structure.
-2. Move existing `designs/src/designSets/*` to `ui/designs/sets/*`.
-3. Copy extracted generic runtime into `ui/designs/runtime`.
-4. Add `ui/designs/project.config.ts` for tina paths.
-5. Add `tina-web` PM workbench route and navigation action.
-6. Validate wireframe flow without Storybook.
-
-### Phase 2 mapping
-1. Add screenshot capture for sets and Storybook stories.
-2. Add compare UI and gap reporting in workbench.
-3. Run one end-to-end design-to-story implementation pass.
-
-### Phase 3 mapping
-1. Finalize skill prompts/contracts against config + compare artifacts.
-2. Add portability smoke checks and runbook docs.
-3. Remove old-path references and mark migration complete.
+- Legacy `designs/` directory dependency removed from active flow.
 
 ## Risks and Mitigations
 
-Risk: Runtime drift due to local modifications.
-- Mitigation: manual runtime-refresh checklist and runtime-only PR review scope.
+**Runtime drift due to local modifications.**
+Mitigation: manual runtime-refresh checklist and runtime-only PR review scope.
 
-Risk: Alias/import breakage across projects.
-- Mitigation: required `viteAliases` in config and refresh sanity checks before merge.
+**Alias/import breakage across projects.**
+Mitigation: required `viteAliases` in config and refresh sanity checks before merge.
 
-Risk: Over-coupling to one app's component style.
-- Mitigation: keep runtime generic and move assumptions into adapter config + sets.
+**Over-coupling to one app's component style.**
+Mitigation: keep runtime generic and move assumptions into adapter config + sets.
 
-Risk: Storybook mismatch with app reality.
-- Mitigation: implementation skill updates stories first and validates state coverage before screen edits.
+**Storybook mismatch with app reality.**
+Mitigation: implementation skill updates stories first and validates state coverage before screen edits.
+
+**LLM vision inconsistency in comparison.**
+Mitigation: pixel diff provides objective baseline; LLM vision is additive judgment, not sole arbiter.
+
+## Deferred Concerns
+
+- **Port management across worktrees/dev servers** — needs a general solution, not design-specific. Auto-detect for now.
+- **`designs init` CLI shape** — whether this is a tina-session subcommand, standalone script, or skill. Decide during phase 3.
 
 ## Success Criteria
 
-- New project can bootstrap workbench by copying `ui/designs` and only editing `project.config.ts`.
+- Existing architecture docs cleanly renamed to "specs" with no regression.
+- Designs are top-level entities with many-to-many spec linkage.
+- New project can bootstrap workbench by copying `ui/designs` and editing only `project.config.ts`.
 - Wireframing works with direct app component imports and no Storybook dependency.
-- Implementation matcher can compare locked design screenshots against Storybook renders.
+- Design implementation skill self-corrects using pixel diff + LLM vision comparison.
+- Screenshots stored in Convex file storage and viewable in tina-web.
 - Runtime refresh is manual, non-destructive to project content, and reviewable in normal PR flow.

@@ -371,12 +371,118 @@ describe("TaskListPanel", () => {
     expect(orderedSubjects).toEqual([
       "Older running task",
       "Review implementation",
-      "Parallel prep work",
       "Implement API endpoints",
+      "Parallel prep work",
       "Ship changes",
       "First completed task",
       "Last completed task",
     ])
+  })
+
+  it("orders pending tasks using numeric blockedBy JSON arrays", () => {
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
+
+    const detail = buildTaskListDetail({
+      phaseTasks: {
+        "1": [
+          buildTaskEvent({
+            _id: "task3",
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "3",
+            subject: "Task 3",
+            status: "pending",
+            blockedBy: some("[2]"),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:03:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task2",
+            _creationTime: 1234567891,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "2",
+            subject: "Task 2",
+            status: "pending",
+            blockedBy: none<string>(),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:02:00Z",
+          }),
+        ],
+      },
+    })
+
+    render(<TaskListPanel detail={detail} />)
+
+    const orderedSubjects = screen
+      .getAllByRole("heading", { level: 4 })
+      .map((node) => node.textContent)
+
+    expect(orderedSubjects).toEqual(["Task 2", "Task 3"])
+  })
+
+  it("falls back to task id ordering when pending tasks have no dependency metadata", () => {
+    setPanelSelection(mockUseSelection, { phaseId: "phase1" })
+
+    const detail = buildTaskListDetail({
+      phaseTasks: {
+        "1": [
+          buildTaskEvent({
+            _id: "task10",
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "10",
+            subject: "Task 10",
+            status: "pending",
+            blockedBy: none<string>(),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:10:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task9",
+            _creationTime: 1234567891,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "9",
+            subject: "Task 9",
+            status: "pending",
+            blockedBy: none<string>(),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:09:00Z",
+          }),
+          buildTaskEvent({
+            _id: "task8",
+            _creationTime: 1234567892,
+            orchestrationId: "orch1",
+            phaseNumber: some("1"),
+            taskId: "8",
+            subject: "Task 8",
+            status: "pending",
+            blockedBy: none<string>(),
+            description: none<string>(),
+            owner: none<string>(),
+            metadata: none<string>(),
+            recordedAt: "2024-01-01T10:08:00Z",
+          }),
+        ],
+      },
+    })
+
+    render(<TaskListPanel detail={detail} />)
+
+    const orderedSubjects = screen
+      .getAllByRole("heading", { level: 4 })
+      .map((node) => node.textContent)
+
+    expect(orderedSubjects).toEqual(["Task 8", "Task 9", "Task 10"])
   })
 
   it("does not render inline blocker details for unresolved dependencies", () => {

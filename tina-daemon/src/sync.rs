@@ -21,7 +21,8 @@ use crate::watcher::WorktreeInfo;
 
 /// Cached state for detecting changes and avoiding redundant Convex writes.
 pub struct SyncCache {
-    /// Maps `(orchestration_id, phase_key, task_id)` -> `(status, subject, owner)`
+    /// Maps `(orchestration_id, phase_key, task_id)` -> task snapshot fields that
+    /// impact `taskEvents` projection writes.
     pub task_state: HashMap<(String, String, String), TaskCacheEntry>,
     /// Maps `(orchestration_id, phase_number, agent_name)` -> last recorded_at
     pub team_member_state: HashMap<(String, String, String), String>,
@@ -42,7 +43,10 @@ pub struct SyncCache {
 pub struct TaskCacheEntry {
     pub status: String,
     pub subject: String,
+    pub description: String,
     pub owner: Option<String>,
+    pub blocked_by: Option<String>,
+    pub metadata: Option<String>,
 }
 
 const ORCHESTRATOR_PHASE_KEY: &str = "__orchestrator__";
@@ -530,7 +534,10 @@ async fn sync_task_dir(
         let current = TaskCacheEntry {
             status: task.status.to_string(),
             subject: task.subject.clone(),
+            description: task.description.clone(),
             owner: task.owner.clone(),
+            blocked_by: blocked_by_json.clone(),
+            metadata: metadata_json.clone(),
         };
 
         // Skip if unchanged
@@ -1290,7 +1297,10 @@ mod tests {
         let entry = TaskCacheEntry {
             status: "pending".to_string(),
             subject: "Test".to_string(),
+            description: "Test description".to_string(),
             owner: None,
+            blocked_by: Some("[\"1\"]".to_string()),
+            metadata: Some("{\"model\":\"opus\"}".to_string()),
         };
 
         cache.task_state.insert(key.clone(), entry.clone());
@@ -1307,14 +1317,20 @@ mod tests {
         let old = TaskCacheEntry {
             status: "pending".to_string(),
             subject: "Test".to_string(),
+            description: "Old description".to_string(),
             owner: None,
+            blocked_by: None,
+            metadata: None,
         };
         cache.task_state.insert(key.clone(), old);
 
         let new = TaskCacheEntry {
             status: "in_progress".to_string(),
             subject: "Test".to_string(),
+            description: "New description".to_string(),
             owner: Some("worker".to_string()),
+            blocked_by: Some("[\"2\"]".to_string()),
+            metadata: Some("{\"model\":\"haiku\"}".to_string()),
         };
 
         // Different entry should not match

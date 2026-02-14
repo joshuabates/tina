@@ -38,8 +38,15 @@ export function parseBlockedByDependencies(rawBlockedBy: string): string[] | nul
       const parsed = JSON.parse(trimmed)
       if (Array.isArray(parsed)) {
         return parsed
-          .filter((value): value is string => typeof value === "string")
-          .map((value) => value.trim())
+          .map((value) => {
+            if (typeof value === "string") {
+              return value.trim()
+            }
+            if (typeof value === "number" && Number.isFinite(value)) {
+              return String(value)
+            }
+            return ""
+          })
           .filter((value) => value.length > 0)
       }
     } catch {
@@ -147,9 +154,37 @@ function compareByRecordedAtAsc(
   if (a.recordedAt < b.recordedAt) return -1
   if (a.recordedAt > b.recordedAt) return 1
 
+  return compareTaskIds(a.taskId, b.taskId, indexByTaskId)
+}
+
+function toNumericTaskId(taskId: string): number | undefined {
+  if (!/^\d+$/.test(taskId)) {
+    return undefined
+  }
+
+  const parsed = Number(taskId)
+  return Number.isSafeInteger(parsed) ? parsed : undefined
+}
+
+function compareTaskIds(
+  a: string,
+  b: string,
+  indexByTaskId: ReadonlyMap<string, number>,
+): number {
+  const aNumber = toNumericTaskId(a)
+  const bNumber = toNumericTaskId(b)
+
+  if (aNumber !== undefined && bNumber !== undefined && aNumber !== bNumber) {
+    return aNumber - bNumber
+  }
+
+  if (aNumber === undefined && bNumber === undefined && a !== b) {
+    return a.localeCompare(b)
+  }
+
   return (
-    (indexByTaskId.get(a.taskId) ?? Number.MAX_SAFE_INTEGER) -
-    (indexByTaskId.get(b.taskId) ?? Number.MAX_SAFE_INTEGER)
+    (indexByTaskId.get(a) ?? Number.MAX_SAFE_INTEGER) -
+    (indexByTaskId.get(b) ?? Number.MAX_SAFE_INTEGER)
   )
 }
 
@@ -186,13 +221,12 @@ function topologicalOrderTasks(
     }
   }
 
-  const byOriginalOrder = (a: string, b: string) =>
-    (indexByTaskId.get(a) ?? Number.MAX_SAFE_INTEGER) -
-    (indexByTaskId.get(b) ?? Number.MAX_SAFE_INTEGER)
+  const byDependencyOrder = (a: string, b: string) =>
+    compareTaskIds(a, b, indexByTaskId)
 
   const ready: string[] = taskIds
     .filter((taskId) => (indegree.get(taskId) ?? 0) === 0)
-    .sort(byOriginalOrder)
+    .sort(byDependencyOrder)
 
   const orderedTaskIds: string[] = []
 
@@ -207,13 +241,13 @@ function topologicalOrderTasks(
       indegree.set(dependentId, nextIndegree)
       if (nextIndegree === 0) {
         ready.push(dependentId)
-        ready.sort(byOriginalOrder)
+        ready.sort(byDependencyOrder)
       }
     }
   }
 
-  // Cycles or malformed dependency graphs fall back to original order.
-  for (const taskId of taskIds.sort(byOriginalOrder)) {
+  // Cycles or malformed dependency graphs fall back to deterministic id order.
+  for (const taskId of taskIds.sort(byDependencyOrder)) {
     if (!orderedTaskIds.includes(taskId)) {
       orderedTaskIds.push(taskId)
     }
