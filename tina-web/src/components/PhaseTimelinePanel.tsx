@@ -19,7 +19,8 @@ function mapPhaseToCard(
   phaseTasks: Record<string, readonly TaskEvent[]>,
   teamMembers: readonly TeamMember[],
 ): PhaseCardProps {
-  const phaseNum = parseInt(phase.phaseNumber, 10) || 0
+  const parsedPhaseNumber = Number.parseFloat(phase.phaseNumber)
+  const phaseNum = Number.isFinite(parsedPhaseNumber) ? parsedPhaseNumber : 0
   const tasks = phaseTasks[phase.phaseNumber] ?? []
   const completedCount = tasks.filter(t => t.status === "completed").length
   const teamCount = teamMembers.filter(m => m.phaseNumber === phase.phaseNumber).length

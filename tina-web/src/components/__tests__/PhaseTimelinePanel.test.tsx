@@ -72,6 +72,31 @@ describe("PhaseTimelinePanel", () => {
     expect(screen.getByText(/Phase 3/)).toBeInTheDocument()
   })
 
+  it("renders remediation phases with decimal phase numbers", () => {
+    const detail = buildPhaseTimelineDetail({
+      phases: [
+        buildPhase({ _id: "phase1", orchestrationId: "orch1", phaseNumber: "1", status: "complete" }),
+        buildPhase({
+          _id: "phase1_5",
+          _creationTime: 1234567891,
+          orchestrationId: "orch1",
+          phaseNumber: "1.5",
+          status: "planning",
+        }),
+      ],
+      phaseTasks: {
+        "1": [],
+        "1.5": [],
+      },
+      totalPhases: 2,
+      currentPhase: 1,
+    })
+
+    const { container } = renderTimelineView({ detail })
+    expect(phaseById(container, "phase1")).toHaveTextContent("P1 Phase 1")
+    expect(phaseById(container, "phase1_5")).toHaveTextContent("P1.5 Phase 1.5")
+  })
+
   it.each([
     {
       label: "task counts",
