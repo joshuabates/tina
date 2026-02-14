@@ -10,6 +10,7 @@ import { ReviewSummary } from "../review"
 import { ReviewThread } from "../reviewThread"
 import { ReviewGate } from "../reviewGate"
 import { ReviewCheck } from "../reviewCheck"
+import { TeamMember } from "../team"
 
 describe("OrchestrationSummary schema", () => {
   it("decodes a valid orchestration payload", () => {
@@ -510,5 +511,39 @@ describe("ReviewCheck schema", () => {
   it("rejects a check missing required fields", () => {
     const raw = { _id: "check1", _creationTime: 1700000000000 }
     expect(() => Schema.decodeUnknownSync(ReviewCheck)(raw)).toThrow()
+  })
+})
+
+describe("TeamMember schema", () => {
+  it("decodes a team member without optional fields", () => {
+    const raw = {
+      _id: "tm1",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      phaseNumber: "1",
+      agentName: "worker-1",
+      recordedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(TeamMember)(raw)
+    expect(result.agentName).toBe("worker-1")
+    expect(Option.isNone(result.agentType)).toBe(true)
+    expect(Option.isNone(result.tmuxPaneId)).toBe(true)
+  })
+
+  it("decodes a team member with tmuxPaneId present", () => {
+    const raw = {
+      _id: "tm2",
+      _creationTime: 1700000000000,
+      orchestrationId: "orch1",
+      phaseNumber: "1",
+      agentName: "worker-2",
+      tmuxPaneId: "session:0.1",
+      recordedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(TeamMember)(raw)
+    expect(result.agentName).toBe("worker-2")
+    expect(Option.getOrThrow(result.tmuxPaneId)).toBe("session:0.1")
   })
 })

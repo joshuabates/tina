@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Navigate,
   NavLink,
@@ -6,6 +6,7 @@ import {
   useLocation,
   useNavigate,
   useParams,
+  useSearchParams,
 } from "react-router-dom"
 import { Option } from "effect"
 import { Activity, ClipboardList, Code2, MessageSquare, PenTool } from "lucide-react"
@@ -23,8 +24,10 @@ import {
   setLastSubviewForProjectMode,
   type NavMode,
 } from "@/lib/navigation"
-import { OrchestrationListQuery, ProjectListQuery } from "@/services/data/queryDefs"
-import type { OrchestrationSummary, ProjectSummary } from "@/schemas"
+import { OrchestrationListQuery, ProjectListQuery, TerminalTargetListQuery } from "@/services/data/queryDefs"
+import type { OrchestrationSummary, ProjectSummary, TerminalTarget } from "@/schemas"
+import { SidebarItem } from "@/components/ui/sidebar-item"
+import { NewSessionDialog } from "@/components/NewSessionDialog"
 import { statusLabel, toStatusBadgeStatus } from "@/components/ui/status-styles"
 import styles from "./AppShell.module.scss"
 
@@ -83,13 +86,56 @@ function PlanSidebar({ projectId }: { projectId: string }) {
 }
 
 function SessionsSidebar() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [showNewSession, setShowNewSession] = useState(false)
+  const targetsResult = useTypedQuery(TerminalTargetListQuery, {})
+  const activePaneId = searchParams.get("pane")
+
   return (
     <div className={styles.modeSidebarContent}>
       <div className={styles.modeSidebarHeader}>Sessions</div>
-      <p className={styles.modeSidebarHint}>Current project sessions and launch tools live here.</p>
-      <button type="button" className={styles.modeSidebarButton} data-sidebar-action>
-        Start session
+      {targetsResult.status === "success" && targetsResult.data.length > 0 && (
+        <div className={styles.modeSidebarSection}>
+          {targetsResult.data.map((target: TerminalTarget) => (
+            <SidebarItem
+              key={target.id}
+              label={target.label}
+              active={target.tmuxPaneId === activePaneId}
+              statusIndicatorClass={
+                target.type === "agent"
+                  ? "bg-emerald-500"
+                  : "bg-sky-400"
+              }
+              onClick={() => {
+                setSearchParams({ pane: target.tmuxPaneId })
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {targetsResult.status === "loading" && (
+        <p className={styles.modeSidebarHint}>Loading sessions...</p>
+      )}
+      {targetsResult.status === "success" && targetsResult.data.length === 0 && (
+        <p className={styles.modeSidebarHint}>No active sessions.</p>
+      )}
+      <button
+        type="button"
+        className={styles.modeSidebarButton}
+        data-sidebar-action
+        onClick={() => setShowNewSession(true)}
+      >
+        New session
       </button>
+      {showNewSession && (
+        <NewSessionDialog
+          onClose={() => setShowNewSession(false)}
+          onCreated={(paneId: string) => {
+            setShowNewSession(false)
+            setSearchParams({ pane: paneId })
+          }}
+        />
+      )}
     </div>
   )
 }

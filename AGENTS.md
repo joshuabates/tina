@@ -31,7 +31,6 @@ mise run harness:run 01-single-phase-feature -- --full  # real orchestration (~2
 **Before e2e testing:** Always rebuild binaries first. Symlinks at `~/.local/bin/` should point to release artifacts, and stale PATH resolution causes silent failures.
 ```bash
 mise run install
-tina-session check doctor
 ```
 
 ## Architecture

@@ -5,15 +5,17 @@ import { TeamMember, type MemberStatus } from "./team-member";
 interface TeamPanelMember {
   name: string;
   memberStatus: MemberStatus;
+  tmuxPaneId?: string;
 }
 
 interface TeamPanelProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string
   members: TeamPanelMember[];
   emptyMessage: string
+  onConnect?: (paneId: string) => void
 }
 
-function TeamPanel({ title, members, emptyMessage, className, ...props }: TeamPanelProps) {
+function TeamPanel({ title, members, emptyMessage, onConnect, className, ...props }: TeamPanelProps) {
   const activeCount = members.filter(
     (m) => m.memberStatus === "active" || m.memberStatus === "busy"
   ).length;
@@ -37,6 +39,7 @@ function TeamPanel({ title, members, emptyMessage, className, ...props }: TeamPa
               key={member.name}
               name={member.name}
               memberStatus={member.memberStatus}
+              onConnect={member.tmuxPaneId && onConnect ? () => onConnect(member.tmuxPaneId!) : undefined}
             />
           ))
         )}

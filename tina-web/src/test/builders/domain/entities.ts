@@ -106,6 +106,7 @@ export function buildTeamMember(
     agentType: none<string>(),
     model: none<string>(),
     joinedAt: none<string>(),
+    tmuxPaneId: none<string>(),
     recordedAt: "2024-01-01T10:00:00Z",
     ...overrides,
   }

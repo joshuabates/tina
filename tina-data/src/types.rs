@@ -61,7 +61,39 @@ pub struct TeamMemberRecord {
     pub agent_type: Option<String>,
     pub model: Option<String>,
     pub joined_at: Option<String>,
+    pub tmux_pane_id: Option<String>,
     pub recorded_at: String,
+}
+
+/// Terminal session record matching the Convex `terminalSessions` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerminalSessionRecord {
+    pub session_name: String,
+    pub tmux_pane_id: String,
+    pub label: String,
+    pub cli: String,
+    pub status: String,
+    pub context_type: Option<String>,
+    pub context_id: Option<String>,
+    pub context_summary: Option<String>,
+    pub created_at: f64,
+    pub ended_at: Option<f64>,
+}
+
+/// Active terminal session as returned by `terminalSessions:listActive`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveTerminalSession {
+    pub session_name: String,
+    pub tmux_pane_id: String,
+}
+
+/// Team member with a tmux pane ID, as returned by `teamMembers:listWithPaneIds`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamMemberWithPane {
+    pub orchestration_id: String,
+    pub phase_number: String,
+    pub agent_name: String,
+    pub tmux_pane_id: String,
 }
 
 /// Team registration input (for `teams:registerTeam`).

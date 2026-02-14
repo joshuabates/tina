@@ -80,6 +80,17 @@
   }
 }
 
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+
+  .sectionTitle {
+    margin-bottom: 0;
+  }
+}
+
 .sectionTitle {
   font-size: 12px;
   font-weight: 600;

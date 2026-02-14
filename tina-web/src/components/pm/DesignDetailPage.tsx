@@ -11,6 +11,7 @@ import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import { CommentTimeline } from "./CommentTimeline"
 import { EditDesignModal } from "./EditDesignModal"
 import type { Id } from "@convex/_generated/dataModel"
+import { useCreateSession } from "@/hooks/useCreateSession"
 import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import styles from "./DesignDetailPage.module.scss"
 import markdownStyles from "../PlanQuicklook.module.scss"
@@ -60,6 +61,7 @@ export function DesignDetailPage() {
 
   const transitionDesign = useMutation(api.designs.transitionDesign)
   const updateMarkers = useMutation(api.designs.updateDesignMarkers)
+  const { createAndConnect } = useCreateSession()
 
   const designResult = useTypedQuery(DesignDetailQuery, {
     designId: designId ?? "",
@@ -111,6 +113,15 @@ export function DesignDetailPage() {
     setEditing(false)
   }
 
+  const handleDiscussDesign = () => {
+    createAndConnect({
+      label: `Discuss: ${design.title}`,
+      contextType: "design",
+      contextId: designId!,
+      contextSummary: design.markdown.slice(0, 2000),
+    })
+  }
+
   const actions = getTransitionActions(design.status)
   const complexityPreset = Option.getOrUndefined(design.complexityPreset)
   const requiredMarkers = Option.getOrElse(() => [] as string[])(design.requiredMarkers)
@@ -148,6 +159,12 @@ export function DesignDetailPage() {
             {action.label}
           </button>
         ))}
+        <button
+          className={styles.actionButton}
+          onClick={handleDiscussDesign}
+        >
+          Discuss Design
+        </button>
         {!editing && (
           <button
             className={styles.actionButton}

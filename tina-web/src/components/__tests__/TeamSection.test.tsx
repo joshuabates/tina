@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { Option } from "effect"
 import { TeamSection } from "../TeamSection"
 import type { OrchestrationDetail } from "@/schemas"
@@ -16,10 +17,15 @@ vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
 vi.mock("@/hooks/useActionRegistration")
 vi.mock("@/hooks/useTypedQuery")
+vi.mock("@/hooks/useCreateSession")
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
+
+const mockUseCreateSession = vi.mocked(
+  await import("@/hooks/useCreateSession"),
+).useCreateSession
 
 const mockUseFocusable = vi.mocked(
   await import("@/hooks/useFocusable"),
@@ -58,10 +64,16 @@ function buildDetail(overrides: Partial<OrchestrationDetail> = {}): Orchestratio
 }
 
 describe("TeamSection", () => {
+  const mockConnectToPane = vi.fn()
+
   beforeEach(() => {
     vi.clearAllMocks()
     setPanelFocus(mockUseFocusable)
     setSelection()
+    mockUseCreateSession.mockReturnValue({
+      createAndConnect: vi.fn(),
+      connectToPane: mockConnectToPane,
+    })
     installAppRuntimeQueryMock(mockUseTypedQuery, {
       states: {
         "events.list": querySuccess([]),
@@ -242,7 +254,7 @@ describe("TeamSection", () => {
       expect(screen.queryByText("SHUTDOWN")).not.toBeInTheDocument()
     })
 
-    it("removes multiple shut down agents from the roster", () => {
+    it("removes multiple shutdown agents from the roster", () => {
       setSelection("phase1")
       const shutdownEvents = [
         {
@@ -307,6 +319,74 @@ describe("TeamSection", () => {
       expect(screen.queryByText("worker2")).not.toBeInTheDocument()
       expect(screen.queryByText("SHUTDOWN")).not.toBeInTheDocument()
       expect(screen.getByText(/no team members/i)).toBeInTheDocument()
+    })
+  })
+
+  describe("connect button", () => {
+    it("shows Connect button for members with tmuxPaneId", () => {
+      setSelection("phase1")
+      render(
+        <TeamSection
+          detail={buildDetail({
+            teamMembers: [
+              buildTeamMember({
+                _id: "member1",
+                orchestrationId: "orch1",
+                phaseNumber: "1",
+                agentName: "worker1",
+                tmuxPaneId: Option.some("%42"),
+              }),
+            ],
+          })}
+        />,
+      )
+
+      expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument()
+    })
+
+    it("does not show Connect button for members without tmuxPaneId", () => {
+      setSelection("phase1")
+      render(
+        <TeamSection
+          detail={buildDetail({
+            teamMembers: [
+              buildTeamMember({
+                _id: "member1",
+                orchestrationId: "orch1",
+                phaseNumber: "1",
+                agentName: "worker1",
+                tmuxPaneId: Option.none(),
+              }),
+            ],
+          })}
+        />,
+      )
+
+      expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument()
+    })
+
+    it("calls connectToPane with pane ID when Connect is clicked", async () => {
+      const user = userEvent.setup()
+      setSelection("phase1")
+      render(
+        <TeamSection
+          detail={buildDetail({
+            teamMembers: [
+              buildTeamMember({
+                _id: "member1",
+                orchestrationId: "orch1",
+                phaseNumber: "1",
+                agentName: "worker1",
+                tmuxPaneId: Option.some("%42"),
+              }),
+            ],
+          })}
+        />,
+      )
+
+      await user.click(screen.getByRole("button", { name: "Connect" }))
+
+      expect(mockConnectToPane).toHaveBeenCalledWith("%42")
     })
   })
 })

@@ -2,6 +2,7 @@ import { Option } from "effect"
 import type { TaskEvent } from "@/schemas"
 import { optionText } from "@/lib/option-display"
 import { formatBlockedByForDisplay } from "@/lib/task-dependencies"
+import { useCreateSession } from "@/hooks/useCreateSession"
 import { QuicklookDialog } from "@/components/QuicklookDialog"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import ReactMarkdown from "react-markdown"
@@ -18,6 +19,7 @@ export interface TaskQuicklookProps {
 }
 
 export function TaskQuicklook({ task, onClose }: TaskQuicklookProps) {
+  const { createAndConnect } = useCreateSession()
   const status = toStatusBadgeStatus(task.status)
   const blockedBy = Option.match(task.blockedBy, {
     onNone: () => null,
@@ -92,6 +94,25 @@ export function TaskQuicklook({ task, onClose }: TaskQuicklookProps) {
           <div className={styles.value}>{blockedBy}</div>
         </section>
       )}
+
+      <section className={styles.section}>
+        <button
+          type="button"
+          className="text-sm text-primary hover:underline"
+          onClick={() => {
+            const description = Option.getOrUndefined(task.description) ?? ""
+            const summary = `${task.subject}\n\nStatus: ${task.status}${description ? `\n\n${description}` : ""}`.trim()
+            createAndConnect({
+              label: `Discuss: ${task.subject}`,
+              contextType: "task",
+              contextId: task._id,
+              contextSummary: summary,
+            })
+          }}
+        >
+          Discuss this task
+        </button>
+      </section>
 
     </QuicklookDialog>
   )

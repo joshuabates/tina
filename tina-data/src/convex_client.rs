@@ -161,10 +161,42 @@ fn team_member_to_args(member: &TeamMemberRecord) -> BTreeMap<String, Value> {
     if let Some(ref ja) = member.joined_at {
         args.insert("joinedAt".into(), Value::from(ja.as_str()));
     }
+    if let Some(ref pane_id) = member.tmux_pane_id {
+        args.insert("tmuxPaneId".into(), Value::from(pane_id.as_str()));
+    }
     args.insert(
         "recordedAt".into(),
         Value::from(member.recorded_at.as_str()),
     );
+    args
+}
+
+pub fn terminal_session_to_args(session: &TerminalSessionRecord) -> BTreeMap<String, Value> {
+    let mut args = BTreeMap::new();
+    args.insert(
+        "sessionName".into(),
+        Value::from(session.session_name.as_str()),
+    );
+    args.insert(
+        "tmuxPaneId".into(),
+        Value::from(session.tmux_pane_id.as_str()),
+    );
+    args.insert("label".into(), Value::from(session.label.as_str()));
+    args.insert("cli".into(), Value::from(session.cli.as_str()));
+    args.insert("status".into(), Value::from(session.status.as_str()));
+    if let Some(ref ct) = session.context_type {
+        args.insert("contextType".into(), Value::from(ct.as_str()));
+    }
+    if let Some(ref ci) = session.context_id {
+        args.insert("contextId".into(), Value::from(ci.as_str()));
+    }
+    if let Some(ref cs) = session.context_summary {
+        args.insert("contextSummary".into(), Value::from(cs.as_str()));
+    }
+    args.insert("createdAt".into(), Value::from(session.created_at));
+    if let Some(ended) = session.ended_at {
+        args.insert("endedAt".into(), Value::from(ended));
+    }
     args
 }
 
@@ -603,6 +635,7 @@ fn extract_team_member_from_obj(obj: &BTreeMap<String, Value>) -> TeamMemberReco
         agent_type: value_as_opt_str(obj, "agentType"),
         model: value_as_opt_str(obj, "model"),
         joined_at: value_as_opt_str(obj, "joinedAt"),
+        tmux_pane_id: value_as_opt_str(obj, "tmuxPaneId"),
         recorded_at: value_as_str(obj, "recordedAt"),
     }
 }
@@ -821,6 +854,66 @@ fn extract_active_team_list(result: FunctionResult) -> Result<Vec<ActiveTeamReco
         FunctionResult::Value(Value::Null) => Ok(vec![]),
         FunctionResult::Value(other) => {
             bail!("expected array for active team list, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_active_terminal_sessions(
+    result: FunctionResult,
+) -> Result<Vec<ActiveTerminalSession>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut sessions = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    sessions.push(ActiveTerminalSession {
+                        session_name: value_as_str(&obj, "sessionName"),
+                        tmux_pane_id: value_as_str(&obj, "tmuxPaneId"),
+                    });
+                }
+            }
+            Ok(sessions)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => {
+            bail!(
+                "expected array for active terminal sessions, got: {:?}",
+                other
+            )
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_team_members_with_panes(
+    result: FunctionResult,
+) -> Result<Vec<TeamMemberWithPane>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut members = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    if let Some(pane_id) = value_as_opt_str(&obj, "tmuxPaneId") {
+                        members.push(TeamMemberWithPane {
+                            orchestration_id: value_as_id(&obj, "orchestrationId"),
+                            phase_number: value_as_str(&obj, "phaseNumber"),
+                            agent_name: value_as_str(&obj, "agentName"),
+                            tmux_pane_id: pane_id,
+                        });
+                    }
+                }
+            }
+            Ok(members)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => {
+            bail!(
+                "expected array for team members with panes, got: {:?}",
+                other
+            )
         }
         FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
         FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
@@ -1085,6 +1178,28 @@ impl TinaConvexClient {
             .mutation("teamMembers:upsertTeamMember", args)
             .await?;
         extract_id(result)
+    }
+
+    /// Remove stale team members for an orchestration phase.
+    pub async fn prune_team_members(
+        &mut self,
+        orchestration_id: &str,
+        phase_number: &str,
+        active_agent_names: &[String],
+    ) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        args.insert("phaseNumber".into(), Value::from(phase_number));
+        let active_values = active_agent_names
+            .iter()
+            .map(|name| Value::from(name.as_str()))
+            .collect();
+        args.insert("activeAgentNames".into(), Value::Array(active_values));
+        let result = self
+            .client
+            .mutation("teamMembers:prunePhaseMembers", args)
+            .await?;
+        extract_unit(result)
     }
 
     /// Register a team in Convex.
@@ -1722,6 +1837,59 @@ impl TinaConvexClient {
         let result = self.client.mutation("reviewGates:upsertGate", args).await?;
         extract_id(result)
     }
+
+    /// Create or update a terminal session record.
+    pub async fn upsert_terminal_session(
+        &mut self,
+        session: &TerminalSessionRecord,
+    ) -> Result<String> {
+        let args = terminal_session_to_args(session);
+        let result = self
+            .client
+            .mutation("terminalSessions:upsert", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Mark a terminal session as ended.
+    pub async fn mark_terminal_ended(
+        &mut self,
+        session_name: &str,
+        ended_at: f64,
+    ) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("sessionName".into(), Value::from(session_name));
+        args.insert("endedAt".into(), Value::from(ended_at));
+        let result = self
+            .client
+            .mutation("terminalSessions:markEnded", args)
+            .await?;
+        extract_unit(result)
+    }
+
+    /// List active terminal sessions (status = "active").
+    pub async fn list_active_terminal_sessions(
+        &mut self,
+    ) -> Result<Vec<ActiveTerminalSession>> {
+        let args = BTreeMap::new();
+        let result = self
+            .client
+            .query("terminalSessions:listActive", args)
+            .await?;
+        extract_active_terminal_sessions(result)
+    }
+
+    /// List team members that have a tmuxPaneId set.
+    pub async fn list_team_members_with_panes(
+        &mut self,
+    ) -> Result<Vec<TeamMemberWithPane>> {
+        let args = BTreeMap::new();
+        let result = self
+            .client
+            .query("teamMembers:listWithPaneIds", args)
+            .await?;
+        extract_team_members_with_panes(result)
+    }
 }
 
 #[cfg(test)]
@@ -2026,6 +2194,7 @@ mod tests {
             agent_type: Some("executor".to_string()),
             model: Some("claude-opus-4-6".to_string()),
             joined_at: Some("2026-02-07T10:00:00Z".to_string()),
+            tmux_pane_id: Some("%42".to_string()),
             recorded_at: "2026-02-07T10:00:00Z".to_string(),
         };
 
@@ -2036,7 +2205,8 @@ mod tests {
         assert_eq!(args.get("agentName"), Some(&Value::from("executor-1")));
         assert_eq!(args.get("agentType"), Some(&Value::from("executor")));
         assert_eq!(args.get("model"), Some(&Value::from("claude-opus-4-6")));
-        assert_eq!(args.len(), 7);
+        assert_eq!(args.get("tmuxPaneId"), Some(&Value::from("%42")));
+        assert_eq!(args.len(), 8);
     }
 
     #[test]
@@ -2048,6 +2218,7 @@ mod tests {
             agent_type: None,
             model: None,
             joined_at: None,
+            tmux_pane_id: None,
             recorded_at: "2026-02-07T10:00:00Z".to_string(),
         };
 
@@ -2056,7 +2227,77 @@ mod tests {
         assert!(args.get("agentType").is_none());
         assert!(args.get("model").is_none());
         assert!(args.get("joinedAt").is_none());
+        assert!(args.get("tmuxPaneId").is_none());
         assert_eq!(args.len(), 4);
+    }
+
+    #[test]
+    fn test_terminal_session_to_args_all_fields() {
+        let session = TerminalSessionRecord {
+            session_name: "tina-adhoc-abc123".to_string(),
+            tmux_pane_id: "%412".to_string(),
+            label: "Discuss: Add auth middleware".to_string(),
+            cli: "claude".to_string(),
+            status: "active".to_string(),
+            context_type: Some("task".to_string()),
+            context_id: Some("task-id-123".to_string()),
+            context_summary: Some("Review auth".to_string()),
+            created_at: 1707350400000.0,
+            ended_at: Some(1707354000000.0),
+        };
+
+        let args = terminal_session_to_args(&session);
+
+        assert_eq!(
+            args.get("sessionName"),
+            Some(&Value::from("tina-adhoc-abc123"))
+        );
+        assert_eq!(args.get("tmuxPaneId"), Some(&Value::from("%412")));
+        assert_eq!(
+            args.get("label"),
+            Some(&Value::from("Discuss: Add auth middleware"))
+        );
+        assert_eq!(args.get("cli"), Some(&Value::from("claude")));
+        assert_eq!(args.get("status"), Some(&Value::from("active")));
+        assert_eq!(args.get("contextType"), Some(&Value::from("task")));
+        assert_eq!(args.get("contextId"), Some(&Value::from("task-id-123")));
+        assert_eq!(
+            args.get("contextSummary"),
+            Some(&Value::from("Review auth"))
+        );
+        assert_eq!(
+            args.get("createdAt"),
+            Some(&Value::from(1707350400000.0f64))
+        );
+        assert_eq!(
+            args.get("endedAt"),
+            Some(&Value::from(1707354000000.0f64))
+        );
+        assert_eq!(args.len(), 10);
+    }
+
+    #[test]
+    fn test_terminal_session_to_args_minimal() {
+        let session = TerminalSessionRecord {
+            session_name: "tina-adhoc-xyz".to_string(),
+            tmux_pane_id: "%500".to_string(),
+            label: "Quick chat".to_string(),
+            cli: "codex".to_string(),
+            status: "active".to_string(),
+            context_type: None,
+            context_id: None,
+            context_summary: None,
+            created_at: 1707350400000.0,
+            ended_at: None,
+        };
+
+        let args = terminal_session_to_args(&session);
+
+        assert!(args.get("contextType").is_none());
+        assert!(args.get("contextId").is_none());
+        assert!(args.get("contextSummary").is_none());
+        assert!(args.get("endedAt").is_none());
+        assert_eq!(args.len(), 6);
     }
 
     // --- Result extraction tests ---

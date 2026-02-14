@@ -19,6 +19,14 @@ vi.mock("convex/react", async (importOriginal) => {
   }
 })
 
+const mockCreateAndConnect = vi.fn()
+vi.mock("@/hooks/useCreateSession", () => ({
+  useCreateSession: () => ({
+    createAndConnect: mockCreateAndConnect,
+    connectToPane: vi.fn(),
+  }),
+}))
+
 function createMockCommit(overrides: Partial<Commit> = {}): Commit {
   return {
     _id: "commit1",
@@ -145,12 +153,40 @@ describe("CommitQuicklook", () => {
     expect(mockOnClose).toHaveBeenCalledOnce()
   })
 
-  it("displays future diff view message", () => {
+  it("displays a Review this commit button", () => {
     const commit = createMockCommit()
 
     render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
 
-    expect(screen.getByText(/Full diff view coming in future update/i)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /review this commit/i })).toBeInTheDocument()
+  })
+
+  it("calls createAndConnect with commit context when Review button is clicked", async () => {
+    const user = userEvent.setup()
+    const commit = createMockCommit({
+      sha: "abc123def456789",
+      subject: "feat: add awesome feature",
+      author: "Alice <alice@example.com>",
+      insertions: 15,
+      deletions: 5,
+    })
+
+    render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
+
+    const reviewButton = screen.getByRole("button", { name: /review this commit/i })
+    await user.click(reviewButton)
+
+    expect(mockCreateAndConnect).toHaveBeenCalledWith({
+      label: "Review: feat: add awesome feature",
+      contextType: "commit",
+      contextId: "commit1",
+      contextSummary: [
+        "Commit: abc123def456789",
+        "Message: feat: add awesome feature",
+        "Author: Alice <alice@example.com>",
+        "+15 -5",
+      ].join("\n"),
+    })
   })
 
   defineQuicklookDialogContract({

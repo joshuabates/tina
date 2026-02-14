@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { TeamMember } from "../ui/team-member"
 
 describe("TeamMember", () => {
@@ -62,5 +63,34 @@ describe("TeamMember", () => {
     // Verify member name has inactive styling
     const memberName = screen.getByText("executor-5")
     expect(memberName).toHaveClass("opacity-50")
+  })
+
+  describe("connect button", () => {
+    it("renders Connect button when onConnect is provided", () => {
+      render(
+        <TeamMember name="executor-1" memberStatus="active" onConnect={() => {}} />,
+      )
+
+      expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument()
+    })
+
+    it("does not render Connect button when onConnect is not provided", () => {
+      render(<TeamMember name="executor-1" memberStatus="active" />)
+
+      expect(screen.queryByRole("button", { name: "Connect" })).not.toBeInTheDocument()
+    })
+
+    it("calls onConnect when Connect button is clicked", async () => {
+      const user = userEvent.setup()
+      const handleConnect = vi.fn()
+
+      render(
+        <TeamMember name="executor-1" memberStatus="active" onConnect={handleConnect} />,
+      )
+
+      await user.click(screen.getByRole("button", { name: "Connect" }))
+
+      expect(handleConnect).toHaveBeenCalledOnce()
+    })
   })
 })

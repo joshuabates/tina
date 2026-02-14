@@ -8,10 +8,20 @@ import { querySuccess, queryLoading, queryError } from "@/test/builders/query"
 import { defineQuicklookDialogContract } from "@/test/harness/quicklook-contract"
 
 vi.mock("@/hooks/useTypedQuery")
+vi.mock("@/hooks/useCreateSession")
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
+
+const mockCreateAndConnect = vi.fn()
+const mockUseCreateSession = vi.mocked(
+  await import("@/hooks/useCreateSession"),
+).useCreateSession
+mockUseCreateSession.mockReturnValue({
+  createAndConnect: mockCreateAndConnect,
+  connectToPane: vi.fn(),
+})
 
 function createMockPlan(overrides: Partial<Plan> = {}): Plan {
   return {
@@ -313,6 +323,99 @@ describe("PlanQuicklook", () => {
     expect(screen.getByText("Phase 3 Plan")).toBeInTheDocument()
   })
 
+  it("shows Refine Plan button when data is loaded", () => {
+    const plan = createMockPlan()
+
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "plans.get": querySuccess(plan),
+      },
+    })
+
+    render(
+      <PlanQuicklook orchestrationId="orch1" phaseNumber="1" onClose={mockOnClose} />
+    )
+
+    expect(screen.getByRole("button", { name: "Refine Plan" })).toBeInTheDocument()
+  })
+
+  it("does not show Refine Plan button when loading", () => {
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "plans.get": queryLoading(),
+      },
+    })
+
+    render(
+      <PlanQuicklook orchestrationId="orch1" phaseNumber="1" onClose={mockOnClose} />
+    )
+
+    expect(screen.queryByRole("button", { name: "Refine Plan" })).not.toBeInTheDocument()
+  })
+
+  it("does not show Refine Plan button when plan is null", () => {
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "plans.get": querySuccess(null),
+      },
+    })
+
+    render(
+      <PlanQuicklook orchestrationId="orch1" phaseNumber="1" onClose={mockOnClose} />
+    )
+
+    expect(screen.queryByRole("button", { name: "Refine Plan" })).not.toBeInTheDocument()
+  })
+
+  it("calls createAndConnect with plan context when Refine Plan clicked", async () => {
+    const user = userEvent.setup()
+    const plan = createMockPlan({
+      content: "# Phase Plan\n\nDetailed plan content here.",
+    })
+
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "plans.get": querySuccess(plan),
+      },
+    })
+
+    render(
+      <PlanQuicklook orchestrationId="orch1" phaseNumber="2" onClose={mockOnClose} />
+    )
+
+    await user.click(screen.getByRole("button", { name: "Refine Plan" }))
+
+    expect(mockCreateAndConnect).toHaveBeenCalledWith({
+      label: "Refine: Phase 2 Plan",
+      contextType: "plan",
+      contextSummary: "# Phase Plan\n\nDetailed plan content here.",
+    })
+  })
+
+  it("truncates contextSummary to 2000 characters", async () => {
+    const user = userEvent.setup()
+    const longContent = "x".repeat(3000)
+    const plan = createMockPlan({ content: longContent })
+
+    installAppRuntimeQueryMock(mockUseTypedQuery, {
+      states: {
+        "plans.get": querySuccess(plan),
+      },
+    })
+
+    render(
+      <PlanQuicklook orchestrationId="orch1" phaseNumber="1" onClose={mockOnClose} />
+    )
+
+    await user.click(screen.getByRole("button", { name: "Refine Plan" }))
+
+    expect(mockCreateAndConnect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextSummary: "x".repeat(2000),
+      }),
+    )
+  })
+
   defineQuicklookDialogContract({
     renderDialog: () => {
       installAppRuntimeQueryMock(mockUseTypedQuery, {
@@ -325,5 +428,6 @@ describe("PlanQuicklook", () => {
       )
     },
     onClose: mockOnClose,
+    firstFocusable: () => screen.getByRole("button", { name: "Refine Plan" }),
   })
 })

@@ -3,6 +3,7 @@ import { Option } from "effect"
 import type { Phase, TaskEvent, TeamMember } from "@/schemas"
 import { cn } from "@/lib/utils"
 import { optionNullableText, optionText } from "@/lib/option-display"
+import { useCreateSession } from "@/hooks/useCreateSession"
 import { QuicklookDialog } from "@/components/QuicklookDialog"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import { PlanQuicklook } from "./PlanQuicklook"
@@ -15,11 +16,13 @@ export interface PhaseQuicklookProps {
   phase: Phase
   tasks: TaskEvent[]
   teamMembers: TeamMember[]
+  leadPaneId?: string
   onClose: () => void
 }
 
-export function PhaseQuicklook({ orchestrationId, phase, tasks, teamMembers, onClose }: PhaseQuicklookProps) {
+export function PhaseQuicklook({ orchestrationId, phase, tasks, teamMembers, leadPaneId, onClose }: PhaseQuicklookProps) {
   const [showPlanQuicklook, setShowPlanQuicklook] = useState(false)
+  const { connectToPane } = useCreateSession()
   const status = toStatusBadgeStatus(phase.status)
 
   // Calculate task completion
@@ -83,7 +86,17 @@ export function PhaseQuicklook({ orchestrationId, phase, tasks, teamMembers, onC
         </section>
 
         <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>Team</h3>
+          <div className={styles.sectionHeader}>
+            <h3 className={styles.sectionTitle}>Team</h3>
+            {leadPaneId && (
+              <button
+                className="text-xs text-primary hover:underline"
+                onClick={() => connectToPane(leadPaneId)}
+              >
+                Connect to Lead
+              </button>
+            )}
+          </div>
           {teamMembers.length === 0 ? (
             <div className={styles.value}>No team members</div>
           ) : (

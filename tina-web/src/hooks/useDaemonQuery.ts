@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
+import { DAEMON_BASE } from "../lib/daemon"
 
 // Types matching tina-daemon/src/git.rs serialization
 export type FileStatus = "added" | "modified" | "deleted" | "renamed"
@@ -28,17 +29,28 @@ export interface DiffHunk {
   lines: DiffLine[]
 }
 
-const DAEMON_BASE = import.meta.env.VITE_DAEMON_URL ?? "http://localhost:7842"
-
-export async function fetchDaemon<T>(path: string, params: Record<string, string>): Promise<T> {
+export async function fetchDaemon<T>(
+  path: string,
+  params: Record<string, string>,
+  method: string = "GET",
+  body?: unknown,
+): Promise<T> {
   const url = new URL(path, DAEMON_BASE)
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v)
+  if (method === "GET") {
+    for (const [k, v] of Object.entries(params)) {
+      url.searchParams.set(k, v)
+    }
   }
-  const resp = await fetch(url.toString())
+  const init: RequestInit = { method }
+  if (body !== undefined) {
+    init.headers = { "Content-Type": "application/json" }
+    init.body = JSON.stringify(body)
+  }
+  const resp = await fetch(url.toString(), init)
   if (!resp.ok) {
     throw new Error(`Daemon ${path}: ${resp.status} ${await resp.text()}`)
   }
+  if (resp.status === 204) return undefined as T
   return resp.json() as Promise<T>
 }
 

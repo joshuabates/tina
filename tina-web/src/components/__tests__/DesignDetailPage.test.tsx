@@ -17,6 +17,14 @@ import { renderWithAppRuntime } from "@/test/harness/app-runtime"
 
 vi.mock("@/hooks/useTypedQuery")
 
+const mockCreateAndConnect = vi.fn()
+vi.mock("@/hooks/useCreateSession", () => ({
+  useCreateSession: () => ({
+    createAndConnect: mockCreateAndConnect,
+    connectToPane: vi.fn(),
+  }),
+}))
+
 const mockMutate = vi.fn()
 vi.mock("convex/react", async (importOriginal) => {
   const mod = await importOriginal<typeof import("convex/react")>()
@@ -192,6 +200,26 @@ describe("DesignDetailPage", () => {
     renderApp("/projects/p1/plan/designs/d1")
 
     expect(screen.getByText(/no comments/i)).toBeInTheDocument()
+  })
+
+  it("renders Discuss Design button", () => {
+    renderApp("/projects/p1/plan/designs/d1")
+
+    expect(screen.getByRole("button", { name: /discuss design/i })).toBeInTheDocument()
+  })
+
+  it("calls createAndConnect with design context when Discuss Design is clicked", async () => {
+    const user = userEvent.setup()
+    renderApp("/projects/p1/plan/designs/d1")
+
+    await user.click(screen.getByRole("button", { name: /discuss design/i }))
+
+    expect(mockCreateAndConnect).toHaveBeenCalledWith({
+      label: "Discuss: Authentication Flow",
+      contextType: "design",
+      contextId: "d1",
+      contextSummary: "# Auth\nDesign for auth flow",
+    })
   })
 
   describe("validation section", () => {

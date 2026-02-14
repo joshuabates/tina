@@ -340,6 +340,7 @@ fn upsert_team_member(
                 model: Some(model.to_string()),
                 joined_at: Some(Utc::now().to_rfc3339()),
                 recorded_at: Utc::now().to_rfc3339(),
+                tmux_pane_id: None,
             })
             .await?;
         Ok(())

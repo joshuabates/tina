@@ -1,0 +1,104 @@
+@use '../styles/tokens' as *;
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0a0a0f;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-bottom: 1px solid $border-color;
+  background: $bg-sidebar;
+  flex-shrink: 0;
+}
+
+.label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: $text-primary;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  border: 1px solid $border-color;
+  color: $text-muted;
+  flex-shrink: 0;
+}
+
+.headerButton {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.3rem;
+  border: 1px solid $border-color;
+  background: transparent;
+  color: $text-muted;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: hsl(var(--muted) / 0.35);
+    color: $text-primary;
+  }
+}
+
+.headerButtonDanger {
+  &:hover {
+    border-color: hsl(var(--destructive, 0 84% 60%));
+    color: hsl(var(--destructive, 0 84% 60%));
+  }
+}
+
+.terminalCanvas {
+  flex: 1;
+  min-height: 0;
+  padding: 4px;
+}
+
+.statusBar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.75rem;
+  font-size: 0.65rem;
+  color: $text-muted;
+  border-top: 1px solid $border-color;
+  background: $bg-sidebar;
+  flex-shrink: 0;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.statusDotConnected {
+  background: hsl(var(--status-complete));
+}
+
+.statusDotConnecting {
+  background: hsl(var(--status-warning));
+}
+
+.statusDotDisconnected {
+  background: hsl(var(--muted-foreground));
+}
+
+.statusDotError {
+  background: hsl(var(--destructive, 0 84% 60%));
+}

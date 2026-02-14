@@ -1,4 +1,5 @@
 import { useState, useRef } from "react"
+import { Option } from "effect"
 import { useSelection } from "@/hooks/useSelection"
 import { useIndexedAction } from "@/hooks/useIndexedAction"
 import { useRovingSection } from "@/hooks/useRovingSection"
@@ -101,6 +102,12 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
     ? detail.teamMembers.filter(m => m.phaseNumber === quicklookPhase.phaseNumber) as TeamMember[]
     : []
 
+  // Find team lead pane ID for "Connect to Lead" button
+  const leadMember = detail.teamMembers.find(
+    m => m.agentName === "team-lead",
+  )
+  const leadPaneId = leadMember ? Option.getOrUndefined(leadMember.tmuxPaneId) : undefined
+
   return (
     <>
       <PhaseTimeline
@@ -142,6 +149,7 @@ export function PhaseTimelinePanel({ detail }: PhaseTimelinePanelProps) {
           phase={quicklookPhase}
           tasks={quicklookTasks}
           teamMembers={quicklookTeamMembers}
+          leadPaneId={leadPaneId}
           onClose={handleQuicklookClose}
         />
       )}

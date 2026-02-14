@@ -13,6 +13,7 @@ use tina_daemon::actions;
 use tina_daemon::config::DaemonConfig;
 use tina_daemon::heartbeat;
 use tina_daemon::http;
+use tina_daemon::reconcile;
 use tina_daemon::sync::{self, SyncCache};
 use tina_daemon::telemetry::DaemonTelemetry;
 use tina_daemon::watcher::{DaemonWatcher, WatchEvent};
@@ -196,9 +197,14 @@ async fn main() -> Result<()> {
     let heartbeat_handle =
         heartbeat::spawn_heartbeat(Arc::clone(&client), node_id.clone(), cancel.clone());
 
-    // Start HTTP server
+    // Start HTTP server (with Convex client for session persistence)
     let http_cancel = cancel.clone();
-    let http_handle = http::spawn_http_server(config.http_port, http_cancel).await?;
+    let http_handle = http::spawn_http_server_with_client(
+        config.http_port,
+        http_cancel,
+        Some(Arc::clone(&client)),
+    )
+    .await?;
 
     // Set up file watchers
     let home = dirs::home_dir().expect("could not determine home directory");
@@ -230,6 +236,22 @@ async fn main() -> Result<()> {
         error!(error = %e, "initial sync failed");
     }
 
+    // Run crash-recovery reconciliation: mark terminal sessions whose tmux
+    // panes no longer exist as ended, and log team members with dead panes.
+    info!("running startup reconciliation");
+    match reconcile::reconcile(&client).await {
+        Ok(result) => {
+            info!(
+                sessions_ended = result.sessions_ended,
+                members_with_dead_panes = result.members_with_dead_panes,
+                "startup reconciliation complete"
+            );
+        }
+        Err(e) => {
+            error!(error = %e, "startup reconciliation failed");
+        }
+    }
+
     info!("daemon initialization complete");
 
     // Subscribe to pending actions
@@ -239,6 +261,10 @@ async fn main() -> Result<()> {
     };
 
     info!("daemon started, entering main loop");
+
+    // Periodic reconciliation timer (every 60 seconds)
+    let mut reconcile_interval = tokio::time::interval(std::time::Duration::from_secs(60));
+    reconcile_interval.tick().await; // consume the immediate first tick
 
     // Main event loop
     loop {
@@ -252,6 +278,24 @@ async fn main() -> Result<()> {
                 info!("received ctrl-c, shutting down");
                 cancel.cancel();
                 break;
+            }
+
+            // Periodic reconciliation
+            _ = reconcile_interval.tick() => {
+                match reconcile::reconcile(&client).await {
+                    Ok(result) => {
+                        if result.sessions_ended > 0 || result.members_with_dead_panes > 0 {
+                            info!(
+                                sessions_ended = result.sessions_ended,
+                                members_with_dead_panes = result.members_with_dead_panes,
+                                "periodic reconciliation complete"
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "periodic reconciliation failed");
+                    }
+                }
             }
 
             // File change events

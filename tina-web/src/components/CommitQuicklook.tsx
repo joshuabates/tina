@@ -1,5 +1,6 @@
 import { useId, useRef } from "react"
 import { useFocusTrap } from "@/hooks/useFocusTrap"
+import { useCreateSession } from "@/hooks/useCreateSession"
 import { useQuicklookKeyboard } from "@/hooks/useQuicklookKeyboard"
 import type { Commit } from "@/schemas"
 import styles from "./QuicklookDialog.module.scss"
@@ -16,8 +17,25 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
   useQuicklookKeyboard(onClose)
   useFocusTrap(modalRef)
 
+  const { createAndConnect } = useCreateSession()
+
   const handleCopyToClipboard = () => {
     navigator.clipboard.writeText(commit.sha)
+  }
+
+  const handleReviewCommit = () => {
+    const summary = [
+      `Commit: ${commit.sha}`,
+      `Message: ${commit.subject}`,
+      `Author: ${commit.author}`,
+      `+${commit.insertions} -${commit.deletions}`,
+    ].join("\n")
+    createAndConnect({
+      label: `Review: ${commit.subject}`,
+      contextType: "commit",
+      contextId: commit._id,
+      contextSummary: summary,
+    })
   }
 
   return (
@@ -86,9 +104,13 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
               </div>
             </div>
 
-            <div className="text-sm text-muted-foreground italic">
-              Full diff view coming in future update
-            </div>
+            <button
+              type="button"
+              className="text-sm text-primary hover:underline"
+              onClick={handleReviewCommit}
+            >
+              Review this commit
+            </button>
 
           </div>
         </div>

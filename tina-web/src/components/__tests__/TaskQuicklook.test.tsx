@@ -9,6 +9,13 @@ import { defineQuicklookDialogContract } from "@/test/harness/quicklook-contract
 // Mock useActionRegistration
 vi.mock("@/hooks/useActionRegistration")
 
+// Mock useCreateSession
+vi.mock("@/hooks/useCreateSession")
+
+const mockUseCreateSession = vi.mocked(
+  await import("@/hooks/useCreateSession"),
+).useCreateSession
+
 // Mock useTypedQuery to avoid Convex client requirement
 vi.mock("@/hooks/useTypedQuery", () => ({
   useTypedQuery: vi.fn(() => ({ status: "success", data: [] })),
@@ -25,9 +32,14 @@ vi.mock("convex/react", async (importOriginal) => {
 
 describe("TaskQuicklook", () => {
   const mockOnClose = vi.fn()
+  const mockCreateAndConnect = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseCreateSession.mockReturnValue({
+      createAndConnect: mockCreateAndConnect,
+      connectToPane: vi.fn(),
+    })
   })
 
   afterEach(() => {
@@ -240,6 +252,59 @@ describe("TaskQuicklook", () => {
       const link = screen.getByRole("link", { name: "documentation" })
       expect(link).toBeInTheDocument()
       expect(link).toHaveAttribute("href", "https://example.com")
+    })
+  })
+
+  describe("discuss button", () => {
+    it("renders a discuss button", () => {
+      const task = createMockTask()
+
+      render(<TaskQuicklook task={task} onClose={mockOnClose} />)
+
+      expect(screen.getByRole("button", { name: /discuss this task/i })).toBeInTheDocument()
+    })
+
+    it("calls createAndConnect with task context on click", async () => {
+      const user = userEvent.setup()
+      const task = createMockTask({
+        _id: "task42",
+        subject: "Fix the login bug",
+        status: "in_progress",
+        description: Option.some("Detailed steps here"),
+      })
+
+      render(<TaskQuicklook task={task} onClose={mockOnClose} />)
+
+      await user.click(screen.getByRole("button", { name: /discuss this task/i }))
+
+      expect(mockCreateAndConnect).toHaveBeenCalledOnce()
+      expect(mockCreateAndConnect).toHaveBeenCalledWith({
+        label: "Discuss: Fix the login bug",
+        contextType: "task",
+        contextId: "task42",
+        contextSummary: "Fix the login bug\n\nStatus: in_progress\n\nDetailed steps here",
+      })
+    })
+
+    it("handles task with no description", async () => {
+      const user = userEvent.setup()
+      const task = createMockTask({
+        _id: "task99",
+        subject: "Simple task",
+        status: "pending",
+        description: Option.none(),
+      })
+
+      render(<TaskQuicklook task={task} onClose={mockOnClose} />)
+
+      await user.click(screen.getByRole("button", { name: /discuss this task/i }))
+
+      expect(mockCreateAndConnect).toHaveBeenCalledWith({
+        label: "Discuss: Simple task",
+        contextType: "task",
+        contextId: "task99",
+        contextSummary: "Simple task\n\nStatus: pending",
+      })
     })
   })
 

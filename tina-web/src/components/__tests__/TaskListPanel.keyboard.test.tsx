@@ -12,6 +12,7 @@ import { setPanelFocus, setPanelSelection } from "@/test/harness/panel-state"
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
 vi.mock("@/hooks/useActionRegistration")
+vi.mock("@/hooks/useCreateSession")
 
 // Mock useTypedQuery to avoid Convex client requirement
 vi.mock("@/hooks/useTypedQuery", () => ({
@@ -36,6 +37,9 @@ const mockUseSelection = vi.mocked(
 const mockUseActionRegistration = vi.mocked(
   await import("@/hooks/useActionRegistration"),
 ).useActionRegistration
+const mockUseCreateSession = vi.mocked(
+  await import("@/hooks/useCreateSession"),
+).useCreateSession
 
 const taskIds = ["task2", "task3", "task1"] as const
 
@@ -79,6 +83,10 @@ describe("TaskListPanel - Keyboard Navigation", () => {
     setFocus()
     setPanelSelection(mockUseSelection)
     mockUseActionRegistration.mockImplementation(() => {})
+    mockUseCreateSession.mockReturnValue({
+      createAndConnect: vi.fn(),
+      connectToPane: vi.fn(),
+    })
   })
 
   it("registers Space action with taskList scope", () => {
