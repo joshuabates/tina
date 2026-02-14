@@ -214,6 +214,28 @@ pub async fn sync_team_members(
         }
     }
 
+    // Keep cache and Convex in sync with currently active members for this phase.
+    cache.team_member_state.retain(|(oid, phase, agent_name), _| {
+        !(oid == orchestration_id
+            && phase == &phase_number
+            && !current_members.contains_key(agent_name))
+    });
+    let active_agent_names: Vec<String> = current_members.keys().cloned().collect();
+    let prune_result = {
+        let mut client_guard = client.lock().await;
+        client_guard
+            .prune_team_members(orchestration_id, &phase_number, &active_agent_names)
+            .await
+    };
+    if let Err(e) = prune_result {
+        error!(
+            orchestration = %orchestration_id,
+            phase = %phase_number,
+            error = %e,
+            "failed to prune stale team members"
+        );
+    }
+
     // Sync current members to Convex
     for member in &team_config.members {
         let cache_key = (

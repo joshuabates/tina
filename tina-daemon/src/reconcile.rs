@@ -71,7 +71,7 @@ pub fn alive_pane_ids(panes: &[TmuxPane]) -> HashSet<&str> {
 /// Query tmux for all panes (blocking — call from `spawn_blocking`).
 ///
 /// Returns `Ok(Some(output))` if tmux is running, `Ok(None)` if tmux server
-/// is not started (no sessions), or `Err` on unexpected failures.
+/// is not started (no sessions), or `Err` on failures (including missing tmux binary).
 pub fn list_tmux_panes_blocking() -> Result<Option<String>> {
     let output = Command::new("tmux")
         .args(["list-panes", "-a", "-F", "#{pane_id} #{pane_dead}"])
@@ -95,12 +95,10 @@ pub fn list_tmux_panes_blocking() -> Result<Option<String>> {
             }
         }
         Err(e) => {
-            // tmux binary not found or not executable
             if e.kind() == std::io::ErrorKind::NotFound {
-                Ok(None)
-            } else {
-                Err(e.into())
+                anyhow::bail!("tmux binary not found in PATH")
             }
+            Err(e.into())
         }
     }
 }

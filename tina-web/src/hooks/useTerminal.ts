@@ -11,11 +11,13 @@ function buildWsUrl(paneId: string): string {
 }
 
 function encodeResizeMessage(cols: number, rows: number): ArrayBuffer {
-  const msg = new Uint8Array(4)
-  msg[0] = (cols >> 8) & 0xff
-  msg[1] = cols & 0xff
-  msg[2] = (rows >> 8) & 0xff
-  msg[3] = rows & 0xff
+  // Binary control protocol: [type=1, cols_hi, cols_lo, rows_hi, rows_lo]
+  const msg = new Uint8Array(5)
+  msg[0] = 1
+  msg[1] = (cols >> 8) & 0xff
+  msg[2] = cols & 0xff
+  msg[3] = (rows >> 8) & 0xff
+  msg[4] = rows & 0xff
   return msg.buffer
 }
 

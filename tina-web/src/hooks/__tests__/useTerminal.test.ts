@@ -137,6 +137,19 @@ describe("useTerminal", () => {
     expect(onStatusChange).toHaveBeenCalledWith("connected")
   })
 
+  it("sends typed resize control message on connect", () => {
+    renderConnected("test-pane")
+
+    act(() => {
+      capturedWs!.simulateOpen()
+    })
+
+    expect(capturedWs!.send).toHaveBeenCalled()
+    const payload = capturedWs!.send.mock.calls[0]?.[0] as ArrayBuffer
+    const bytes = new Uint8Array(payload)
+    expect(Array.from(bytes)).toEqual([1, 0, 80, 0, 24])
+  })
+
   it("sets status to 'disconnected' on WebSocket close", () => {
     const { onStatusChange } = renderConnected("test-pane")
 

@@ -20,19 +20,22 @@ export const listTerminalTargets = query({
     for (const member of allMembers) {
       if (!member.tmuxPaneId) continue;
 
-      // Find the team for this member's orchestration + phase
-      const team = await ctx.db
+      // Check orchestration is still active.
+      const orchestration = await ctx.db.get(member.orchestrationId);
+      if (!orchestration) continue;
+      if (orchestration.status.toLowerCase() === "complete") continue;
+
+      // Find the best team match for this member.
+      const teams = await ctx.db
         .query("teams")
         .withIndex("by_orchestration", (q) =>
           q.eq("orchestrationId", member.orchestrationId),
         )
-        .first();
+        .collect();
 
-      if (!team) continue;
-
-      // Check orchestration is still active
-      const orchestration = await ctx.db.get(member.orchestrationId);
-      if (!orchestration || orchestration.status === "complete") continue;
+      if (teams.length === 0) continue;
+      const team =
+        teams.find((t) => t.phaseNumber === member.phaseNumber) ?? teams[0];
 
       targets.push({
         id: `agent:${member._id}`,

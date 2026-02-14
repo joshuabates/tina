@@ -1,7 +1,12 @@
 import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import schema from "./schema";
-import { createFeatureFixture, registerTeam } from "./test_helpers";
+import {
+  createFeatureFixture,
+  createNode,
+  createOrchestration,
+  registerTeam,
+} from "./test_helpers";
 
 const modules = import.meta.glob("./**/*.*s");
 
@@ -188,5 +193,66 @@ describe("terminalTargets:listTerminalTargets", () => {
       id: "task-123",
       summary: "Review auth",
     });
+  });
+
+  test("excludes agent sessions when orchestration status is Complete (case-insensitive)", async () => {
+    const t = convexTest(schema, modules);
+    const nodeId = await createNode(t);
+    const orchestrationId = await createOrchestration(t, {
+      nodeId,
+      featureName: "done-feature",
+      status: "Complete",
+    });
+
+    await registerTeam(t, {
+      teamName: "done-feature-phase-1",
+      orchestrationId,
+      phaseNumber: "1",
+      tmuxSessionName: "tina-done-feature-phase-1",
+      createdAt: Date.now(),
+    });
+
+    await t.mutation("teamMembers:upsertTeamMember" as any, {
+      orchestrationId,
+      phaseNumber: "1",
+      agentName: "worker-1",
+      tmuxPaneId: "%42",
+      recordedAt: "2026-02-13T10:00:00Z",
+    });
+
+    const targets = await t.query("terminalTargets:listTerminalTargets" as any, {});
+    expect(targets.length).toBe(0);
+  });
+
+  test("uses phase-matching team for tmux session name", async () => {
+    const t = convexTest(schema, modules);
+    const { orchestrationId } = await createFeatureFixture(t, "phase-match");
+
+    await registerTeam(t, {
+      teamName: "phase-match-phase-1",
+      orchestrationId,
+      phaseNumber: "1",
+      tmuxSessionName: "tina-phase-match-phase-1",
+      createdAt: Date.now(),
+    });
+    await registerTeam(t, {
+      teamName: "phase-match-phase-2",
+      orchestrationId,
+      phaseNumber: "2",
+      tmuxSessionName: "tina-phase-match-phase-2",
+      createdAt: Date.now(),
+    });
+
+    await t.mutation("teamMembers:upsertTeamMember" as any, {
+      orchestrationId,
+      phaseNumber: "2",
+      agentName: "worker-2",
+      tmuxPaneId: "%55",
+      recordedAt: "2026-02-13T10:00:00Z",
+    });
+
+    const targets = await t.query("terminalTargets:listTerminalTargets" as any, {});
+    expect(targets.length).toBe(1);
+    expect(targets[0].tmuxSessionName).toBe("tina-phase-match-phase-2");
   });
 });

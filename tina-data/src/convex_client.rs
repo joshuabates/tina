@@ -1180,6 +1180,28 @@ impl TinaConvexClient {
         extract_id(result)
     }
 
+    /// Remove stale team members for an orchestration phase.
+    pub async fn prune_team_members(
+        &mut self,
+        orchestration_id: &str,
+        phase_number: &str,
+        active_agent_names: &[String],
+    ) -> Result<()> {
+        let mut args = BTreeMap::new();
+        args.insert("orchestrationId".into(), Value::from(orchestration_id));
+        args.insert("phaseNumber".into(), Value::from(phase_number));
+        let active_values = active_agent_names
+            .iter()
+            .map(|name| Value::from(name.as_str()))
+            .collect();
+        args.insert("activeAgentNames".into(), Value::Array(active_values));
+        let result = self
+            .client
+            .mutation("teamMembers:prunePhaseMembers", args)
+            .await?;
+        extract_unit(result)
+    }
+
     /// Register a team in Convex.
     pub async fn register_team(&mut self, team: &RegisterTeamRecord) -> Result<String> {
         let args = register_team_to_args(team);

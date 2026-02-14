@@ -38,6 +38,29 @@ export const upsertTeamMember = mutation({
   },
 });
 
+export const prunePhaseMembers = mutation({
+  args: {
+    orchestrationId: v.id("orchestrations"),
+    phaseNumber: v.string(),
+    activeAgentNames: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const activeNames = new Set(args.activeAgentNames);
+    const members = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_orchestration", (q) =>
+        q.eq("orchestrationId", args.orchestrationId),
+      )
+      .collect();
+
+    for (const member of members) {
+      if (member.phaseNumber !== args.phaseNumber) continue;
+      if (activeNames.has(member.agentName)) continue;
+      await ctx.db.delete(member._id);
+    }
+  },
+});
+
 export const listWithPaneIds = query({
   args: {},
   handler: async (ctx) => {
