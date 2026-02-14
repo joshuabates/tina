@@ -9,7 +9,7 @@ const STATUS_VALUES = [
   "pending",
   "in_progress",
   "launching",
-  // Design statuses
+  // Spec statuses
   "draft",
   "in_review",
   "approved",
@@ -108,7 +108,7 @@ const statusStyleMap: Record<StatusBadgeStatus, StatusStyleTokens> = {
     borderClass: "border-l-status-executing",
     badgeClass: "text-status-executing border-status-executing/30 bg-status-executing/12",
   },
-  // Design statuses
+  // Spec statuses
   draft: {
     label: "Draft",
     textClass: "text-status-planning",
