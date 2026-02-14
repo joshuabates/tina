@@ -13,7 +13,8 @@
     "capture:storybook": "tsx scripts/capture-storybook.ts",
     "compare": "tsx scripts/compare.ts",
     "vision-compare": "tsx scripts/vision-compare.ts",
-    "playwright:install": "playwright install chromium"
+    "playwright:install": "playwright install chromium",
+    "validate-config": "tsx scripts/validate-config.ts"
   },
   "dependencies": {
     "react": "^19.2.0",
