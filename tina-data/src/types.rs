@@ -295,6 +295,32 @@ pub struct SpecRecord {
     pub archived_at: Option<String>,
 }
 
+/// Design record for Convex `designs` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignRecord {
+    pub id: String,
+    pub project_id: String,
+    pub design_key: String,
+    pub title: String,
+    pub prompt: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Design variation record for Convex `designVariations` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignVariationRecord {
+    pub id: String,
+    pub design_id: String,
+    pub slug: String,
+    pub title: String,
+    pub status: String,
+    pub screenshot_storage_ids: Option<Vec<String>>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 /// Ticket record for Convex `tickets` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TicketRecord {

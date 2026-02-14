@@ -969,6 +969,89 @@ fn extract_plan_list(result: FunctionResult) -> Result<Vec<PlanRecord>> {
     }
 }
 
+fn value_as_opt_str_vec(map: &BTreeMap<String, Value>, key: &str) -> Option<Vec<String>> {
+    match map.get(key) {
+        Some(Value::Array(arr)) => {
+            let strings: Vec<String> = arr
+                .iter()
+                .filter_map(|v| {
+                    if let Value::String(s) = v {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            Some(strings)
+        }
+        _ => None,
+    }
+}
+
+fn extract_design_record(obj: &BTreeMap<String, Value>) -> DesignRecord {
+    DesignRecord {
+        id: value_as_id(obj, "_id"),
+        project_id: value_as_id(obj, "projectId"),
+        design_key: value_as_str(obj, "designKey"),
+        title: value_as_str(obj, "title"),
+        prompt: value_as_str(obj, "prompt"),
+        status: value_as_str(obj, "status"),
+        created_at: value_as_str(obj, "createdAt"),
+        updated_at: value_as_str(obj, "updatedAt"),
+    }
+}
+
+fn extract_design_list(result: FunctionResult) -> Result<Vec<DesignRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut designs = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    designs.push(extract_design_record(&obj));
+                }
+            }
+            Ok(designs)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => bail!("expected array for design list, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_variation_record(obj: &BTreeMap<String, Value>) -> DesignVariationRecord {
+    DesignVariationRecord {
+        id: value_as_id(obj, "_id"),
+        design_id: value_as_id(obj, "designId"),
+        slug: value_as_str(obj, "slug"),
+        title: value_as_str(obj, "title"),
+        status: value_as_str(obj, "status"),
+        screenshot_storage_ids: value_as_opt_str_vec(obj, "screenshotStorageIds"),
+        created_at: value_as_str(obj, "createdAt"),
+        updated_at: value_as_str(obj, "updatedAt"),
+    }
+}
+
+fn extract_variation_list(result: FunctionResult) -> Result<Vec<DesignVariationRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut variations = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    variations.push(extract_variation_record(&obj));
+                }
+            }
+            Ok(variations)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => {
+            bail!("expected array for variation list, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
 fn extract_spec_record(obj: &BTreeMap<String, Value>) -> SpecRecord {
     SpecRecord {
         id: value_as_id(obj, "_id"),
@@ -1673,6 +1756,116 @@ impl TinaConvexClient {
         args.insert("targetId".into(), Value::from(target_id));
         let result = self.client.query("workComments:listComments", args).await?;
         extract_comment_list(result)
+    }
+
+    // --- Design methods ---
+
+    /// Create a new design.
+    pub async fn create_design(
+        &mut self,
+        project_id: &str,
+        title: &str,
+        prompt: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("projectId".into(), Value::from(project_id));
+        args.insert("title".into(), Value::from(title));
+        args.insert("prompt".into(), Value::from(prompt));
+        let result = self
+            .client
+            .mutation("designs:createDesign", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// List designs for a project, optionally filtered by status.
+    pub async fn list_designs(
+        &mut self,
+        project_id: &str,
+        status: Option<&str>,
+    ) -> Result<Vec<DesignRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("projectId".into(), Value::from(project_id));
+        if let Some(s) = status {
+            args.insert("status".into(), Value::from(s));
+        }
+        let result = self.client.query("designs:listDesigns", args).await?;
+        extract_design_list(result)
+    }
+
+    /// Create a new design variation.
+    pub async fn create_variation(
+        &mut self,
+        design_id: &str,
+        slug: &str,
+        title: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("designId".into(), Value::from(design_id));
+        args.insert("slug".into(), Value::from(slug));
+        args.insert("title".into(), Value::from(title));
+        let result = self
+            .client
+            .mutation("designVariations:createVariation", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// List variations for a design.
+    pub async fn list_variations(
+        &mut self,
+        design_id: &str,
+    ) -> Result<Vec<DesignVariationRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("designId".into(), Value::from(design_id));
+        let result = self
+            .client
+            .query("designVariations:listVariations", args)
+            .await?;
+        extract_variation_list(result)
+    }
+
+    /// Update screenshot storage IDs for a variation.
+    pub async fn update_variation_screenshots(
+        &mut self,
+        variation_id: &str,
+        storage_ids: &[String],
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("variationId".into(), Value::from(variation_id));
+        let ids_value: Vec<Value> = storage_ids.iter().map(|s| Value::from(s.as_str())).collect();
+        args.insert("screenshotStorageIds".into(), Value::Array(ids_value));
+        let result = self
+            .client
+            .mutation("designVariations:updateVariation", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Generate a screenshot upload URL.
+    pub async fn generate_screenshot_upload_url(&mut self) -> Result<String> {
+        let args = BTreeMap::new();
+        let result = self
+            .client
+            .mutation("designVariations:generateScreenshotUploadUrl", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Link a spec to a design.
+    pub async fn link_spec_to_design(
+        &mut self,
+        spec_id: &str,
+        design_id: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("specId".into(), Value::from(spec_id));
+        args.insert("designId".into(), Value::from(design_id));
+        let result = self
+            .client
+            .mutation("specDesigns:linkSpecToDesign", args)
+            .await?;
+        extract_id(result)
     }
 
     // --- Review methods ---
@@ -2816,5 +3009,175 @@ mod tests {
         let comment = extract_comment_record(&obj);
 
         assert_eq!(comment.edited_at, Some("2026-02-11T11:00:00Z".to_string()));
+    }
+
+    // --- Design extraction tests ---
+
+    #[test]
+    fn test_extract_design_record_from_obj() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("design-123"));
+        obj.insert("projectId".to_string(), Value::from("proj-456"));
+        obj.insert("designKey".to_string(), Value::from("MYAPP-D1"));
+        obj.insert("title".to_string(), Value::from("Login Page Redesign"));
+        obj.insert("prompt".to_string(), Value::from("Redesign the login page"));
+        obj.insert("status".to_string(), Value::from("exploring"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+
+        let design = extract_design_record(&obj);
+
+        assert_eq!(design.id, "design-123");
+        assert_eq!(design.project_id, "proj-456");
+        assert_eq!(design.design_key, "MYAPP-D1");
+        assert_eq!(design.title, "Login Page Redesign");
+        assert_eq!(design.prompt, "Redesign the login page");
+        assert_eq!(design.status, "exploring");
+        assert_eq!(design.created_at, "2026-02-13T10:00:00Z");
+        assert_eq!(design.updated_at, "2026-02-13T11:00:00Z");
+    }
+
+    #[test]
+    fn test_extract_design_list_from_array() {
+        let obj1 = Value::Object({
+            let mut m = BTreeMap::new();
+            m.insert("_id".to_string(), Value::from("design-1"));
+            m.insert("projectId".to_string(), Value::from("proj-1"));
+            m.insert("designKey".to_string(), Value::from("P-D1"));
+            m.insert("title".to_string(), Value::from("Design A"));
+            m.insert("prompt".to_string(), Value::from("Prompt A"));
+            m.insert("status".to_string(), Value::from("exploring"));
+            m.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+            m.insert("updatedAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+            m
+        });
+        let obj2 = Value::Object({
+            let mut m = BTreeMap::new();
+            m.insert("_id".to_string(), Value::from("design-2"));
+            m.insert("projectId".to_string(), Value::from("proj-1"));
+            m.insert("designKey".to_string(), Value::from("P-D2"));
+            m.insert("title".to_string(), Value::from("Design B"));
+            m.insert("prompt".to_string(), Value::from("Prompt B"));
+            m.insert("status".to_string(), Value::from("locked"));
+            m.insert("createdAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+            m.insert("updatedAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+            m
+        });
+
+        let result = FunctionResult::Value(Value::Array(vec![obj1, obj2]));
+        let designs = extract_design_list(result).unwrap();
+
+        assert_eq!(designs.len(), 2);
+        assert_eq!(designs[0].id, "design-1");
+        assert_eq!(designs[0].title, "Design A");
+        assert_eq!(designs[1].id, "design-2");
+        assert_eq!(designs[1].status, "locked");
+    }
+
+    #[test]
+    fn test_extract_design_list_null_returns_empty() {
+        let result = FunctionResult::Value(Value::Null);
+        let designs = extract_design_list(result).unwrap();
+        assert!(designs.is_empty());
+    }
+
+    #[test]
+    fn test_extract_variation_record_from_obj() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("var-123"));
+        obj.insert("designId".to_string(), Value::from("design-456"));
+        obj.insert("slug".to_string(), Value::from("dark-theme"));
+        obj.insert("title".to_string(), Value::from("Dark Theme Variant"));
+        obj.insert("status".to_string(), Value::from("exploring"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+
+        let variation = extract_variation_record(&obj);
+
+        assert_eq!(variation.id, "var-123");
+        assert_eq!(variation.design_id, "design-456");
+        assert_eq!(variation.slug, "dark-theme");
+        assert_eq!(variation.title, "Dark Theme Variant");
+        assert_eq!(variation.status, "exploring");
+        assert!(variation.screenshot_storage_ids.is_none());
+    }
+
+    #[test]
+    fn test_extract_variation_record_with_screenshots() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("var-123"));
+        obj.insert("designId".to_string(), Value::from("design-456"));
+        obj.insert("slug".to_string(), Value::from("light-theme"));
+        obj.insert("title".to_string(), Value::from("Light Theme Variant"));
+        obj.insert("status".to_string(), Value::from("selected"));
+        obj.insert(
+            "screenshotStorageIds".to_string(),
+            Value::Array(vec![Value::from("sid-1"), Value::from("sid-2")]),
+        );
+        obj.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+
+        let variation = extract_variation_record(&obj);
+
+        assert_eq!(variation.id, "var-123");
+        assert_eq!(variation.status, "selected");
+        let sids = variation.screenshot_storage_ids.unwrap();
+        assert_eq!(sids, vec!["sid-1".to_string(), "sid-2".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_variation_list_from_array() {
+        let obj = Value::Object({
+            let mut m = BTreeMap::new();
+            m.insert("_id".to_string(), Value::from("var-1"));
+            m.insert("designId".to_string(), Value::from("design-1"));
+            m.insert("slug".to_string(), Value::from("v1"));
+            m.insert("title".to_string(), Value::from("Variation 1"));
+            m.insert("status".to_string(), Value::from("exploring"));
+            m.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+            m.insert("updatedAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+            m
+        });
+
+        let result = FunctionResult::Value(Value::Array(vec![obj]));
+        let variations = extract_variation_list(result).unwrap();
+
+        assert_eq!(variations.len(), 1);
+        assert_eq!(variations[0].id, "var-1");
+        assert_eq!(variations[0].slug, "v1");
+    }
+
+    #[test]
+    fn test_extract_variation_list_null_returns_empty() {
+        let result = FunctionResult::Value(Value::Null);
+        let variations = extract_variation_list(result).unwrap();
+        assert!(variations.is_empty());
+    }
+
+    #[test]
+    fn test_value_as_opt_str_vec_some() {
+        let mut map = BTreeMap::new();
+        map.insert(
+            "ids".to_string(),
+            Value::Array(vec![Value::from("a"), Value::from("b")]),
+        );
+
+        let result = value_as_opt_str_vec(&map, "ids");
+        assert_eq!(result, Some(vec!["a".to_string(), "b".to_string()]));
+    }
+
+    #[test]
+    fn test_value_as_opt_str_vec_none() {
+        let map = BTreeMap::new();
+        let result = value_as_opt_str_vec(&map, "ids");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_value_as_opt_str_vec_null() {
+        let mut map = BTreeMap::new();
+        map.insert("ids".to_string(), Value::Null);
+        let result = value_as_opt_str_vec(&map, "ids");
+        assert_eq!(result, None);
     }
 }
