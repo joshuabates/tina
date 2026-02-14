@@ -54,7 +54,7 @@ mod tests {
         let state = r#"{
             "version": 1,
             "feature": "test-feature",
-            "design_doc": "docs/plans/design.md",
+            "spec_doc": "docs/plans/spec.md",
             "worktree_path": "/path/to/worktree",
             "branch": "feature/test",
             "total_phases": 3,

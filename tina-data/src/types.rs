@@ -281,12 +281,12 @@ pub struct RollupRecord {
     pub max_duration_ms: Option<f64>,
 }
 
-/// Design record for Convex `designs` table.
+/// Spec record for Convex `specs` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DesignRecord {
+pub struct SpecRecord {
     pub id: String,
     pub project_id: String,
-    pub design_key: String,
+    pub spec_key: String,
     pub title: String,
     pub markdown: String,
     pub status: String,
@@ -300,7 +300,7 @@ pub struct DesignRecord {
 pub struct TicketRecord {
     pub id: String,
     pub project_id: String,
-    pub design_id: Option<String>,
+    pub spec_id: Option<String>,
     pub ticket_key: String,
     pub title: String,
     pub description: String,
