@@ -128,7 +128,7 @@ mod tests {
         let json = r#"{
             "version": 1,
             "feature": "test",
-            "design_doc": "/tmp/design.md",
+            "spec_doc": "/tmp/design.md",
             "worktree_path": "/tmp/worktree",
             "branch": "test-branch",
             "total_phases": 3,
@@ -151,7 +151,7 @@ mod tests {
         let json = r#"{
             "version": 1,
             "feature": "test",
-            "design_doc": "/tmp/design.md",
+            "spec_doc": "/tmp/design.md",
             "worktree_path": "/tmp/worktree",
             "branch": "test-branch",
             "total_phases": 3,
