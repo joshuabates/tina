@@ -11,7 +11,7 @@ import styles from "./CommentTimeline.module.scss"
 
 interface CommentTimelineProps {
   projectId: string
-  targetType: "design" | "ticket"
+  targetType: "spec" | "ticket"
   targetId: string
 }
 

@@ -2,8 +2,8 @@ import { useState } from "react"
 import { useMutation } from "convex/react"
 import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { useDesignValidation } from "@/hooks/useDesignValidation"
-import { DesignListQuery } from "@/services/data/queryDefs"
+import { useSpecValidation } from "@/hooks/useSpecValidation"
+import { SpecListQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { generateIdempotencyKey, kebabCase } from "@/lib/utils"
@@ -21,14 +21,14 @@ interface LaunchModalProps {
 }
 
 export function LaunchModal({ projectId, onClose }: LaunchModalProps) {
-  const [selectedDesignId, setSelectedDesignId] = useState<string>("")
+  const [selectedSpecId, setSelectedSpecId] = useState<string>("")
   const [featureName, setFeatureName] = useState<string>("")
   const [policy, setPolicy] = useState<PolicySnapshot>(() => structuredClone(PRESETS.balanced))
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<{ orchestrationId: string } | null>(null)
 
-  const designsResult = useTypedQuery(DesignListQuery, {
+  const specsResult = useTypedQuery(SpecListQuery, {
     projectId,
     status: undefined,
   })
@@ -37,9 +37,9 @@ export function LaunchModal({ projectId, onClose }: LaunchModalProps) {
 
   const branchName = featureName ? `tina/${kebabCase(featureName)}` : ""
 
-  const designs = designsResult.status === "success" ? designsResult.data : []
-  const selectedDesign = designs.find((d) => d._id === selectedDesignId)
-  const validation = useDesignValidation(selectedDesign)
+  const specs = specsResult.status === "success" ? specsResult.data : []
+  const selectedSpec = specs.find((d) => d._id === selectedSpecId)
+  const validation = useSpecValidation(selectedSpec)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -53,14 +53,14 @@ export function LaunchModal({ projectId, onClose }: LaunchModalProps) {
       return
     }
 
-    if (!selectedDesignId) {
-      setError("Please select a design")
+    if (!selectedSpecId) {
+      setError("Please select a spec")
       setSubmitting(false)
       return
     }
 
     if (!validation.valid) {
-      setError("Design validation must pass before launching")
+      setError("Spec validation must pass before launching")
       setSubmitting(false)
       return
     }
@@ -69,7 +69,7 @@ export function LaunchModal({ projectId, onClose }: LaunchModalProps) {
       const idempotencyKey = generateIdempotencyKey()
       const { orchestrationId } = await launch({
         projectId: projectId as Id<"projects">,
-        designId: selectedDesignId as Id<"designs">,
+        specId: selectedSpecId as Id<"specs">,
         feature: featureName.trim(),
         branch: branchName.trim(),
         policySnapshot: policy,
@@ -79,7 +79,7 @@ export function LaunchModal({ projectId, onClose }: LaunchModalProps) {
       setResult({ orchestrationId: orchestrationId as string })
       setFeatureName("")
       setPolicy(structuredClone(PRESETS.balanced))
-      setSelectedDesignId("")
+      setSelectedSpecId("")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to launch orchestration")
     } finally {
@@ -87,8 +87,8 @@ export function LaunchModal({ projectId, onClose }: LaunchModalProps) {
     }
   }
 
-  const isLoading = isAnyQueryLoading(designsResult)
-  const queryError = firstQueryError(designsResult)
+  const isLoading = isAnyQueryLoading(specsResult)
+  const queryError = firstQueryError(specsResult)
 
   return (
     <FormDialog title="Launch Orchestration" onClose={onClose} maxWidth={560}>
@@ -103,34 +103,34 @@ export function LaunchModal({ projectId, onClose }: LaunchModalProps) {
 
       <form onSubmit={handleSubmit}>
         <div className={formStyles.formField}>
-          <label className={formStyles.formLabel} htmlFor="design-select">
-            Design
+          <label className={formStyles.formLabel} htmlFor="spec-select">
+            Spec
           </label>
           <select
-            id="design-select"
+            id="spec-select"
             className={formStyles.formInput}
-            value={selectedDesignId}
-            onChange={(e) => setSelectedDesignId(e.target.value)}
+            value={selectedSpecId}
+            onChange={(e) => setSelectedSpecId(e.target.value)}
             disabled={isLoading}
           >
-            <option value="">Select a design</option>
-            {designs.map((design) => (
-              <option key={design._id} value={design._id}>
-                {design.title}
+            <option value="">Select a spec</option>
+            {specs.map((spec) => (
+              <option key={spec._id} value={spec._id}>
+                {spec.title}
               </option>
             ))}
           </select>
         </div>
 
-        {selectedDesign && (
+        {selectedSpec && (
           <div className={`${styles.validationStatus} ${validation.valid ? styles.statusReady : styles.statusNotReady}`}>
             <span>{validation.valid ? "Ready for launch" : "Not ready for launch"}</span>
             {!validation.valid && validation.errors.map((err, i) => (
               <div key={i} className={styles.statusDetail}>{err}</div>
             ))}
-            {validation.valid && Option.isSome(selectedDesign.phaseCount) && (
+            {validation.valid && Option.isSome(selectedSpec.phaseCount) && (
               <div className={styles.statusDetail}>
-                {Option.getOrUndefined(selectedDesign.phaseCount)} phase{Option.getOrUndefined(selectedDesign.phaseCount) !== 1 ? "s" : ""} detected
+                {Option.getOrUndefined(selectedSpec.phaseCount)} phase{Option.getOrUndefined(selectedSpec.phaseCount) !== 1 ? "s" : ""} detected
               </div>
             )}
           </div>
@@ -165,7 +165,7 @@ export function LaunchModal({ projectId, onClose }: LaunchModalProps) {
           <button
             type="submit"
             className={formStyles.submitButton}
-            disabled={!featureName.trim() || !selectedDesignId || !validation.valid || submitting || isLoading}
+            disabled={!featureName.trim() || !selectedSpecId || !validation.valid || submitting || isLoading}
           >
             {submitting ? "Launching..." : "Launch"}
           </button>

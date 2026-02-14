@@ -3,10 +3,10 @@ import { AppShell } from "./components/AppShell"
 import { OrchestrationPage } from "./components/OrchestrationPage"
 import { ReviewDetailPage } from "./components/ReviewDetailPage"
 import { PmShell } from "./components/pm/PmShell"
-import { DesignDetailPage } from "./components/pm/DesignDetailPage"
+import { SpecDetailPage } from "./components/pm/SpecDetailPage"
 import { TicketDetailPage } from "./components/pm/TicketDetailPage"
 import { TicketListPage } from "./components/pm/TicketListPage"
-import { DesignListPage } from "./components/pm/DesignListPage"
+import { SpecListPage } from "./components/pm/SpecListPage"
 import { SessionsModePage } from "./components/modes/SessionsModePage"
 import { CodeModePage } from "./components/modes/CodeModePage"
 import { DesignModePage } from "./components/modes/DesignModePage"
@@ -113,8 +113,8 @@ export default function App() {
           <Route index element={<Navigate to="tickets" replace />} />
           <Route path="tickets" element={<TicketListPage />} />
           <Route path="tickets/:ticketId" element={<TicketDetailPage />} />
-          <Route path="designs" element={<DesignListPage />} />
-          <Route path="designs/:designId" element={<DesignDetailPage />} />
+          <Route path="specs" element={<SpecListPage />} />
+          <Route path="specs/:specId" element={<SpecDetailPage />} />
         </Route>
       </Route>
 

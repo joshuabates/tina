@@ -68,17 +68,17 @@ function PlanSidebar({ projectId }: { projectId: string }) {
         </NavLink>
       </div>
       <div className={styles.modeSidebarSection}>
-        <div className={styles.modeSidebarSectionTitle}>Designs</div>
+        <div className={styles.modeSidebarSectionTitle}>Specs</div>
         <NavLink
           className={({ isActive }) =>
             isActive
               ? `${styles.modeSidebarLink} ${styles.modeSidebarLinkActive}`
               : styles.modeSidebarLink
           }
-          to={`/projects/${projectId}/plan/designs`}
+          to={`/projects/${projectId}/plan/specs`}
           data-sidebar-action
         >
-          All designs
+          All specs
         </NavLink>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { Option } from "effect"
 import { useParams, Link } from "react-router-dom"
 import { useMutation } from "convex/react"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { TicketDetailQuery, DesignListQuery } from "@/services/data/queryDefs"
+import { TicketDetailQuery, SpecListQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -66,7 +66,7 @@ export function TicketDetailPage() {
       ? ticketResult.data.projectId
       : null)
 
-  const designsResult = useTypedQuery(DesignListQuery, {
+  const specsResult = useTypedQuery(SpecListQuery, {
     projectId: resolvedProjectId as string,
   })
 
@@ -103,7 +103,7 @@ export function TicketDetailPage() {
     )
   }
 
-  if (isAnyQueryLoading(designsResult)) {
+  if (isAnyQueryLoading(specsResult)) {
     return (
       <div data-testid="ticket-detail-page" className={styles.ticketDetail}>
         <div data-testid="ticket-detail-loading" className={styles.loading}>
@@ -115,21 +115,21 @@ export function TicketDetailPage() {
     )
   }
 
-  const designsQueryError = firstQueryError(designsResult)
-  if (designsQueryError) {
-    throw designsQueryError
+  const specsQueryError = firstQueryError(specsResult)
+  if (specsQueryError) {
+    throw specsQueryError
   }
 
-  if (designsResult.status !== "success") {
+  if (specsResult.status !== "success") {
     return null
   }
 
-  const designs = designsResult.data
+  const specs = specsResult.data
   const projectId = routeProjectId ?? ticket.projectId
 
-  const designMap = new Map(designs.map((d) => [d._id, d]))
-  const rawDesignId = Option.isSome(ticket.designId) ? ticket.designId.value : undefined
-  const linkedDesign = rawDesignId ? designMap.get(rawDesignId) : undefined
+  const specMap = new Map(specs.map((d) => [d._id, d]))
+  const rawSpecId = Option.isSome(ticket.specId) ? ticket.specId.value : undefined
+  const linkedSpec = rawSpecId ? specMap.get(rawSpecId) : undefined
   const transitions = STATUS_TRANSITIONS[ticket.status] ?? []
 
   const handleTransition = async (newStatus: string) => {
@@ -177,7 +177,7 @@ export function TicketDetailPage() {
       {editing && (
         <EditTicketModal
           ticket={ticket}
-          designs={designs}
+          specs={specs}
           onClose={() => setEditing(false)}
           onSaved={() => setEditing(false)}
         />
@@ -205,15 +205,15 @@ export function TicketDetailPage() {
             }
           </div>
         </div>
-        <div className={styles.metadataItem} data-testid="meta-design">
-          <div className={styles.metadataLabel}>Design</div>
+        <div className={styles.metadataItem} data-testid="meta-spec">
+          <div className={styles.metadataLabel}>Spec</div>
           <div className={styles.metadataValue}>
-            {linkedDesign && rawDesignId ? (
+            {linkedSpec && rawSpecId ? (
               <Link
-                to={`/projects/${projectId}/plan/designs/${rawDesignId}`}
-                className={styles.designLink}
+                to={`/projects/${projectId}/plan/specs/${rawSpecId}`}
+                className={styles.specLink}
               >
-                {linkedDesign.designKey}: {linkedDesign.title}
+                {linkedSpec.specKey}: {linkedSpec.title}
               </Link>
             ) : (
               <span className={styles.unassigned}>—</span>

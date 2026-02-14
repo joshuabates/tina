@@ -3,20 +3,20 @@ import { Option } from "effect"
 import { useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { FormDialog } from "@/components/FormDialog"
-import type { TicketSummary, DesignSummary } from "@/schemas"
+import type { TicketSummary, SpecSummary } from "@/schemas"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "@/components/FormDialog.module.scss"
 
 interface EditTicketModalProps {
   ticket: TicketSummary
-  designs: readonly DesignSummary[]
+  specs: readonly SpecSummary[]
   onClose: () => void
   onSaved: () => void
 }
 
 export function EditTicketModal({
   ticket,
-  designs,
+  specs,
   onClose,
   onSaved,
 }: EditTicketModalProps) {
@@ -26,8 +26,8 @@ export function EditTicketModal({
   const [estimate, setEstimate] = useState(
     Option.isSome(ticket.estimate) ? ticket.estimate.value : "",
   )
-  const [designId, setDesignId] = useState(
-    Option.isSome(ticket.designId) ? ticket.designId.value : "",
+  const [specId, setSpecId] = useState(
+    Option.isSome(ticket.specId) ? ticket.specId.value : "",
   )
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -45,8 +45,8 @@ export function EditTicketModal({
         title: string
         description: string
         priority: string
-        designId?: Id<"designs">
-        clearDesignId?: boolean
+        specId?: Id<"specs">
+        clearSpecId?: boolean
         estimate?: string
       } = {
         ticketId: ticket._id as Id<"tickets">,
@@ -55,10 +55,10 @@ export function EditTicketModal({
         priority,
         ...(estimate.trim() ? { estimate: estimate.trim() } : {}),
       }
-      if (designId) {
-        payload.designId = designId as Id<"designs">
-      } else if (Option.isSome(ticket.designId)) {
-        payload.clearDesignId = true
+      if (specId) {
+        payload.specId = specId as Id<"specs">
+      } else if (Option.isSome(ticket.specId)) {
+        payload.clearSpecId = true
       }
       await updateTicket(payload)
       onSaved()
@@ -117,17 +117,17 @@ export function EditTicketModal({
           />
         </div>
         <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="edit-design">Design Link</label>
+          <label className={styles.formLabel} htmlFor="edit-spec">Spec Link</label>
           <select
-            id="edit-design"
+            id="edit-spec"
             className={styles.formInput}
-            value={designId}
-            onChange={(e) => setDesignId(e.target.value)}
+            value={specId}
+            onChange={(e) => setSpecId(e.target.value)}
           >
             <option value="">None</option>
-            {designs.map((d) => (
+            {specs.map((d) => (
               <option key={d._id} value={d._id}>
-                {d.designKey}: {d.title}
+                {d.specKey}: {d.title}
               </option>
             ))}
           </select>

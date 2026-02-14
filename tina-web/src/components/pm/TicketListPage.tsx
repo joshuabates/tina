@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Option } from "effect"
 import { useNavigate, Link, useParams } from "react-router-dom"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { TicketListQuery, DesignListQuery } from "@/services/data/queryDefs"
+import { TicketListQuery, SpecListQuery } from "@/services/data/queryDefs"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus, priorityLabel } from "@/components/ui/status-styles"
@@ -21,7 +21,7 @@ export function TicketListPage() {
     projectId: projectId as string,
   })
 
-  const designsResult = useTypedQuery(DesignListQuery, {
+  const specsResult = useTypedQuery(SpecListQuery, {
     projectId: projectId as string,
   })
 
@@ -33,7 +33,7 @@ export function TicketListPage() {
     )
   }
 
-  if (isAnyQueryLoading(ticketsResult, designsResult)) {
+  if (isAnyQueryLoading(ticketsResult, specsResult)) {
     return (
       <div data-testid="ticket-list-page" className={styles.ticketList}>
         <div className={styles.header}>
@@ -48,19 +48,19 @@ export function TicketListPage() {
     )
   }
 
-  const queryError = firstQueryError(ticketsResult, designsResult)
+  const queryError = firstQueryError(ticketsResult, specsResult)
   if (queryError) {
     throw queryError
   }
 
-  if (ticketsResult.status !== "success" || designsResult.status !== "success") {
+  if (ticketsResult.status !== "success" || specsResult.status !== "success") {
     return null
   }
 
   const tickets = ticketsResult.data
-  const designs = designsResult.data
+  const specs = specsResult.data
 
-  const designMap = new Map(designs.map((d) => [d._id, d]))
+  const specMap = new Map(specs.map((d) => [d._id, d]))
 
   const handleRowClick = (ticket: TicketSummary) => {
     navigate(`/projects/${projectId}/plan/tickets/${ticket._id}`)
@@ -86,7 +86,7 @@ export function TicketListPage() {
       {showCreateForm && (
         <CreateTicketModal
           projectId={projectId}
-          designs={designs}
+          specs={specs}
           onClose={() => setShowCreateForm(false)}
           onCreated={handleCreated}
         />
@@ -101,16 +101,16 @@ export function TicketListPage() {
               <th>Ticket</th>
               <th>Status</th>
               <th>Priority</th>
-              <th>Design Link</th>
+              <th>Spec Link</th>
             </tr>
           </thead>
           <tbody>
             {tickets.map((ticket) => {
-              const rawDesignId = Option.isSome(ticket.designId)
-                ? ticket.designId.value
+              const rawSpecId = Option.isSome(ticket.specId)
+                ? ticket.specId.value
                 : undefined
-              const design = rawDesignId
-                ? designMap.get(rawDesignId)
+              const spec = rawSpecId
+                ? specMap.get(rawSpecId)
                 : undefined
 
               return (
@@ -134,13 +134,13 @@ export function TicketListPage() {
                     </span>
                   </td>
                   <td>
-                    {design && rawDesignId ? (
+                    {spec && rawSpecId ? (
                       <Link
-                        to={`/projects/${projectId}/plan/designs/${rawDesignId}`}
-                        className={styles.designLink}
+                        to={`/projects/${projectId}/plan/specs/${rawSpecId}`}
+                        className={styles.specLink}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {design.designKey}
+                        {spec.specKey}
                       </Link>
                     ) : (
                       <span className={styles.unassigned}>—</span>
