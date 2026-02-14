@@ -2,8 +2,15 @@ import { useId, useRef } from "react"
 import { useFocusTrap } from "@/hooks/useFocusTrap"
 import { useCreateSession } from "@/hooks/useCreateSession"
 import { useQuicklookKeyboard } from "@/hooks/useQuicklookKeyboard"
+import { useTypedQuery } from "@/hooks/useTypedQuery"
+import {
+  ReviewListQuery,
+  ReviewThreadByOrchestrationListQuery,
+} from "@/services/data/queryDefs"
+import { matchQueryResult } from "@/lib/query-state"
 import type { Commit } from "@/schemas"
 import type { DaemonCommitDetail } from "@/hooks/useDaemonQuery"
+import { ReviewFeedbackComposer, ReviewThreadCard } from "@/components/ReviewFeedback"
 import styles from "./QuicklookDialog.module.scss"
 
 export interface HydratedCommit extends Commit {
@@ -24,6 +31,14 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
 
   const { createAndConnect } = useCreateSession()
 
+  const reviewsResult = useTypedQuery(ReviewListQuery, {
+    orchestrationId: commit.orchestrationId,
+    phaseNumber: commit.phaseNumber,
+  })
+  const threadsResult = useTypedQuery(ReviewThreadByOrchestrationListQuery, {
+    orchestrationId: commit.orchestrationId,
+  })
+
   const handleCopyToClipboard = () => {
     navigator.clipboard.writeText(commit.sha)
   }
@@ -37,6 +52,24 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
   const deletionsValue = commit.detail?.deletions
   const insertions = insertionsValue !== undefined ? `+${insertionsValue}` : "--"
   const deletions = deletionsValue !== undefined ? `-${deletionsValue}` : "--"
+
+  const latestReviewId =
+    reviewsResult.status === "success"
+      ? (reviewsResult.data.find((review) => review.state === "open") ??
+          reviewsResult.data[0])?._id ?? null
+      : null
+
+  const commitThreads =
+    threadsResult.status === "success"
+      ? threadsResult.data.filter((thread) => thread.commitSha === commit.sha)
+      : []
+
+  const reviewContextMessage =
+    reviewsResult.status === "loading"
+      ? "Loading review context..."
+      : reviewsResult.status === "error"
+        ? "Review context unavailable for this commit"
+        : "No review available for this phase yet"
 
   const handleReviewCommit = () => {
     const stats =
@@ -131,6 +164,47 @@ export function CommitQuicklook({ commit, onClose }: CommitQuicklookProps) {
             >
               Review this commit
             </button>
+
+            <div className="border-t border-border/70 pt-4">
+              <div className="text-sm font-semibold mb-3">Feedback</div>
+
+              <ReviewFeedbackComposer
+                reviewId={latestReviewId}
+                orchestrationId={commit.orchestrationId}
+                commitSha={commit.sha}
+                emptyMessage={reviewContextMessage}
+                summaryPlaceholder="Feedback summary"
+                bodyPlaceholder="What should change?"
+                submitLabel="Add feedback"
+                successMessage="Feedback added"
+              />
+
+              {matchQueryResult(threadsResult, {
+                loading: () => (
+                  <div className="text-muted-foreground text-sm">Loading feedback...</div>
+                ),
+                error: () => (
+                  <div className="text-red-500 text-sm">Failed to load feedback</div>
+                ),
+                success: () => {
+                  if (commitThreads.length === 0) {
+                    return (
+                      <div className="text-muted-foreground text-sm">
+                        No feedback yet for this commit
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div className="space-y-3">
+                      {commitThreads.map((thread) => (
+                        <ReviewThreadCard key={thread._id} thread={thread} />
+                      ))}
+                    </div>
+                  )
+                },
+              })}
+            </div>
 
           </div>
         </div>

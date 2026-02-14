@@ -215,6 +215,15 @@ export const ReviewThreadListQuery = queryDef({
   schema: Schema.Array(ReviewThread),
 })
 
+export const ReviewThreadByOrchestrationListQuery = queryDef({
+  key: "reviewThreads.byOrchestration",
+  query: api.reviewThreads.listThreadsByOrchestration,
+  args: Schema.Struct({
+    orchestrationId: Schema.String,
+  }),
+  schema: Schema.Array(ReviewThread),
+})
+
 export const ReviewGateListQuery = queryDef({
   key: "reviewGates.list",
   query: api.reviewGates.listGatesByOrchestration,
@@ -235,4 +244,3 @@ export const TerminalTargetListQuery = queryDef({
   args: Schema.Struct({}),
   schema: Schema.Array(TerminalTarget),
 })
-

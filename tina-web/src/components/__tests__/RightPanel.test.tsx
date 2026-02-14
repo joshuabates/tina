@@ -19,10 +19,14 @@ vi.mock("@/hooks/useOrchestrationEvents")
 vi.mock("@/hooks/useFocusable")
 vi.mock("@/hooks/useSelection")
 vi.mock("@/hooks/useTypedQuery")
+vi.mock("@/hooks/useDaemonQuery")
 
 const mockUseTypedQuery = vi.mocked(
   await import("@/hooks/useTypedQuery"),
 ).useTypedQuery
+const mockUseCommitDetails = vi.mocked(
+  await import("@/hooks/useDaemonQuery"),
+).useCommitDetails
 
 const mockUseOrchestrationEvents = vi.mocked(
   await import("@/hooks/useOrchestrationEvents"),
@@ -49,6 +53,10 @@ describe("RightPanel", () => {
       selectOrchestration: vi.fn(),
       selectPhase: vi.fn(),
     })
+    mockUseCommitDetails.mockReturnValue({
+      data: { commits: [], missingShas: [] },
+      isError: false,
+    } as unknown as ReturnType<typeof mockUseCommitDetails>)
     mockUseOrchestrationEvents.mockReturnValue({
       status: "success",
       isLoading: false,

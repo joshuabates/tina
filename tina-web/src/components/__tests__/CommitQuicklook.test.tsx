@@ -10,13 +10,18 @@ vi.mock("@/hooks/useTypedQuery", () => ({
 }))
 
 // Mock useMutation to avoid Convex client requirement
+const mockCreateThread = vi.fn()
 vi.mock("convex/react", async (importOriginal) => {
   const mod = await importOriginal<typeof import("convex/react")>()
   return {
     ...mod,
-    useMutation: vi.fn(() => vi.fn()),
+    useMutation: vi.fn(() => mockCreateThread),
   }
 })
+
+const mockUseTypedQuery = vi.mocked(
+  await import("@/hooks/useTypedQuery"),
+).useTypedQuery
 
 const mockCreateAndConnect = vi.fn()
 vi.mock("@/hooks/useCreateSession", () => ({
@@ -54,6 +59,25 @@ describe("CommitQuicklook", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseTypedQuery.mockImplementation((def) => {
+      if (def.key === "reviews.list") {
+        return {
+          status: "success",
+          data: [
+            {
+              _id: "rev1",
+              state: "open",
+            },
+          ],
+        } as any
+      }
+
+      if (def.key === "reviewThreads.byOrchestration") {
+        return { status: "success", data: [] }
+      }
+
+      return { status: "success", data: [] }
+    })
   })
 
   afterEach(() => {
@@ -213,6 +237,103 @@ describe("CommitQuicklook", () => {
         "+15 -5",
       ].join("\n"),
     })
+  })
+
+  it("submits commit feedback through review threads", async () => {
+    const user = userEvent.setup()
+    const commit = createMockCommit({
+      sha: "abc123def456789",
+    })
+
+    render(<CommitQuicklook commit={commit} onClose={mockOnClose} />)
+
+    await user.type(screen.getByLabelText("Comment summary"), "Needs test coverage")
+    await user.type(screen.getByLabelText("Comment body"), "Please add cases for edge inputs.")
+    await user.click(screen.getByRole("button", { name: "Add feedback" }))
+
+    expect(mockCreateThread).toHaveBeenCalledWith({
+      reviewId: "rev1",
+      orchestrationId: "orch1",
+      summary: "Needs test coverage",
+      body: "Please add cases for edge inputs.",
+      source: "human",
+      filePath: "",
+      line: 0,
+      commitSha: "abc123def456789",
+      severity: "p2",
+      author: "human",
+      gateImpact: "review",
+    })
+  })
+
+  it("shows feedback threads only for the selected commit", () => {
+    mockUseTypedQuery.mockImplementation((def) => {
+      if (def.key === "reviews.list") {
+        return {
+          status: "success",
+          data: [
+            {
+              _id: "rev1",
+              state: "open",
+            },
+          ],
+        } as any
+      }
+
+      if (def.key === "reviewThreads.byOrchestration") {
+        return {
+          status: "success",
+          data: [
+            {
+              _id: "thread1",
+              _creationTime: 123,
+              reviewId: "rev1",
+              orchestrationId: "orch1",
+              filePath: "",
+              line: 0,
+              commitSha: "abc123def456789",
+              summary: "Fix null handling",
+              body: "Guard undefined before access.",
+              severity: "p2",
+              status: "unresolved",
+              source: "human",
+              author: "dev",
+              gateImpact: "review",
+              createdAt: "2024-01-01T00:00:00Z",
+            },
+            {
+              _id: "thread2",
+              _creationTime: 124,
+              reviewId: "rev1",
+              orchestrationId: "orch1",
+              filePath: "",
+              line: 0,
+              commitSha: "different-sha",
+              summary: "Other commit issue",
+              body: "Should not show in this modal.",
+              severity: "p2",
+              status: "unresolved",
+              source: "human",
+              author: "dev",
+              gateImpact: "review",
+              createdAt: "2024-01-01T00:00:00Z",
+            },
+          ],
+        } as any
+      }
+
+      return { status: "success", data: [] }
+    })
+
+    render(
+      <CommitQuicklook
+        commit={createMockCommit({ sha: "abc123def456789" })}
+        onClose={mockOnClose}
+      />,
+    )
+
+    expect(screen.getByText("Fix null handling")).toBeInTheDocument()
+    expect(screen.queryByText("Other commit issue")).not.toBeInTheDocument()
   })
 
   defineQuicklookDialogContract({

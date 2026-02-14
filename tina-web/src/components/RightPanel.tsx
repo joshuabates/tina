@@ -28,7 +28,11 @@ export function RightPanel({ detail }: RightPanelProps) {
       <div className={styles.stack}>
         <StatusSection detail={detail} />
         <TeamSection detail={detail} />
-        <GitOpsSection gitEvents={events.gitEvents} isLoading={events.isLoading} />
+        <GitOpsSection
+          orchestrationId={detail._id}
+          gitEvents={events.gitEvents}
+          isLoading={events.isLoading}
+        />
         <ReviewSection
           orchestrationId={detail._id}
           reviewEvents={events.reviewEvents}
