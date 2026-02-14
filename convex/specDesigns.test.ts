@@ -201,4 +201,64 @@ describe("specDesigns", () => {
       expect(specs).toHaveLength(0);
     });
   });
+
+  describe("many-to-many", () => {
+    test("one spec links to multiple designs and one design links to multiple specs", async () => {
+      const t = convexTest(schema, modules);
+      const projectId = await createProject(t);
+
+      const specId1 = await createSpec(t, { projectId, title: "Spec A" });
+      const specId2 = await createSpec(t, { projectId, title: "Spec B" });
+      const designId1 = await createDesign(t, { projectId, title: "Design X" });
+      const designId2 = await createDesign(t, { projectId, title: "Design Y" });
+
+      // spec1 -> design1, design2 (one spec to multiple designs)
+      await t.mutation(api.specDesigns.linkSpecToDesign, {
+        specId: specId1 as any,
+        designId: designId1 as any,
+      });
+      await t.mutation(api.specDesigns.linkSpecToDesign, {
+        specId: specId1 as any,
+        designId: designId2 as any,
+      });
+
+      // spec2 -> design1 (multiple specs to one design)
+      await t.mutation(api.specDesigns.linkSpecToDesign, {
+        specId: specId2 as any,
+        designId: designId1 as any,
+      });
+
+      // Verify spec1 is linked to both designs
+      const designsForSpec1 = await t.query(api.specDesigns.listDesignsForSpec, {
+        specId: specId1 as any,
+      });
+      expect(designsForSpec1).toHaveLength(2);
+      expect(designsForSpec1.map((d: any) => d._id)).toEqual(
+        expect.arrayContaining([designId1, designId2]),
+      );
+
+      // Verify spec2 is linked to only design1
+      const designsForSpec2 = await t.query(api.specDesigns.listDesignsForSpec, {
+        specId: specId2 as any,
+      });
+      expect(designsForSpec2).toHaveLength(1);
+      expect(designsForSpec2[0]?._id).toBe(designId1);
+
+      // Verify design1 is linked to both specs
+      const specsForDesign1 = await t.query(api.specDesigns.listSpecsForDesign, {
+        designId: designId1 as any,
+      });
+      expect(specsForDesign1).toHaveLength(2);
+      expect(specsForDesign1.map((s: any) => s._id)).toEqual(
+        expect.arrayContaining([specId1, specId2]),
+      );
+
+      // Verify design2 is linked to only spec1
+      const specsForDesign2 = await t.query(api.specDesigns.listSpecsForDesign, {
+        designId: designId2 as any,
+      });
+      expect(specsForDesign2).toHaveLength(1);
+      expect(specsForDesign2[0]?._id).toBe(specId1);
+    });
+  });
 });
