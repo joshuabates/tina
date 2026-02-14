@@ -22,7 +22,7 @@ const { design, variation, port } = values;
 const baseUrl = `http://localhost:${port}`;
 const screenshotDir = path.resolve(
   import.meta.dirname,
-  "../../..",
+  "../../../..",
   config.screenshotDir,
 );
 

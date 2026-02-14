@@ -31,7 +31,7 @@ const workbenchPort = values["workbench-port"]!;
 const storybookPort = values["storybook-port"]!;
 const screenshotDir = path.resolve(
   import.meta.dirname,
-  "../..",
+  "../../../..",
   config.screenshotDir,
 );
 

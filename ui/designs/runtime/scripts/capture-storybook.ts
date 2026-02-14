@@ -23,7 +23,7 @@ const { story, design, variation, port } = values;
 const baseUrl = config.storybook.url.replace(/:\d+/, `:${port}`);
 const screenshotDir = path.resolve(
   import.meta.dirname,
-  "../../..",
+  "../../../..",
   config.screenshotDir,
 );
 
