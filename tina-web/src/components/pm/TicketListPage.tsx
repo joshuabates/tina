@@ -4,11 +4,24 @@ import { useNavigate, Link, useParams } from "react-router-dom"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { TicketListQuery, DesignListQuery } from "@/services/data/queryDefs"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
+import { formatRelativeTimeShort } from "@/lib/time"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus, priorityLabel } from "@/components/ui/status-styles"
 import { CreateTicketModal } from "./CreateTicketModal"
 import type { TicketSummary } from "@/schemas"
 import styles from "./TicketListPage.module.scss"
+
+function openedAtLabel(createdAt: string): string {
+  const relative = formatRelativeTimeShort(createdAt)
+  return relative === "--" ? "opened recently" : `opened ${relative} ago`
+}
+
+function isInteractiveElement(target: EventTarget | null): target is HTMLElement {
+  return (
+    target instanceof HTMLElement
+    && target.closest("a, button, input, select, textarea") !== null
+  )
+}
 
 export function TicketListPage() {
   const { projectId: projectIdParam } = useParams<{ projectId: string }>()
@@ -112,16 +125,46 @@ export function TicketListPage() {
               const design = rawDesignId
                 ? designMap.get(rawDesignId)
                 : undefined
+              const description = ticket.description.trim()
+              const showDescription =
+                description.length > 0
+                && description !== ticket.title.trim()
+              const openedLabel = openedAtLabel(ticket.createdAt)
 
               return (
                 <tr
                   key={ticket._id}
+                  className={styles.tableRow}
                   onClick={() => handleRowClick(ticket)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") {
+                      return
+                    }
+                    if (
+                      event.target !== event.currentTarget
+                      && isInteractiveElement(event.target)
+                    ) {
+                      return
+                    }
+                    event.preventDefault()
+                    handleRowClick(ticket)
+                  }}
+                  tabIndex={0}
                   role="row"
                 >
-                  <td>
-                    <div className={styles.ticketKey}>{ticket.ticketKey}</div>
+                  <td className={styles.ticketCell}>
                     <div className={styles.ticketTitle}>{ticket.title}</div>
+                    <div
+                      className={styles.ticketMeta}
+                      data-testid={`ticket-meta-${ticket._id}`}
+                    >
+                      <span className={styles.ticketKey}>{ticket.ticketKey}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{openedLabel}</span>
+                    </div>
+                    {showDescription ? (
+                      <div className={styles.ticketDescription}>{description}</div>
+                    ) : null}
                   </td>
                   <td>
                     <StatusBadge

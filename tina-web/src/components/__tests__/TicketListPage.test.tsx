@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { screen, within } from "@testing-library/react"
+import { fireEvent, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import App from "../../App"
 import {
@@ -155,6 +155,14 @@ describe("TicketListPage", () => {
     expect(screen.getByText("Add dashboard")).toBeInTheDocument()
   })
 
+  it("shows ticket metadata with id and opened time", () => {
+    renderApp("/projects/p1/plan/tickets")
+
+    const meta = screen.getByTestId("ticket-meta-t1")
+    expect(meta).toHaveTextContent("ALPHA-T1")
+    expect(meta).toHaveTextContent(/opened .* ago/i)
+  })
+
   it("renders correct status labels for ticket statuses", () => {
     renderApp("/projects/p1/plan/tickets")
 
@@ -206,6 +214,16 @@ describe("TicketListPage", () => {
     const rows = screen.getAllByRole("row")
     // Click the first data row (skip header)
     await user.click(rows[1])
+
+    expect(screen.getByTestId("ticket-detail-page")).toBeInTheDocument()
+  })
+
+  it("pressing Enter on a focused row navigates to detail page", () => {
+    renderApp("/projects/p1/plan/tickets")
+
+    const table = screen.getByRole("table")
+    const rows = within(table).getAllByRole("row")
+    fireEvent.keyDown(rows[1], { key: "Enter" })
 
     expect(screen.getByTestId("ticket-detail-page")).toBeInTheDocument()
   })
