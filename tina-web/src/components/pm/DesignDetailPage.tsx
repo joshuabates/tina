@@ -11,6 +11,7 @@ import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
+import { CommentTimeline } from "./CommentTimeline"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "./DesignDetailPage.module.scss"
 
@@ -195,6 +196,15 @@ export function DesignDetailPage() {
             </div>
           ))
         )}
+      </div>
+
+      <div className={styles.section}>
+        <h3 className={styles.sectionTitle}>Comments</h3>
+        <CommentTimeline
+          projectId={routeProjectId || design.projectId}
+          targetType="design"
+          targetId={designId ?? ""}
+        />
       </div>
     </div>
   )

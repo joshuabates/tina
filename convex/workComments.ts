@@ -5,7 +5,7 @@ import type { Id } from "./_generated/dataModel";
 export const addComment = mutation({
   args: {
     projectId: v.id("projects"),
-    targetType: v.union(v.literal("spec"), v.literal("ticket")),
+    targetType: v.union(v.literal("spec"), v.literal("ticket"), v.literal("design")),
     targetId: v.string(),
     authorType: v.union(v.literal("human"), v.literal("agent")),
     authorName: v.string(),
@@ -27,6 +27,12 @@ export const addComment = mutation({
         throw new Error(`Ticket not found: ${args.targetId}`);
       }
       targetProjectId = ticket.projectId;
+    } else if (args.targetType === "design") {
+      const design = await ctx.db.get(args.targetId as Id<"designs">);
+      if (!design) {
+        throw new Error(`Design not found: ${args.targetId}`);
+      }
+      targetProjectId = design.projectId;
     } else {
       throw new Error(`Unsupported targetType: ${args.targetType}`);
     }
@@ -55,7 +61,7 @@ export const addComment = mutation({
 
 export const listComments = query({
   args: {
-    targetType: v.union(v.literal("spec"), v.literal("ticket")),
+    targetType: v.union(v.literal("spec"), v.literal("ticket"), v.literal("design")),
     targetId: v.string(),
   },
   handler: async (ctx, args) => {
