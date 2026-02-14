@@ -149,6 +149,10 @@ impl std::str::FromStr for PhaseStatus {
     }
 }
 
+fn is_zero_u32(value: &u32) -> bool {
+    *value == 0
+}
+
 /// Timing breakdown for a phase.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PhaseBreakdown {
@@ -195,6 +199,10 @@ pub struct PhaseState {
     /// Collected review verdicts for consensus mode.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub review_verdicts: Vec<ReviewVerdict>,
+
+    /// Number of in-phase repair loops attempted after phase-reviewer gaps.
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub in_phase_repair_loops: u32,
 }
 
 impl PhaseState {
@@ -212,6 +220,7 @@ impl PhaseState {
             blocked_reason: None,
             breakdown: PhaseBreakdown::default(),
             review_verdicts: Vec::new(),
+            in_phase_repair_loops: 0,
         }
     }
 }

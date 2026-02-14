@@ -16,6 +16,9 @@ use crate::state::schema::{
 };
 use crate::state::timing::duration_mins;
 
+/// How many in-phase self-repair loops to attempt before creating remediation.
+const MAX_IN_PHASE_SELF_REPAIR_LOOPS: u32 = 2;
+
 /// An action the orchestrator should take next.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -31,6 +34,9 @@ pub enum Action {
         phase: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         model: Option<String>,
+        /// Optional review gaps carried when replanning in the same phase.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        issues: Option<Vec<String>>,
     },
 
     /// Spawn a phase executor.
@@ -253,6 +259,7 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                     return Ok(Action::SpawnPlanner {
                         phase: key,
                         model: non_default_model(&state.model_policy.planner, "opus"),
+                        issues: None,
                     });
                 }
                 // Previous phase not done yet, skip
@@ -263,6 +270,7 @@ pub fn next_action(state: &SupervisorState) -> Result<Action> {
                     return Ok(Action::SpawnPlanner {
                         phase: key,
                         model: non_default_model(&state.model_policy.planner, "opus"),
+                        issues: None,
                     });
                 }
                 PhaseStatus::Planned => {
@@ -352,6 +360,7 @@ pub fn advance_state(
             Ok(Action::SpawnPlanner {
                 phase: phase_key,
                 model: non_default_model(&state.model_policy.planner, "opus"),
+                issues: None,
             })
         }
 
@@ -500,6 +509,7 @@ pub fn advance_state(
                     Ok(Action::SpawnPlanner {
                         phase: next_key,
                         model: non_default_model(&state.model_policy.planner, "opus"),
+                        issues: None,
                     })
                 }
                 None => {
@@ -596,6 +606,7 @@ pub fn advance_state(
                 return Ok(Action::SpawnPlanner {
                     phase: phase.to_string(),
                     model: non_default_model(&state.model_policy.planner, "opus"),
+                    issues: None,
                 });
             }
 
@@ -674,6 +685,46 @@ fn handle_review_gaps(
     now: chrono::DateTime<Utc>,
     issues: Vec<String>,
 ) -> Result<Action> {
+    // Main phases get one in-place repair loop before spawning a remediation phase.
+    // This keeps most fixes within the original phase and makes .5 phases rarer.
+    let planner_model = non_default_model(&state.model_policy.planner, "opus");
+    let mut self_repair = false;
+    {
+        let phase_state = state
+            .phases
+            .get_mut(phase)
+            .ok_or_else(|| OrchestrateError::PhaseNotFound(phase.to_string()))?;
+
+        let is_main_phase = !phase.contains('.');
+        if is_main_phase
+            && phase_state.in_phase_repair_loops < MAX_IN_PHASE_SELF_REPAIR_LOOPS
+        {
+            phase_state.in_phase_repair_loops += 1;
+            phase_state.status = PhaseStatus::Planning;
+            phase_state.review_verdicts.clear();
+            phase_state.review_started_at = None;
+            phase_state.completed_at = None;
+            phase_state.git_range = None;
+            if phase_state.planning_started_at.is_none() {
+                phase_state.planning_started_at = Some(now);
+            }
+            phase_state.blocked_reason = Some(format!(
+                "in_phase_repair: {}",
+                issues.join(" | ")
+            ));
+            self_repair = true;
+        }
+    }
+
+    if self_repair {
+        state.status = OrchestrationStatus::Planning;
+        return Ok(Action::SpawnPlanner {
+            phase: phase.to_string(),
+            model: planner_model,
+            issues: Some(issues),
+        });
+    }
+
     let phase_state = state
         .phases
         .get_mut(phase)
@@ -775,6 +826,7 @@ fn find_remediation_action(state: &SupervisorState, phase_num: u32) -> Result<Ac
                 PhaseStatus::Planning => Ok(Action::SpawnPlanner {
                     phase: key.clone(),
                     model: non_default_model(&state.model_policy.planner, "opus"),
+                    issues: None,
                 }),
                 PhaseStatus::Planned => {
                     let plan_path = phase_state
@@ -1077,7 +1129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_advance_review_gaps_creates_remediation() {
+    fn test_advance_review_gaps_replans_same_phase_before_remediation() {
         let mut state = test_state(3);
         state.phases.insert(
             "1".to_string(),
@@ -1098,6 +1150,40 @@ mod tests {
         .unwrap();
         assert!(matches!(
             action,
+            Action::SpawnPlanner {
+                ref phase,
+                issues: Some(_),
+                ..
+            } if phase == "1"
+        ));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Planning);
+        assert_eq!(state.phases["1"].in_phase_repair_loops, 1);
+        assert!(!state.phases.contains_key("1.5"));
+    }
+
+    #[test]
+    fn test_advance_review_gaps_creates_remediation_after_in_phase_repair() {
+        let mut state = test_state(3);
+        state.phases.insert(
+            "1".to_string(),
+            PhaseState {
+                status: PhaseStatus::Reviewing,
+                planning_started_at: Some(Utc::now()),
+                review_started_at: Some(Utc::now()),
+                in_phase_repair_loops: 2,
+                ..PhaseState::default()
+            },
+        );
+        let action = advance_state(
+            &mut state,
+            "1",
+            AdvanceEvent::ReviewGaps {
+                issues: vec!["missing tests".to_string()],
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            action,
             Action::Remediate {
                 phase,
                 remediation_phase,
@@ -1105,6 +1191,7 @@ mod tests {
             } if phase == "1" && remediation_phase == "1.5"
         ));
         assert!(state.phases.contains_key("1.5"));
+        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
         assert_eq!(state.phases["1.5"].status, PhaseStatus::Planning);
     }
 
@@ -1190,7 +1277,7 @@ mod tests {
     }
 
     #[test]
-    fn test_advance_error_verification_gate_creates_remediation() {
+    fn test_advance_error_verification_gate_replans_same_phase() {
         let mut state = test_state(3);
         state.phases.insert(
             "1".to_string(),
@@ -1212,14 +1299,15 @@ mod tests {
 
         assert!(matches!(
             action,
-            Action::Remediate {
+            Action::SpawnPlanner {
                 ref phase,
-                ref remediation_phase,
+                issues: Some(_),
                 ..
-            } if phase == "1" && remediation_phase == "1.5"
+            } if phase == "1"
         ));
-        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
-        assert_eq!(state.phases["1.5"].status, PhaseStatus::Planning);
+        assert_eq!(state.phases["1"].status, PhaseStatus::Planning);
+        assert_eq!(state.phases["1"].in_phase_repair_loops, 1);
+        assert!(!state.phases.contains_key("1.5"));
         assert_eq!(state.status, OrchestrationStatus::Planning);
     }
 
@@ -1578,9 +1666,20 @@ mod tests {
             },
         )
         .unwrap();
-        // Both gaps -> remediation with merged issues
-        assert!(matches!(action, Action::Remediate { .. }));
-        if let Action::Remediate { issues, .. } = &action {
+        // Both gaps -> in-phase replanning with merged issues
+        assert!(matches!(
+            action,
+            Action::SpawnPlanner {
+                ref phase,
+                issues: Some(_),
+                ..
+            } if phase == "1"
+        ));
+        if let Action::SpawnPlanner {
+            issues: Some(issues),
+            ..
+        } = &action
+        {
             assert!(issues.contains(&"missing tests".to_string()));
             assert!(issues.contains(&"error handling".to_string()));
         }
@@ -1746,7 +1845,7 @@ mod tests {
     }
 
     #[test]
-    fn test_full_lifecycle_with_remediation() {
+    fn test_full_lifecycle_with_in_phase_repair() {
         let mut state = test_state(1);
 
         // Validation + Plan + Execute
@@ -1769,7 +1868,7 @@ mod tests {
         )
         .unwrap();
 
-        // Review finds gaps -> remediation phase 1.5
+        // First review finds gaps -> replan same phase
         let action = advance_state(
             &mut state,
             "1",
@@ -1780,42 +1879,41 @@ mod tests {
         .unwrap();
         assert!(matches!(
             action,
-            Action::Remediate {
+            Action::SpawnPlanner {
                 ref phase,
-                ref remediation_phase,
+                issues: Some(_),
                 ..
-            } if phase == "1" && remediation_phase == "1.5"
+            } if phase == "1"
         ));
-        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
-        assert_eq!(state.phases["1.5"].status, PhaseStatus::Planning);
+        assert_eq!(state.phases["1"].status, PhaseStatus::Planning);
 
-        // Remediation phase 1.5: plan -> execute -> review pass
+        // Replanned phase 1: plan -> execute -> review pass
         let action = advance_state(
             &mut state,
-            "1.5",
+            "1",
             AdvanceEvent::PlanComplete {
-                plan_path: PathBuf::from("/tmp/plan-1.5.md"),
+                plan_path: PathBuf::from("/tmp/plan-1-repair.md"),
             },
         )
         .unwrap();
-        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "1.5"));
+        assert!(matches!(action, Action::SpawnExecutor { ref phase, .. } if phase == "1"));
 
-        advance_state(&mut state, "1.5", AdvanceEvent::ExecuteStarted).unwrap();
+        advance_state(&mut state, "1", AdvanceEvent::ExecuteStarted).unwrap();
 
         advance_state(
             &mut state,
-            "1.5",
+            "1",
             AdvanceEvent::ExecuteComplete {
                 git_range: "def..ghi".to_string(),
             },
         )
         .unwrap();
 
-        // ReviewPass on remediation of last phase -> Finalize + Complete
-        let action = advance_state(&mut state, "1.5", AdvanceEvent::ReviewPass).unwrap();
+        // ReviewPass on repaired last phase -> Finalize + Complete
+        let action = advance_state(&mut state, "1", AdvanceEvent::ReviewPass).unwrap();
         assert!(matches!(action, Action::Finalize));
         assert_eq!(state.status, OrchestrationStatus::Complete);
-        assert_eq!(state.phases["1.5"].status, PhaseStatus::Complete);
+        assert_eq!(state.phases["1"].status, PhaseStatus::Complete);
 
         let action = next_action(&state).unwrap();
         assert!(matches!(action, Action::Complete));

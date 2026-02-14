@@ -187,6 +187,29 @@ fn event_from_action(
         );
     }
 
+    if let (
+        Some(AdvanceEvent::ReviewGaps { issues }),
+        Action::SpawnPlanner {
+            phase: p,
+            issues: planner_issues,
+            ..
+        },
+    ) = (event, action)
+    {
+        let merged_issues = planner_issues.clone().unwrap_or_else(|| issues.clone());
+        return (
+            "retry".to_string(),
+            format!("Phase {} review found gaps (in-phase repair)", p),
+            Some(
+                serde_json::json!({
+                    "strategy": "in_phase_repair",
+                    "issues": merged_issues
+                })
+                .to_string(),
+            ),
+        );
+    }
+
     match action {
         Action::SpawnValidator { .. } => (
             "phase_started".to_string(),

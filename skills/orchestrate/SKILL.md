@@ -364,7 +364,7 @@ The CLI returns a JSON object with an `action` field. Dispatch based on action t
 | Action | What to Do |
 |--------|------------|
 | `spawn_validator` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=validator. If claude: spawn `tina:design-validator`. |
-| `spawn_planner` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=planner. If claude: spawn `tina:phase-planner`. |
+| `spawn_planner` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=planner. If claude: spawn `tina:phase-planner`. If `.issues` is present, this is an **in-phase repair loop**: reopen `plan-phase-N` for the same phase, attach `.issues` to plan task metadata (`repair_issues`), and replan within phase `N` (do not create `N.5` yet). |
 | `spawn_executor` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=executor. If claude: spawn `tina:phase-executor`. |
 | `spawn_reviewer` | Run routing check on `.model`. If codex: spawn `tina:codex-cli` with role=reviewer. If claude: spawn `tina:phase-reviewer`. If `.secondary_model` is present, spawn a second reviewer with that model (also routing-checked) in parallel for consensus review. |
 | `consensus_disagreement` | Default to autonomous handling: treat disagreement as gaps and create remediation from `.issues`. Only surface to user when an explicit HITL gate is enabled. |
@@ -1105,6 +1105,12 @@ if message contains "review-N complete (gaps)":
     if NEXT_ACTION.action != "wait":
         TaskUpdate: <review-task-id-N>, status: completed, metadata: { status: "gaps", issues: [...], output_path: "$WORKTREE_PATH/.claude/tina/reports/phase-$N-review.md" }
 
+        # If NEXT_ACTION is "spawn_planner" with phase N and includes .issues:
+        #   This is in-phase self-repair (same phase, no .5 yet)
+        #   TaskUpdate: <plan-task-id-N>, status: pending/in_progress, metadata: { repair_issues: NEXT_ACTION.issues }
+        #   Re-dispatch planner for phase N so plan can add focused fix tasks
+        #   Keep remediation phases as fallback only if self-repair loop still fails
+ 
         # If NEXT_ACTION is "remediate":
         #   Create remediation tasks (plan/execute/review for .remediation_phase)
         #   Set up dependencies
