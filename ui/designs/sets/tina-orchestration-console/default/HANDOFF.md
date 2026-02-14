@@ -34,19 +34,14 @@ Out of scope:
 - Separate progress widget.
 
 ## Files To Edit
-- `/Users/joshua/Projects/tina/designs/src/designSets/tina-orchestration-console/index.tsx`
-- `/Users/joshua/Projects/tina/designs/src/designSets/tina-orchestration-console/data.ts`
-- `/Users/joshua/Projects/tina/designs/src/designSets/tina-orchestration-console/meta.ts`
+- `ui/designs/sets/tina-orchestration-console/default/index.tsx`
+- `ui/designs/sets/tina-orchestration-console/default/data.ts`
+- `ui/designs/sets/tina-orchestration-console/default/meta.ts`
 
 ## Run
 ```bash
-cd /Users/joshua/Projects/tina/designs
+cd ui/designs/runtime
 npm run dev
-```
-
-Build check:
-```bash
-npm run build
 ```
 
 ## IA And Screen Map

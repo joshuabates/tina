@@ -37,17 +37,12 @@ A wireframe state toggle is included:
 This is intentional to validate resilience of hierarchy under imperfect data.
 
 ## Files
-- `/Users/joshua/Projects/tina/designs/src/designSets/project-idea-to-orchestration/meta.ts`
-- `/Users/joshua/Projects/tina/designs/src/designSets/project-idea-to-orchestration/data.ts`
-- `/Users/joshua/Projects/tina/designs/src/designSets/project-idea-to-orchestration/index.tsx`
+- `ui/designs/sets/project-idea-to-orchestration/default/meta.ts`
+- `ui/designs/sets/project-idea-to-orchestration/default/data.ts`
+- `ui/designs/sets/project-idea-to-orchestration/default/index.tsx`
 
 ## Run
 ```bash
-cd /Users/joshua/Projects/tina/designs
+cd ui/designs/runtime
 npm run dev
-```
-
-Build:
-```bash
-npm run build
 ```
