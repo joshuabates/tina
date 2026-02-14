@@ -1,4 +1,10 @@
-import { readFileSync } from "node:fs";
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -31,8 +37,40 @@ function loadProjectAliases(): Record<string, string> {
 
 const projectAliases = loadProjectAliases();
 
+function serveScreenshots(): import("vite").Plugin {
+  const screenshotsDir = path.resolve(__dirname, "../.artifacts/screenshots");
+  return {
+    name: "serve-screenshots",
+    configureServer(server) {
+      mkdirSync(screenshotsDir, { recursive: true });
+      server.middlewares.use("/screenshots", (req, res, next) => {
+        if (!req.url) return next();
+        const filePath = path.join(
+          screenshotsDir,
+          decodeURIComponent(req.url),
+        );
+        const normalizedPath = path.normalize(filePath);
+        if (!normalizedPath.startsWith(screenshotsDir)) return next();
+        if (!existsSync(normalizedPath) || !statSync(normalizedPath).isFile())
+          return next();
+        const ext = path.extname(normalizedPath).toLowerCase();
+        const mimeTypes: Record<string, string> = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".json": "application/json",
+        };
+        res.setHeader(
+          "Content-Type",
+          mimeTypes[ext] ?? "application/octet-stream",
+        );
+        createReadStream(normalizedPath).pipe(res);
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), serveScreenshots()],
   resolve: {
     alias: {
       "@sets": setsDir,
