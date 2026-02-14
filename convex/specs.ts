@@ -1,10 +1,10 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { allocateKey } from "./projectCounters";
-import { seedMarkersFromPreset, parsePhaseStructure } from "./designPresets";
-import type { ComplexityPreset } from "./designPresets";
+import { seedMarkersFromPreset, parsePhaseStructure } from "./specPresets";
+import type { ComplexityPreset } from "./specPresets";
 
-export const createDesign = mutation({
+export const createSpec = mutation({
   args: {
     projectId: v.id("projects"),
     title: v.string(),
@@ -17,17 +17,17 @@ export const createDesign = mutation({
       throw new Error(`Project not found: ${args.projectId}`);
     }
 
-    const keyNumber = await allocateKey(ctx, args.projectId, "design");
-    const designKey = `${project.name.toUpperCase()}-D${keyNumber}`;
+    const keyNumber = await allocateKey(ctx, args.projectId, "spec");
+    const specKey = `${project.name.toUpperCase()}-S${keyNumber}`;
     const now = new Date().toISOString();
 
     if (args.complexityPreset) {
       const preset = args.complexityPreset as ComplexityPreset;
       const requiredMarkers = seedMarkersFromPreset(preset);
       const { phaseCount, phaseStructureValid } = parsePhaseStructure(args.markdown);
-      return await ctx.db.insert("designs", {
+      return await ctx.db.insert("specs", {
         projectId: args.projectId,
-        designKey,
+        specKey,
         title: args.title,
         markdown: args.markdown,
         status: "draft",
@@ -41,9 +41,9 @@ export const createDesign = mutation({
         validationUpdatedAt: now,
       });
     } else {
-      return await ctx.db.insert("designs", {
+      return await ctx.db.insert("specs", {
         projectId: args.projectId,
-        designKey,
+        specKey,
         title: args.title,
         markdown: args.markdown,
         status: "draft",
@@ -54,28 +54,28 @@ export const createDesign = mutation({
   },
 });
 
-export const getDesign = query({
+export const getSpec = query({
   args: {
-    designId: v.id("designs"),
+    specId: v.id("specs"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.designId);
+    return await ctx.db.get(args.specId);
   },
 });
 
-export const getDesignByKey = query({
+export const getSpecByKey = query({
   args: {
-    designKey: v.string(),
+    specKey: v.string(),
   },
   handler: async (ctx, args) => {
     return await ctx.db
-      .query("designs")
-      .withIndex("by_key", (q) => q.eq("designKey", args.designKey))
+      .query("specs")
+      .withIndex("by_key", (q) => q.eq("specKey", args.specKey))
       .first();
   },
 });
 
-export const listDesigns = query({
+export const listSpecs = query({
   args: {
     projectId: v.id("projects"),
     status: v.optional(v.string()),
@@ -86,13 +86,13 @@ export const listDesigns = query({
 
     if (status !== undefined) {
       queryObj = ctx.db
-        .query("designs")
+        .query("specs")
         .withIndex("by_project_status", (q) =>
           q.eq("projectId", args.projectId).eq("status", status),
         );
     } else {
       queryObj = ctx.db
-        .query("designs")
+        .query("specs")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId));
     }
 
@@ -100,16 +100,16 @@ export const listDesigns = query({
   },
 });
 
-export const updateDesign = mutation({
+export const updateSpec = mutation({
   args: {
-    designId: v.id("designs"),
+    specId: v.id("specs"),
     title: v.optional(v.string()),
     markdown: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const design = await ctx.db.get(args.designId);
-    if (!design) {
-      throw new Error(`Design not found: ${args.designId}`);
+    const spec = await ctx.db.get(args.specId);
+    if (!spec) {
+      throw new Error(`Spec not found: ${args.specId}`);
     }
 
     const now = new Date().toISOString();
@@ -128,20 +128,20 @@ export const updateDesign = mutation({
       updates.validationUpdatedAt = now;
     }
 
-    await ctx.db.patch(args.designId, updates);
-    return args.designId;
+    await ctx.db.patch(args.specId, updates);
+    return args.specId;
   },
 });
 
-export const transitionDesign = mutation({
+export const transitionSpec = mutation({
   args: {
-    designId: v.id("designs"),
+    specId: v.id("specs"),
     newStatus: v.string(),
   },
   handler: async (ctx, args) => {
-    const design = await ctx.db.get(args.designId);
-    if (!design) {
-      throw new Error(`Design not found: ${args.designId}`);
+    const spec = await ctx.db.get(args.specId);
+    if (!spec) {
+      throw new Error(`Spec not found: ${args.specId}`);
     }
 
     const validTransitions: Record<string, string[]> = {
@@ -151,10 +151,10 @@ export const transitionDesign = mutation({
       archived: ["draft"],
     };
 
-    const allowed = validTransitions[design.status] || [];
+    const allowed = validTransitions[spec.status] || [];
     if (!allowed.includes(args.newStatus)) {
       throw new Error(
-        `Invalid status transition from ${design.status} to ${args.newStatus}`,
+        `Invalid status transition from ${spec.status} to ${args.newStatus}`,
       );
     }
 
@@ -172,28 +172,28 @@ export const transitionDesign = mutation({
       update.archivedAt = undefined;
     }
 
-    await ctx.db.patch(args.designId, update);
-    return args.designId;
+    await ctx.db.patch(args.specId, update);
+    return args.specId;
   },
 });
 
-export const updateDesignMarkers = mutation({
+export const updateSpecMarkers = mutation({
   args: {
-    designId: v.id("designs"),
+    specId: v.id("specs"),
     completedMarkers: v.array(v.string()),
   },
   handler: async (ctx, args) => {
-    const design = await ctx.db.get(args.designId);
-    if (!design) {
-      throw new Error(`Design not found: ${args.designId}`);
+    const spec = await ctx.db.get(args.specId);
+    if (!spec) {
+      throw new Error(`Spec not found: ${args.specId}`);
     }
 
     const now = new Date().toISOString();
-    await ctx.db.patch(args.designId, {
+    await ctx.db.patch(args.specId, {
       completedMarkers: args.completedMarkers,
       validationUpdatedAt: now,
       updatedAt: now,
     });
-    return args.designId;
+    return args.specId;
   },
 });
