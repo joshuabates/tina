@@ -1,9 +1,9 @@
 import { useState } from "react"
-import { useParams } from "react-router-dom"
+import { useParams, useNavigate } from "react-router-dom"
 import { useMutation } from "convex/react"
 import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { SpecDetailQuery } from "@/services/data/queryDefs"
+import { SpecDetailQuery, LinkedDesignsQuery } from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
@@ -56,6 +56,7 @@ export function SpecDetailPage() {
     specId: string
     projectId: string
   }>()
+  const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [transitioning, setTransitioning] = useState(false)
 
@@ -64,6 +65,10 @@ export function SpecDetailPage() {
   const { createAndConnect } = useCreateSession()
 
   const specResult = useTypedQuery(SpecDetailQuery, {
+    specId: specId ?? "",
+  })
+
+  const linkedDesignsResult = useTypedQuery(LinkedDesignsQuery, {
     specId: specId ?? "",
   })
 
@@ -219,6 +224,27 @@ export function SpecDetailPage() {
           )}
         </div>
       )}
+
+      <div className={styles.section} data-testid="linked-designs-section">
+        <h3 className={styles.sectionTitle}>Linked Designs</h3>
+        {linkedDesignsResult.status === "success" && linkedDesignsResult.data.length > 0 ? (
+          <ul className={styles.linkedList}>
+            {linkedDesignsResult.data.map((design) => (
+              <li key={design._id} className={styles.linkedItem}>
+                <button
+                  className={styles.linkedLink}
+                  onClick={() => navigate(`/projects/${routeProjectId}/plan/designs/${design._id}`)}
+                >
+                  <span className={styles.linkedKey}>{design.designKey}</span>
+                  <span>{design.title}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={styles.emptyHint}>No linked designs.</p>
+        )}
+      </div>
 
       {editing && (
         <EditSpecModal
