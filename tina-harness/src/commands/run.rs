@@ -275,12 +275,12 @@ fn run_full_orchestration(
     // Write the design doc to the work directory
     // Force H1 to match this run's feature so orchestrate flows that derive
     // feature names from the document cannot collapse back to a stale base name.
-    let design_doc = design_doc_for_run(&scenario.design_doc, &scenario.feature_name, feature_name);
-    let design_path = work_dir.join("design.md");
-    fs::write(&design_path, design_doc).context("Failed to write design doc to work directory")?;
-    let design_markdown =
-        fs::read_to_string(&design_path).context("Failed to read design doc from work directory")?;
-    let design_id = seed_design_in_convex(work_dir, &design_markdown, feature_name)?;
+    let spec_doc = design_doc_for_run(&scenario.design_doc, &scenario.feature_name, feature_name);
+    let spec_path = work_dir.join("design.md");
+    fs::write(&spec_path, spec_doc).context("Failed to write spec doc to work directory")?;
+    let spec_markdown =
+        fs::read_to_string(&spec_path).context("Failed to read spec doc from work directory")?;
+    let spec_id = seed_spec_in_convex(work_dir, &spec_markdown, feature_name)?;
 
     // Initialize git repo in work directory (required for orchestration)
     let git_init = Command::new("git")
@@ -367,10 +367,10 @@ fn run_full_orchestration(
     // Record time before sending command so we can filter stale orchestrations
     let started_after = Utc::now().to_rfc3339();
 
-    // Send the orchestrate skill command using a Convex design ID.
+    // Send the orchestrate skill command using a Convex spec ID.
     let skill_cmd = format!(
-        "/tina:orchestrate --feature {} --design-id {}",
-        feature_name, design_id
+        "/tina:orchestrate --feature {} --spec-id {}",
+        feature_name, spec_id
     );
     eprintln!("Sending: {}", skill_cmd);
     tina_session::tmux::send_keys(&session_name, &skill_cmd)
@@ -710,8 +710,8 @@ fn design_doc_for_run(design_doc: &str, scenario_feature: &str, run_feature: &st
     lines.join("\n")
 }
 
-/// Extract a design title from markdown H1, falling back to the feature name.
-fn extract_design_title(markdown: &str, fallback_feature: &str) -> String {
+/// Extract a spec title from markdown H1, falling back to the feature name.
+fn extract_spec_title(markdown: &str, fallback_feature: &str) -> String {
     markdown
         .lines()
         .find_map(|line| line.strip_prefix("# "))
@@ -721,20 +721,20 @@ fn extract_design_title(markdown: &str, fallback_feature: &str) -> String {
         .unwrap_or_else(|| fallback_feature.to_string())
 }
 
-/// Create a Convex design record for this harness run and return the design ID.
-fn seed_design_in_convex(work_dir: &Path, design_markdown: &str, feature_name: &str) -> Result<String> {
+/// Create a Convex spec record for this harness run and return the spec ID.
+fn seed_spec_in_convex(work_dir: &Path, spec_markdown: &str, feature_name: &str) -> Result<String> {
     let repo_name = work_dir
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or(feature_name)
         .to_string();
     let repo_path = work_dir.canonicalize()?.to_string_lossy().to_string();
-    let title = extract_design_title(design_markdown, feature_name);
-    let markdown = design_markdown.to_string();
+    let title = extract_spec_title(spec_markdown, feature_name);
+    let markdown = spec_markdown.to_string();
 
     tina_session::convex::run_convex(|mut writer| async move {
         let project_id = writer.find_or_create_project(&repo_name, &repo_path).await?;
-        writer.create_design(&project_id, &title, &markdown).await
+        writer.create_spec(&project_id, &title, &markdown).await
     })
 }
 
@@ -1300,16 +1300,16 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_design_title_prefers_h1() {
+    fn test_extract_spec_title_prefers_h1() {
         let markdown = "# Calculator API\n\n## Phase 1\nDo work";
-        let title = extract_design_title(markdown, "calculator-api");
+        let title = extract_spec_title(markdown, "calculator-api");
         assert_eq!(title, "Calculator API");
     }
 
     #[test]
-    fn test_extract_design_title_falls_back_when_h1_missing() {
+    fn test_extract_spec_title_falls_back_when_h1_missing() {
         let markdown = "## Phase 1\nDo work";
-        let title = extract_design_title(markdown, "calculator-api");
+        let title = extract_spec_title(markdown, "calculator-api");
         assert_eq!(title, "calculator-api");
     }
 
