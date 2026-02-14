@@ -58,6 +58,14 @@ pub fn cli_command(cli: CliChoice) -> &'static str {
     }
 }
 
+/// Build the tmux launch command for a CLI.
+///
+/// Includes `~/.local/bin` in PATH so symlinked CLIs installed by `mise run install`
+/// are resolvable from the tmux shell even when the daemon process PATH is minimal.
+pub fn cli_launch_command(cli: CliChoice) -> String {
+    format!("PATH=\"$PATH:$HOME/.local/bin\" {}", cli_command(cli))
+}
+
 /// Build a context-seeding prompt from the provided context.
 ///
 /// Returns `None` for freeform context or when no context info is provided.
@@ -224,13 +232,42 @@ pub fn is_cli_ready(output: &str) -> bool {
     false
 }
 
+/// Detect terminal output that indicates CLI startup failed.
+pub fn detect_cli_startup_error(output: &str, cli: CliChoice) -> Option<String> {
+    let lowered = output.to_ascii_lowercase();
+    let cli_name = match cli {
+        CliChoice::Claude => "claude",
+        CliChoice::Codex => "codex",
+    };
+
+    if lowered.contains("command not found") && lowered.contains(cli_name) {
+        return Some(format!(
+            "CLI `{}` not found in tmux shell PATH. Install it and/or ensure ~/.local/bin is available.",
+            cli_name
+        ));
+    }
+
+    if lowered.contains("no such file or directory") && lowered.contains(cli_name) {
+        return Some(format!(
+            "CLI `{}` could not be executed (no such file or directory).",
+            cli_name
+        ));
+    }
+
+    if lowered.contains("permission denied") && lowered.contains(cli_name) {
+        return Some(format!("CLI `{}` could not be executed (permission denied).", cli_name));
+    }
+
+    None
+}
+
 /// POST /sessions handler.
 pub async fn create_session(
     State(state): State<AppState>,
     Json(req): Json<CreateSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateSessionResponse>), (StatusCode, String)> {
     let session_name = generate_session_name();
-    let cli_cmd = cli_command(req.cli);
+    let cli_cmd = cli_launch_command(req.cli);
 
     // 1. Create tmux session
     let sn = session_name.clone();
@@ -241,7 +278,7 @@ pub async fn create_session(
 
     // 2. Launch CLI in the session
     let sn = session_name.clone();
-    let cmd = cli_cmd.to_string();
+    let cmd = cli_cmd;
     tokio::task::spawn_blocking(move || send_keys_blocking(&sn, &cmd))
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -249,6 +286,7 @@ pub async fn create_session(
 
     // 3. Wait for CLI readiness (poll up to 30s)
     let sn = session_name.clone();
+    let selected_cli = req.cli;
     let ready = tokio::task::spawn_blocking(move || {
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_secs(30);
@@ -257,6 +295,9 @@ pub async fn create_session(
                 return Err("CLI did not become ready within 30s".to_string());
             }
             if let Ok(output) = capture_pane_blocking(&sn) {
+                if let Some(startup_error) = detect_cli_startup_error(&output, selected_cli) {
+                    return Err(startup_error);
+                }
                 if is_cli_ready(&output) {
                     return Ok(());
                 }
@@ -394,6 +435,13 @@ mod tests {
         assert_eq!(cli_command(CliChoice::Codex), "codex");
     }
 
+    #[test]
+    fn cli_launch_command_prefixes_local_bin_path() {
+        let cmd = cli_launch_command(CliChoice::Claude);
+        assert!(cmd.starts_with("PATH=\"$PATH:$HOME/.local/bin\" "));
+        assert!(cmd.ends_with("claude --dangerously-skip-permissions"));
+    }
+
     // --- Context seeding ---
 
     #[test]
@@ -510,6 +558,20 @@ mod tests {
         assert!(!is_cli_ready("Loading..."));
         assert!(!is_cli_ready(""));
         assert!(!is_cli_ready("Starting Claude Code..."));
+    }
+
+    #[test]
+    fn detect_cli_startup_error_detects_command_not_found() {
+        let output = "-sh: claude: command not found";
+        let err = detect_cli_startup_error(output, CliChoice::Claude);
+        assert!(err.is_some());
+    }
+
+    #[test]
+    fn detect_cli_startup_error_returns_none_for_normal_output() {
+        let output = "Starting Claude Code...\nLoading...";
+        let err = detect_cli_startup_error(output, CliChoice::Claude);
+        assert!(err.is_none());
     }
 
     // --- Request deserialization ---
