@@ -2,32 +2,16 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
-import { createProject } from "./test_helpers";
+import { createDesign, createProject } from "./test_helpers";
 
 const modules = import.meta.glob("./**/*.*s");
-
-async function createDesign(t: ReturnType<typeof convexTest>) {
-  const projectId = await createProject(t);
-  const now = new Date().toISOString();
-  const designId = await t.run(async (ctx) => {
-    return await ctx.db.insert("designs", {
-      projectId: projectId as any,
-      designKey: "TINA-D1",
-      title: "Test Design",
-      prompt: "What should the UI look like?",
-      status: "exploring",
-      createdAt: now,
-      updatedAt: now,
-    });
-  });
-  return designId;
-}
 
 describe("designVariations", () => {
   describe("createVariation", () => {
     test("creates variation with exploring status", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const variationId = await t.mutation(
         api.designVariations.createVariation,
@@ -52,7 +36,8 @@ describe("designVariations", () => {
 
     test("throws when design does not exist", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
       const fakeDesignId = designId.replace(
         /^[a-z0-9]+/,
         "z0000000000000000000000",
@@ -74,7 +59,8 @@ describe("designVariations", () => {
   describe("getVariation", () => {
     test("returns null for non-existent variation", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
       const fakeId = designId.replace("designs", "designVariations");
 
       const variation = await t.query(api.designVariations.getVariation, {
@@ -87,7 +73,8 @@ describe("designVariations", () => {
   describe("listVariations", () => {
     test("lists all variations for a design", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       await t.mutation(api.designVariations.createVariation, {
         designId: designId as any,
@@ -111,7 +98,8 @@ describe("designVariations", () => {
 
     test("filters by status", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const v1 = await t.mutation(api.designVariations.createVariation, {
         designId: designId as any,
@@ -149,7 +137,8 @@ describe("designVariations", () => {
   describe("transitionVariation", () => {
     test("transitions exploring -> selected", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const variationId = await t.mutation(
         api.designVariations.createVariation,
@@ -173,7 +162,8 @@ describe("designVariations", () => {
 
     test("transitions exploring -> rejected", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const variationId = await t.mutation(
         api.designVariations.createVariation,
@@ -197,7 +187,8 @@ describe("designVariations", () => {
 
     test("transitions selected -> exploring", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const variationId = await t.mutation(
         api.designVariations.createVariation,
@@ -225,7 +216,8 @@ describe("designVariations", () => {
 
     test("transitions rejected -> exploring", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const variationId = await t.mutation(
         api.designVariations.createVariation,
@@ -253,7 +245,8 @@ describe("designVariations", () => {
 
     test("rejects invalid transitions", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const variationId = await t.mutation(
         api.designVariations.createVariation,
@@ -283,7 +276,8 @@ describe("designVariations", () => {
 
     test("throws for non-existent variation", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
       const fakeId = designId.replace("designs", "designVariations");
 
       try {
@@ -301,7 +295,8 @@ describe("designVariations", () => {
   describe("updateVariation", () => {
     test("updates title", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const variationId = await t.mutation(
         api.designVariations.createVariation,
@@ -325,7 +320,8 @@ describe("designVariations", () => {
 
     test("updates screenshotStorageIds", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const variationId = await t.mutation(
         api.designVariations.createVariation,
@@ -352,7 +348,8 @@ describe("designVariations", () => {
 
     test("partial update only modifies specified fields", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
 
       const variationId = await t.mutation(
         api.designVariations.createVariation,
@@ -377,7 +374,8 @@ describe("designVariations", () => {
 
     test("throws for non-existent variation", async () => {
       const t = convexTest(schema, modules);
-      const designId = await createDesign(t);
+      const projectId = await createProject(t);
+      const designId = await createDesign(t, { projectId });
       const fakeId = designId.replace("designs", "designVariations");
 
       try {

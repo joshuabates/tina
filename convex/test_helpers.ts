@@ -169,6 +169,23 @@ export async function createValidatedLaunchFixture(t: ConvexHarness) {
   return { nodeId, projectId, specId };
 }
 
+interface CreateDesignOptions {
+  projectId: string;
+  title?: string;
+  prompt?: string;
+}
+
+export async function createDesign(
+  t: ConvexHarness,
+  options: CreateDesignOptions,
+) {
+  return await t.mutation(api.designs.createDesign, {
+    projectId: options.projectId as any,
+    title: options.title ?? "Test Design",
+    prompt: options.prompt ?? "How should we build this?",
+  });
+}
+
 interface CreateReviewOptions {
   orchestrationId: string;
   phaseNumber?: string;

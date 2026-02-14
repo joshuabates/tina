@@ -2,28 +2,9 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
-import { createProject, createSpec } from "./test_helpers";
+import { createDesign, createProject, createSpec } from "./test_helpers";
 
 const modules = import.meta.glob("./**/*.*s");
-
-async function createDesign(
-  t: ReturnType<typeof convexTest>,
-  projectId: string,
-) {
-  let designId: string = "";
-  await t.run(async (ctx) => {
-    designId = await ctx.db.insert("designs", {
-      projectId: projectId as any,
-      designKey: `TEST-D${Math.floor(Math.random() * 10000)}`,
-      title: "Test Design",
-      prompt: "How should we build this?",
-      status: "exploring",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-  });
-  return designId;
-}
 
 describe("specDesigns", () => {
   describe("linkSpecToDesign", () => {
@@ -31,7 +12,7 @@ describe("specDesigns", () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
       const specId = await createSpec(t, { projectId });
-      const designId = await createDesign(t, projectId);
+      const designId = await createDesign(t, { projectId });
 
       const linkId = await t.mutation(api.specDesigns.linkSpecToDesign, {
         specId: specId as any,
@@ -44,7 +25,7 @@ describe("specDesigns", () => {
     test("throws when spec does not exist", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
-      const designId = await createDesign(t, projectId);
+      const designId = await createDesign(t, { projectId });
 
       // Create and delete a spec to get a valid-format but non-existent ID
       const deletedSpecId = await createSpec(t, { projectId });
@@ -66,7 +47,7 @@ describe("specDesigns", () => {
       const specId = await createSpec(t, { projectId });
 
       // Create and delete a design to get a valid-format but non-existent ID
-      const deletedDesignId = await createDesign(t, projectId);
+      const deletedDesignId = await createDesign(t, { projectId });
       await t.run(async (ctx) => {
         await ctx.db.delete(deletedDesignId as any);
       });
@@ -83,7 +64,7 @@ describe("specDesigns", () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
       const specId = await createSpec(t, { projectId });
-      const designId = await createDesign(t, projectId);
+      const designId = await createDesign(t, { projectId });
 
       const linkId1 = await t.mutation(api.specDesigns.linkSpecToDesign, {
         specId: specId as any,
@@ -104,7 +85,7 @@ describe("specDesigns", () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
       const specId = await createSpec(t, { projectId });
-      const designId = await createDesign(t, projectId);
+      const designId = await createDesign(t, { projectId });
 
       await t.mutation(api.specDesigns.linkSpecToDesign, {
         specId: specId as any,
@@ -126,7 +107,7 @@ describe("specDesigns", () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
       const specId = await createSpec(t, { projectId });
-      const designId = await createDesign(t, projectId);
+      const designId = await createDesign(t, { projectId });
 
       // Should not throw
       await t.mutation(api.specDesigns.unlinkSpecFromDesign, {
@@ -146,8 +127,8 @@ describe("specDesigns", () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
       const specId = await createSpec(t, { projectId });
-      const designId1 = await createDesign(t, projectId);
-      const designId2 = await createDesign(t, projectId);
+      const designId1 = await createDesign(t, { projectId });
+      const designId2 = await createDesign(t, { projectId });
 
       await t.mutation(api.specDesigns.linkSpecToDesign, {
         specId: specId as any,
@@ -187,7 +168,7 @@ describe("specDesigns", () => {
       const projectId = await createProject(t);
       const specId1 = await createSpec(t, { projectId, title: "Spec 1" });
       const specId2 = await createSpec(t, { projectId, title: "Spec 2" });
-      const designId = await createDesign(t, projectId);
+      const designId = await createDesign(t, { projectId });
 
       await t.mutation(api.specDesigns.linkSpecToDesign, {
         specId: specId1 as any,
@@ -211,7 +192,7 @@ describe("specDesigns", () => {
     test("returns empty array when design has no linked specs", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
-      const designId = await createDesign(t, projectId);
+      const designId = await createDesign(t, { projectId });
 
       const specs = await t.query(api.specDesigns.listSpecsForDesign, {
         designId: designId as any,
