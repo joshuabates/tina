@@ -54,3 +54,54 @@ export interface PresetResult {
   hasDiff: boolean;
   hasReport: boolean;
 }
+
+export type VisionIssueCategory =
+  | "layout"
+  | "spacing"
+  | "typography"
+  | "color"
+  | "states"
+  | "other";
+
+export type VisionIssueSeverity = "minor" | "major" | "critical";
+
+export interface VisionIssue {
+  category: VisionIssueCategory;
+  severity: VisionIssueSeverity;
+  description: string;
+  region?: string;
+}
+
+export interface VisionResult {
+  pass: boolean;
+  confidence: number;
+  issues: VisionIssue[];
+  summary: string;
+}
+
+export interface IterationRecord {
+  iteration: number;
+  timestamp: string;
+  pixelDiff: {
+    diffPercentage: number;
+    diffPixels: number;
+    totalPixels: number;
+  };
+  visionResult: {
+    pass: boolean;
+    confidence: number;
+    issueCount: number;
+  } | null;
+}
+
+export interface ConvergenceReport {
+  designSlug: string;
+  variationSlug: string;
+  storyId: string;
+  iterations: IterationRecord[];
+  converged: boolean;
+  totalIterations: number;
+  finalDiffPercentage: number;
+  startedAt: string;
+  completedAt: string;
+}
