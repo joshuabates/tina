@@ -2,11 +2,13 @@ import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createFeatureFixture } from "./test_helpers";
 
 describe("telemetry:recordSpan", () => {
   test("creates span with full correlation envelope", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const spanId = await t.mutation(api.telemetry.recordSpan, {
@@ -37,7 +39,7 @@ describe("telemetry:recordSpan", () => {
   });
 
   test("deduplicates spans by spanId", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const spanId1 = await t.mutation(api.telemetry.recordSpan, {
@@ -76,7 +78,7 @@ describe("telemetry:recordSpan", () => {
   });
 
   test("records span with parent relationship", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.telemetry.recordSpan, {
@@ -113,7 +115,7 @@ describe("telemetry:recordSpan", () => {
   });
 
   test("records span with error status and details", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.telemetry.recordSpan, {
@@ -142,7 +144,7 @@ describe("telemetry:recordSpan", () => {
   });
 
   test("records span with JSON attrs", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const attrs = JSON.stringify({ retry_count: 1, can_retry: true });
@@ -173,7 +175,7 @@ describe("telemetry:recordSpan", () => {
 
 describe("telemetry:recordEvent", () => {
   test("creates event with correlation envelope", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const eventId = await t.mutation(api.telemetry.recordEvent, {
@@ -203,7 +205,7 @@ describe("telemetry:recordEvent", () => {
   });
 
   test("creates multiple events without deduplication", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.telemetry.recordEvent, {
@@ -237,7 +239,7 @@ describe("telemetry:recordEvent", () => {
   });
 
   test("records projection.skip event with reason in attrs", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const attrs = JSON.stringify({ reason: "task_dir_missing", path: "/path/to/tasks" });
@@ -265,7 +267,7 @@ describe("telemetry:recordEvent", () => {
   });
 
   test("records consistency.violation event from harness", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const attrs = JSON.stringify({
@@ -299,7 +301,7 @@ describe("telemetry:recordEvent", () => {
 
 describe("telemetry:listSpans", () => {
   test("filters spans by traceId", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.telemetry.recordSpan, {
@@ -333,7 +335,7 @@ describe("telemetry:listSpans", () => {
   });
 
   test("filters spans by orchestrationId", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId: orch1 } = await createFeatureFixture(t, "feature-1");
     const { orchestrationId: orch2 } = await createFeatureFixture(t, "feature-2");
 
@@ -368,7 +370,7 @@ describe("telemetry:listSpans", () => {
   });
 
   test("filters spans by source", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.telemetry.recordSpan, {
@@ -403,7 +405,7 @@ describe("telemetry:listSpans", () => {
   });
 
   test("filters spans by time range (since)", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.telemetry.recordSpan, {
@@ -438,7 +440,7 @@ describe("telemetry:listSpans", () => {
   });
 
   test("respects limit parameter", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     for (let i = 0; i < 5; i++) {
@@ -465,7 +467,7 @@ describe("telemetry:listSpans", () => {
 
 describe("telemetry:listEvents", () => {
   test("filters events by traceId", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.telemetry.recordEvent, {
@@ -499,7 +501,7 @@ describe("telemetry:listEvents", () => {
   });
 
   test("filters events by eventType", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.telemetry.recordEvent, {
@@ -536,7 +538,7 @@ describe("telemetry:listEvents", () => {
 
 describe("telemetry:recordRollup", () => {
   test("creates rollup with metrics", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const rollupId = await t.mutation(api.telemetry.recordRollup, {
@@ -566,7 +568,7 @@ describe("telemetry:recordRollup", () => {
   });
 
   test("upserts rollup by window+source+operation", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const rollupId1 = await t.mutation(api.telemetry.recordRollup, {
@@ -610,7 +612,7 @@ describe("telemetry:recordRollup", () => {
 
 describe("telemetry:getRollups", () => {
   test("filters rollups by window range", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.telemetry.recordRollup, {
@@ -645,7 +647,7 @@ describe("telemetry:getRollups", () => {
   });
 
   test("filters rollups by source", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     await t.mutation(api.telemetry.recordRollup, {
       windowStart: "2026-02-10T10:00:00Z",

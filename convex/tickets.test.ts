@@ -2,12 +2,14 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createProject } from "./test_helpers";
 
 describe("tickets", () => {
   describe("createTicket", () => {
     test("creates ticket with correct key format and allocates next number", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "TINA",
         repoPath: "/Users/joshua/Projects/tina",
@@ -28,12 +30,12 @@ describe("tickets", () => {
       expect(ticket?.priority).toBe("high");
       expect(ticket?.status).toBe("todo");
       expect(ticket?.estimate).toBeUndefined();
-      expect(ticket?.designId).toBeUndefined();
+      expect(ticket?.specId).toBeUndefined();
       expect(ticket?.closedAt).toBeUndefined();
     });
 
     test("allocates sequential keys for multiple tickets", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "PROJ",
         repoPath: "/Users/joshua/Projects/proj",
@@ -60,55 +62,55 @@ describe("tickets", () => {
       expect(ticket2?.ticketKey).toBe("PROJ-2");
     });
 
-    test("creates ticket with design reference", async () => {
-      const t = convexTest(schema);
+    test("creates ticket with spec reference", async () => {
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "ARCH",
         repoPath: "/Users/joshua/Projects/arch",
       });
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "API Design",
+        title: "API Spec",
         markdown: "# REST API",
       });
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
         projectId,
-        designId,
+        specId,
         title: "Implement endpoints",
         description: "Build API",
         priority: "high",
       });
 
       const ticket = await t.query(api.tickets.getTicket, { ticketId });
-      expect(ticket?.designId).toBe(designId);
+      expect(ticket?.specId).toBe(specId);
     });
 
-    test("throws on non-existent designId", async () => {
-      const t = convexTest(schema);
+    test("throws on non-existent specId", async () => {
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
-      const fakeDesignId = (projectId as string).replace(
+      const fakeSpecId = (projectId as string).replace(
         "projects",
-        "designs",
+        "specs",
       ) as any;
 
       try {
         await t.mutation(api.tickets.createTicket, {
           projectId,
-          designId: fakeDesignId,
+          specId: fakeSpecId,
           title: "Test",
           description: "Test",
           priority: "low",
         });
         expect.fail("Should have thrown error");
       } catch (e) {
-        expect((e as Error).message).toContain("Design not found");
+        expect((e as Error).message).toContain("Spec not found");
       }
     });
 
-    test("throws when design belongs to a different project", async () => {
-      const t = convexTest(schema);
+    test("throws when spec belongs to a different project", async () => {
+      const t = convexTest(schema, modules);
       const projectA = await createProject(t, {
         name: "PROJA",
         repoPath: "/Users/joshua/Projects/proja",
@@ -118,16 +120,16 @@ describe("tickets", () => {
         repoPath: "/Users/joshua/Projects/projb",
       });
 
-      const designFromB = await t.mutation(api.designs.createDesign, {
+      const specFromB = await t.mutation(api.specs.createSpec, {
         projectId: projectB,
-        title: "Design B",
+        title: "Spec B",
         markdown: "# Design B",
       });
 
       await expect(
         t.mutation(api.tickets.createTicket, {
           projectId: projectA,
-          designId: designFromB,
+          specId: specFromB,
           title: "Cross project link",
           description: "Should be rejected",
           priority: "medium",
@@ -136,7 +138,7 @@ describe("tickets", () => {
     });
 
     test("throws on missing project", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       // Create a project to get a valid ID format
       const realProjectId = (await createProject(t)) as string;
       // Construct a non-existent projects ID by changing the numeric prefix
@@ -159,7 +161,7 @@ describe("tickets", () => {
 
   describe("getTicket", () => {
     test("returns null for non-existent ticket", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const fakeId = (await createProject(t)).replace("projects", "tickets");
 
       const ticket = await t.query(api.tickets.getTicket, { ticketId: fakeId as any });
@@ -169,7 +171,7 @@ describe("tickets", () => {
 
   describe("getTicketByKey", () => {
     test("looks up ticket by key", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "KEY",
         repoPath: "/Users/joshua/Projects/key",
@@ -191,7 +193,7 @@ describe("tickets", () => {
     });
 
     test("returns null for non-existent key", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticket = await t.query(api.tickets.getTicketByKey, {
@@ -204,7 +206,7 @@ describe("tickets", () => {
 
   describe("listTickets", () => {
     test("lists all tickets for a project", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "LIST",
         repoPath: "/Users/joshua/Projects/list",
@@ -232,7 +234,7 @@ describe("tickets", () => {
     });
 
     test("filters by status", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "STAT",
         repoPath: "/Users/joshua/Projects/stat",
@@ -274,28 +276,28 @@ describe("tickets", () => {
       expect(inProgressTickets[0]?.title).toBe("In progress task");
     });
 
-    test("filters by design", async () => {
-      const t = convexTest(schema);
+    test("filters by spec", async () => {
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "DSGN",
         repoPath: "/Users/joshua/Projects/dsgn",
       });
 
-      const design1Id = await t.mutation(api.designs.createDesign, {
+      const spec1Id = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design A",
+        title: "Spec A",
         markdown: "# Design A",
       });
 
-      const design2Id = await t.mutation(api.designs.createDesign, {
+      const spec2Id = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design B",
+        title: "Spec B",
         markdown: "# Design B",
       });
 
       await t.mutation(api.tickets.createTicket, {
         projectId,
-        designId: design1Id,
+        specId: spec1Id,
         title: "Ticket for A",
         description: "Relates to A",
         priority: "medium",
@@ -303,7 +305,7 @@ describe("tickets", () => {
 
       await t.mutation(api.tickets.createTicket, {
         projectId,
-        designId: design2Id,
+        specId: spec2Id,
         title: "Ticket for B",
         description: "Relates to B",
         priority: "medium",
@@ -318,15 +320,15 @@ describe("tickets", () => {
 
       const ticketsForA = await t.query(api.tickets.listTickets, {
         projectId,
-        designId: design1Id,
+        specId: spec1Id,
       });
 
       expect(ticketsForA).toHaveLength(1);
       expect(ticketsForA[0]?.title).toBe("Ticket for A");
     });
 
-    test("design filter does not leak tickets from other projects", async () => {
-      const t = convexTest(schema);
+    test("spec filter does not leak tickets from other projects", async () => {
+      const t = convexTest(schema, modules);
       const projectA = await createProject(t, {
         name: "LKA",
         repoPath: "/Users/joshua/Projects/lka",
@@ -336,15 +338,15 @@ describe("tickets", () => {
         repoPath: "/Users/joshua/Projects/lkb",
       });
 
-      const designInB = await t.mutation(api.designs.createDesign, {
+      const specInB = await t.mutation(api.specs.createSpec, {
         projectId: projectB,
-        title: "Project B design",
+        title: "Project B spec",
         markdown: "# B",
       });
 
       await t.mutation(api.tickets.createTicket, {
         projectId: projectB,
-        designId: designInB,
+        specId: specInB,
         title: "Ticket in B",
         description: "Should stay in B",
         priority: "high",
@@ -352,14 +354,14 @@ describe("tickets", () => {
 
       const leaked = await t.query(api.tickets.listTickets, {
         projectId: projectA,
-        designId: designInB,
+        specId: specInB,
       });
 
       expect(leaked).toHaveLength(0);
     });
 
     test("returns empty array when no tickets exist", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "EMPTY",
         repoPath: "/Users/joshua/Projects/empty",
@@ -370,7 +372,7 @@ describe("tickets", () => {
     });
 
     test("isolates tickets by project", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const project1Id = await createProject(t, {
         name: "PROJ1",
         repoPath: "/Users/joshua/Projects/proj1",
@@ -413,7 +415,7 @@ describe("tickets", () => {
 
   describe("updateTicket", () => {
     test("updates title and description", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -442,7 +444,7 @@ describe("tickets", () => {
     });
 
     test("updates priority and estimate", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -464,7 +466,7 @@ describe("tickets", () => {
     });
 
     test("partial updates only modify specified fields", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -484,19 +486,19 @@ describe("tickets", () => {
       expect(ticket?.priority).toBe("low");
     });
 
-    test("can unlink design with clearDesignId", async () => {
-      const t = convexTest(schema);
+    test("can unlink spec with clearSpecId", async () => {
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Linked design",
+        title: "Linked spec",
         markdown: "# Linked",
       });
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
         projectId,
-        designId,
+        specId,
         title: "Linked ticket",
         description: "Has design",
         priority: "medium",
@@ -504,15 +506,15 @@ describe("tickets", () => {
 
       await t.mutation(api.tickets.updateTicket, {
         ticketId,
-        clearDesignId: true,
+        clearSpecId: true,
       });
 
       const ticket = await t.query(api.tickets.getTicket, { ticketId });
-      expect(ticket?.designId).toBeUndefined();
+      expect(ticket?.specId).toBeUndefined();
     });
 
-    test("throws when update links design from another project", async () => {
-      const t = convexTest(schema);
+    test("throws when update links spec from another project", async () => {
+      const t = convexTest(schema, modules);
       const projectA = await createProject(t, {
         name: "UPA",
         repoPath: "/Users/joshua/Projects/upa",
@@ -522,9 +524,9 @@ describe("tickets", () => {
         repoPath: "/Users/joshua/Projects/upb",
       });
 
-      const designFromB = await t.mutation(api.designs.createDesign, {
+      const specFromB = await t.mutation(api.specs.createSpec, {
         projectId: projectB,
-        title: "Design B",
+        title: "Spec B",
         markdown: "# B",
       });
 
@@ -538,17 +540,17 @@ describe("tickets", () => {
       await expect(
         t.mutation(api.tickets.updateTicket, {
           ticketId: ticketInA,
-          designId: designFromB,
+          specId: specFromB,
         }),
       ).rejects.toThrow("does not belong to ticket project");
     });
 
-    test("throws when both designId and clearDesignId are provided", async () => {
-      const t = convexTest(schema);
+    test("throws when both specId and clearSpecId are provided", async () => {
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design",
+        title: "Spec",
         markdown: "# Design",
       });
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -561,14 +563,14 @@ describe("tickets", () => {
       await expect(
         t.mutation(api.tickets.updateTicket, {
           ticketId,
-          designId,
-          clearDesignId: true,
+          specId,
+          clearSpecId: true,
         }),
-      ).rejects.toThrow("Cannot provide both designId and clearDesignId");
+      ).rejects.toThrow("Cannot provide both specId and clearSpecId");
     });
 
     test("throws on missing ticket", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
       const fakeTicketId = (projectId as string).replace(
         "projects",
@@ -589,7 +591,7 @@ describe("tickets", () => {
 
   describe("transitionTicket", () => {
     test("transitions todo -> in_progress", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -609,7 +611,7 @@ describe("tickets", () => {
     });
 
     test("transitions todo -> blocked", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -629,7 +631,7 @@ describe("tickets", () => {
     });
 
     test("transitions todo -> canceled", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -650,7 +652,7 @@ describe("tickets", () => {
     });
 
     test("transitions in_progress -> in_review", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -675,7 +677,7 @@ describe("tickets", () => {
     });
 
     test("transitions in_review -> done and sets closedAt", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -706,7 +708,7 @@ describe("tickets", () => {
     });
 
     test("transitions in_review -> in_progress (rework)", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -736,7 +738,7 @@ describe("tickets", () => {
     });
 
     test("transitions done -> todo (reopen) and clears closedAt", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -775,7 +777,7 @@ describe("tickets", () => {
     });
 
     test("transitions canceled -> todo (reopen)", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -804,7 +806,7 @@ describe("tickets", () => {
     });
 
     test("transitions in_progress -> blocked", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -829,7 +831,7 @@ describe("tickets", () => {
     });
 
     test("transitions blocked -> in_progress", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {
@@ -854,7 +856,7 @@ describe("tickets", () => {
     });
 
     test("throws on missing ticket", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
       const fakeTicketId = (projectId as string).replace(
         "projects",
@@ -873,7 +875,7 @@ describe("tickets", () => {
     });
 
     test("rejects invalid transitions", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       const ticketId = await t.mutation(api.tickets.createTicket, {

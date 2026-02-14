@@ -2,11 +2,13 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createProject } from "./test_helpers";
 
 describe("projectCounters:allocateKey", () => {
   test("allocates key 1 on first call and seeds counter to 2", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const projectId = await createProject(t, {
       name: "counter-test-project",
@@ -15,7 +17,7 @@ describe("projectCounters:allocateKey", () => {
 
     const key = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
-      counterType: "design",
+      counterType: "spec",
     });
 
     expect(key).toBe(1);
@@ -23,13 +25,13 @@ describe("projectCounters:allocateKey", () => {
     // Verify the counter was seeded
     const counter = await t.query(internal.projectCounters.getCounter, {
       projectId,
-      counterType: "design",
+      counterType: "spec",
     });
     expect(counter?.nextValue).toBe(2);
   });
 
   test("allocates key 2 on second call and increments counter", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const projectId = await createProject(t, {
       name: "counter-test-project-2",
@@ -38,11 +40,11 @@ describe("projectCounters:allocateKey", () => {
 
     const key1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
-      counterType: "design",
+      counterType: "spec",
     });
     const key2 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
-      counterType: "design",
+      counterType: "spec",
     });
 
     expect(key1).toBe(1);
@@ -50,13 +52,13 @@ describe("projectCounters:allocateKey", () => {
 
     const counter = await t.query(internal.projectCounters.getCounter, {
       projectId,
-      counterType: "design",
+      counterType: "spec",
     });
     expect(counter?.nextValue).toBe(3);
   });
 
   test("maintains separate counters for different types", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const projectId = await createProject(t, {
       name: "counter-test-project-3",
@@ -65,7 +67,7 @@ describe("projectCounters:allocateKey", () => {
 
     const designKey1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
-      counterType: "design",
+      counterType: "spec",
     });
     const ticketKey1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
@@ -73,7 +75,7 @@ describe("projectCounters:allocateKey", () => {
     });
     const designKey2 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId,
-      counterType: "design",
+      counterType: "spec",
     });
 
     expect(designKey1).toBe(1);
@@ -82,7 +84,7 @@ describe("projectCounters:allocateKey", () => {
 
     const designCounter = await t.query(internal.projectCounters.getCounter, {
       projectId,
-      counterType: "design",
+      counterType: "spec",
     });
     expect(designCounter?.nextValue).toBe(3);
 
@@ -94,7 +96,7 @@ describe("projectCounters:allocateKey", () => {
   });
 
   test("maintains separate counters for different projects", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const project1Id = await createProject(t, {
       name: "counter-test-project-4a",
@@ -107,11 +109,11 @@ describe("projectCounters:allocateKey", () => {
 
     const key1Project1 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId: project1Id,
-      counterType: "design",
+      counterType: "spec",
     });
     const key1Project2 = await t.mutation(internal.projectCounters.allocateKeyMutation, {
       projectId: project2Id,
-      counterType: "design",
+      counterType: "spec",
     });
 
     expect(key1Project1).toBe(1);

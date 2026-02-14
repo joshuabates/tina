@@ -12,7 +12,7 @@ interface CreateNodeOptions {
 interface CreateOrchestrationOptions {
   nodeId: string;
   featureName: string;
-  designDocPath?: string;
+  specDocPath?: string;
   branch?: string;
   worktreePath?: string;
   totalPhases?: number;
@@ -57,7 +57,7 @@ export async function createOrchestration(
   const args: Record<string, unknown> = {
     nodeId: options.nodeId as any,
     featureName: options.featureName,
-    designDocPath: options.designDocPath ?? "/docs/design.md",
+    specDocPath: options.specDocPath ?? "/docs/design.md",
     branch: options.branch ?? `tina/${options.featureName}`,
     totalPhases: options.totalPhases ?? 3,
     currentPhase: options.currentPhase ?? 1,
@@ -129,44 +129,44 @@ export async function createProject(
   });
 }
 
-interface CreateDesignOptions {
+interface CreateSpecOptions {
   projectId: string;
   title?: string;
   markdown?: string;
   complexityPreset?: string;
 }
 
-export async function createDesign(
+export async function createSpec(
   t: ConvexHarness,
-  options: CreateDesignOptions,
+  options: CreateSpecOptions,
 ) {
   const args: Record<string, unknown> = {
     projectId: options.projectId as any,
-    title: options.title ?? "Test Design",
-    markdown: options.markdown ?? "# Test Design\n\nTest content.",
+    title: options.title ?? "Test Spec",
+    markdown: options.markdown ?? "# Test Spec\n\nTest content.",
   };
 
   if (options.complexityPreset !== undefined) {
     args.complexityPreset = options.complexityPreset;
   }
 
-  return await t.mutation(api.designs.createDesign, args as any);
+  return await t.mutation(api.specs.createSpec, args as any);
 }
 
 export async function createValidatedLaunchFixture(t: ConvexHarness) {
   const nodeId = await createNode(t);
   const projectId = await createProject(t);
-  const designId = await createDesign(t, {
+  const specId = await createSpec(t, {
     projectId,
     markdown: "# Test Feature\n\n## Phase 1: Build\n\nBuild it\n\n## Phase 2: Test\n\nTest it",
     complexityPreset: "simple",
   });
   // Complete all markers
-  await t.mutation(api.designs.updateDesignMarkers, {
-    designId,
+  await t.mutation(api.specs.updateSpecMarkers, {
+    specId,
     completedMarkers: ["objective_defined", "scope_bounded"],
   });
-  return { nodeId, projectId, designId };
+  return { nodeId, projectId, specId };
 }
 
 interface CreateReviewOptions {

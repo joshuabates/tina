@@ -2,11 +2,13 @@ import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import { api, internal } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createFeatureFixture } from "./test_helpers";
 
 describe("cron:cleanupExpiredTelemetry", () => {
   test("deletes success spans older than 7 days", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create old success span (8 days ago)
@@ -52,7 +54,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
   });
 
   test("deletes error spans older than 30 days", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create old error span (35 days ago)
@@ -99,7 +101,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
   });
 
   test("deletes success events older than 7 days", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create old info event (8 days ago)
@@ -140,7 +142,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
   });
 
   test("deletes error/warn events older than 30 days", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create old error event (35 days ago)
@@ -193,7 +195,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
   });
 
   test("deletes rollups older than 180 days", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create old rollup (185 days ago)
@@ -239,7 +241,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
   });
 
   test("handles empty database gracefully", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const result = await t.mutation(internal.cron.cleanupExpiredTelemetry, {
       currentTime: "2026-02-10T10:00:00Z",
@@ -253,7 +255,7 @@ describe("cron:cleanupExpiredTelemetry", () => {
 
 describe("cron:aggregateSpansIntoRollups", () => {
   test("aggregates spans into 15min rollup with p95 and max metrics", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create 10 spans within a 15-minute window (2026-02-10 10:00:00 - 10:15:00)
@@ -333,7 +335,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
   });
 
   test("aggregates spans into hourly rollup", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create spans across an hour (10:00 - 11:00)
@@ -372,7 +374,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
   });
 
   test("aggregates spans into daily rollup", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create spans across a day (00:00 - 24:00)
@@ -411,7 +413,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
   });
 
   test("creates separate rollups per source+operation combination", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create spans for different source+operation combos in same window
@@ -484,7 +486,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
   });
 
   test("handles empty window gracefully", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const result = await t.mutation(internal.cron.aggregateSpansIntoRollups, {
       windowStart: "2026-02-10T10:00:00Z",
@@ -496,7 +498,7 @@ describe("cron:aggregateSpansIntoRollups", () => {
   });
 
   test("updates existing rollup if already exists", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     // Create initial span

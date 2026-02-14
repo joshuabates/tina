@@ -2,11 +2,13 @@ import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createFeatureFixture } from "./test_helpers";
 
 describe("events:recordEvent", () => {
   test("creates agent_shutdown event with correct structure", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const detail = {
@@ -39,7 +41,7 @@ describe("events:recordEvent", () => {
   });
 
   test("stores agent_name, agent_type in detail JSON", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const detail = {
@@ -71,7 +73,7 @@ describe("events:recordEvent", () => {
   });
 
   test("includes shutdown_detected_at timestamp in detail", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const detail = {
@@ -102,7 +104,7 @@ describe("events:recordEvent", () => {
 
 describe("events:listEvents", () => {
   test("query events by eventType:agent_shutdown returns only shutdown events", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.events.recordEvent, {
@@ -147,7 +149,7 @@ describe("events:listEvents", () => {
   });
 
   test("shutdown events appear in orchestration event timeline", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.events.recordEvent, {
@@ -183,7 +185,7 @@ describe("events:listEvents", () => {
 
 describe("events:recordEvent - detail JSON parsing", () => {
   test("event detail JSON parses without errors", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const detail = {

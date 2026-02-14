@@ -2,11 +2,13 @@ import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createFeatureFixture } from "./test_helpers";
 
 describe("plans:upsertPlan", () => {
   test("creates new plan record when none exists", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const planId = await t.mutation(api.plans.upsertPlan, {
@@ -30,7 +32,7 @@ describe("plans:upsertPlan", () => {
   });
 
   test("updates existing plan content when called again for same orchestration+phase", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const id1 = await t.mutation(api.plans.upsertPlan, {
@@ -58,7 +60,7 @@ describe("plans:upsertPlan", () => {
   });
 
   test("updates lastSynced timestamp on update", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.plans.upsertPlan, {
@@ -91,7 +93,7 @@ describe("plans:upsertPlan", () => {
   });
 
   test("updates planPath if it changes", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.plans.upsertPlan, {
@@ -119,7 +121,7 @@ describe("plans:upsertPlan", () => {
 
 describe("plans:getPlan", () => {
   test("returns correct plan for orchestration+phase", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.plans.upsertPlan, {
@@ -147,7 +149,7 @@ describe("plans:getPlan", () => {
   });
 
   test("returns null when no plan exists", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "empty-feature");
 
     const plan = await t.query(api.plans.getPlan, {
@@ -161,7 +163,7 @@ describe("plans:getPlan", () => {
 
 describe("plans:listPlans", () => {
   test("returns all plans for orchestration", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.plans.upsertPlan, {
@@ -195,7 +197,7 @@ describe("plans:listPlans", () => {
   });
 
   test("returns empty array for orchestration with no plans", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "empty-feature");
 
     const plans = await t.query(api.plans.listPlans, {

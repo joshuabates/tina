@@ -2,36 +2,36 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
-import { COMPLEXITY_PRESETS } from "./designPresets";
+import { COMPLEXITY_PRESETS } from "./specPresets";
 import { createProject } from "./test_helpers";
 
 const modules = import.meta.glob("./**/*.*s");
 
-describe("designs", () => {
-  describe("createDesign", () => {
-    test("creates design with correct key format and allocates next number", async () => {
+describe("specs", () => {
+  describe("createSpec", () => {
+    test("creates spec with correct key format and allocates next number", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "TINA",
         repoPath: "/Users/joshua/Projects/tina",
       });
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "API Design",
+        title: "API Spec",
         markdown: "# REST API Specification",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design).toBeDefined();
-      expect(design?.designKey).toBe("TINA-D1");
-      expect(design?.title).toBe("API Design");
-      expect(design?.markdown).toBe("# REST API Specification");
-      expect(design?.status).toBe("draft");
-      expect(design?.archivedAt).toBeUndefined();
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec).toBeDefined();
+      expect(spec?.specKey).toBe("TINA-S1");
+      expect(spec?.title).toBe("API Spec");
+      expect(spec?.markdown).toBe("# REST API Specification");
+      expect(spec?.status).toBe("draft");
+      expect(spec?.archivedAt).toBeUndefined();
     });
 
-    test("creates design with complexity preset and seeds validation fields", async () => {
+    test("creates spec with complexity preset and seeds validation fields", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "PRESET",
@@ -39,64 +39,64 @@ describe("designs", () => {
       });
 
       const markdown = "# Feature\n\n## Phase 1: Setup\n\n## Phase 2: Build";
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Preset Design",
+        title: "Preset Spec",
         markdown,
         complexityPreset: "standard",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design).toBeDefined();
-      expect(design?.complexityPreset).toBe("standard");
-      expect(design?.requiredMarkers).toEqual(COMPLEXITY_PRESETS.standard);
-      expect(design?.completedMarkers).toEqual([]);
-      expect(design?.phaseCount).toBe(2);
-      expect(design?.phaseStructureValid).toBe(true);
-      expect(design?.validationUpdatedAt).toBeDefined();
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec).toBeDefined();
+      expect(spec?.complexityPreset).toBe("standard");
+      expect(spec?.requiredMarkers).toEqual(COMPLEXITY_PRESETS.standard);
+      expect(spec?.completedMarkers).toEqual([]);
+      expect(spec?.phaseCount).toBe(2);
+      expect(spec?.phaseStructureValid).toBe(true);
+      expect(spec?.validationUpdatedAt).toBeDefined();
     });
 
-    test("creates design without preset leaves validation fields unset", async () => {
+    test("creates spec without preset leaves validation fields unset", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "NOPRE",
         repoPath: "/Users/joshua/Projects/nopre",
       });
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "No Preset",
         markdown: "# Simple doc",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.complexityPreset).toBeUndefined();
-      expect(design?.requiredMarkers).toBeUndefined();
-      expect(design?.completedMarkers).toBeUndefined();
-      expect(design?.phaseCount).toBeUndefined();
-      expect(design?.phaseStructureValid).toBeUndefined();
-      expect(design?.validationUpdatedAt).toBeUndefined();
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.complexityPreset).toBeUndefined();
+      expect(spec?.requiredMarkers).toBeUndefined();
+      expect(spec?.completedMarkers).toBeUndefined();
+      expect(spec?.phaseCount).toBeUndefined();
+      expect(spec?.phaseStructureValid).toBeUndefined();
+      expect(spec?.validationUpdatedAt).toBeUndefined();
     });
 
-    test("creates design with preset and no phase headings shows invalid structure", async () => {
+    test("creates spec with preset and no phase headings shows invalid structure", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "NOPH",
         repoPath: "/Users/joshua/Projects/noph",
       });
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "No Phases",
         markdown: "# Design with no phases",
         complexityPreset: "simple",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.complexityPreset).toBe("simple");
-      expect(design?.requiredMarkers).toEqual(COMPLEXITY_PRESETS.simple);
-      expect(design?.phaseCount).toBe(0);
-      expect(design?.phaseStructureValid).toBe(false);
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.complexityPreset).toBe("simple");
+      expect(spec?.requiredMarkers).toEqual(COMPLEXITY_PRESETS.simple);
+      expect(spec?.phaseCount).toBe(0);
+      expect(spec?.phaseStructureValid).toBe(false);
     });
 
     test("allocates sequential keys for multiple designs", async () => {
@@ -106,57 +106,57 @@ describe("designs", () => {
         repoPath: "/Users/joshua/Projects/proj",
       });
 
-      const design1Id = await t.mutation(api.designs.createDesign, {
+      const spec1Id = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design 1",
+        title: "Spec 1",
         markdown: "# Design One",
       });
 
-      const design2Id = await t.mutation(api.designs.createDesign, {
+      const spec2Id = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design 2",
+        title: "Spec 2",
         markdown: "# Design Two",
       });
 
-      const design1 = await t.query(api.designs.getDesign, { designId: design1Id });
-      const design2 = await t.query(api.designs.getDesign, { designId: design2Id });
+      const spec1 = await t.query(api.specs.getSpec, { specId: spec1Id });
+      const spec2 = await t.query(api.specs.getSpec, { specId: spec2Id });
 
-      expect(design1?.designKey).toBe("PROJ-D1");
-      expect(design2?.designKey).toBe("PROJ-D2");
+      expect(spec1?.specKey).toBe("PROJ-S1");
+      expect(spec2?.specKey).toBe("PROJ-S2");
     });
 
   });
 
   describe("getDesign", () => {
-    test("returns null for non-existent design", async () => {
+    test("returns null for non-existent spec", async () => {
       const t = convexTest(schema, modules);
-      const fakeId = (await createProject(t)).replace("projects", "designs");
+      const fakeId = (await createProject(t)).replace("projects", "specs");
 
-      const design = await t.query(api.designs.getDesign, { designId: fakeId as any });
-      expect(design).toBeNull();
+      const spec = await t.query(api.specs.getSpec, { specId: fakeId as any });
+      expect(spec).toBeNull();
     });
   });
 
-  describe("getDesignByKey", () => {
-    test("looks up design by key", async () => {
+  describe("getSpecByKey", () => {
+    test("looks up spec by key", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "KEY",
         repoPath: "/Users/joshua/Projects/key",
       });
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Test design",
+        title: "Test spec",
         markdown: "# Test",
       });
 
-      const design = await t.query(api.designs.getDesignByKey, {
-        designKey: "KEY-D1",
+      const spec = await t.query(api.specs.getSpecByKey, {
+        specKey: "KEY-S1",
       });
 
-      expect(design?._id).toBe(designId);
-      expect(design?.designKey).toBe("KEY-D1");
+      expect(spec?._id).toBe(specId);
+      expect(spec?.specKey).toBe("KEY-S1");
     });
 
     test("returns null for non-existent key", async () => {
@@ -166,38 +166,38 @@ describe("designs", () => {
         repoPath: "/Users/joshua/Projects/none",
       });
 
-      const design = await t.query(api.designs.getDesignByKey, {
-        designKey: "NONE-D999",
+      const spec = await t.query(api.specs.getSpecByKey, {
+        specKey: "NONE-S999",
       });
 
-      expect(design).toBeNull();
+      expect(spec).toBeNull();
     });
   });
 
-  describe("listDesigns", () => {
-    test("lists all designs for a project", async () => {
+  describe("listSpecs", () => {
+    test("lists all specs for a project", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t, {
         name: "LIST",
         repoPath: "/Users/joshua/Projects/list",
       });
 
-      await t.mutation(api.designs.createDesign, {
+      await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design 1",
+        title: "Spec 1",
         markdown: "# Design One",
       });
 
-      await t.mutation(api.designs.createDesign, {
+      await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design 2",
+        title: "Spec 2",
         markdown: "# Design Two",
       });
 
-      const designs = await t.query(api.designs.listDesigns, { projectId });
-      expect(designs).toHaveLength(2);
-      expect(designs.map((d: any) => d.title)).toEqual(
-        expect.arrayContaining(["Design 1", "Design 2"]),
+      const specs = await t.query(api.specs.listSpecs, { projectId });
+      expect(specs).toHaveLength(2);
+      expect(specs.map((d: any) => d.title)).toEqual(
+        expect.arrayContaining(["Spec 1", "Spec 2"]),
       );
     });
 
@@ -208,44 +208,44 @@ describe("designs", () => {
         repoPath: "/Users/joshua/Projects/stat",
       });
 
-      const design1Id = await t.mutation(api.designs.createDesign, {
+      const spec1Id = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Draft design",
+        title: "Draft spec",
         markdown: "# Draft",
       });
 
-      const design2Id = await t.mutation(api.designs.createDesign, {
+      const spec2Id = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Approved design",
+        title: "Approved spec",
         markdown: "# Approved",
       });
 
       // Transition design2 to approved
-      await t.mutation(api.designs.transitionDesign, {
-        designId: design2Id,
+      await t.mutation(api.specs.transitionSpec, {
+        specId: spec2Id,
         newStatus: "in_review",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId: design2Id,
+      await t.mutation(api.specs.transitionSpec, {
+        specId: spec2Id,
         newStatus: "approved",
       });
 
-      const draftDesigns = await t.query(api.designs.listDesigns, {
+      const draftSpecs = await t.query(api.specs.listSpecs, {
         projectId,
         status: "draft",
       });
 
-      const approvedDesigns = await t.query(api.designs.listDesigns, {
+      const approvedSpecs = await t.query(api.specs.listSpecs, {
         projectId,
         status: "approved",
       });
 
-      expect(draftDesigns).toHaveLength(1);
-      expect(draftDesigns[0]?.title).toBe("Draft design");
+      expect(draftSpecs).toHaveLength(1);
+      expect(draftSpecs[0]?.title).toBe("Draft spec");
 
-      expect(approvedDesigns).toHaveLength(1);
-      expect(approvedDesigns[0]?.title).toBe("Approved design");
+      expect(approvedSpecs).toHaveLength(1);
+      expect(approvedSpecs[0]?.title).toBe("Approved spec");
     });
   });
 
@@ -254,25 +254,25 @@ describe("designs", () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "Original title",
         markdown: "# Original",
       });
 
-      const beforeUpdate = await t.query(api.designs.getDesign, { designId });
+      const beforeUpdate = await t.query(api.specs.getSpec, { specId });
       const beforeTime = beforeUpdate?.updatedAt;
 
       // Small delay to ensure updatedAt changes
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      await t.mutation(api.designs.updateDesign, {
-        designId,
+      await t.mutation(api.specs.updateSpec, {
+        specId,
         title: "Updated title",
         markdown: "# Updated",
       });
 
-      const afterUpdate = await t.query(api.designs.getDesign, { designId });
+      const afterUpdate = await t.query(api.specs.getSpec, { specId });
       expect(afterUpdate?.title).toBe("Updated title");
       expect(afterUpdate?.markdown).toBe("# Updated");
       expect(afterUpdate?.updatedAt).not.toBe(beforeTime);
@@ -282,23 +282,23 @@ describe("designs", () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "Phase Test",
         markdown: "# Design\n\n## Phase 1: Setup",
         complexityPreset: "standard",
       });
 
-      const before = await t.query(api.designs.getDesign, { designId });
+      const before = await t.query(api.specs.getSpec, { specId });
       expect(before?.phaseCount).toBe(1);
       expect(before?.phaseStructureValid).toBe(true);
 
-      await t.mutation(api.designs.updateDesign, {
-        designId,
+      await t.mutation(api.specs.updateSpec, {
+        specId,
         markdown: "# Design\n\n## Phase 1: Setup\n\n## Phase 2: Build\n\n## Phase 3: Test",
       });
 
-      const after = await t.query(api.designs.getDesign, { designId });
+      const after = await t.query(api.specs.getSpec, { specId });
       expect(after?.phaseCount).toBe(3);
       expect(after?.phaseStructureValid).toBe(true);
       expect(after?.validationUpdatedAt).toBeDefined();
@@ -308,215 +308,215 @@ describe("designs", () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "No Preset",
         markdown: "# Original",
       });
 
-      await t.mutation(api.designs.updateDesign, {
-        designId,
+      await t.mutation(api.specs.updateSpec, {
+        specId,
         markdown: "# Updated\n\n## Phase 1: New phase",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.phaseCount).toBe(1);
-      expect(design?.phaseStructureValid).toBe(true);
-      expect(design?.validationUpdatedAt).toBeDefined();
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.phaseCount).toBe(1);
+      expect(spec?.phaseStructureValid).toBe(true);
+      expect(spec?.validationUpdatedAt).toBeDefined();
     });
 
     test("title-only update does not touch phase validation", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "Original",
         markdown: "# Original",
       });
 
-      await t.mutation(api.designs.updateDesign, {
-        designId,
+      await t.mutation(api.specs.updateSpec, {
+        specId,
         title: "New Title",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.phaseCount).toBeUndefined();
-      expect(design?.phaseStructureValid).toBeUndefined();
-      expect(design?.validationUpdatedAt).toBeUndefined();
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.phaseCount).toBeUndefined();
+      expect(spec?.phaseStructureValid).toBeUndefined();
+      expect(spec?.validationUpdatedAt).toBeUndefined();
     });
 
     test("partial updates only modify specified fields", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "Original",
         markdown: "# Original content",
       });
 
-      await t.mutation(api.designs.updateDesign, {
-        designId,
+      await t.mutation(api.specs.updateSpec, {
+        specId,
         title: "New title",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.title).toBe("New title");
-      expect(design?.markdown).toBe("# Original content");
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.title).toBe("New title");
+      expect(spec?.markdown).toBe("# Original content");
     });
   });
 
-  describe("transitionDesign", () => {
+  describe("transitionSpec", () => {
     test("transitions draft -> in_review", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design",
+        title: "Spec",
         markdown: "# Content",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "in_review",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.status).toBe("in_review");
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.status).toBe("in_review");
     });
 
     test("transitions in_review -> approved", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design",
+        title: "Spec",
         markdown: "# Content",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "in_review",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "approved",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.status).toBe("approved");
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.status).toBe("approved");
     });
 
     test("transitions in_review -> draft (reject)", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design",
+        title: "Spec",
         markdown: "# Content",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "in_review",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "draft",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.status).toBe("draft");
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.status).toBe("draft");
     });
 
     test("transitions approved -> archived", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design",
+        title: "Spec",
         markdown: "# Content",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "in_review",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "approved",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "archived",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.status).toBe("archived");
-      expect(design?.archivedAt).toBeDefined();
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.status).toBe("archived");
+      expect(spec?.archivedAt).toBeDefined();
     });
 
     test("transitions archived -> draft (unarchive)", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design",
+        title: "Spec",
         markdown: "# Content",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "in_review",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "approved",
       });
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "archived",
       });
 
-      const beforeUnarchive = await t.query(api.designs.getDesign, { designId });
+      const beforeUnarchive = await t.query(api.specs.getSpec, { specId });
       expect(beforeUnarchive?.archivedAt).toBeDefined();
 
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
+      await t.mutation(api.specs.transitionSpec, {
+        specId,
         newStatus: "draft",
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.status).toBe("draft");
-      expect(design?.archivedAt).toBeFalsy();
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.status).toBe("draft");
+      expect(spec?.archivedAt).toBeFalsy();
     });
 
     test("rejects invalid transitions", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design",
+        title: "Spec",
         markdown: "# Content",
       });
 
       // draft can't transition to approved directly
       try {
-        await t.mutation(api.designs.transitionDesign, {
-          designId,
+        await t.mutation(api.specs.transitionSpec, {
+          specId,
           newStatus: "approved",
         });
         expect.fail("Should have thrown error");
@@ -525,51 +525,51 @@ describe("designs", () => {
       }
     });
 
-    test("design not found", async () => {
+    test("spec not found", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
       // Create and delete by using the test to get an ID that doesn't exist
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design",
+        title: "Spec",
         markdown: "# Content",
       });
 
       // Now manually create a fake ID format to test not found
       try {
-        await t.mutation(api.designs.transitionDesign, {
-          designId: designId.replace(/^[a-z0-9]+/, "z0000000000000000000000") as any,
+        await t.mutation(api.specs.transitionSpec, {
+          specId: specId.replace(/^[a-z0-9]+/, "z0000000000000000000000") as any,
           newStatus: "in_review",
         });
         expect.fail("Should have thrown error");
       } catch (e) {
-        expect((e as Error).message).toContain("Design not found");
+        expect((e as Error).message).toContain("Spec not found");
       }
     });
   });
 
-  describe("updateDesignMarkers", () => {
+  describe("updateSpecMarkers", () => {
     test("sets completedMarkers and validationUpdatedAt", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design with markers",
+        title: "Spec with markers",
         markdown: "# Markers test",
       });
 
-      const beforeUpdate = await t.query(api.designs.getDesign, { designId });
+      const beforeUpdate = await t.query(api.specs.getSpec, { specId });
       expect(beforeUpdate?.completedMarkers).toBeUndefined();
       expect(beforeUpdate?.validationUpdatedAt).toBeUndefined();
 
-      await t.mutation(api.designs.updateDesignMarkers, {
-        designId,
+      await t.mutation(api.specs.updateSpecMarkers, {
+        specId,
         completedMarkers: ["success_criteria", "phase_structure"],
       });
 
-      const afterUpdate = await t.query(api.designs.getDesign, { designId });
+      const afterUpdate = await t.query(api.specs.getSpec, { specId });
       expect(afterUpdate?.completedMarkers).toEqual(["success_criteria", "phase_structure"]);
       expect(afterUpdate?.validationUpdatedAt).toBeDefined();
       expect(afterUpdate?.updatedAt).toBeDefined();
@@ -579,63 +579,63 @@ describe("designs", () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "Replace markers",
         markdown: "# Replace test",
       });
 
-      await t.mutation(api.designs.updateDesignMarkers, {
-        designId,
+      await t.mutation(api.specs.updateSpecMarkers, {
+        specId,
         completedMarkers: ["success_criteria", "phase_structure"],
       });
 
-      await t.mutation(api.designs.updateDesignMarkers, {
-        designId,
+      await t.mutation(api.specs.updateSpecMarkers, {
+        specId,
         completedMarkers: ["success_criteria"],
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.completedMarkers).toEqual(["success_criteria"]);
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.completedMarkers).toEqual(["success_criteria"]);
     });
 
     test("accepts empty markers array", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "Empty markers",
         markdown: "# Empty test",
       });
 
-      await t.mutation(api.designs.updateDesignMarkers, {
-        designId,
+      await t.mutation(api.specs.updateSpecMarkers, {
+        specId,
         completedMarkers: [],
       });
 
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.completedMarkers).toEqual([]);
+      const spec = await t.query(api.specs.getSpec, { specId });
+      expect(spec?.completedMarkers).toEqual([]);
     });
 
-    test("throws for non-existent design", async () => {
+    test("throws for non-existent spec", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
         title: "Temp",
         markdown: "# Temp",
       });
 
       try {
-        await t.mutation(api.designs.updateDesignMarkers, {
-          designId: designId.replace(/^[a-z0-9]+/, "z0000000000000000000000") as any,
+        await t.mutation(api.specs.updateSpecMarkers, {
+          specId: specId.replace(/^[a-z0-9]+/, "z0000000000000000000000") as any,
           completedMarkers: ["test"],
         });
         expect.fail("Should have thrown error");
       } catch (e) {
-        expect((e as Error).message).toContain("Design not found");
+        expect((e as Error).message).toContain("Spec not found");
       }
     });
   });

@@ -4,7 +4,7 @@ import {
   VALID_PRESETS,
   seedMarkersFromPreset,
   parsePhaseStructure,
-} from "./designPresets";
+} from "./specPresets";
 
 describe("COMPLEXITY_PRESETS", () => {
   test("defines three preset tiers", () => {

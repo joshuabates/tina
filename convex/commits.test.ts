@@ -2,11 +2,13 @@ import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createFeatureFixture } from "./test_helpers";
 
 describe("commits:recordCommit", () => {
   test("creates new commit index record", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const commitId = await t.mutation(api.commits.recordCommit, {
@@ -33,7 +35,7 @@ describe("commits:recordCommit", () => {
   });
 
   test("allows shortSha to be omitted", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.commits.recordCommit, {
@@ -51,7 +53,7 @@ describe("commits:recordCommit", () => {
   });
 
   test("returns existing ID when called with same SHA (deduplication)", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const id1 = await t.mutation(api.commits.recordCommit, {
@@ -80,7 +82,7 @@ describe("commits:recordCommit", () => {
 
 describe("commits:listCommits", () => {
   test("returns all commits for orchestration when no phase filter", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.commits.recordCommit, {
@@ -105,7 +107,7 @@ describe("commits:listCommits", () => {
   });
 
   test("returns newest commits first", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "ordering-feature");
 
     await t.mutation(api.commits.recordCommit, {
@@ -133,7 +135,7 @@ describe("commits:listCommits", () => {
   });
 
   test("returns only phase-specific commits when phaseNumber provided", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.commits.recordCommit, {
@@ -160,7 +162,7 @@ describe("commits:listCommits", () => {
   });
 
   test("returns empty array for orchestration with no commits", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "empty-feature");
 
     const commits = await t.query(api.commits.listCommits, {
@@ -173,7 +175,7 @@ describe("commits:listCommits", () => {
 
 describe("commits:getCommit", () => {
   test("returns commit by SHA", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.commits.recordCommit, {
@@ -192,7 +194,7 @@ describe("commits:getCommit", () => {
   });
 
   test("returns null for non-existent SHA", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const commit = await t.query(api.commits.getCommit, {
       sha: "nonexistent",
