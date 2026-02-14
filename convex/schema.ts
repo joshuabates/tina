@@ -297,7 +297,7 @@ export default defineSchema({
     // Legacy design rows used markdown-only payloads before prompt existed.
     markdown: v.optional(v.string()),
     prompt: v.optional(v.string()), // the question being explored
-    status: v.string(), // exploring | locked | archived
+    status: v.string(), // exploring | archived
     createdAt: v.string(),
     updatedAt: v.string(),
     // Legacy planning fields from pre-workbench payloads.

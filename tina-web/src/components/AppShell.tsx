@@ -149,7 +149,6 @@ function designStatusIndicatorClass(status: string): string {
     case "in_review":
     case "in_progress":
       return "bg-sky-400"
-    case "locked":
     case "selected":
     case "approved":
     case "complete":

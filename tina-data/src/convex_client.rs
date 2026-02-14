@@ -3081,7 +3081,7 @@ mod tests {
             m.insert("slug".to_string(), Value::from("design-b"));
             m.insert("title".to_string(), Value::from("Design B"));
             m.insert("prompt".to_string(), Value::from("Prompt B"));
-            m.insert("status".to_string(), Value::from("locked"));
+            m.insert("status".to_string(), Value::from("archived"));
             m.insert("createdAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
             m.insert("updatedAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
             m
@@ -3094,7 +3094,7 @@ mod tests {
         assert_eq!(designs[0].id, "design-1");
         assert_eq!(designs[0].title, "Design A");
         assert_eq!(designs[1].id, "design-2");
-        assert_eq!(designs[1].status, "locked");
+        assert_eq!(designs[1].status, "archived");
     }
 
     #[test]

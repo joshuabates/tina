@@ -1,7 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-const WORKBENCH_STATUSES = new Set(["exploring", "locked", "archived"]);
+const WORKBENCH_STATUSES = new Set(["exploring", "archived"]);
 
 type DesignRow = {
   _id: unknown;

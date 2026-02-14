@@ -184,13 +184,13 @@ describe("designs", () => {
 
       const design2Id = await t.mutation(api.designs.createDesign, {
         projectId,
-        title: "Locked design",
+        title: "Archived design",
         prompt: "Question 2",
       });
 
       await t.mutation(api.designs.transitionDesign, {
         designId: design2Id,
-        newStatus: "locked",
+        newStatus: "archived",
       });
 
       const exploring = await t.query(api.designs.listDesigns, {
@@ -198,16 +198,16 @@ describe("designs", () => {
         status: "exploring",
       });
 
-      const locked = await t.query(api.designs.listDesigns, {
+      const archived = await t.query(api.designs.listDesigns, {
         projectId,
-        status: "locked",
+        status: "archived",
       });
 
       expect(exploring).toHaveLength(1);
       expect(exploring[0]?.title).toBe("Exploring design");
 
-      expect(locked).toHaveLength(1);
-      expect(locked[0]?.title).toBe("Locked design");
+      expect(archived).toHaveLength(1);
+      expect(archived[0]?.title).toBe("Archived design");
     });
 
     test("excludes legacy rows from list query", async () => {
@@ -306,7 +306,7 @@ describe("designs", () => {
   });
 
   describe("transitionDesign", () => {
-    test("transitions exploring -> locked", async () => {
+    test("transitions exploring -> archived", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
@@ -314,30 +314,6 @@ describe("designs", () => {
         projectId,
         title: "Design",
         prompt: "Question",
-      });
-
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
-        newStatus: "locked",
-      });
-
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.status).toBe("locked");
-    });
-
-    test("transitions locked -> archived", async () => {
-      const t = convexTest(schema, modules);
-      const projectId = await createProject(t);
-
-      const designId = await t.mutation(api.designs.createDesign, {
-        projectId,
-        title: "Design",
-        prompt: "Question",
-      });
-
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
-        newStatus: "locked",
       });
 
       await t.mutation(api.designs.transitionDesign, {
@@ -349,7 +325,7 @@ describe("designs", () => {
       expect(design?.status).toBe("archived");
     });
 
-    test("transitions locked -> exploring (unlock)", async () => {
+    test("transitions archived -> exploring", async () => {
       const t = convexTest(schema, modules);
       const projectId = await createProject(t);
 
@@ -357,35 +333,6 @@ describe("designs", () => {
         projectId,
         title: "Design",
         prompt: "Question",
-      });
-
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
-        newStatus: "locked",
-      });
-
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
-        newStatus: "exploring",
-      });
-
-      const design = await t.query(api.designs.getDesign, { designId });
-      expect(design?.status).toBe("exploring");
-    });
-
-    test("transitions archived -> exploring (unarchive)", async () => {
-      const t = convexTest(schema, modules);
-      const projectId = await createProject(t);
-
-      const designId = await t.mutation(api.designs.createDesign, {
-        projectId,
-        title: "Design",
-        prompt: "Question",
-      });
-
-      await t.mutation(api.designs.transitionDesign, {
-        designId,
-        newStatus: "locked",
       });
 
       await t.mutation(api.designs.transitionDesign, {
@@ -412,11 +359,11 @@ describe("designs", () => {
         prompt: "Question",
       });
 
-      // exploring can't transition to archived directly
+      // locked status is no longer supported
       try {
         await t.mutation(api.designs.transitionDesign, {
           designId,
-          newStatus: "archived",
+          newStatus: "locked",
         });
         expect.fail("Should have thrown error");
       } catch (e) {
@@ -437,7 +384,7 @@ describe("designs", () => {
       try {
         await t.mutation(api.designs.transitionDesign, {
           designId: designId.replace(/^[a-z0-9]+/, "z0000000000000000000000") as any,
-          newStatus: "locked",
+          newStatus: "archived",
         });
         expect.fail("Should have thrown error");
       } catch (e) {

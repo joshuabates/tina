@@ -46,7 +46,7 @@ const designs: DesignSummary[] = [
     _creationTime: 1234567891,
     designKey: "ALPHA-DES2",
     title: "Dashboard Layout",
-    status: "locked",
+    status: "archived",
     updatedAt: "2024-01-02T14:00:00Z",
   }),
 ]
@@ -123,7 +123,7 @@ describe("DesignListPage", () => {
   it("renders status badges for each design", () => {
     renderApp("/projects/p1/design")
     expect(screen.getByText("Exploring")).toBeInTheDocument()
-    expect(screen.getByText("Locked")).toBeInTheDocument()
+    expect(screen.getByText("Archived")).toBeInTheDocument()
   })
 
   it("clicking a design row navigates to detail page", async () => {

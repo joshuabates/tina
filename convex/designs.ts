@@ -2,7 +2,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { allocateKey } from "./projectCounters";
 
-const WORKBENCH_STATUSES = new Set(["exploring", "locked", "archived"]);
+const WORKBENCH_STATUSES = new Set(["exploring", "archived"]);
 
 type PublicDesign = {
   _id: unknown;
@@ -185,8 +185,7 @@ export const transitionDesign = mutation({
     }
 
     const validTransitions: Record<string, string[]> = {
-      exploring: ["locked"],
-      locked: ["archived", "exploring"],
+      exploring: ["archived"],
       archived: ["exploring"],
     };
 

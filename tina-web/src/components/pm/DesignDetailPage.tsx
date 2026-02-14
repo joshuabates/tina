@@ -17,7 +17,6 @@ import styles from "./DesignDetailPage.module.scss"
 
 const DESIGN_STATUS_LABELS: Record<string, string> = {
   exploring: "Exploring",
-  locked: "Locked",
   archived: "Archived",
 }
 
@@ -48,11 +47,8 @@ const DESIGN_WORKBENCH_BASE_URL =
 function getTransitionActions(status: string): TransitionAction[] {
   switch (status) {
     case "exploring":
-      return [{ label: "Lock", newStatus: "locked", primary: true }]
-    case "locked":
       return [
-        { label: "Archive", newStatus: "archived" },
-        { label: "Unlock", newStatus: "exploring" },
+        { label: "Archive", newStatus: "archived", primary: true },
       ]
     case "archived":
       return [{ label: "Reopen", newStatus: "exploring" }]

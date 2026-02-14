@@ -103,20 +103,19 @@ describe("DesignDetailPage", () => {
     expect(screen.getByText("Design a login page with OAuth support")).toBeInTheDocument()
   })
 
-  it("renders Lock button when status is exploring", () => {
+  it("renders Archive button when status is exploring", () => {
     renderApp("/projects/p1/design/design1")
 
-    expect(screen.getByRole("button", { name: /lock/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /archive/i })).toBeInTheDocument()
   })
 
-  it("renders Archive and Unlock buttons when status is locked", () => {
+  it("renders Reopen button when status is archived", () => {
     renderApp("/projects/p1/design/design1", {
       ...defaultStates,
-      "designs.get": querySuccess(buildDesignSummary({ status: "locked" })),
+      "designs.get": querySuccess(buildDesignSummary({ status: "archived" })),
     })
 
-    expect(screen.getByRole("button", { name: /archive/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /unlock/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /reopen/i })).toBeInTheDocument()
   })
 
   it("renders Reopen button when status is archived", () => {
@@ -132,12 +131,12 @@ describe("DesignDetailPage", () => {
     const user = userEvent.setup()
     renderApp("/projects/p1/design/design1")
 
-    await user.click(screen.getByRole("button", { name: /lock/i }))
+    await user.click(screen.getByRole("button", { name: /archive/i }))
 
     expect(mockMutate).toHaveBeenCalledWith(
       expect.objectContaining({
         designId: "design1",
-        newStatus: "locked",
+        newStatus: "archived",
       }),
     )
   })
