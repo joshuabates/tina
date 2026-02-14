@@ -79,12 +79,20 @@ export function DesignPage() {
       title={design.title}
       subtitle={design.prompt}
       actions={
-        <Link
-          to="/"
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
-        >
-          Back to index
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            to={`/compare/${designSlug}/${activeVariationSlug}`}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:border-slate-500"
+          >
+            Compare
+          </Link>
+          <Link
+            to="/"
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+          >
+            Back to index
+          </Link>
+        </div>
       }
     >
       {design.variations.length > 1 ? (
