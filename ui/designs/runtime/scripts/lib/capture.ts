@@ -1,15 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { chromium, type Browser } from "playwright";
+import type { CaptureOptions } from "../../src/compare/types.ts";
 
-export interface CaptureOptions {
-  url: string;
-  outputPath: string;
-  width: number;
-  height: number;
-  waitForSelector?: string;
-  delay?: number;
-}
+export type { CaptureOptions };
 
 let browser: Browser | null = null;
 
