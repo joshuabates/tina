@@ -111,6 +111,14 @@ describe("TicketDetailPage", () => {
     expect(screen.getByText("Implement login")).toBeInTheDocument()
   })
 
+  it("renders back link to tickets list", () => {
+    renderApp("/projects/p1/plan/tickets/t1")
+
+    const backLink = screen.getByRole("link", { name: /back to tickets list/i })
+    expect(backLink).toBeInTheDocument()
+    expect(backLink).toHaveAttribute("href", expect.stringContaining("/projects/p1/plan/tickets"))
+  })
+
   it("renders status badge", () => {
     renderApp("/projects/p1/plan/tickets/t1")
 

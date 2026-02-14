@@ -126,6 +126,7 @@ export function TicketDetailPage() {
 
   const designs = designsResult.data
   const projectId = routeProjectId ?? ticket.projectId
+  const ticketsPath = `/projects/${projectId}/plan/tickets`
 
   const designMap = new Map(designs.map((d) => [d._id, d]))
   const rawDesignId = Option.isSome(ticket.designId) ? ticket.designId.value : undefined
@@ -143,6 +144,13 @@ export function TicketDetailPage() {
     <div data-testid="ticket-detail-page" className={styles.ticketDetail}>
       <div className={styles.header}>
         <div className={styles.headerTop}>
+          <Link
+            to={ticketsPath}
+            className={styles.backLink}
+            aria-label="Back to tickets list"
+          >
+            Back to tickets
+          </Link>
           <span className={styles.ticketKey}>{ticket.ticketKey}</span>
         </div>
         <div className={styles.ticketTitle}>{ticket.title}</div>

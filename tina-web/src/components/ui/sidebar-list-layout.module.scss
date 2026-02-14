@@ -1,0 +1,29 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: hsl(var(--sidebar));
+}
+
+.header {
+  padding: 0.6rem 0.75rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: hsl(var(--muted-foreground));
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.footer {
+  padding: 0.5rem 0.75rem 0.75rem;
+}

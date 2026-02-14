@@ -42,7 +42,7 @@ function SidebarItem({
   return (
     <div
       className={cn(
-        "group/item flex items-center justify-between px-2 py-1 cursor-pointer rounded-md transition-colors",
+        "group/item flex items-center px-2 py-1 cursor-pointer rounded-md transition-colors",
         active
           ? "bg-muted/50 text-foreground"
           : "text-muted-foreground/95 hover:bg-muted/25 hover:text-foreground cursor-pointer",
@@ -66,7 +66,7 @@ function SidebarItem({
           data-status-indicator="true"
         />
       )}
-      <span className="truncate leading-tight">{label}</span>
+      <span className="min-w-0 flex-1 truncate leading-tight text-left">{label}</span>
       {shouldRenderDelete && (
         <button
           type="button"

@@ -11,7 +11,8 @@ $mode-rail-width: 56px;
     "rail sidebar main"
     "footer footer footer";
   height: 100vh;
-  width: 100vw;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
 }
 
@@ -219,4 +220,16 @@ $mode-rail-width: 56px;
 
 .modeSidebarButton:hover {
   background: hsl(var(--muted) / 0.35);
+}
+
+.sessionsSidebarItem {
+  font-size: 0.8rem;
+}
+
+.sessionsSidebarHint {
+  margin: 0;
+  padding: 0.2rem 0.3rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: hsl(var(--muted-foreground));
 }

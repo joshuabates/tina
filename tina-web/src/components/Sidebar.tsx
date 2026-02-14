@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { DataErrorBoundary } from "./DataErrorBoundary"
 import { SidebarItem } from "./ui/sidebar-item"
+import { SidebarListLayout } from "./ui/sidebar-list-layout"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
 import { useSelection } from "@/hooks/useSelection"
 import { useIndexedAction } from "@/hooks/useIndexedAction"
@@ -168,14 +169,14 @@ function SidebarContent({ projectId }: SidebarProps) {
 
   if (isAnyQueryLoading(orchestrationsResult)) {
     return (
-      <div className={styles.sidebar}>
+      <SidebarListLayout title="Observe">
         <div className={styles.loading}>
           <div className={styles.skeletonBar} />
           <div className={styles.skeletonBar} />
           <div className={styles.skeletonBar} />
           <div className={styles.skeletonBar} />
         </div>
-      </div>
+      </SidebarListLayout>
     )
   }
 
@@ -190,17 +191,17 @@ function SidebarContent({ projectId }: SidebarProps) {
 
   if (projectOrchestrations.length === 0) {
     return (
-      <div className={styles.sidebar}>
-        <div className={styles.modeHeader}>Observe</div>
+      <SidebarListLayout title="Observe">
         <div className={styles.empty}>No orchestrations for this project.</div>
-      </div>
+      </SidebarListLayout>
     )
   }
 
   return (
-    <div className={styles.sidebar}>
-      <div className={styles.modeHeader}>Observe</div>
-      <div className={styles.list} role="list" aria-activedescendant={activeDescendantId}>
+    <SidebarListLayout
+      title="Observe"
+      bodyProps={{ role: "list", "aria-activedescendant": activeDescendantId }}
+    >
         {projectOrchestrations.map((orchestration: OrchestrationSummary, index) => {
           const rovingProps = getItemProps(index, `observe-sidebar-item-${index}`)
           const active = orchestration._id === orchestrationId
@@ -266,8 +267,7 @@ function SidebarContent({ projectId }: SidebarProps) {
             </div>
           )
         })}
-      </div>
-    </div>
+    </SidebarListLayout>
   )
 }
 

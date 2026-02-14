@@ -2,7 +2,10 @@
 
 .rightPanel {
   height: 100%;
+  width: 100%;
+  min-width: 0;
   background: color-mix(in srgb, $bg-sidebar 26%, $bg-primary 74%);
+  overflow-x: hidden;
 }
 
 .stack {
@@ -10,4 +13,6 @@
   flex-direction: column;
   gap: 8px;
   padding: 8px;
+  min-width: 0;
+  box-sizing: border-box;
 }

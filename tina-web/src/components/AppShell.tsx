@@ -13,6 +13,7 @@ import { AppStatusBar } from "./ui/app-status-bar"
 import { Sidebar } from "./Sidebar"
 import { useSelection } from "@/hooks/useSelection"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
+import { SidebarListLayout } from "./ui/sidebar-list-layout"
 import { firstQueryError, isAnyQueryLoading } from "@/lib/query-state"
 import {
   buildModePath,
@@ -54,13 +55,29 @@ function SessionsSidebar() {
   const [showNewSession, setShowNewSession] = useState(false)
   const targetsResult = useTypedQuery(TerminalTargetListQuery, {})
   const activePaneId = searchParams.get("pane")
+  const sessionTargets = targetsResult.status === "success"
+    ? targetsResult.data
+    : []
+  const hasTargets = sessionTargets.length > 0
 
   return (
-    <div className={styles.modeSidebarContent}>
-      <div className={styles.modeSidebarHeader}>Sessions</div>
-      {targetsResult.status === "success" && targetsResult.data.length > 0 && (
-        <div className={styles.modeSidebarSection}>
-          {targetsResult.data.map((target: TerminalTarget) => (
+    <SidebarListLayout
+      title="Sessions"
+      bodyProps={hasTargets ? { role: "list" } : undefined}
+      footer={(
+        <button
+          type="button"
+          className={styles.modeSidebarButton}
+          data-sidebar-action
+          onClick={() => setShowNewSession(true)}
+        >
+          New session
+        </button>
+      )}
+    >
+      {hasTargets && (
+        <>
+          {sessionTargets.map((target: TerminalTarget, index) => (
             <SidebarItem
               key={target.id}
               label={target.label}
@@ -70,27 +87,25 @@ function SessionsSidebar() {
                   ? "bg-emerald-500"
                   : "bg-sky-400"
               }
+              className={styles.sessionsSidebarItem}
+              data-sidebar-action={index === 0 ? "true" : undefined}
               onClick={() => {
                 setSearchParams({ pane: target.tmuxPaneId })
               }}
             />
           ))}
-        </div>
+        </>
       )}
       {targetsResult.status === "loading" && (
-        <p className={styles.modeSidebarHint}>Loading sessions...</p>
+        <p className={styles.sessionsSidebarHint}>
+          Loading sessions...
+        </p>
       )}
       {targetsResult.status === "success" && targetsResult.data.length === 0 && (
-        <p className={styles.modeSidebarHint}>No active sessions.</p>
+        <p className={styles.sessionsSidebarHint}>
+          No active sessions.
+        </p>
       )}
-      <button
-        type="button"
-        className={styles.modeSidebarButton}
-        data-sidebar-action
-        onClick={() => setShowNewSession(true)}
-      >
-        New session
-      </button>
       {showNewSession && (
         <NewSessionDialog
           onClose={() => setShowNewSession(false)}
@@ -100,7 +115,7 @@ function SessionsSidebar() {
           }}
         />
       )}
-    </div>
+    </SidebarListLayout>
   )
 }
 
