@@ -292,6 +292,7 @@ export default defineSchema({
   designs: defineTable({
     projectId: v.id("projects"),
     designKey: v.string(),
+    slug: v.optional(v.string()),
     title: v.string(),
     // Legacy design rows used markdown-only payloads before prompt existed.
     markdown: v.optional(v.string()),

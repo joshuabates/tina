@@ -9,6 +9,7 @@ type PublicDesign = {
   _creationTime: number;
   projectId: unknown;
   designKey: string;
+  slug: string;
   title: string;
   prompt: string;
   status: string;
@@ -20,6 +21,14 @@ function isWorkbenchStatus(status: string): boolean {
   return WORKBENCH_STATUSES.has(status);
 }
 
+function slugFromTitle(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function toPublicDesignOrNull(design: any): PublicDesign | null {
   if (!design) return null;
   if (!isWorkbenchStatus(design.status)) return null;
@@ -29,6 +38,10 @@ function toPublicDesignOrNull(design: any): PublicDesign | null {
     _creationTime: design._creationTime,
     projectId: design.projectId,
     designKey: design.designKey,
+    slug:
+      typeof design.slug === "string" && design.slug.length > 0
+        ? design.slug
+        : slugFromTitle(design.title),
     title: design.title,
     prompt: design.prompt,
     status: design.status,
@@ -42,6 +55,7 @@ export const createDesign = mutation({
     projectId: v.id("projects"),
     title: v.string(),
     prompt: v.string(),
+    slug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -56,6 +70,7 @@ export const createDesign = mutation({
     return await ctx.db.insert("designs", {
       projectId: args.projectId,
       designKey,
+      slug: args.slug ?? slugFromTitle(args.title),
       title: args.title,
       prompt: args.prompt,
       status: "exploring",
@@ -128,6 +143,7 @@ export const updateDesign = mutation({
     designId: v.id("designs"),
     title: v.optional(v.string()),
     prompt: v.optional(v.string()),
+    slug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const design = await ctx.db.get(args.designId);
@@ -146,6 +162,9 @@ export const updateDesign = mutation({
     }
     if (args.prompt !== undefined) {
       updates.prompt = args.prompt;
+    }
+    if (args.slug !== undefined) {
+      updates.slug = args.slug;
     }
 
     await ctx.db.patch(args.designId, updates);

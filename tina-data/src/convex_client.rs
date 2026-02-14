@@ -993,6 +993,7 @@ fn extract_design_record(obj: &BTreeMap<String, Value>) -> DesignRecord {
         id: value_as_id(obj, "_id"),
         project_id: value_as_id(obj, "projectId"),
         design_key: value_as_str(obj, "designKey"),
+        slug: value_as_str(obj, "slug"),
         title: value_as_str(obj, "title"),
         prompt: value_as_str(obj, "prompt"),
         status: value_as_str(obj, "status"),
@@ -1766,11 +1767,13 @@ impl TinaConvexClient {
         project_id: &str,
         title: &str,
         prompt: &str,
+        slug: &str,
     ) -> Result<String> {
         let mut args = BTreeMap::new();
         args.insert("projectId".into(), Value::from(project_id));
         args.insert("title".into(), Value::from(title));
         args.insert("prompt".into(), Value::from(prompt));
+        args.insert("slug".into(), Value::from(slug));
         let result = self
             .client
             .mutation("designs:createDesign", args)
@@ -1791,6 +1794,22 @@ impl TinaConvexClient {
         }
         let result = self.client.query("designs:listDesigns", args).await?;
         extract_design_list(result)
+    }
+
+    /// Update only the design slug.
+    pub async fn update_design_slug(
+        &mut self,
+        design_id: &str,
+        slug: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("designId".into(), Value::from(design_id));
+        args.insert("slug".into(), Value::from(slug));
+        let result = self
+            .client
+            .mutation("designs:updateDesign", args)
+            .await?;
+        extract_id(result)
     }
 
     /// Create a new design variation.
@@ -3019,6 +3038,7 @@ mod tests {
         obj.insert("_id".to_string(), Value::from("design-123"));
         obj.insert("projectId".to_string(), Value::from("proj-456"));
         obj.insert("designKey".to_string(), Value::from("MYAPP-D1"));
+        obj.insert("slug".to_string(), Value::from("myapp-login-page-redesign"));
         obj.insert("title".to_string(), Value::from("Login Page Redesign"));
         obj.insert("prompt".to_string(), Value::from("Redesign the login page"));
         obj.insert("status".to_string(), Value::from("exploring"));
@@ -3030,6 +3050,7 @@ mod tests {
         assert_eq!(design.id, "design-123");
         assert_eq!(design.project_id, "proj-456");
         assert_eq!(design.design_key, "MYAPP-D1");
+        assert_eq!(design.slug, "myapp-login-page-redesign");
         assert_eq!(design.title, "Login Page Redesign");
         assert_eq!(design.prompt, "Redesign the login page");
         assert_eq!(design.status, "exploring");
@@ -3044,6 +3065,7 @@ mod tests {
             m.insert("_id".to_string(), Value::from("design-1"));
             m.insert("projectId".to_string(), Value::from("proj-1"));
             m.insert("designKey".to_string(), Value::from("P-D1"));
+            m.insert("slug".to_string(), Value::from("design-a"));
             m.insert("title".to_string(), Value::from("Design A"));
             m.insert("prompt".to_string(), Value::from("Prompt A"));
             m.insert("status".to_string(), Value::from("exploring"));
@@ -3056,6 +3078,7 @@ mod tests {
             m.insert("_id".to_string(), Value::from("design-2"));
             m.insert("projectId".to_string(), Value::from("proj-1"));
             m.insert("designKey".to_string(), Value::from("P-D2"));
+            m.insert("slug".to_string(), Value::from("design-b"));
             m.insert("title".to_string(), Value::from("Design B"));
             m.insert("prompt".to_string(), Value::from("Prompt B"));
             m.insert("status".to_string(), Value::from("locked"));

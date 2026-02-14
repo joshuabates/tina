@@ -61,14 +61,6 @@ function getTransitionActions(status: string): TransitionAction[] {
   }
 }
 
-function slugFromTitle(title: string): string {
-  return title
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-}
-
 export function DesignDetailPage() {
   const { designId, projectId: routeProjectId } = useParams<{
     designId: string
@@ -128,7 +120,7 @@ export function DesignDetailPage() {
     variationsResult.status === "success" ? variationsResult.data : []
   const linkedSpecs =
     linkedSpecsResult.status === "success" ? linkedSpecsResult.data : []
-  const designSlug = slugFromTitle(design.title)
+  const designSlug = design.slug
 
   const handleTransition = async (newStatus: string) => {
     setTransitioning(true)

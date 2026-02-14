@@ -5,6 +5,7 @@ export const DesignSummary = Schema.Struct({
   ...convexDocumentFields,
   projectId: Schema.String,
   designKey: Schema.String,
+  slug: Schema.String,
   title: Schema.String,
   prompt: Schema.String,
   status: Schema.String,

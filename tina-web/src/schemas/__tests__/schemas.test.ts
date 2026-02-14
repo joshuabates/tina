@@ -523,6 +523,7 @@ describe("DesignSummary schema", () => {
       _creationTime: 1700000000000,
       projectId: "proj1",
       designKey: "PROJ-DES1",
+      slug: "login-page-design",
       title: "Login Page Design",
       prompt: "Design a login page",
       status: "exploring",

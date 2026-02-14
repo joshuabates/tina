@@ -1085,10 +1085,12 @@ pub async fn sync_design_metadata(
             .context("listing designs for metadata sync")?
     };
 
-    let mut design_ids_by_title: HashMap<String, String> = existing_designs
-        .into_iter()
-        .map(|design| (design.title, design.id))
-        .collect();
+    let mut design_ids_by_title: HashMap<String, String> = HashMap::new();
+    let mut design_slugs_by_title: HashMap<String, String> = HashMap::new();
+    for design in existing_designs {
+        design_ids_by_title.insert(design.title.clone(), design.id);
+        design_slugs_by_title.insert(design.title, design.slug);
+    }
 
     let mut design_entries = Vec::new();
     for entry in fs::read_dir(&sets_dir)? {
@@ -1117,11 +1119,50 @@ pub async fn sync_design_metadata(
         };
 
         let design_id = match design_ids_by_title.get(&title) {
-            Some(existing_id) => existing_id.clone(),
+            Some(existing_id) => {
+                let existing_id = existing_id.clone();
+                let existing_slug = design_slugs_by_title
+                    .get(&title)
+                    .cloned()
+                    .unwrap_or_default();
+                if existing_slug != design_slug {
+                    let update_result = {
+                        let mut client_guard = client.lock().await;
+                        client_guard
+                            .update_design_slug(&existing_id, &design_slug)
+                            .await
+                    };
+                    match update_result {
+                        Ok(_) => {
+                            info!(
+                                design = %design_slug,
+                                title = %title,
+                                design_id = %existing_id,
+                                orchestration = %orchestration_id,
+                                "updated design slug from workbench metadata"
+                            );
+                            design_slugs_by_title.insert(title.clone(), design_slug.clone());
+                        }
+                        Err(e) => {
+                            warn!(
+                                design = %design_slug,
+                                title = %title,
+                                design_id = %existing_id,
+                                orchestration = %orchestration_id,
+                                error = %e,
+                                "failed to update design slug from metadata"
+                            );
+                        }
+                    }
+                }
+                existing_id
+            }
             None => {
                 let create_result = {
                     let mut client_guard = client.lock().await;
-                    client_guard.create_design(project_id, &title, &prompt).await
+                    client_guard
+                        .create_design(project_id, &title, &prompt, &design_slug)
+                        .await
                 };
                 match create_result {
                     Ok(new_id) => {
@@ -1132,6 +1173,7 @@ pub async fn sync_design_metadata(
                             "created design from workbench metadata"
                         );
                         design_ids_by_title.insert(title.clone(), new_id.clone());
+                        design_slugs_by_title.insert(title.clone(), design_slug.clone());
                         new_id
                     }
                     Err(e) => {

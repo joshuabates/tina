@@ -221,6 +221,7 @@ export function buildDesignSummary(
     _creationTime: 1234567890,
     projectId: "p1",
     designKey: "ALPHA-DES1",
+    slug: "login-page-design",
     title: "Login Page Design",
     prompt: "Design a login page with OAuth support",
     status: "exploring",
@@ -267,4 +268,3 @@ export function buildReviewCheck(
     ...overrides,
   }
 }
-

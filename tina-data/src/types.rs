@@ -301,6 +301,7 @@ pub struct DesignRecord {
     pub id: String,
     pub project_id: String,
     pub design_key: String,
+    pub slug: String,
     pub title: String,
     pub prompt: String,
     pub status: String,
