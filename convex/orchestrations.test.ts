@@ -2,17 +2,19 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createNode, createProject } from "./test_helpers";
 
 describe("orchestrations:upsertOrchestration", () => {
-  test("accepts optional designId on insert", async () => {
-    const t = convexTest(schema);
+  test("accepts optional specId on insert", async () => {
+    const t = convexTest(schema, modules);
     const nodeId = await createNode(t);
     const projectId = await createProject(t);
 
-    const designId = await t.mutation(api.designs.createDesign, {
+    const specId = await t.mutation(api.specs.createSpec, {
       projectId,
-      title: "Test Design",
+      title: "Test Spec",
       markdown: "# Test",
     });
 
@@ -21,9 +23,9 @@ describe("orchestrations:upsertOrchestration", () => {
       {
         nodeId,
         projectId,
-        designId,
+        specId,
         featureName: "design-link-test",
-        designDocPath: "/docs/design.md",
+        specDocPath: "/docs/design.md",
         branch: "tina/design-link-test",
         totalPhases: 2,
         currentPhase: 1,
@@ -37,11 +39,11 @@ describe("orchestrations:upsertOrchestration", () => {
     });
 
     expect(detail).not.toBeNull();
-    expect(detail!.designId).toBe(designId);
+    expect(detail!.specId).toBe(specId);
   });
 
-  test("inserts without designId (field remains undefined)", async () => {
-    const t = convexTest(schema);
+  test("inserts without specId (field remains undefined)", async () => {
+    const t = convexTest(schema, modules);
     const nodeId = await createNode(t);
 
     const orchestrationId = await t.mutation(
@@ -49,7 +51,7 @@ describe("orchestrations:upsertOrchestration", () => {
       {
         nodeId,
         featureName: "no-design-test",
-        designDocPath: "/docs/design.md",
+        specDocPath: "/docs/design.md",
         branch: "tina/no-design-test",
         totalPhases: 1,
         currentPhase: 1,
@@ -63,19 +65,19 @@ describe("orchestrations:upsertOrchestration", () => {
     });
 
     expect(detail).not.toBeNull();
-    expect(detail!.designId).toBeUndefined();
+    expect(detail!.specId).toBeUndefined();
   });
 
-  test("patches designId on upsert update", async () => {
-    const t = convexTest(schema);
+  test("patches specId on upsert update", async () => {
+    const t = convexTest(schema, modules);
     const nodeId = await createNode(t);
     const projectId = await createProject(t);
 
-    // First insert without designId
+    // First insert without specId
     await t.mutation(api.orchestrations.upsertOrchestration, {
       nodeId,
       featureName: "design-patch-test",
-      designDocPath: "/docs/design.md",
+      specDocPath: "/docs/design.md",
       branch: "tina/design-patch-test",
       totalPhases: 2,
       currentPhase: 1,
@@ -83,20 +85,20 @@ describe("orchestrations:upsertOrchestration", () => {
       startedAt: "2026-02-11T00:00:00Z",
     });
 
-    const designId = await t.mutation(api.designs.createDesign, {
+    const specId = await t.mutation(api.specs.createSpec, {
       projectId,
-      title: "Patched Design",
+      title: "Patched Spec",
       markdown: "# Patched",
     });
 
-    // Upsert again with designId
+    // Upsert again with specId
     const orchestrationId = await t.mutation(
       api.orchestrations.upsertOrchestration,
       {
         nodeId,
-        designId,
+        specId,
         featureName: "design-patch-test",
-        designDocPath: "/docs/design.md",
+        specDocPath: "/docs/design.md",
         branch: "tina/design-patch-test",
         totalPhases: 2,
         currentPhase: 1,
@@ -110,26 +112,26 @@ describe("orchestrations:upsertOrchestration", () => {
     });
 
     expect(detail).not.toBeNull();
-    expect(detail!.designId).toBe(designId);
+    expect(detail!.specId).toBe(specId);
   });
 
-  test("does not overwrite designId when not provided on update", async () => {
-    const t = convexTest(schema);
+  test("does not overwrite specId when not provided on update", async () => {
+    const t = convexTest(schema, modules);
     const nodeId = await createNode(t);
     const projectId = await createProject(t);
 
-    const designId = await t.mutation(api.designs.createDesign, {
+    const specId = await t.mutation(api.specs.createSpec, {
       projectId,
-      title: "Keep Design",
+      title: "Keep Spec",
       markdown: "# Keep",
     });
 
-    // Insert with designId
+    // Insert with specId
     await t.mutation(api.orchestrations.upsertOrchestration, {
       nodeId,
-      designId,
+      specId,
       featureName: "design-keep-test",
-      designDocPath: "/docs/design.md",
+      specDocPath: "/docs/design.md",
       branch: "tina/design-keep-test",
       totalPhases: 2,
       currentPhase: 1,
@@ -137,13 +139,13 @@ describe("orchestrations:upsertOrchestration", () => {
       startedAt: "2026-02-11T00:00:00Z",
     });
 
-    // Upsert without designId — should preserve existing
+    // Upsert without specId — should preserve existing
     const orchestrationId = await t.mutation(
       api.orchestrations.upsertOrchestration,
       {
         nodeId,
         featureName: "design-keep-test",
-        designDocPath: "/docs/design.md",
+        specDocPath: "/docs/design.md",
         branch: "tina/design-keep-test",
         totalPhases: 2,
         currentPhase: 2,
@@ -157,6 +159,6 @@ describe("orchestrations:upsertOrchestration", () => {
     });
 
     expect(detail).not.toBeNull();
-    expect(detail!.designId).toBe(designId);
+    expect(detail!.specId).toBe(specId);
   });
 });

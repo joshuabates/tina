@@ -6,7 +6,7 @@ pub fn create(
     title: &str,
     description: &str,
     priority: &str,
-    design_id: Option<&str>,
+    spec_id: Option<&str>,
     assignee: Option<&str>,
     estimate: Option<&str>,
     json: bool,
@@ -15,7 +15,7 @@ pub fn create(
         writer
             .create_ticket(
                 project_id,
-                design_id,
+                spec_id,
                 title,
                 description,
                 priority,
@@ -68,7 +68,7 @@ pub fn get(id: Option<&str>, key: Option<&str>, json: bool) -> Result<u8, anyhow
                         "description": t.description,
                         "status": t.status,
                         "priority": t.priority,
-                        "designId": t.design_id,
+                        "specId": t.spec_id,
                         "assignee": t.assignee,
                         "estimate": t.estimate,
                         "createdAt": t.created_at,
@@ -101,13 +101,13 @@ pub fn get(id: Option<&str>, key: Option<&str>, json: bool) -> Result<u8, anyhow
 pub fn list(
     project_id: &str,
     status: Option<&str>,
-    design_id: Option<&str>,
+    spec_id: Option<&str>,
     assignee: Option<&str>,
     json: bool,
 ) -> Result<u8, anyhow::Error> {
     let tickets = convex::run_convex(|mut writer| async move {
         writer
-            .list_tickets(project_id, status, design_id, assignee)
+            .list_tickets(project_id, status, spec_id, assignee)
             .await
     })?;
 
@@ -140,14 +140,14 @@ pub fn update(
     title: Option<&str>,
     description: Option<&str>,
     priority: Option<&str>,
-    design_id: Option<&str>,
-    clear_design_id: bool,
+    spec_id: Option<&str>,
+    clear_spec_id: bool,
     assignee: Option<&str>,
     estimate: Option<&str>,
     json: bool,
 ) -> Result<u8, anyhow::Error> {
-    if design_id.is_some() && clear_design_id {
-        anyhow::bail!("Cannot specify both --design-id and --clear-design-id");
+    if spec_id.is_some() && clear_spec_id {
+        anyhow::bail!("Cannot specify both --spec-id and --clear-spec-id");
     }
 
     let ticket_id = convex::run_convex(|mut writer| async move {
@@ -157,8 +157,8 @@ pub fn update(
                 title,
                 description,
                 priority,
-                design_id,
-                clear_design_id,
+                spec_id,
+                clear_spec_id,
                 assignee,
                 estimate,
             )

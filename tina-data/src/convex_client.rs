@@ -31,16 +31,16 @@ pub fn orchestration_to_args(orch: &OrchestrationRecord) -> BTreeMap<String, Val
     if let Some(ref pid) = orch.project_id {
         args.insert("projectId".into(), Value::from(pid.clone()));
     }
-    if let Some(ref did) = orch.design_id {
-        args.insert("designId".into(), Value::from(did.clone()));
+    if let Some(ref did) = orch.spec_id {
+        args.insert("specId".into(), Value::from(did.clone()));
     }
     args.insert(
         "featureName".into(),
         Value::from(orch.feature_name.as_str()),
     );
     args.insert(
-        "designDocPath".into(),
-        Value::from(orch.design_doc_path.as_str()),
+        "specDocPath".into(),
+        Value::from(orch.spec_doc_path.as_str()),
     );
     args.insert("branch".into(), Value::from(orch.branch.as_str()));
     if let Some(ref wp) = orch.worktree_path {
@@ -267,16 +267,16 @@ fn plan_to_args(plan: &PlanRecord) -> BTreeMap<String, Value> {
 }
 
 #[cfg(test)]
-fn design_to_args(design: &DesignRecord) -> BTreeMap<String, Value> {
+fn spec_to_args(spec: &SpecRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
-    args.insert("projectId".into(), Value::from(design.project_id.as_str()));
-    args.insert("designKey".into(), Value::from(design.design_key.as_str()));
-    args.insert("title".into(), Value::from(design.title.as_str()));
-    args.insert("markdown".into(), Value::from(design.markdown.as_str()));
-    args.insert("status".into(), Value::from(design.status.as_str()));
-    args.insert("createdAt".into(), Value::from(design.created_at.as_str()));
-    args.insert("updatedAt".into(), Value::from(design.updated_at.as_str()));
-    if let Some(ref aa) = design.archived_at {
+    args.insert("projectId".into(), Value::from(spec.project_id.as_str()));
+    args.insert("specKey".into(), Value::from(spec.spec_key.as_str()));
+    args.insert("title".into(), Value::from(spec.title.as_str()));
+    args.insert("markdown".into(), Value::from(spec.markdown.as_str()));
+    args.insert("status".into(), Value::from(spec.status.as_str()));
+    args.insert("createdAt".into(), Value::from(spec.created_at.as_str()));
+    args.insert("updatedAt".into(), Value::from(spec.updated_at.as_str()));
+    if let Some(ref aa) = spec.archived_at {
         args.insert("archivedAt".into(), Value::from(aa.as_str()));
     }
     args
@@ -286,8 +286,8 @@ fn design_to_args(design: &DesignRecord) -> BTreeMap<String, Value> {
 fn ticket_to_args(ticket: &TicketRecord) -> BTreeMap<String, Value> {
     let mut args = BTreeMap::new();
     args.insert("projectId".into(), Value::from(ticket.project_id.as_str()));
-    if let Some(ref did) = ticket.design_id {
-        args.insert("designId".into(), Value::from(did.as_str()));
+    if let Some(ref did) = ticket.spec_id {
+        args.insert("specId".into(), Value::from(did.as_str()));
     }
     args.insert("ticketKey".into(), Value::from(ticket.ticket_key.as_str()));
     args.insert("title".into(), Value::from(ticket.title.as_str()));
@@ -552,9 +552,9 @@ fn extract_orchestration_record(obj: &BTreeMap<String, Value>) -> OrchestrationR
     OrchestrationRecord {
         node_id: value_as_id(obj, "nodeId"),
         project_id: value_as_opt_str(obj, "projectId"),
-        design_id: value_as_opt_str(obj, "designId"),
+        spec_id: value_as_opt_str(obj, "specId"),
         feature_name: value_as_str(obj, "featureName"),
-        design_doc_path: value_as_str(obj, "designDocPath"),
+        spec_doc_path: value_as_str(obj, "specDocPath"),
         branch: value_as_str(obj, "branch"),
         worktree_path: value_as_opt_str(obj, "worktreePath"),
         total_phases: value_as_f64(obj, "totalPhases"),
@@ -566,7 +566,7 @@ fn extract_orchestration_record(obj: &BTreeMap<String, Value>) -> OrchestrationR
         policy_snapshot: value_as_opt_str(obj, "policySnapshot"),
         policy_snapshot_hash: value_as_opt_str(obj, "policySnapshotHash"),
         preset_origin: value_as_opt_str(obj, "presetOrigin"),
-        design_only: value_as_opt_bool(obj, "designOnly"),
+        spec_only: value_as_opt_bool(obj, "specOnly"),
         policy_revision: value_as_opt_f64(obj, "policyRevision"),
         updated_at: value_as_opt_str(obj, "updatedAt"),
     }
@@ -969,29 +969,35 @@ fn extract_plan_list(result: FunctionResult) -> Result<Vec<PlanRecord>> {
     }
 }
 
+fn value_as_opt_str_vec(map: &BTreeMap<String, Value>, key: &str) -> Option<Vec<String>> {
+    match map.get(key) {
+        Some(Value::Array(arr)) => {
+            let strings: Vec<String> = arr
+                .iter()
+                .filter_map(|v| {
+                    if let Value::String(s) = v {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            Some(strings)
+        }
+        _ => None,
+    }
+}
+
 fn extract_design_record(obj: &BTreeMap<String, Value>) -> DesignRecord {
     DesignRecord {
         id: value_as_id(obj, "_id"),
         project_id: value_as_id(obj, "projectId"),
         design_key: value_as_str(obj, "designKey"),
         title: value_as_str(obj, "title"),
-        markdown: value_as_str(obj, "markdown"),
+        prompt: value_as_str(obj, "prompt"),
         status: value_as_str(obj, "status"),
         created_at: value_as_str(obj, "createdAt"),
         updated_at: value_as_str(obj, "updatedAt"),
-        archived_at: value_as_opt_str(obj, "archivedAt"),
-    }
-}
-
-fn extract_optional_design(result: FunctionResult) -> Result<Option<DesignRecord>> {
-    match result {
-        FunctionResult::Value(Value::Null) => Ok(None),
-        FunctionResult::Value(Value::Object(obj)) => Ok(Some(extract_design_record(&obj))),
-        FunctionResult::Value(other) => {
-            bail!("expected object or null for design, got: {:?}", other)
-        }
-        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
-        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
     }
 }
 
@@ -1013,11 +1019,88 @@ fn extract_design_list(result: FunctionResult) -> Result<Vec<DesignRecord>> {
     }
 }
 
+fn extract_variation_record(obj: &BTreeMap<String, Value>) -> DesignVariationRecord {
+    DesignVariationRecord {
+        id: value_as_id(obj, "_id"),
+        design_id: value_as_id(obj, "designId"),
+        slug: value_as_str(obj, "slug"),
+        title: value_as_str(obj, "title"),
+        status: value_as_str(obj, "status"),
+        screenshot_storage_ids: value_as_opt_str_vec(obj, "screenshotStorageIds"),
+        created_at: value_as_str(obj, "createdAt"),
+        updated_at: value_as_str(obj, "updatedAt"),
+    }
+}
+
+fn extract_variation_list(result: FunctionResult) -> Result<Vec<DesignVariationRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut variations = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    variations.push(extract_variation_record(&obj));
+                }
+            }
+            Ok(variations)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => {
+            bail!("expected array for variation list, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_spec_record(obj: &BTreeMap<String, Value>) -> SpecRecord {
+    SpecRecord {
+        id: value_as_id(obj, "_id"),
+        project_id: value_as_id(obj, "projectId"),
+        spec_key: value_as_str(obj, "specKey"),
+        title: value_as_str(obj, "title"),
+        markdown: value_as_str(obj, "markdown"),
+        status: value_as_str(obj, "status"),
+        created_at: value_as_str(obj, "createdAt"),
+        updated_at: value_as_str(obj, "updatedAt"),
+        archived_at: value_as_opt_str(obj, "archivedAt"),
+    }
+}
+
+fn extract_optional_spec(result: FunctionResult) -> Result<Option<SpecRecord>> {
+    match result {
+        FunctionResult::Value(Value::Null) => Ok(None),
+        FunctionResult::Value(Value::Object(obj)) => Ok(Some(extract_spec_record(&obj))),
+        FunctionResult::Value(other) => {
+            bail!("expected object or null for spec, got: {:?}", other)
+        }
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
+fn extract_spec_list(result: FunctionResult) -> Result<Vec<SpecRecord>> {
+    match result {
+        FunctionResult::Value(Value::Array(items)) => {
+            let mut specs = Vec::new();
+            for item in items {
+                if let Value::Object(obj) = item {
+                    specs.push(extract_spec_record(&obj));
+                }
+            }
+            Ok(specs)
+        }
+        FunctionResult::Value(Value::Null) => Ok(vec![]),
+        FunctionResult::Value(other) => bail!("expected array for spec list, got: {:?}", other),
+        FunctionResult::ErrorMessage(msg) => bail!("Convex error: {}", msg),
+        FunctionResult::ConvexError(err) => bail!("Convex error: {:?}", err),
+    }
+}
+
 fn extract_ticket_record(obj: &BTreeMap<String, Value>) -> TicketRecord {
     TicketRecord {
         id: value_as_id(obj, "_id"),
         project_id: value_as_id(obj, "projectId"),
-        design_id: value_as_opt_str(obj, "designId"),
+        spec_id: value_as_opt_str(obj, "specId"),
         ticket_key: value_as_str(obj, "ticketKey"),
         title: value_as_str(obj, "title"),
         description: value_as_str(obj, "description"),
@@ -1442,8 +1525,8 @@ impl TinaConvexClient {
 
     // --- PM (Project Management) methods ---
 
-    /// Create a new design.
-    pub async fn create_design(
+    /// Create a new spec.
+    pub async fn create_spec(
         &mut self,
         project_id: &str,
         title: &str,
@@ -1453,68 +1536,68 @@ impl TinaConvexClient {
         args.insert("projectId".into(), Value::from(project_id));
         args.insert("title".into(), Value::from(title));
         args.insert("markdown".into(), Value::from(markdown));
-        let result = self.client.mutation("designs:createDesign", args).await?;
+        let result = self.client.mutation("specs:createSpec", args).await?;
         extract_id(result)
     }
 
-    /// Get a design by ID.
-    pub async fn get_design(&mut self, design_id: &str) -> Result<Option<DesignRecord>> {
+    /// Get a spec by ID.
+    pub async fn get_spec(&mut self, spec_id: &str) -> Result<Option<SpecRecord>> {
         let mut args = BTreeMap::new();
-        args.insert("designId".into(), Value::from(design_id));
-        let result = self.client.query("designs:getDesign", args).await?;
-        extract_optional_design(result)
+        args.insert("specId".into(), Value::from(spec_id));
+        let result = self.client.query("specs:getSpec", args).await?;
+        extract_optional_spec(result)
     }
 
-    /// Get a design by key.
-    pub async fn get_design_by_key(&mut self, design_key: &str) -> Result<Option<DesignRecord>> {
+    /// Get a spec by key.
+    pub async fn get_spec_by_key(&mut self, spec_key: &str) -> Result<Option<SpecRecord>> {
         let mut args = BTreeMap::new();
-        args.insert("designKey".into(), Value::from(design_key));
-        let result = self.client.query("designs:getDesignByKey", args).await?;
-        extract_optional_design(result)
+        args.insert("specKey".into(), Value::from(spec_key));
+        let result = self.client.query("specs:getSpecByKey", args).await?;
+        extract_optional_spec(result)
     }
 
-    /// List designs for a project, optionally filtered by status.
-    pub async fn list_designs(
+    /// List specs for a project, optionally filtered by status.
+    pub async fn list_specs(
         &mut self,
         project_id: &str,
         status: Option<&str>,
-    ) -> Result<Vec<DesignRecord>> {
+    ) -> Result<Vec<SpecRecord>> {
         let mut args = BTreeMap::new();
         args.insert("projectId".into(), Value::from(project_id));
         if let Some(s) = status {
             args.insert("status".into(), Value::from(s));
         }
-        let result = self.client.query("designs:listDesigns", args).await?;
-        extract_design_list(result)
+        let result = self.client.query("specs:listSpecs", args).await?;
+        extract_spec_list(result)
     }
 
-    /// Update a design.
-    pub async fn update_design(
+    /// Update a spec.
+    pub async fn update_spec(
         &mut self,
-        design_id: &str,
+        spec_id: &str,
         title: Option<&str>,
         markdown: Option<&str>,
     ) -> Result<String> {
         let mut args = BTreeMap::new();
-        args.insert("designId".into(), Value::from(design_id));
+        args.insert("specId".into(), Value::from(spec_id));
         if let Some(t) = title {
             args.insert("title".into(), Value::from(t));
         }
         if let Some(m) = markdown {
             args.insert("markdown".into(), Value::from(m));
         }
-        let result = self.client.mutation("designs:updateDesign", args).await?;
+        let result = self.client.mutation("specs:updateSpec", args).await?;
         extract_id(result)
     }
 
-    /// Transition a design to a new status.
-    pub async fn transition_design(&mut self, design_id: &str, new_status: &str) -> Result<String> {
+    /// Transition a spec to a new status.
+    pub async fn transition_spec(&mut self, spec_id: &str, new_status: &str) -> Result<String> {
         let mut args = BTreeMap::new();
-        args.insert("designId".into(), Value::from(design_id));
+        args.insert("specId".into(), Value::from(spec_id));
         args.insert("newStatus".into(), Value::from(new_status));
         let result = self
             .client
-            .mutation("designs:transitionDesign", args)
+            .mutation("specs:transitionSpec", args)
             .await?;
         extract_id(result)
     }
@@ -1523,7 +1606,7 @@ impl TinaConvexClient {
     pub async fn create_ticket(
         &mut self,
         project_id: &str,
-        design_id: Option<&str>,
+        spec_id: Option<&str>,
         title: &str,
         description: &str,
         priority: &str,
@@ -1532,8 +1615,8 @@ impl TinaConvexClient {
     ) -> Result<String> {
         let mut args = BTreeMap::new();
         args.insert("projectId".into(), Value::from(project_id));
-        if let Some(did) = design_id {
-            args.insert("designId".into(), Value::from(did));
+        if let Some(did) = spec_id {
+            args.insert("specId".into(), Value::from(did));
         }
         args.insert("title".into(), Value::from(title));
         args.insert("description".into(), Value::from(description));
@@ -1564,12 +1647,12 @@ impl TinaConvexClient {
         extract_optional_ticket(result)
     }
 
-    /// List tickets for a project, optionally filtered by status, design, or assignee.
+    /// List tickets for a project, optionally filtered by status, spec, or assignee.
     pub async fn list_tickets(
         &mut self,
         project_id: &str,
         status: Option<&str>,
-        design_id: Option<&str>,
+        spec_id: Option<&str>,
         assignee: Option<&str>,
     ) -> Result<Vec<TicketRecord>> {
         let mut args = BTreeMap::new();
@@ -1577,8 +1660,8 @@ impl TinaConvexClient {
         if let Some(s) = status {
             args.insert("status".into(), Value::from(s));
         }
-        if let Some(did) = design_id {
-            args.insert("designId".into(), Value::from(did));
+        if let Some(did) = spec_id {
+            args.insert("specId".into(), Value::from(did));
         }
         if let Some(a) = assignee {
             args.insert("assignee".into(), Value::from(a));
@@ -1594,8 +1677,8 @@ impl TinaConvexClient {
         title: Option<&str>,
         description: Option<&str>,
         priority: Option<&str>,
-        design_id: Option<&str>,
-        clear_design_id: bool,
+        spec_id: Option<&str>,
+        clear_spec_id: bool,
         assignee: Option<&str>,
         estimate: Option<&str>,
     ) -> Result<String> {
@@ -1610,11 +1693,11 @@ impl TinaConvexClient {
         if let Some(p) = priority {
             args.insert("priority".into(), Value::from(p));
         }
-        if let Some(did) = design_id {
-            args.insert("designId".into(), Value::from(did));
+        if let Some(did) = spec_id {
+            args.insert("specId".into(), Value::from(did));
         }
-        if clear_design_id {
-            args.insert("clearDesignId".into(), Value::from(true));
+        if clear_spec_id {
+            args.insert("clearSpecId".into(), Value::from(true));
         }
         if let Some(a) = assignee {
             args.insert("assignee".into(), Value::from(a));
@@ -1638,7 +1721,7 @@ impl TinaConvexClient {
         extract_id(result)
     }
 
-    /// Add a comment to a design or ticket (internal function).
+    /// Add a comment to a spec or ticket (internal function).
     pub async fn add_comment(
         &mut self,
         project_id: &str,
@@ -1662,7 +1745,7 @@ impl TinaConvexClient {
         extract_id(result)
     }
 
-    /// List comments for a design or ticket (internal function).
+    /// List comments for a spec or ticket (internal function).
     pub async fn list_comments(
         &mut self,
         target_type: &str,
@@ -1673,6 +1756,116 @@ impl TinaConvexClient {
         args.insert("targetId".into(), Value::from(target_id));
         let result = self.client.query("workComments:listComments", args).await?;
         extract_comment_list(result)
+    }
+
+    // --- Design methods ---
+
+    /// Create a new design.
+    pub async fn create_design(
+        &mut self,
+        project_id: &str,
+        title: &str,
+        prompt: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("projectId".into(), Value::from(project_id));
+        args.insert("title".into(), Value::from(title));
+        args.insert("prompt".into(), Value::from(prompt));
+        let result = self
+            .client
+            .mutation("designs:createDesign", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// List designs for a project, optionally filtered by status.
+    pub async fn list_designs(
+        &mut self,
+        project_id: &str,
+        status: Option<&str>,
+    ) -> Result<Vec<DesignRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("projectId".into(), Value::from(project_id));
+        if let Some(s) = status {
+            args.insert("status".into(), Value::from(s));
+        }
+        let result = self.client.query("designs:listDesigns", args).await?;
+        extract_design_list(result)
+    }
+
+    /// Create a new design variation.
+    pub async fn create_variation(
+        &mut self,
+        design_id: &str,
+        slug: &str,
+        title: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("designId".into(), Value::from(design_id));
+        args.insert("slug".into(), Value::from(slug));
+        args.insert("title".into(), Value::from(title));
+        let result = self
+            .client
+            .mutation("designVariations:createVariation", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// List variations for a design.
+    pub async fn list_variations(
+        &mut self,
+        design_id: &str,
+    ) -> Result<Vec<DesignVariationRecord>> {
+        let mut args = BTreeMap::new();
+        args.insert("designId".into(), Value::from(design_id));
+        let result = self
+            .client
+            .query("designVariations:listVariations", args)
+            .await?;
+        extract_variation_list(result)
+    }
+
+    /// Update screenshot storage IDs for a variation.
+    pub async fn update_variation_screenshots(
+        &mut self,
+        variation_id: &str,
+        storage_ids: &[String],
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("variationId".into(), Value::from(variation_id));
+        let ids_value: Vec<Value> = storage_ids.iter().map(|s| Value::from(s.as_str())).collect();
+        args.insert("screenshotStorageIds".into(), Value::Array(ids_value));
+        let result = self
+            .client
+            .mutation("designVariations:updateVariation", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Generate a screenshot upload URL.
+    pub async fn generate_screenshot_upload_url(&mut self) -> Result<String> {
+        let args = BTreeMap::new();
+        let result = self
+            .client
+            .mutation("designVariations:generateScreenshotUploadUrl", args)
+            .await?;
+        extract_id(result)
+    }
+
+    /// Link a spec to a design.
+    pub async fn link_spec_to_design(
+        &mut self,
+        spec_id: &str,
+        design_id: &str,
+    ) -> Result<String> {
+        let mut args = BTreeMap::new();
+        args.insert("specId".into(), Value::from(spec_id));
+        args.insert("designId".into(), Value::from(design_id));
+        let result = self
+            .client
+            .mutation("specDesigns:linkSpecToDesign", args)
+            .await?;
+        extract_id(result)
     }
 
     // --- Review methods ---
@@ -1907,9 +2100,9 @@ mod tests {
         let orch = OrchestrationRecord {
             node_id: "node-123".to_string(),
             project_id: None,
-            design_id: None,
+            spec_id: None,
             feature_name: "auth-system".to_string(),
-            design_doc_path: "docs/auth.md".to_string(),
+            spec_doc_path: "docs/auth.md".to_string(),
             branch: "tina/auth-system".to_string(),
             worktree_path: Some("/path/to/worktree".to_string()),
             total_phases: 3.0,
@@ -1921,7 +2114,7 @@ mod tests {
             policy_snapshot: None,
             policy_snapshot_hash: None,
             preset_origin: None,
-            design_only: None,
+            spec_only: None,
             policy_revision: None,
             updated_at: None,
         };
@@ -1931,7 +2124,7 @@ mod tests {
         assert_eq!(args.get("nodeId"), Some(&Value::from("node-123")));
         assert_eq!(args.get("featureName"), Some(&Value::from("auth-system")));
         assert_eq!(
-            args.get("designDocPath"),
+            args.get("specDocPath"),
             Some(&Value::from("docs/auth.md"))
         );
         assert_eq!(args.get("branch"), Some(&Value::from("tina/auth-system")));
@@ -1959,9 +2152,9 @@ mod tests {
         let orch = OrchestrationRecord {
             node_id: "node-123".to_string(),
             project_id: None,
-            design_id: None,
+            spec_id: None,
             feature_name: "auth".to_string(),
-            design_doc_path: "docs/auth.md".to_string(),
+            spec_doc_path: "docs/auth.md".to_string(),
             branch: "tina/auth".to_string(),
             worktree_path: None,
             total_phases: 1.0,
@@ -1973,7 +2166,7 @@ mod tests {
             policy_snapshot: None,
             policy_snapshot_hash: None,
             preset_origin: None,
-            design_only: None,
+            spec_only: None,
             policy_revision: None,
             updated_at: None,
         };
@@ -1983,18 +2176,18 @@ mod tests {
         assert!(args.get("worktreePath").is_none());
         assert!(args.get("completedAt").is_none());
         assert!(args.get("totalElapsedMins").is_none());
-        assert!(args.get("designId").is_none());
+        assert!(args.get("specId").is_none());
         assert_eq!(args.len(), 8);
     }
 
     #[test]
-    fn test_orchestration_to_args_with_design_id() {
+    fn test_orchestration_to_args_with_spec_id() {
         let orch = OrchestrationRecord {
             node_id: "node-123".to_string(),
             project_id: Some("proj-456".to_string()),
-            design_id: Some("design-789".to_string()),
+            spec_id: Some("spec-789".to_string()),
             feature_name: "linked-feature".to_string(),
-            design_doc_path: "docs/design.md".to_string(),
+            spec_doc_path: "docs/spec.md".to_string(),
             branch: "tina/linked-feature".to_string(),
             worktree_path: None,
             total_phases: 2.0,
@@ -2006,16 +2199,16 @@ mod tests {
             policy_snapshot: None,
             policy_snapshot_hash: None,
             preset_origin: None,
-            design_only: None,
+            spec_only: None,
             policy_revision: None,
             updated_at: None,
         };
 
         let args = orchestration_to_args(&orch);
 
-        assert_eq!(args.get("designId"), Some(&Value::from("design-789")));
+        assert_eq!(args.get("specId"), Some(&Value::from("spec-789")));
         assert_eq!(args.get("projectId"), Some(&Value::from("proj-456")));
-        assert_eq!(args.len(), 10); // 8 required + projectId + designId
+        assert_eq!(args.len(), 10); // 8 required + projectId + specId
     }
 
     #[test]
@@ -2484,27 +2677,27 @@ mod tests {
     // --- PM arg-building tests ---
 
     #[test]
-    fn test_design_to_args_all_fields() {
-        let design = DesignRecord {
-            id: "design-123".to_string(),
+    fn test_spec_to_args_all_fields() {
+        let spec = SpecRecord {
+            id: "spec-123".to_string(),
             project_id: "proj-123".to_string(),
-            design_key: "MYAPP-D1".to_string(),
+            spec_key: "MYAPP-D1".to_string(),
             title: "User Auth Flow".to_string(),
-            markdown: "# Auth Design\n\nDetails here".to_string(),
+            markdown: "# Auth Spec\n\nDetails here".to_string(),
             status: "approved".to_string(),
             created_at: "2026-02-11T10:00:00Z".to_string(),
             updated_at: "2026-02-11T11:00:00Z".to_string(),
             archived_at: Some("2026-02-11T12:00:00Z".to_string()),
         };
 
-        let args = design_to_args(&design);
+        let args = spec_to_args(&spec);
 
         assert_eq!(args.get("projectId"), Some(&Value::from("proj-123")));
-        assert_eq!(args.get("designKey"), Some(&Value::from("MYAPP-D1")));
+        assert_eq!(args.get("specKey"), Some(&Value::from("MYAPP-D1")));
         assert_eq!(args.get("title"), Some(&Value::from("User Auth Flow")));
         assert_eq!(
             args.get("markdown"),
-            Some(&Value::from("# Auth Design\n\nDetails here"))
+            Some(&Value::from("# Auth Spec\n\nDetails here"))
         );
         assert_eq!(args.get("status"), Some(&Value::from("approved")));
         assert_eq!(
@@ -2522,12 +2715,12 @@ mod tests {
     }
 
     #[test]
-    fn test_design_to_args_no_archived_at() {
-        let design = DesignRecord {
-            id: "design-123".to_string(),
+    fn test_spec_to_args_no_archived_at() {
+        let spec = SpecRecord {
+            id: "spec-123".to_string(),
             project_id: "proj-123".to_string(),
-            design_key: "MYAPP-D1".to_string(),
-            title: "Design".to_string(),
+            spec_key: "MYAPP-D1".to_string(),
+            title: "Spec".to_string(),
             markdown: "Content".to_string(),
             status: "draft".to_string(),
             created_at: "2026-02-11T10:00:00Z".to_string(),
@@ -2535,7 +2728,7 @@ mod tests {
             archived_at: None,
         };
 
-        let args = design_to_args(&design);
+        let args = spec_to_args(&spec);
 
         assert!(args.get("archivedAt").is_none());
         assert_eq!(args.len(), 7);
@@ -2546,7 +2739,7 @@ mod tests {
         let ticket = TicketRecord {
             id: "ticket-123".to_string(),
             project_id: "proj-123".to_string(),
-            design_id: Some("design-456".to_string()),
+            spec_id: Some("spec-456".to_string()),
             ticket_key: "MYAPP-123".to_string(),
             title: "Implement OAuth".to_string(),
             description: "Add OAuth support".to_string(),
@@ -2562,7 +2755,7 @@ mod tests {
         let args = ticket_to_args(&ticket);
 
         assert_eq!(args.get("projectId"), Some(&Value::from("proj-123")));
-        assert_eq!(args.get("designId"), Some(&Value::from("design-456")));
+        assert_eq!(args.get("specId"), Some(&Value::from("spec-456")));
         assert_eq!(args.get("ticketKey"), Some(&Value::from("MYAPP-123")));
         assert_eq!(args.get("title"), Some(&Value::from("Implement OAuth")));
         assert_eq!(
@@ -2587,7 +2780,7 @@ mod tests {
         let ticket = TicketRecord {
             id: "ticket-123".to_string(),
             project_id: "proj-123".to_string(),
-            design_id: None,
+            spec_id: None,
             ticket_key: "MYAPP-1".to_string(),
             title: "Task".to_string(),
             description: "Do it".to_string(),
@@ -2602,7 +2795,7 @@ mod tests {
 
         let args = ticket_to_args(&ticket);
 
-        assert!(args.get("designId").is_none());
+        assert!(args.get("specId").is_none());
         assert!(args.get("assignee").is_none());
         assert!(args.get("estimate").is_none());
         assert!(args.get("closedAt").is_none());
@@ -2614,11 +2807,11 @@ mod tests {
         let comment = CommentRecord {
             id: "comment-123".to_string(),
             project_id: "proj-123".to_string(),
-            target_type: "design".to_string(),
-            target_id: "design-456".to_string(),
+            target_type: "spec".to_string(),
+            target_id: "spec-456".to_string(),
             author_type: "human".to_string(),
             author_name: "alice@example.com".to_string(),
-            body: "Great design!".to_string(),
+            body: "Great spec!".to_string(),
             created_at: "2026-02-11T10:00:00Z".to_string(),
             edited_at: None,
         };
@@ -2626,14 +2819,14 @@ mod tests {
         let args = comment_to_args(&comment);
 
         assert_eq!(args.get("projectId"), Some(&Value::from("proj-123")));
-        assert_eq!(args.get("targetType"), Some(&Value::from("design")));
-        assert_eq!(args.get("targetId"), Some(&Value::from("design-456")));
+        assert_eq!(args.get("targetType"), Some(&Value::from("spec")));
+        assert_eq!(args.get("targetId"), Some(&Value::from("spec-456")));
         assert_eq!(args.get("authorType"), Some(&Value::from("human")));
         assert_eq!(
             args.get("authorName"),
             Some(&Value::from("alice@example.com"))
         );
-        assert_eq!(args.get("body"), Some(&Value::from("Great design!")));
+        assert_eq!(args.get("body"), Some(&Value::from("Great spec!")));
         assert_eq!(
             args.get("createdAt"),
             Some(&Value::from("2026-02-11T10:00:00Z"))
@@ -2666,11 +2859,11 @@ mod tests {
     }
 
     #[test]
-    fn test_design_update_args_partial() {
-        let design = DesignRecord {
-            id: "design-123".to_string(),
+    fn test_spec_update_args_partial() {
+        let spec = SpecRecord {
+            id: "spec-123".to_string(),
             project_id: "proj-123".to_string(),
-            design_key: "MYAPP-D1".to_string(),
+            spec_key: "MYAPP-D1".to_string(),
             title: "Original Title".to_string(),
             markdown: "# Original".to_string(),
             status: "draft".to_string(),
@@ -2679,42 +2872,42 @@ mod tests {
             archived_at: None,
         };
 
-        let args = design_to_args(&design);
+        let args = spec_to_args(&spec);
 
         assert_eq!(args.get("projectId"), Some(&Value::from("proj-123")));
-        assert_eq!(args.get("designKey"), Some(&Value::from("MYAPP-D1")));
+        assert_eq!(args.get("specKey"), Some(&Value::from("MYAPP-D1")));
         assert_eq!(args.len(), 7);
     }
 
     #[test]
-    fn test_extract_design_record_from_obj() {
+    fn test_extract_spec_record_from_obj() {
         let mut obj = BTreeMap::new();
-        obj.insert("_id".to_string(), Value::from("design-456"));
+        obj.insert("_id".to_string(), Value::from("spec-456"));
         obj.insert("projectId".to_string(), Value::from("proj-123"));
-        obj.insert("designKey".to_string(), Value::from("MYAPP-D1"));
-        obj.insert("title".to_string(), Value::from("Test Design"));
+        obj.insert("specKey".to_string(), Value::from("MYAPP-D1"));
+        obj.insert("title".to_string(), Value::from("Test Spec"));
         obj.insert("markdown".to_string(), Value::from("# Test"));
         obj.insert("status".to_string(), Value::from("draft"));
         obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
         obj.insert("updatedAt".to_string(), Value::from("2026-02-11T11:00:00Z"));
 
-        let design = extract_design_record(&obj);
+        let spec = extract_spec_record(&obj);
 
-        assert_eq!(design.id, "design-456");
-        assert_eq!(design.project_id, "proj-123");
-        assert_eq!(design.design_key, "MYAPP-D1");
-        assert_eq!(design.title, "Test Design");
-        assert_eq!(design.status, "draft");
-        assert!(design.archived_at.is_none());
+        assert_eq!(spec.id, "spec-456");
+        assert_eq!(spec.project_id, "proj-123");
+        assert_eq!(spec.spec_key, "MYAPP-D1");
+        assert_eq!(spec.title, "Test Spec");
+        assert_eq!(spec.status, "draft");
+        assert!(spec.archived_at.is_none());
     }
 
     #[test]
-    fn test_extract_design_record_with_archived_at() {
+    fn test_extract_spec_record_with_archived_at() {
         let mut obj = BTreeMap::new();
-        obj.insert("_id".to_string(), Value::from("design-456"));
+        obj.insert("_id".to_string(), Value::from("spec-456"));
         obj.insert("projectId".to_string(), Value::from("proj-123"));
-        obj.insert("designKey".to_string(), Value::from("MYAPP-D1"));
-        obj.insert("title".to_string(), Value::from("Test Design"));
+        obj.insert("specKey".to_string(), Value::from("MYAPP-D1"));
+        obj.insert("title".to_string(), Value::from("Test Spec"));
         obj.insert("markdown".to_string(), Value::from("# Test"));
         obj.insert("status".to_string(), Value::from("archived"));
         obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
@@ -2724,10 +2917,10 @@ mod tests {
             Value::from("2026-02-11T12:00:00Z"),
         );
 
-        let design = extract_design_record(&obj);
+        let spec = extract_spec_record(&obj);
 
-        assert_eq!(design.id, "design-456");
-        assert_eq!(design.archived_at, Some("2026-02-11T12:00:00Z".to_string()));
+        assert_eq!(spec.id, "spec-456");
+        assert_eq!(spec.archived_at, Some("2026-02-11T12:00:00Z".to_string()));
     }
 
     #[test]
@@ -2750,7 +2943,7 @@ mod tests {
         assert_eq!(ticket.ticket_key, "MYAPP-123");
         assert_eq!(ticket.title, "Test Ticket");
         assert_eq!(ticket.status, "todo");
-        assert!(ticket.design_id.is_none());
+        assert!(ticket.spec_id.is_none());
         assert!(ticket.closed_at.is_none());
     }
 
@@ -2759,7 +2952,7 @@ mod tests {
         let mut obj = BTreeMap::new();
         obj.insert("_id".to_string(), Value::from("ticket-789"));
         obj.insert("projectId".to_string(), Value::from("proj-123"));
-        obj.insert("designId".to_string(), Value::from("design-456"));
+        obj.insert("specId".to_string(), Value::from("spec-456"));
         obj.insert("ticketKey".to_string(), Value::from("MYAPP-123"));
         obj.insert("title".to_string(), Value::from("Test Ticket"));
         obj.insert("description".to_string(), Value::from("Do something"));
@@ -2773,7 +2966,7 @@ mod tests {
 
         let ticket = extract_ticket_record(&obj);
 
-        assert_eq!(ticket.design_id, Some("design-456".to_string()));
+        assert_eq!(ticket.spec_id, Some("spec-456".to_string()));
         assert_eq!(ticket.assignee, Some("alice@example.com".to_string()));
         assert_eq!(ticket.closed_at, Some("2026-02-11T12:00:00Z".to_string()));
     }
@@ -2783,20 +2976,20 @@ mod tests {
         let mut obj = BTreeMap::new();
         obj.insert("_id".to_string(), Value::from("comment-999"));
         obj.insert("projectId".to_string(), Value::from("proj-123"));
-        obj.insert("targetType".to_string(), Value::from("design"));
-        obj.insert("targetId".to_string(), Value::from("design-456"));
+        obj.insert("targetType".to_string(), Value::from("spec"));
+        obj.insert("targetId".to_string(), Value::from("spec-456"));
         obj.insert("authorType".to_string(), Value::from("human"));
         obj.insert("authorName".to_string(), Value::from("alice@example.com"));
-        obj.insert("body".to_string(), Value::from("Great design!"));
+        obj.insert("body".to_string(), Value::from("Great spec!"));
         obj.insert("createdAt".to_string(), Value::from("2026-02-11T10:00:00Z"));
 
         let comment = extract_comment_record(&obj);
 
         assert_eq!(comment.id, "comment-999");
         assert_eq!(comment.project_id, "proj-123");
-        assert_eq!(comment.target_type, "design");
+        assert_eq!(comment.target_type, "spec");
         assert_eq!(comment.author_type, "human");
-        assert_eq!(comment.body, "Great design!");
+        assert_eq!(comment.body, "Great spec!");
         assert!(comment.edited_at.is_none());
     }
 
@@ -2816,5 +3009,175 @@ mod tests {
         let comment = extract_comment_record(&obj);
 
         assert_eq!(comment.edited_at, Some("2026-02-11T11:00:00Z".to_string()));
+    }
+
+    // --- Design extraction tests ---
+
+    #[test]
+    fn test_extract_design_record_from_obj() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("design-123"));
+        obj.insert("projectId".to_string(), Value::from("proj-456"));
+        obj.insert("designKey".to_string(), Value::from("MYAPP-D1"));
+        obj.insert("title".to_string(), Value::from("Login Page Redesign"));
+        obj.insert("prompt".to_string(), Value::from("Redesign the login page"));
+        obj.insert("status".to_string(), Value::from("exploring"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+
+        let design = extract_design_record(&obj);
+
+        assert_eq!(design.id, "design-123");
+        assert_eq!(design.project_id, "proj-456");
+        assert_eq!(design.design_key, "MYAPP-D1");
+        assert_eq!(design.title, "Login Page Redesign");
+        assert_eq!(design.prompt, "Redesign the login page");
+        assert_eq!(design.status, "exploring");
+        assert_eq!(design.created_at, "2026-02-13T10:00:00Z");
+        assert_eq!(design.updated_at, "2026-02-13T11:00:00Z");
+    }
+
+    #[test]
+    fn test_extract_design_list_from_array() {
+        let obj1 = Value::Object({
+            let mut m = BTreeMap::new();
+            m.insert("_id".to_string(), Value::from("design-1"));
+            m.insert("projectId".to_string(), Value::from("proj-1"));
+            m.insert("designKey".to_string(), Value::from("P-D1"));
+            m.insert("title".to_string(), Value::from("Design A"));
+            m.insert("prompt".to_string(), Value::from("Prompt A"));
+            m.insert("status".to_string(), Value::from("exploring"));
+            m.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+            m.insert("updatedAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+            m
+        });
+        let obj2 = Value::Object({
+            let mut m = BTreeMap::new();
+            m.insert("_id".to_string(), Value::from("design-2"));
+            m.insert("projectId".to_string(), Value::from("proj-1"));
+            m.insert("designKey".to_string(), Value::from("P-D2"));
+            m.insert("title".to_string(), Value::from("Design B"));
+            m.insert("prompt".to_string(), Value::from("Prompt B"));
+            m.insert("status".to_string(), Value::from("locked"));
+            m.insert("createdAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+            m.insert("updatedAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+            m
+        });
+
+        let result = FunctionResult::Value(Value::Array(vec![obj1, obj2]));
+        let designs = extract_design_list(result).unwrap();
+
+        assert_eq!(designs.len(), 2);
+        assert_eq!(designs[0].id, "design-1");
+        assert_eq!(designs[0].title, "Design A");
+        assert_eq!(designs[1].id, "design-2");
+        assert_eq!(designs[1].status, "locked");
+    }
+
+    #[test]
+    fn test_extract_design_list_null_returns_empty() {
+        let result = FunctionResult::Value(Value::Null);
+        let designs = extract_design_list(result).unwrap();
+        assert!(designs.is_empty());
+    }
+
+    #[test]
+    fn test_extract_variation_record_from_obj() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("var-123"));
+        obj.insert("designId".to_string(), Value::from("design-456"));
+        obj.insert("slug".to_string(), Value::from("dark-theme"));
+        obj.insert("title".to_string(), Value::from("Dark Theme Variant"));
+        obj.insert("status".to_string(), Value::from("exploring"));
+        obj.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+
+        let variation = extract_variation_record(&obj);
+
+        assert_eq!(variation.id, "var-123");
+        assert_eq!(variation.design_id, "design-456");
+        assert_eq!(variation.slug, "dark-theme");
+        assert_eq!(variation.title, "Dark Theme Variant");
+        assert_eq!(variation.status, "exploring");
+        assert!(variation.screenshot_storage_ids.is_none());
+    }
+
+    #[test]
+    fn test_extract_variation_record_with_screenshots() {
+        let mut obj = BTreeMap::new();
+        obj.insert("_id".to_string(), Value::from("var-123"));
+        obj.insert("designId".to_string(), Value::from("design-456"));
+        obj.insert("slug".to_string(), Value::from("light-theme"));
+        obj.insert("title".to_string(), Value::from("Light Theme Variant"));
+        obj.insert("status".to_string(), Value::from("selected"));
+        obj.insert(
+            "screenshotStorageIds".to_string(),
+            Value::Array(vec![Value::from("sid-1"), Value::from("sid-2")]),
+        );
+        obj.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+        obj.insert("updatedAt".to_string(), Value::from("2026-02-13T11:00:00Z"));
+
+        let variation = extract_variation_record(&obj);
+
+        assert_eq!(variation.id, "var-123");
+        assert_eq!(variation.status, "selected");
+        let sids = variation.screenshot_storage_ids.unwrap();
+        assert_eq!(sids, vec!["sid-1".to_string(), "sid-2".to_string()]);
+    }
+
+    #[test]
+    fn test_extract_variation_list_from_array() {
+        let obj = Value::Object({
+            let mut m = BTreeMap::new();
+            m.insert("_id".to_string(), Value::from("var-1"));
+            m.insert("designId".to_string(), Value::from("design-1"));
+            m.insert("slug".to_string(), Value::from("v1"));
+            m.insert("title".to_string(), Value::from("Variation 1"));
+            m.insert("status".to_string(), Value::from("exploring"));
+            m.insert("createdAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+            m.insert("updatedAt".to_string(), Value::from("2026-02-13T10:00:00Z"));
+            m
+        });
+
+        let result = FunctionResult::Value(Value::Array(vec![obj]));
+        let variations = extract_variation_list(result).unwrap();
+
+        assert_eq!(variations.len(), 1);
+        assert_eq!(variations[0].id, "var-1");
+        assert_eq!(variations[0].slug, "v1");
+    }
+
+    #[test]
+    fn test_extract_variation_list_null_returns_empty() {
+        let result = FunctionResult::Value(Value::Null);
+        let variations = extract_variation_list(result).unwrap();
+        assert!(variations.is_empty());
+    }
+
+    #[test]
+    fn test_value_as_opt_str_vec_some() {
+        let mut map = BTreeMap::new();
+        map.insert(
+            "ids".to_string(),
+            Value::Array(vec![Value::from("a"), Value::from("b")]),
+        );
+
+        let result = value_as_opt_str_vec(&map, "ids");
+        assert_eq!(result, Some(vec!["a".to_string(), "b".to_string()]));
+    }
+
+    #[test]
+    fn test_value_as_opt_str_vec_none() {
+        let map = BTreeMap::new();
+        let result = value_as_opt_str_vec(&map, "ids");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_value_as_opt_str_vec_null() {
+        let mut map = BTreeMap::new();
+        map.insert("ids".to_string(), Value::Null);
+        let result = value_as_opt_str_vec(&map, "ids");
+        assert_eq!(result, None);
     }
 }

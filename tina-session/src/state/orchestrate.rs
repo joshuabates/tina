@@ -23,7 +23,7 @@ const MAX_IN_PHASE_SELF_REPAIR_LOOPS: u32 = 2;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Action {
-    /// Spawn the design validator.
+    /// Spawn the spec validator.
     SpawnValidator {
         #[serde(skip_serializing_if = "Option::is_none")]
         model: Option<String>,
@@ -101,11 +101,11 @@ pub enum Action {
 /// Events that advance the orchestration state machine.
 #[derive(Debug, Clone)]
 pub enum AdvanceEvent {
-    /// Design validation passed.
+    /// Spec validation passed.
     ValidationPass,
-    /// Design validation passed with warnings.
+    /// Spec validation passed with warnings.
     ValidationWarning,
-    /// Design validation failed (stop).
+    /// Spec validation failed (stop).
     ValidationStop,
     /// Phase planning completed.
     PlanComplete { plan_path: PathBuf },
@@ -367,7 +367,7 @@ pub fn advance_state(
         AdvanceEvent::ValidationStop => {
             state.status = OrchestrationStatus::Blocked;
             Ok(Action::Stopped {
-                reason: "Design validation failed".to_string(),
+                reason: "Spec validation failed".to_string(),
             })
         }
 
@@ -880,7 +880,7 @@ mod tests {
     fn test_state(total_phases: u32) -> SupervisorState {
         SupervisorState::new(
             "test-feature",
-            PathBuf::from("/tmp/design.md"),
+            PathBuf::from("/tmp/spec.md"),
             PathBuf::from("/tmp/worktree"),
             "tina/test",
             total_phases,

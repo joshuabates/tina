@@ -27,7 +27,7 @@ const baseDetail = buildOrchestrationDetail({
   _creationTime: 1234567890,
   nodeId: "node1",
   featureName: "test-feature",
-  designDocPath: "/docs/test.md",
+  specDocPath: "/docs/test.md",
   branch: "tina/test-feature",
   worktreePath: none<string>(),
   totalPhases: 5,
@@ -116,9 +116,9 @@ describe("StatusSection", () => {
   })
 
   it("renders action buttons", () => {
-    renderStatus({ designDocPath: "/docs/design.md" })
+    renderStatus({ specDocPath: "/docs/spec.md" })
 
-    expect(screen.getByText("Design Plan")).toBeInTheDocument()
+    expect(screen.getByText("Spec")).toBeInTheDocument()
     expect(screen.getByText("Phase Plan")).toBeInTheDocument()
   })
 
@@ -137,9 +137,9 @@ describe("StatusSection", () => {
   it("action buttons have accessible aria-labels", () => {
     renderStatus()
 
-    const designButton = screen.getByRole("button", { name: "Open design plan" })
-    expect(designButton).toBeInTheDocument()
-    expect(designButton).toHaveAccessibleName("Open design plan")
+    const specButton = screen.getByRole("button", { name: "Open spec" })
+    expect(specButton).toBeInTheDocument()
+    expect(specButton).toHaveAccessibleName("Open spec")
 
     const phaseButton = screen.getByRole("button", { name: "Open phase plan" })
     expect(phaseButton).toBeInTheDocument()

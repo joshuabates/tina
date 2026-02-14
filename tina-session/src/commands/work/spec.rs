@@ -2,14 +2,14 @@ use serde_json::json;
 use std::path::Path;
 use tina_session::convex;
 
-fn map_design_id_error(err: anyhow::Error, design_id: &str) -> anyhow::Error {
+fn map_spec_id_error(err: anyhow::Error, spec_id: &str) -> anyhow::Error {
     let msg = format!("{:#}", err);
     if msg.contains("ArgumentValidationError")
-        && (msg.contains("Path: .designId") || msg.contains("Validator: v.id(\"designs\")"))
+        && (msg.contains("Path: .specId") || msg.contains("Validator: v.id(\"specs\")"))
     {
         return anyhow::anyhow!(
-            "Invalid design id '{}': expected a Convex designs document id",
-            design_id
+            "Invalid spec id '{}': expected a Convex specs document id",
+            spec_id
         );
     }
     anyhow::anyhow!(msg)
@@ -21,8 +21,8 @@ pub fn create(
     markdown: &str,
     json: bool,
 ) -> Result<u8, anyhow::Error> {
-    let design_id = convex::run_convex(|mut writer| async move {
-        writer.create_design(project_id, title, markdown).await
+    let spec_id = convex::run_convex(|mut writer| async move {
+        writer.create_spec(project_id, title, markdown).await
     })?;
 
     if json {
@@ -30,11 +30,11 @@ pub fn create(
             "{}",
             json!({
                 "ok": true,
-                "designId": design_id,
+                "specId": spec_id,
             })
         );
     } else {
-        println!("Created design: {}", design_id);
+        println!("Created spec: {}", spec_id);
     }
     Ok(0)
 }
@@ -47,15 +47,15 @@ pub fn get(id: Option<&str>, key: Option<&str>, json: bool) -> Result<u8, anyhow
         anyhow::bail!("Cannot specify both --id and --key");
     }
 
-    let design = convex::run_convex(|mut writer| async move {
-        if let Some(design_id) = id {
-            writer.get_design(design_id).await
+    let spec = convex::run_convex(|mut writer| async move {
+        if let Some(spec_id) = id {
+            writer.get_spec(spec_id).await
         } else {
-            writer.get_design_by_key(key.unwrap()).await
+            writer.get_spec_by_key(key.unwrap()).await
         }
     })?;
 
-    match design {
+    match spec {
         Some(d) => {
             if json {
                 println!(
@@ -63,7 +63,7 @@ pub fn get(id: Option<&str>, key: Option<&str>, json: bool) -> Result<u8, anyhow
                     json!({
                         "ok": true,
                         "id": d.id,
-                        "designKey": d.design_key,
+                        "specKey": d.spec_key,
                         "title": d.title,
                         "markdown": d.markdown,
                         "status": d.status,
@@ -73,7 +73,7 @@ pub fn get(id: Option<&str>, key: Option<&str>, json: bool) -> Result<u8, anyhow
                     })
                 );
             } else {
-                println!("{} ({}): {} [{}]", d.design_key, d.id, d.title, d.status);
+                println!("{} ({}): {} [{}]", d.spec_key, d.id, d.title, d.status);
             }
             Ok(0)
         }
@@ -83,11 +83,11 @@ pub fn get(id: Option<&str>, key: Option<&str>, json: bool) -> Result<u8, anyhow
                     "{}",
                     json!({
                         "ok": false,
-                        "error": "Design not found"
+                        "error": "Spec not found"
                     })
                 );
             } else {
-                eprintln!("Design not found");
+                eprintln!("Spec not found");
             }
             Ok(1)
         }
@@ -95,9 +95,9 @@ pub fn get(id: Option<&str>, key: Option<&str>, json: bool) -> Result<u8, anyhow
 }
 
 pub fn list(project_id: &str, status: Option<&str>, json: bool) -> Result<u8, anyhow::Error> {
-    let designs =
+    let specs =
         convex::run_convex(
-            |mut writer| async move { writer.list_designs(project_id, status).await },
+            |mut writer| async move { writer.list_specs(project_id, status).await },
         )?;
 
     if json {
@@ -105,9 +105,9 @@ pub fn list(project_id: &str, status: Option<&str>, json: bool) -> Result<u8, an
             "{}",
             json!({
                 "ok": true,
-                "designs": designs.iter().map(|d| json!({
+                "specs": specs.iter().map(|d| json!({
                     "id": d.id,
-                    "designKey": d.design_key,
+                    "specKey": d.spec_key,
                     "title": d.title,
                     "status": d.status,
                     "createdAt": d.created_at,
@@ -116,8 +116,8 @@ pub fn list(project_id: &str, status: Option<&str>, json: bool) -> Result<u8, an
             })
         );
     } else {
-        for d in designs {
-            println!("{} ({}): {} [{}]", d.design_key, d.id, d.title, d.status);
+        for d in specs {
+            println!("{} ({}): {} [{}]", d.spec_key, d.id, d.title, d.status);
         }
     }
     Ok(0)
@@ -129,9 +129,9 @@ pub fn update(
     markdown: Option<&str>,
     json: bool,
 ) -> Result<u8, anyhow::Error> {
-    let design_id =
+    let spec_id =
         convex::run_convex(
-            |mut writer| async move { writer.update_design(id, title, markdown).await },
+            |mut writer| async move { writer.update_spec(id, title, markdown).await },
         )?;
 
     if json {
@@ -139,46 +139,46 @@ pub fn update(
             "{}",
             json!({
                 "ok": true,
-                "designId": design_id,
+                "specId": spec_id,
             })
         );
     } else {
-        println!("Updated design: {}", design_id);
+        println!("Updated spec: {}", spec_id);
     }
     Ok(0)
 }
 
 pub fn transition(id: &str, status: &str, json: bool) -> Result<u8, anyhow::Error> {
-    let design_id =
-        convex::run_convex(|mut writer| async move { writer.transition_design(id, status).await })?;
+    let spec_id =
+        convex::run_convex(|mut writer| async move { writer.transition_spec(id, status).await })?;
 
     if json {
         println!(
             "{}",
             json!({
                 "ok": true,
-                "designId": design_id,
+                "specId": spec_id,
             })
         );
     } else {
-        println!("Transitioned design {} to status: {}", design_id, status);
+        println!("Transitioned spec {} to status: {}", spec_id, status);
     }
     Ok(0)
 }
 
-pub fn resolve(design_id: &str, json: bool) -> Result<u8, anyhow::Error> {
-    let design = convex::run_convex(|mut writer| async move { writer.get_design(design_id).await })
-        .map_err(|e| map_design_id_error(e, design_id))?;
+pub fn resolve(spec_id: &str, json: bool) -> Result<u8, anyhow::Error> {
+    let spec = convex::run_convex(|mut writer| async move { writer.get_spec(spec_id).await })
+        .map_err(|e| map_spec_id_error(e, spec_id))?;
 
-    match design {
+    match spec {
         Some(d) => {
             if json {
                 println!(
                     "{}",
                     json!({
                         "ok": true,
-                        "designId": d.id,
-                        "designKey": d.design_key,
+                        "specId": d.id,
+                        "specKey": d.spec_key,
                         "title": d.title,
                         "markdown": d.markdown,
                         "status": d.status,
@@ -195,22 +195,22 @@ pub fn resolve(design_id: &str, json: bool) -> Result<u8, anyhow::Error> {
                     "{}",
                     json!({
                         "ok": false,
-                        "error": "Design not found"
+                        "error": "Spec not found"
                     })
                 );
             } else {
-                eprintln!("Design not found");
+                eprintln!("Spec not found");
             }
             Ok(1)
         }
     }
 }
 
-pub fn resolve_to_file(design_id: &str, output: &Path, json: bool) -> Result<u8, anyhow::Error> {
-    let design = convex::run_convex(|mut writer| async move { writer.get_design(design_id).await })
-        .map_err(|e| map_design_id_error(e, design_id))?;
+pub fn resolve_to_file(spec_id: &str, output: &Path, json: bool) -> Result<u8, anyhow::Error> {
+    let spec = convex::run_convex(|mut writer| async move { writer.get_spec(spec_id).await })
+        .map_err(|e| map_spec_id_error(e, spec_id))?;
 
-    match design {
+    match spec {
         Some(d) => {
             std::fs::write(output, &d.markdown)?;
             if json {
@@ -218,12 +218,12 @@ pub fn resolve_to_file(design_id: &str, output: &Path, json: bool) -> Result<u8,
                     "{}",
                     json!({
                         "ok": true,
-                        "designId": d.id,
+                        "specId": d.id,
                         "outputPath": output.display().to_string(),
                     })
                 );
             } else {
-                println!("Wrote design {} to {}", d.design_key, output.display());
+                println!("Wrote spec {} to {}", d.spec_key, output.display());
             }
             Ok(0)
         }
@@ -233,11 +233,11 @@ pub fn resolve_to_file(design_id: &str, output: &Path, json: bool) -> Result<u8,
                     "{}",
                     json!({
                         "ok": false,
-                        "error": "Design not found"
+                        "error": "Spec not found"
                     })
                 );
             } else {
-                eprintln!("Design not found");
+                eprintln!("Spec not found");
             }
             Ok(1)
         }

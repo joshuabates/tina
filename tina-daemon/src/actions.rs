@@ -20,7 +20,7 @@ pub struct ActionPayload {
     #[serde(alias = "parentTeamId")]
     pub parent_team_id: Option<String>,
     // Launch-specific fields (start_orchestration)
-    pub design_id: Option<String>,
+    pub spec_id: Option<String>,
     pub cwd: Option<String>,
     pub branch: Option<String>,
     pub total_phases: Option<u32>,
@@ -271,11 +271,11 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
             if let Some(plan) = payload.plan.as_deref().or(payload.plan_path.as_deref()) {
                 args.push("--plan".to_string());
                 args.push(plan.to_string());
-            } else if let Some(design_id) = payload.design_id.as_deref() {
-                args.push("--design-id".to_string());
-                args.push(design_id.to_string());
+            } else if let Some(spec_id) = payload.spec_id.as_deref() {
+                args.push("--spec-id".to_string());
+                args.push(spec_id.to_string());
             } else {
-                bail!("start_execution requires 'plan'/'plan_path' or 'design_id' in payload");
+                bail!("start_execution requires 'plan'/'plan_path' or 'spec_id' in payload");
             }
 
             if let Some(cwd) = payload.cwd.as_deref() {
@@ -291,8 +291,8 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
             Ok(args)
         }
         "start_orchestration" => {
-            let design_id = payload.design_id.as_deref().ok_or_else(|| {
-                anyhow::anyhow!("start_orchestration requires 'design_id' in payload")
+            let spec_id = payload.spec_id.as_deref().ok_or_else(|| {
+                anyhow::anyhow!("start_orchestration requires 'spec_id' in payload")
             })?;
             let cwd = payload
                 .cwd
@@ -311,8 +311,8 @@ pub fn build_cli_args(action_type: &str, payload: &ActionPayload) -> Result<Vec<
                 feature.to_string(),
                 "--cwd".to_string(),
                 cwd.to_string(),
-                "--design-id".to_string(),
-                design_id.to_string(),
+                "--spec-id".to_string(),
+                spec_id.to_string(),
                 "--branch".to_string(),
                 branch.to_string(),
                 "--total-phases".to_string(),
@@ -519,7 +519,7 @@ mod tests {
             plan: None,
             plan_path: None,
             parent_team_id: None,
-            design_id: None,
+            spec_id: None,
             cwd: None,
             branch: None,
             total_phases: None,
@@ -558,7 +558,7 @@ mod tests {
             plan: None,
             plan_path: None,
             parent_team_id: None,
-            design_id: None,
+            spec_id: None,
             cwd: None,
             branch: None,
             total_phases: None,
@@ -653,7 +653,7 @@ mod tests {
             plan: None,
             plan_path: None,
             parent_team_id: None,
-            design_id: None,
+            spec_id: None,
             cwd: None,
             branch: None,
             total_phases: None,
@@ -693,7 +693,7 @@ mod tests {
             plan: None,
             plan_path: None,
             parent_team_id: None,
-            design_id: None,
+            spec_id: None,
             cwd: None,
             branch: None,
             total_phases: None,
@@ -734,7 +734,7 @@ mod tests {
             plan: None,
             plan_path: None,
             parent_team_id: None,
-            design_id: Some("design_abc".to_string()),
+            spec_id: Some("spec_abc".to_string()),
             cwd: Some("/tmp/worktree".to_string()),
             branch: Some("tina/auth".to_string()),
             total_phases: Some(3),
@@ -762,7 +762,7 @@ mod tests {
             plan: Some("docs/plans/2026-02-01-auth-phase-1.md".to_string()),
             plan_path: None,
             parent_team_id: None,
-            design_id: Some("design_abc".to_string()),
+            spec_id: Some("spec_abc".to_string()),
             cwd: None,
             branch: None,
             total_phases: None,
@@ -825,7 +825,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_cli_args_start_execution_without_plan_uses_design_id() {
+    fn test_build_cli_args_start_execution_without_plan_uses_spec_id() {
         let mut p = start_execution_payload();
         p.plan = None;
         p.plan_path = None;
@@ -838,25 +838,25 @@ mod tests {
                 "auth",
                 "--phase",
                 "1",
-                "--design-id",
-                "design_abc",
+                "--spec-id",
+                "spec_abc",
             ]
         );
     }
 
     #[test]
-    fn test_build_cli_args_start_execution_requires_plan_or_design_id() {
+    fn test_build_cli_args_start_execution_requires_plan_or_spec_id() {
         let mut p = start_execution_payload();
         p.plan = None;
         p.plan_path = None;
-        p.design_id = None;
+        p.spec_id = None;
 
         let result = build_cli_args("start_execution", &p);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("plan'/'plan_path' or 'design_id"));
+            .contains("plan'/'plan_path' or 'spec_id"));
     }
 
     #[test]
@@ -880,8 +880,8 @@ mod tests {
                 "auth",
                 "--cwd",
                 "/tmp/worktree",
-                "--design-id",
-                "design_abc",
+                "--spec-id",
+                "spec_abc",
                 "--branch",
                 "tina/auth",
                 "--total-phases",
@@ -914,8 +914,8 @@ mod tests {
                 "auth",
                 "--cwd",
                 "/tmp/worktree",
-                "--design-id",
-                "design_abc",
+                "--spec-id",
+                "spec_abc",
                 "--branch",
                 "tina/auth",
                 "--total-phases",
@@ -960,8 +960,8 @@ mod tests {
                 "auth",
                 "--cwd",
                 "/tmp/worktree",
-                "--design-id",
-                "design_abc",
+                "--spec-id",
+                "spec_abc",
                 "--branch",
                 "tina/auth",
                 "--total-phases",
@@ -978,12 +978,12 @@ mod tests {
     }
 
     #[test]
-    fn test_start_orchestration_missing_design_id() {
+    fn test_start_orchestration_missing_spec_id() {
         let mut p = launch_payload();
-        p.design_id = None;
+        p.spec_id = None;
         let result = build_cli_args("start_orchestration", &p);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("design_id"));
+        assert!(result.unwrap_err().to_string().contains("spec_id"));
     }
 
     #[test]

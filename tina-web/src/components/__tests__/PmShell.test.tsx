@@ -41,7 +41,7 @@ const defaultStates: Partial<QueryStateMap> = {
     }),
   ]),
   "tickets.list": querySuccess([]),
-  "designs.list": querySuccess([]),
+  "specs.list": querySuccess([]),
   "nodes.list": querySuccess([]),
 }
 
@@ -72,6 +72,9 @@ describe("PmShell - unified workspace", () => {
     expect(screen.getByRole("navigation", { name: /plan list view toggle/i })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Tickets" })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Designs" })).toBeInTheDocument()
+    expect(screen.queryByRole("tablist", { name: /plan workspace tabs/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("tab", { name: /tickets/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("tab", { name: /designs/i })).not.toBeInTheDocument()
   })
 
   it("renders ticket list content on tickets route", () => {
@@ -80,9 +83,9 @@ describe("PmShell - unified workspace", () => {
     expect(screen.getByTestId("ticket-list-page")).toBeInTheDocument()
   })
 
-  it("renders design list content on designs route", () => {
-    renderApp("/projects/p1/plan/designs")
-    expect(screen.getByTestId("design-list-page")).toBeInTheDocument()
+  it("renders spec list content on specs route", () => {
+    renderApp("/projects/p1/plan/specs")
+    expect(screen.getByTestId("spec-list-page")).toBeInTheDocument()
   })
 
   it("does not show project name in workspace header", () => {
@@ -99,7 +102,7 @@ describe("PmShell - unified workspace", () => {
   it("renders Launch button in workspace header", () => {
     renderApp("/projects/p1/plan", {
       ...defaultStates,
-      "designs.list": querySuccess([]),
+      "specs.list": querySuccess([]),
       "nodes.list": querySuccess([]),
     })
 

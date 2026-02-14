@@ -10,7 +10,7 @@ const optionalBoolean = Schema.optionalWith(Schema.Boolean, { as: "Option" });
 export const orchestrationCoreFields = {
   nodeId: Schema.String,
   featureName: Schema.String,
-  designDocPath: Schema.String,
+  specDocPath: Schema.String,
   branch: Schema.String,
   worktreePath: optionalString,
   totalPhases: Schema.Number,
@@ -22,7 +22,7 @@ export const orchestrationCoreFields = {
   policySnapshot: optionalString,
   policySnapshotHash: optionalString,
   presetOrigin: optionalString,
-  designOnly: optionalBoolean,
+  specOnly: optionalBoolean,
   policyRevision: optionalNumber,
   updatedAt: optionalString,
 } as const;

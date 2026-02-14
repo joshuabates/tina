@@ -112,7 +112,7 @@ fn make_test_orchestration(name: &str) -> MonitorOrchestration {
             node_id: "node-1".to_string(),
             project_id: None,
             feature_name: name.to_string(),
-            design_doc_path: "/test/design.md".to_string(),
+            spec_doc_path: "/test/design.md".to_string(),
             branch: format!("tina/{}", name),
             worktree_path: Some("/test".to_string()),
             total_phases: 3.0,
@@ -121,6 +121,13 @@ fn make_test_orchestration(name: &str) -> MonitorOrchestration {
             started_at: "2026-02-07T10:00:00Z".to_string(),
             completed_at: None,
             total_elapsed_mins: None,
+            spec_id: None,
+            policy_snapshot: None,
+            policy_snapshot_hash: None,
+            preset_origin: None,
+            spec_only: None,
+            policy_revision: None,
+            updated_at: None,
         },
     })
 }

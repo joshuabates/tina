@@ -2,11 +2,13 @@ import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createFeatureFixture } from "./test_helpers";
 
 describe("executionTasks:seedExecutionTasks", () => {
   test("creates tasks with correct fields and returns ids", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "seed-feature");
 
     const ids = await t.mutation(api.executionTasks.seedExecutionTasks, {
@@ -51,7 +53,7 @@ describe("executionTasks:seedExecutionTasks", () => {
   });
 
   test("throws when tasks already seeded for phase", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "dup-feature");
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
@@ -70,7 +72,7 @@ describe("executionTasks:seedExecutionTasks", () => {
   });
 
   test("allows seeding different phases independently", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(
       t,
       "multi-phase-feature",
@@ -94,7 +96,7 @@ describe("executionTasks:seedExecutionTasks", () => {
 
 describe("executionTasks:listExecutionTasks", () => {
   test("returns all tasks for orchestration when no phase filter", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "list-feature");
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
@@ -120,7 +122,7 @@ describe("executionTasks:listExecutionTasks", () => {
   });
 
   test("returns only phase-specific tasks when phaseNumber provided", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(
       t,
       "filter-feature",
@@ -148,7 +150,7 @@ describe("executionTasks:listExecutionTasks", () => {
   });
 
   test("returns empty array when no tasks exist", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(
       t,
       "empty-feature",
@@ -164,7 +166,7 @@ describe("executionTasks:listExecutionTasks", () => {
 
 describe("executionTasks:getExecutionTask", () => {
   test("returns specific task by orchestration, phase, and task number", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "get-feature");
 
     await t.mutation(api.executionTasks.seedExecutionTasks, {
@@ -188,7 +190,7 @@ describe("executionTasks:getExecutionTask", () => {
   });
 
   test("returns null for non-existent task", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(
       t,
       "missing-feature",

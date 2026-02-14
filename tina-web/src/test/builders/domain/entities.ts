@@ -1,5 +1,7 @@
 import type {
+  SpecSummary,
   DesignSummary,
+  DesignVariation,
   OrchestrationEvent,
   OrchestrationSummary,
   Phase,
@@ -38,7 +40,7 @@ export function buildOrchestrationSummary(
     nodeId: "n1",
     projectId: some("p1"),
     featureName: "my-feature",
-    designDocPath: "/docs/my-feature.md",
+    specDocPath: "/docs/my-feature.md",
     branch: "tina/my-feature",
     worktreePath: none<string>(),
     totalPhases: 3,
@@ -50,7 +52,7 @@ export function buildOrchestrationSummary(
     policySnapshot: none<string>(),
     policySnapshotHash: none<string>(),
     presetOrigin: none<string>(),
-    designOnly: none<boolean>(),
+    specOnly: none<boolean>(),
     policyRevision: none<number>(),
     updatedAt: none<string>(),
     nodeName: "node1",
@@ -129,14 +131,14 @@ export function buildOrchestrationEvent(
   }
 }
 
-export function buildDesignSummary(
-  overrides: Partial<DesignSummary> = {},
-): DesignSummary {
+export function buildSpecSummary(
+  overrides: Partial<SpecSummary> = {},
+): SpecSummary {
   return {
     _id: "d1",
     _creationTime: 1234567890,
     projectId: "p1",
-    designKey: "ALPHA-D1",
+    specKey: "ALPHA-D1",
     title: "Authentication Flow",
     markdown: "# Auth\nDesign for auth flow",
     status: "draft",
@@ -207,6 +209,40 @@ export function buildReviewGate(
     decidedBy: none<string>(),
     decidedAt: none<string>(),
     summary: "Awaiting review",
+    ...overrides,
+  }
+}
+
+export function buildDesignSummary(
+  overrides: Partial<DesignSummary> = {},
+): DesignSummary {
+  return {
+    _id: "design1",
+    _creationTime: 1234567890,
+    projectId: "p1",
+    designKey: "ALPHA-DES1",
+    title: "Login Page Design",
+    prompt: "Design a login page with OAuth support",
+    status: "exploring",
+    createdAt: "2024-01-01T10:00:00Z",
+    updatedAt: "2024-01-01T12:00:00Z",
+    ...overrides,
+  }
+}
+
+export function buildDesignVariation(
+  overrides: Partial<DesignVariation> = {},
+): DesignVariation {
+  return {
+    _id: "variation1",
+    _creationTime: 1234567890,
+    designId: "design1",
+    slug: "v1",
+    title: "Minimal Login",
+    status: "exploring",
+    screenshotStorageIds: none<string[]>(),
+    createdAt: "2024-01-01T10:00:00Z",
+    updatedAt: "2024-01-01T12:00:00Z",
     ...overrides,
   }
 }

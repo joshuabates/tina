@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestrationRecord {
     pub project_id: Option<String>,
-    pub design_id: Option<String>,
+    pub spec_id: Option<String>,
     pub node_id: String,
     pub feature_name: String,
-    pub design_doc_path: String,
+    pub spec_doc_path: String,
     pub branch: String,
     pub worktree_path: Option<String>,
     pub total_phases: f64,
@@ -21,7 +21,7 @@ pub struct OrchestrationRecord {
     pub policy_snapshot: Option<String>,
     pub policy_snapshot_hash: Option<String>,
     pub preset_origin: Option<String>,
-    pub design_only: Option<bool>,
+    pub spec_only: Option<bool>,
     pub policy_revision: Option<f64>,
     pub updated_at: Option<String>,
 }

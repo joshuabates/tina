@@ -24,7 +24,7 @@ describe("FormDialog", () => {
 
   it("has correct ARIA attributes", () => {
     render(
-      <FormDialog title="Edit Design" onClose={onClose}>
+      <FormDialog title="Edit Spec" onClose={onClose}>
         <p>Content</p>
       </FormDialog>,
     )

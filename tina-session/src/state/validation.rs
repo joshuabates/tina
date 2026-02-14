@@ -136,12 +136,12 @@ pub fn validate_supervisor_state(path: &Path) -> ValidationResult {
         );
     }
 
-    // Check if design_doc exists (warning only)
-    if !state.design_doc.exists() {
+    // Check if spec_doc exists (warning only)
+    if !state.spec_doc.exists() {
         result.add_warning(
             path,
-            "design_doc",
-            &format!("Design doc does not exist: {}", state.design_doc.display()),
+            "spec_doc",
+            &format!("Spec doc does not exist: {}", state.spec_doc.display()),
         );
     }
 
@@ -341,7 +341,7 @@ mod tests {
         let json = r#"{
             "version": 1,
             "feature": "test",
-            "design_doc": "/tmp/design.md",
+            "spec_doc": "/tmp/spec.md",
             "worktree_path": "/tmp/worktree",
             "branch": "test-branch",
             "total_phases": 3,
@@ -366,7 +366,7 @@ mod tests {
         let json = r#"{
             "version": 1,
             "feature": "test",
-            "design_doc": "/tmp/design.md",
+            "spec_doc": "/tmp/spec.md",
             "worktree_path": "/tmp/worktree",
             "branch": "test-branch",
             "total_phases": 3,
@@ -436,7 +436,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("state.json");
         let json = r#"{
-            "version": 1, "feature": "test", "design_doc": "/tmp/d.md",
+            "version": 1, "feature": "test", "spec_doc": "/tmp/d.md",
             "worktree_path": "/tmp/w", "branch": "b", "total_phases": 3,
             "current_phase": 1, "status": "executing",
             "orchestration_started_at": "2026-01-30T10:00:00Z",
@@ -465,7 +465,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("state.json");
         let json = r#"{
-            "version": 1, "feature": "test", "design_doc": "/tmp/d.md",
+            "version": 1, "feature": "test", "spec_doc": "/tmp/d.md",
             "worktree_path": "/tmp/w", "branch": "b", "total_phases": 3,
             "current_phase": 1, "status": "executing",
             "orchestration_started_at": "2026-01-30T10:00:00Z",
@@ -495,7 +495,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("state.json");
         let json = r#"{
-            "version": 1, "feature": "test", "design_doc": "/tmp/d.md",
+            "version": 1, "feature": "test", "spec_doc": "/tmp/d.md",
             "worktree_path": "/tmp/w", "branch": "b", "total_phases": 3,
             "current_phase": 1, "status": "executing",
             "orchestration_started_at": "2026-01-30T10:00:00Z",
@@ -519,7 +519,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().join("state.json");
         let json = r#"{
-            "version": 1, "feature": "test", "design_doc": "/tmp/d.md",
+            "version": 1, "feature": "test", "spec_doc": "/tmp/d.md",
             "worktree_path": "/tmp/w", "branch": "b", "total_phases": 3,
             "current_phase": 1, "status": "executing",
             "orchestration_started_at": "2026-01-30T10:00:00Z",

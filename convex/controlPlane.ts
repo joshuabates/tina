@@ -2,7 +2,7 @@ import { query, mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
-import { validateDesignForLaunch } from "./designValidation";
+import { validateSpecForLaunch } from "./specValidation";
 import { policySnapshotValidator, hashPolicy } from "./policyPresets";
 import type { PolicySnapshot } from "./policyPresets";
 import { HEARTBEAT_TIMEOUT_MS } from "./nodes";
@@ -67,12 +67,12 @@ function validateStartExecutionPayload(rawPayload: string): void {
   const hasPlan =
     (typeof parsed.plan === "string" && parsed.plan.length > 0) ||
     (typeof parsed.planPath === "string" && parsed.planPath.length > 0);
-  const hasDesignId =
-    (typeof parsed.design_id === "string" && parsed.design_id.length > 0) ||
-    (typeof parsed.designId === "string" && parsed.designId.length > 0);
-  if (!hasPlan && !hasDesignId) {
+  const hasSpecId =
+    (typeof parsed.spec_id === "string" && parsed.spec_id.length > 0) ||
+    (typeof parsed.specId === "string" && parsed.specId.length > 0);
+  if (!hasPlan && !hasSpecId) {
     throw new Error(
-      'Payload for "start_execution" requires "plan"/"planPath" or "design_id"/"designId"',
+      'Payload for "start_execution" requires "plan"/"planPath" or "spec_id"/"specId"',
     );
   }
 }
@@ -363,7 +363,7 @@ export const startOrchestration = mutation({
     policySnapshot: v.string(),
     policySnapshotHash: v.string(),
     presetOrigin: v.optional(v.string()),
-    designOnly: v.optional(v.boolean()),
+    specOnly: v.optional(v.boolean()),
     requestedBy: v.string(),
     idempotencyKey: v.string(),
   },
@@ -380,7 +380,7 @@ export const startOrchestration = mutation({
         policySnapshotHash: string;
         updatedAt: string;
         presetOrigin?: string;
-        designOnly?: boolean;
+        specOnly?: boolean;
       } = {
         policySnapshot: args.policySnapshot,
         policySnapshotHash: args.policySnapshotHash,
@@ -389,8 +389,8 @@ export const startOrchestration = mutation({
       if (args.presetOrigin !== undefined) {
         patchFields.presetOrigin = args.presetOrigin;
       }
-      if (args.designOnly !== undefined) {
-        patchFields.designOnly = args.designOnly;
+      if (args.specOnly !== undefined) {
+        patchFields.specOnly = args.specOnly;
       }
       await ctx.db.patch(args.orchestrationId, patchFields);
     }
@@ -398,7 +398,7 @@ export const startOrchestration = mutation({
     const payload = JSON.stringify({
       policySnapshotHash: args.policySnapshotHash,
       presetOrigin: args.presetOrigin,
-      designOnly: args.designOnly,
+      specOnly: args.specOnly,
     });
 
     return insertControlActionWithQueue(ctx, {
@@ -415,7 +415,7 @@ export const startOrchestration = mutation({
 export const launchOrchestration = mutation({
   args: {
     projectId: v.id("projects"),
-    designId: v.id("designs"),
+    specId: v.id("specs"),
     feature: v.string(),
     branch: v.string(),
     ticketIds: v.optional(v.array(v.id("tickets"))),
@@ -427,16 +427,16 @@ export const launchOrchestration = mutation({
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error(`Project not found: ${args.projectId}`);
 
-    const design = await ctx.db.get(args.designId);
-    if (!design) throw new Error(`Design not found: ${args.designId}`);
-    if (design.projectId !== args.projectId) {
-      throw new Error(`Design ${args.designId} does not belong to project ${args.projectId}`);
+    const spec = await ctx.db.get(args.specId);
+    if (!spec) throw new Error(`Spec not found: ${args.specId}`);
+    if (spec.projectId !== args.projectId) {
+      throw new Error(`Spec ${args.specId} does not belong to project ${args.projectId}`);
     }
 
-    // Design validation gates
-    const validation = validateDesignForLaunch(design);
+    // Spec validation gates
+    const validation = validateSpecForLaunch(spec);
     if (!validation.valid) {
-      throw new Error(`Design not ready for launch: ${validation.errors.join("; ")}`);
+      throw new Error(`Spec not ready for launch: ${validation.errors.join("; ")}`);
     }
 
     // Auto-resolve online node
@@ -457,8 +457,8 @@ export const launchOrchestration = mutation({
       }
     }
 
-    const designOnly = ticketIds.length === 0;
-    const totalPhases = design.phaseCount ?? 1;
+    const specOnly = ticketIds.length === 0;
+    const totalPhases = spec.phaseCount ?? 1;
     const policyJson = JSON.stringify(args.policySnapshot);
     const policyHash = await hashPolicy(args.policySnapshot as unknown as PolicySnapshot);
     const nowIso = new Date().toISOString();
@@ -466,9 +466,9 @@ export const launchOrchestration = mutation({
     const orchestrationId = await ctx.db.insert("orchestrations", {
       nodeId: onlineNode._id,
       projectId: args.projectId,
-      designId: args.designId,
+      specId: args.specId,
       featureName: args.feature,
-      designDocPath: `convex://${args.designId}`,
+      specDocPath: `convex://${args.specId}`,
       branch: args.branch,
       totalPhases,
       currentPhase: 1,
@@ -476,13 +476,13 @@ export const launchOrchestration = mutation({
       startedAt: nowIso,
       policySnapshot: policyJson,
       policySnapshotHash: policyHash,
-      designOnly,
+      specOnly,
       policyRevision: 1,
     });
 
     const launchPayload = JSON.stringify({
       feature: args.feature,
-      design_id: args.designId,
+      spec_id: args.specId,
       cwd: project.repoPath,
       branch: args.branch,
       total_phases: totalPhases,
@@ -504,7 +504,7 @@ export const launchOrchestration = mutation({
       source: "control_plane",
       summary: `Launch requested for "${args.feature}" on node "${onlineNode.name}"`,
       detail: JSON.stringify({
-        designOnly,
+        specOnly,
         ticketCount: ticketIds.length,
         nodeAutoResolved: true,
         derivedPhases: totalPhases,

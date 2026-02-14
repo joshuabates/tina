@@ -2,6 +2,8 @@ import { convexTest } from "convex-test";
 import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import {
   createFeatureFixture,
   createNode,
@@ -11,7 +13,7 @@ import {
 
 describe("teams:registerTeam", () => {
   test("inserts new team record", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const teamId = await registerTeam(t, {
@@ -25,7 +27,7 @@ describe("teams:registerTeam", () => {
   });
 
   test("idempotent upsert when same orchestrationId", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const id1 = await registerTeam(t, {
@@ -56,7 +58,7 @@ describe("teams:registerTeam", () => {
   });
 
   test("stores tmux session name when provided", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await registerTeam(t, {
@@ -76,7 +78,7 @@ describe("teams:registerTeam", () => {
   });
 
   test("errors when teamName exists with different orchestrationId", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const nodeId = await createNode(t);
     const orchestrationId1 = await createOrchestration(t, {
       nodeId,
@@ -105,7 +107,7 @@ describe("teams:registerTeam", () => {
   });
 
   test("allows null phaseNumber for orchestration teams", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const teamId = await registerTeam(t, {
@@ -118,7 +120,7 @@ describe("teams:registerTeam", () => {
   });
 
   test("stores parentTeamId when provided", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const parentId = await registerTeam(t, {
@@ -145,7 +147,7 @@ describe("teams:registerTeam", () => {
   });
 
   test("updates parentTeamId on upsert", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const parentId = await registerTeam(t, {
@@ -181,7 +183,7 @@ describe("teams:registerTeam", () => {
 
 describe("teams:getByTeamName", () => {
   test("returns team record when exists", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await registerTeam(t, {
@@ -205,7 +207,7 @@ describe("teams:getByTeamName", () => {
   });
 
   test("stores provided localDirName when teamName contains decimal phase", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await registerTeam(t, {
@@ -225,7 +227,7 @@ describe("teams:getByTeamName", () => {
   });
 
   test("rejects empty localDirName", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await expect(
@@ -240,7 +242,7 @@ describe("teams:getByTeamName", () => {
   });
 
   test("returns null when team does not exist", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const result = await t.query(api.teams.getByTeamName, {
       teamName: "nonexistent",
@@ -252,7 +254,7 @@ describe("teams:getByTeamName", () => {
 
 describe("teams:listActiveTeams", () => {
   test("returns teams with active orchestrations", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "active-feature");
 
     await registerTeam(t, {
@@ -270,7 +272,7 @@ describe("teams:listActiveTeams", () => {
   });
 
   test("excludes teams with completed orchestrations", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const nodeId = await createNode(t);
     const orchestrationId = await createOrchestration(t, {
       nodeId,
@@ -295,7 +297,7 @@ describe("teams:listActiveTeams", () => {
   });
 
   test("includes teams with blocked orchestrations", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const nodeId = await createNode(t);
     const orchestrationId = await createOrchestration(t, {
       nodeId,
@@ -322,7 +324,7 @@ describe("teams:listActiveTeams", () => {
   });
 
   test("returns empty array when no teams", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const teams = await t.query(api.teams.listActiveTeams, {});
     expect(teams).toEqual([]);
   });
@@ -330,7 +332,7 @@ describe("teams:listActiveTeams", () => {
 
 describe("teams:listByParent", () => {
   test("returns child teams for a parent", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const parentId = await registerTeam(t, {
@@ -367,7 +369,7 @@ describe("teams:listByParent", () => {
   });
 
   test("returns empty array when no children", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "solo-feature");
 
     const parentId = await registerTeam(t, {
@@ -386,13 +388,13 @@ describe("teams:listByParent", () => {
 
 describe("orchestrations:getByFeature", () => {
   test("returns latest orchestration for feature", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const nodeId = await createNode(t);
 
     await createOrchestration(t, {
       nodeId,
       featureName: "auth",
-      designDocPath: "/docs/old.md",
+      specDocPath: "/docs/old.md",
       branch: "tina/auth",
       totalPhases: 2,
       currentPhase: 1,
@@ -409,7 +411,7 @@ describe("orchestrations:getByFeature", () => {
     const laterId = await createOrchestration(t, {
       nodeId: nodeId2,
       featureName: "auth",
-      designDocPath: "/docs/new.md",
+      specDocPath: "/docs/new.md",
       branch: "tina/auth",
       totalPhases: 3,
       currentPhase: 1,
@@ -424,12 +426,12 @@ describe("orchestrations:getByFeature", () => {
 
     expect(result).not.toBeNull();
     expect(result!._id).toBe(laterId);
-    expect(result!.designDocPath).toBe("/docs/new.md");
+    expect(result!.specDocPath).toBe("/docs/new.md");
     expect(result!.startedAt).toBe("2026-02-08T10:00:00Z");
   });
 
   test("returns null when no orchestrations for feature", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const result = await t.query(api.orchestrations.getByFeature, {
       featureName: "nonexistent",
@@ -441,7 +443,7 @@ describe("orchestrations:getByFeature", () => {
 
 describe("phases:getPhaseStatus", () => {
   test("returns phase record when exists", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     await t.mutation(api.phases.upsertPhase, {
@@ -462,7 +464,7 @@ describe("phases:getPhaseStatus", () => {
   });
 
   test("returns null when phase does not exist", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
     const { orchestrationId } = await createFeatureFixture(t, "auth-feature");
 
     const result = await t.query(api.phases.getPhaseStatus, {

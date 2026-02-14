@@ -281,12 +281,12 @@ pub struct RollupRecord {
     pub max_duration_ms: Option<f64>,
 }
 
-/// Design record for Convex `designs` table.
+/// Spec record for Convex `specs` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DesignRecord {
+pub struct SpecRecord {
     pub id: String,
     pub project_id: String,
-    pub design_key: String,
+    pub spec_key: String,
     pub title: String,
     pub markdown: String,
     pub status: String,
@@ -295,12 +295,38 @@ pub struct DesignRecord {
     pub archived_at: Option<String>,
 }
 
+/// Design record for Convex `designs` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignRecord {
+    pub id: String,
+    pub project_id: String,
+    pub design_key: String,
+    pub title: String,
+    pub prompt: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Design variation record for Convex `designVariations` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesignVariationRecord {
+    pub id: String,
+    pub design_id: String,
+    pub slug: String,
+    pub title: String,
+    pub status: String,
+    pub screenshot_storage_ids: Option<Vec<String>>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 /// Ticket record for Convex `tickets` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TicketRecord {
     pub id: String,
     pub project_id: String,
-    pub design_id: Option<String>,
+    pub spec_id: Option<String>,
     pub ticket_key: String,
     pub title: String,
     pub description: String,

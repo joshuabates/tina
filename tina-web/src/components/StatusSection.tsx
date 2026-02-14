@@ -141,11 +141,11 @@ export function StatusSection({ detail }: StatusSectionProps) {
           <button
             className="w-full px-2 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground"
             onClick={() => {
-              // TODO: Open design doc
+              // TODO: Open spec doc
             }}
-            aria-label="Open design plan"
+            aria-label="Open spec"
           >
-            Design Plan
+            Spec
           </button>
           <button
             className="w-full px-2 py-1 text-[8px] font-semibold uppercase tracking-tight bg-muted/45 hover:bg-muted/70 border border-border/70 rounded transition-colors text-foreground"

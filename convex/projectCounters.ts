@@ -6,7 +6,7 @@ import type { MutationCtx } from "./_generated/server";
 export async function allocateKey(
   ctx: MutationCtx,
   projectId: Id<"projects">,
-  counterType: "design" | "ticket",
+  counterType: "spec" | "ticket" | "design",
 ): Promise<number> {
   const existing = await ctx.db
     .query("projectCounters")
@@ -33,7 +33,7 @@ export async function allocateKey(
 export const allocateKeyMutation = internalMutation({
   args: {
     projectId: v.id("projects"),
-    counterType: v.union(v.literal("design"), v.literal("ticket")),
+    counterType: v.union(v.literal("spec"), v.literal("ticket"), v.literal("design")),
   },
   handler: async (ctx, args) => {
     return allocateKey(ctx, args.projectId, args.counterType);
@@ -43,7 +43,7 @@ export const allocateKeyMutation = internalMutation({
 export const getCounter = internalQuery({
   args: {
     projectId: v.id("projects"),
-    counterType: v.union(v.literal("design"), v.literal("ticket")),
+    counterType: v.union(v.literal("spec"), v.literal("ticket"), v.literal("design")),
   },
   handler: async (ctx, args) => {
     return await ctx.db

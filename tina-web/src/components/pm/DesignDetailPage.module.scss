@@ -58,7 +58,7 @@
   }
 }
 
-.markdownBody {
+.promptText {
   font-family: $font-mono;
   font-size: 12px;
   line-height: 1.6;
@@ -68,66 +68,7 @@
   border: 1px solid $border-color;
   border-radius: 6px;
   background: $bg-card;
-  margin-bottom: 24px;
-  max-height: 600px;
-  overflow-y: auto;
-}
-
-.editForm {
-  margin-bottom: 24px;
-}
-
-.formField {
-  margin-bottom: 12px;
-}
-
-.formLabel {
-  display: block;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: $text-muted;
-  margin-bottom: 4px;
-}
-
-.formInput {
-  width: 100%;
-  padding: 6px 10px;
-  font-size: 13px;
-  border: 1px solid $border-color;
-  border-radius: 4px;
-  background: $bg-primary;
-  color: $text-primary;
-
-  &:focus {
-    outline: 2px solid $ring-color;
-    outline-offset: 1px;
-  }
-}
-
-.formTextarea {
-  width: 100%;
-  min-height: 200px;
-  padding: 8px 10px;
-  font-family: $font-mono;
-  font-size: 12px;
-  line-height: 1.6;
-  border: 1px solid $border-color;
-  border-radius: 4px;
-  background: $bg-primary;
-  color: $text-primary;
-  resize: vertical;
-
-  &:focus {
-    outline: 2px solid $ring-color;
-    outline-offset: 1px;
-  }
-}
-
-.formActions {
-  display: flex;
-  gap: 8px;
+  margin: 0;
 }
 
 .section {
@@ -143,44 +84,75 @@
   margin-bottom: 8px;
 }
 
-.metadata {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.metadataItem {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.metadataLabel {
-  font-size: 11px;
-  color: $text-muted;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.markerList {
+.linkedSpecList {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
-.markerItem {
-  padding: 4px 0;
+.linkedSpecItem {
+  padding: 6px 0;
+  border-bottom: 1px solid $border-color;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  a {
+    color: $text-primary;
+    text-decoration: none;
+
+    &:hover {
+      color: $accent;
+    }
+  }
 }
 
-.markerLabel {
+.linkedSpecKey {
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 600;
+  color: $text-muted;
+  margin-right: 6px;
+}
+
+.variationsSection {
+  margin-top: 24px;
+}
+
+.variationCard {
   display: flex;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
+  padding: 8px 0;
+  border-bottom: 1px solid $border-color;
+
+  &:last-child {
+    border-bottom: none;
+  }
 }
 
-.markerText {
-  text-transform: capitalize;
+.variationSlug {
+  font-family: $font-mono;
+  font-size: 11px;
+  font-weight: 600;
+  color: $text-muted;
+  min-width: 80px;
+}
+
+.variationTitle {
+  font-size: 13px;
+  color: $text-primary;
+  flex: 1;
+}
+
+.variationStatus {
+  flex-shrink: 0;
+}
+
+.empty {
+  font-size: 13px;
+  color: $text-muted;
 }
 
 .loading {

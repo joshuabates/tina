@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, within } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { CreateDesignModal } from "../pm/CreateDesignModal"
 
@@ -32,124 +32,40 @@ describe("CreateDesignModal", () => {
     )
   }
 
-  describe("complexity preset selector", () => {
-    it("renders complexity radio buttons with simple, standard, complex options", () => {
-      renderModal()
+  it("renders title and prompt form fields", () => {
+    renderModal()
 
-      const selector = screen.getByTestId("complexity-selector")
-      expect(within(selector).getByLabelText(/simple/i)).toBeInTheDocument()
-      expect(within(selector).getByLabelText(/standard/i)).toBeInTheDocument()
-      expect(within(selector).getByLabelText(/complex/i)).toBeInTheDocument()
-    })
-
-    it("defaults to standard complexity", () => {
-      renderModal()
-
-      const standardRadio = screen.getByRole("radio", { name: /standard/i })
-      expect(standardRadio).toBeChecked()
-    })
-
-    it("allows switching complexity preset", async () => {
-      const user = userEvent.setup()
-      renderModal()
-
-      const simpleRadio = screen.getByRole("radio", { name: /simple/i })
-      await user.click(simpleRadio)
-      expect(simpleRadio).toBeChecked()
-      expect(screen.getByRole("radio", { name: /standard/i })).not.toBeChecked()
-    })
-
-    it("submits selected complexity preset", async () => {
-      const user = userEvent.setup()
-      renderModal()
-
-      await user.click(screen.getByRole("radio", { name: /complex/i }))
-      await user.type(screen.getByLabelText(/title/i), "My Design")
-      await user.click(screen.getByRole("button", { name: /^create$/i }))
-
-      expect(mockCreateFn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          complexityPreset: "complex",
-          title: "My Design",
-        }),
-      )
-    })
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/prompt/i)).toBeInTheDocument()
   })
 
-  describe("markdown file import", () => {
-    it("renders an import markdown button", () => {
-      renderModal()
-      expect(screen.getByRole("button", { name: /import markdown/i })).toBeInTheDocument()
-    })
+  it("submit button disabled when title is empty", () => {
+    renderModal()
 
-    it("has a hidden file input for markdown files", () => {
-      renderModal()
-      const fileInput = screen.getByTestId("markdown-file-input") as HTMLInputElement
-      expect(fileInput).toBeInTheDocument()
-      expect(fileInput.type).toBe("file")
-      expect(fileInput.accept).toBe(".md,.markdown,.txt")
-    })
+    expect(screen.getByRole("button", { name: /^create$/i })).toBeDisabled()
+  })
 
-    it("populates content textarea when a file is imported", async () => {
-      const user = userEvent.setup()
-      renderModal()
+  it("enables submit button when title is provided", async () => {
+    const user = userEvent.setup()
+    renderModal()
 
-      const fileContent = "# My Design\n\nSome content here"
-      const file = new File([fileContent], "design.md", { type: "text/plain" })
-      file.text = () => Promise.resolve(fileContent)
-
-      const fileInput = screen.getByTestId("markdown-file-input")
-      await user.upload(fileInput, file)
-
-      const textarea = screen.getByLabelText(/content/i) as HTMLTextAreaElement
-      expect(textarea.value).toBe(fileContent)
-    })
-
-    it("extracts title from markdown h1 when title is empty", async () => {
-      const user = userEvent.setup()
-      renderModal()
-
-      const fileContent = "# Authentication Flow\n\nDesign doc content"
-      const file = new File([fileContent], "auth.md", { type: "text/plain" })
-      file.text = () => Promise.resolve(fileContent)
-
-      const fileInput = screen.getByTestId("markdown-file-input")
-      await user.upload(fileInput, file)
-
-      const titleInput = screen.getByLabelText(/title/i) as HTMLInputElement
-      expect(titleInput.value).toBe("Authentication Flow")
-    })
-
-    it("does not overwrite existing title when importing file", async () => {
-      const user = userEvent.setup()
-      renderModal()
-
-      await user.type(screen.getByLabelText(/title/i), "Existing Title")
-
-      const fileContent = "# New Title\n\nContent"
-      const file = new File([fileContent], "doc.md", { type: "text/plain" })
-      file.text = () => Promise.resolve(fileContent)
-
-      const fileInput = screen.getByTestId("markdown-file-input")
-      await user.upload(fileInput, file)
-
-      const titleInput = screen.getByLabelText(/title/i) as HTMLInputElement
-      expect(titleInput.value).toBe("Existing Title")
-    })
+    await user.type(screen.getByLabelText(/title/i), "My Design")
+    expect(screen.getByRole("button", { name: /^create$/i })).toBeEnabled()
   })
 
   describe("form submission", () => {
-    it("submits with default complexity when no change is made", async () => {
+    it("calls createDesign mutation with form data", async () => {
       const user = userEvent.setup()
       renderModal()
 
-      await user.type(screen.getByLabelText(/title/i), "Test Design")
+      await user.type(screen.getByLabelText(/title/i), "My Design")
+      await user.type(screen.getByLabelText(/prompt/i), "Design a dashboard")
       await user.click(screen.getByRole("button", { name: /^create$/i }))
 
       expect(mockCreateFn).toHaveBeenCalledWith(
         expect.objectContaining({
-          title: "Test Design",
-          complexityPreset: "standard",
+          title: "My Design",
+          prompt: "Design a dashboard",
         }),
       )
     })
@@ -175,5 +91,13 @@ describe("CreateDesignModal", () => {
 
       expect(screen.getByText("Server error")).toBeInTheDocument()
     })
+  })
+
+  it("closes modal on cancel", async () => {
+    const user = userEvent.setup()
+    renderModal()
+
+    await user.click(screen.getByRole("button", { name: /cancel/i }))
+    expect(onClose).toHaveBeenCalled()
   })
 })

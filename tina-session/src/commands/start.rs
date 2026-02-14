@@ -71,7 +71,7 @@ pub fn run(
     feature: &str,
     phase: &str,
     plan: Option<&Path>,
-    design_id: Option<&str>,
+    spec_id: Option<&str>,
     cwd_override: Option<&Path>,
     install_deps: bool,
     parent_team_id: Option<&str>,
@@ -82,7 +82,7 @@ pub fn run(
 
     let cwd = resolve_working_dir(cwd_override, orchestration.worktree_path.as_deref())?;
 
-    let plan_abs = resolve_plan_file(feature, phase, &cwd, plan, design_id)?;
+    let plan_abs = resolve_plan_file(feature, phase, &cwd, plan, spec_id)?;
 
     // Load state to validate phase (only for integer phases)
     let state = SupervisorState::load(feature)?;
@@ -183,7 +183,7 @@ fn resolve_plan_file(
     phase: &str,
     cwd: &Path,
     plan: Option<&Path>,
-    design_id: Option<&str>,
+    spec_id: Option<&str>,
 ) -> anyhow::Result<PathBuf> {
     if let Some(plan_path) = plan {
         let candidate = if plan_path.is_absolute() {
@@ -197,23 +197,23 @@ fn resolve_plan_file(
         return Ok(fs::canonicalize(candidate)?);
     }
 
-    if let Some(design_id) = design_id {
-        return materialize_plan_from_design(feature, phase, cwd, design_id);
+    if let Some(spec_id) = spec_id {
+        return materialize_plan_from_spec(feature, phase, cwd, spec_id);
     }
 
-    anyhow::bail!("Must specify either --plan or --design-id");
+    anyhow::bail!("Must specify either --plan or --spec-id");
 }
 
-fn materialize_plan_from_design(
+fn materialize_plan_from_spec(
     feature: &str,
     phase: &str,
     cwd: &Path,
-    design_id: &str,
+    spec_id: &str,
 ) -> anyhow::Result<PathBuf> {
-    let design_id_owned = design_id.to_string();
-    let design =
-        convex::run_convex(|mut writer| async move { writer.get_design(&design_id_owned).await })?
-            .ok_or_else(|| anyhow::anyhow!("Design not found in Convex: {}", design_id))?;
+    let spec_id_owned = spec_id.to_string();
+    let spec =
+        convex::run_convex(|mut writer| async move { writer.get_spec(&spec_id_owned).await })?
+            .ok_or_else(|| anyhow::anyhow!("Spec not found in Convex: {}", spec_id))?;
 
     let plans_dir = cwd.join("docs").join("plans");
     fs::create_dir_all(&plans_dir)?;
@@ -228,7 +228,7 @@ fn materialize_plan_from_design(
     let plan_path = plans_dir.join(filename);
 
     if !plan_path.exists() {
-        fs::write(&plan_path, design.markdown)?;
+        fs::write(&plan_path, spec.markdown)?;
     }
 
     Ok(fs::canonicalize(plan_path)?)
@@ -385,12 +385,12 @@ mod tests {
     }
 
     #[test]
-    fn resolve_plan_file_requires_plan_or_design_id() {
+    fn resolve_plan_file_requires_plan_or_spec_id() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let err = resolve_plan_file("auth", "1", tmp.path(), None, None).expect_err("error");
         assert!(err
             .to_string()
-            .contains("Must specify either --plan or --design-id"));
+            .contains("Must specify either --plan or --spec-id"));
     }
 
     #[test]

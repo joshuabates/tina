@@ -98,7 +98,7 @@ const rustLines = [
   "#[derive(Debug, Clone, Serialize, Deserialize)]",
   "pub struct OrchestrationRecord {",
   "    pub project_id: Option<String>,",
-  "    pub design_id: Option<String>,",
+  "    pub spec_id: Option<String>,",
   ...fields.map((f) => `    pub ${f.rust}: ${rustTypeExpr(f)},`),
   "}",
   "",

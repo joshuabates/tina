@@ -2,7 +2,7 @@
   "orchestrationCore": [
     { "name": "nodeId", "rust": "node_id", "kind": "id", "table": "nodes" },
     { "name": "featureName", "rust": "feature_name", "kind": "string" },
-    { "name": "designDocPath", "rust": "design_doc_path", "kind": "string" },
+    { "name": "specDocPath", "rust": "spec_doc_path", "kind": "string" },
     { "name": "branch", "rust": "branch", "kind": "string" },
     { "name": "worktreePath", "rust": "worktree_path", "kind": "string", "optional": true },
     { "name": "totalPhases", "rust": "total_phases", "kind": "number" },
@@ -14,7 +14,7 @@
     { "name": "policySnapshot", "rust": "policy_snapshot", "kind": "string", "optional": true },
     { "name": "policySnapshotHash", "rust": "policy_snapshot_hash", "kind": "string", "optional": true },
     { "name": "presetOrigin", "rust": "preset_origin", "kind": "string", "optional": true },
-    { "name": "designOnly", "rust": "design_only", "kind": "boolean", "optional": true },
+    { "name": "specOnly", "rust": "spec_only", "kind": "boolean", "optional": true },
     { "name": "policyRevision", "rust": "policy_revision", "kind": "number", "optional": true },
     { "name": "updatedAt", "rust": "updated_at", "kind": "string", "optional": true }
   ]

@@ -5,7 +5,7 @@ import App from "../../App"
 import {
   buildProjectSummary,
   buildOrchestrationSummary,
-  buildDesignSummary,
+  buildSpecSummary,
   some,
   none,
 } from "@/test/builders/domain"
@@ -41,7 +41,7 @@ function buildTicket(overrides: Partial<TicketSummary> = {}): TicketSummary {
     _id: "t1",
     _creationTime: 1234567890,
     projectId: "p1",
-    designId: none<string>(),
+    specId: none<string>(),
     ticketKey: "ALPHA-T1",
     title: "Implement login",
     description: "Add a login form with email and password fields",
@@ -68,7 +68,7 @@ const defaultStates: Partial<QueryStateMap> = {
     }),
   ]),
   "tickets.get": querySuccess(defaultTicket),
-  "designs.list": querySuccess([buildDesignSummary({ title: "Auth Flow Design", markdown: "# Auth", status: "approved" })]),
+  "specs.list": querySuccess([buildSpecSummary({ title: "Auth Flow Design", markdown: "# Auth", status: "approved" })]),
   "workComments.list": querySuccess([]),
 }
 
@@ -167,15 +167,15 @@ describe("TicketDetailPage", () => {
     expect(screen.getByText("2h")).toBeInTheDocument()
   })
 
-  it("renders design link when ticket has designId", () => {
+  it("renders spec link when ticket has specId", () => {
     renderApp("/projects/p1/plan/tickets/t1", {
       ...defaultStates,
-      "tickets.get": querySuccess(buildTicket({ designId: some("d1") })),
+      "tickets.get": querySuccess(buildTicket({ specId: some("d1") })),
     })
 
     const link = screen.getByRole("link", { name: /ALPHA-D1/i })
     expect(link).toBeInTheDocument()
-    expect(link).toHaveAttribute("href", expect.stringContaining("/projects/p1/plan/designs/d1"))
+    expect(link).toHaveAttribute("href", expect.stringContaining("/projects/p1/plan/specs/d1"))
   })
 
   it("renders comment timeline", () => {
@@ -189,12 +189,12 @@ describe("TicketDetailPage", () => {
 
     expect(screen.getByTestId("ticket-detail-page")).toBeInTheDocument()
 
-    const designsListCall = mockUseTypedQuery.mock.calls.find(
-      ([def]) => def.key === "designs.list",
+    const specsListCall = mockUseTypedQuery.mock.calls.find(
+      ([def]) => def.key === "specs.list",
     )
 
-    expect(designsListCall).toBeDefined()
-    expect(designsListCall?.[1]).toEqual({ projectId: "p1" })
+    expect(specsListCall).toBeDefined()
+    expect(specsListCall?.[1]).toEqual({ projectId: "p1" })
   })
 
   describe("status transitions", () => {
@@ -302,7 +302,7 @@ describe("TicketDetailPage", () => {
       expect(screen.getByLabelText(/description/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/priority/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/estimate/i)).toBeInTheDocument()
-      expect(within(form).getByLabelText(/design/i)).toBeInTheDocument()
+      expect(within(form).getByLabelText(/spec/i)).toBeInTheDocument()
     })
 
     it("edit form pre-fills current ticket values", async () => {
@@ -357,24 +357,24 @@ describe("TicketDetailPage", () => {
       )
     })
 
-    it("save sends clearDesignId when linked design is changed to None", async () => {
+    it("save sends clearSpecId when linked spec is changed to None", async () => {
       const user = userEvent.setup()
       renderApp("/projects/p1/plan/tickets/t1", {
         ...defaultStates,
-        "tickets.get": querySuccess(buildTicket({ designId: some("d1") })),
+        "tickets.get": querySuccess(buildTicket({ specId: some("d1") })),
       })
 
       await user.click(screen.getByRole("button", { name: /^edit$/i }))
 
       const form = screen.getByTestId("ticket-edit-form")
-      const designSelect = within(form).getByLabelText(/design/i)
-      await user.selectOptions(designSelect, "")
+      const specSelect = within(form).getByLabelText(/spec/i)
+      await user.selectOptions(specSelect, "")
       await user.click(screen.getByRole("button", { name: /^save$/i }))
 
       expect(mockMutationFn).toHaveBeenCalledWith(
         expect.objectContaining({
           ticketId: "t1",
-          clearDesignId: true,
+          clearSpecId: true,
         }),
       )
     })

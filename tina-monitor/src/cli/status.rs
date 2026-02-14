@@ -132,7 +132,7 @@ pub struct OrchestrationStatusOutput {
     pub worktree_path: String,
     pub current_phase: u32,
     pub total_phases: u32,
-    pub design_doc_path: String,
+    pub spec_doc_path: String,
     pub status: MonitorOrchestrationStatus,
     pub tasks: TaskSummary,
 }
@@ -170,7 +170,7 @@ pub fn status_orchestration(
         worktree_path: orch.worktree_path.display().to_string(),
         current_phase: orch.current_phase,
         total_phases: orch.total_phases,
-        design_doc_path: orch.design_doc_path.display().to_string(),
+        spec_doc_path: orch.spec_doc_path.display().to_string(),
         status: orch.status.clone(),
         tasks: summary.clone(),
     };
@@ -194,7 +194,7 @@ pub fn status_orchestration(
             println!("Orchestration: {}", output.feature_name);
             println!("Worktree: {}", output.worktree_path);
             println!("Phase: {}/{}", output.current_phase, output.total_phases);
-            println!("Design Doc: {}", output.design_doc_path);
+            println!("Spec Doc: {}", output.spec_doc_path);
             println!("Status: {}", output.status);
             println!();
             println!("Tasks:");

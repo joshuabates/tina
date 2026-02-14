@@ -1,5 +1,5 @@
 /**
- * Complexity preset templates and phase structure parser for designs.
+ * Complexity preset templates and phase structure parser for specs.
  * Presets map to required validation markers.
  * Phase parser extracts phase count from markdown headings.
  */

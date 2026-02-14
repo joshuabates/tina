@@ -92,7 +92,7 @@ describe("AppShell", () => {
           nodeId: "node-1",
           projectId: some("p1"),
           featureName: "my-feature",
-          designDocPath: "/path/to/doc",
+          specDocPath: "/path/to/doc",
           branch: "tina/my-feature",
           currentPhase: 2,
           status: "executing",

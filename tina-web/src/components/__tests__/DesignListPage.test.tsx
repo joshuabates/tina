@@ -35,18 +35,18 @@ const projects = [
 
 const designs: DesignSummary[] = [
   buildDesignSummary({
-    _id: "d1",
-    designKey: "ALPHA-D1",
-    title: "Authentication Flow",
-    status: "draft",
+    _id: "des1",
+    designKey: "ALPHA-DES1",
+    title: "Login Page Design",
+    status: "exploring",
     updatedAt: "2024-01-01T12:00:00Z",
   }),
   buildDesignSummary({
-    _id: "d2",
+    _id: "des2",
     _creationTime: 1234567891,
-    designKey: "ALPHA-D2",
-    title: "Data Model",
-    status: "approved",
+    designKey: "ALPHA-DES2",
+    title: "Dashboard Layout",
+    status: "locked",
     updatedAt: "2024-01-02T14:00:00Z",
   }),
 ]
@@ -112,16 +112,17 @@ describe("DesignListPage", () => {
   it("displays design key and title", () => {
     renderApp("/projects/p1/plan/designs")
 
-    expect(screen.getByText("ALPHA-D1")).toBeInTheDocument()
-    expect(screen.getByText("Authentication Flow")).toBeInTheDocument()
-    expect(screen.getByText("ALPHA-D2")).toBeInTheDocument()
-    expect(screen.getByText("Data Model")).toBeInTheDocument()
+    expect(screen.getByText("ALPHA-DES1")).toBeInTheDocument()
+    expect(screen.getByText("Login Page Design")).toBeInTheDocument()
+    expect(screen.getByText("ALPHA-DES2")).toBeInTheDocument()
+    expect(screen.getByText("Dashboard Layout")).toBeInTheDocument()
   })
 
   it("renders status badges for each design", () => {
     renderApp("/projects/p1/plan/designs")
-    expect(screen.getByText("Draft")).toBeInTheDocument()
-    expect(screen.getByText("Approved")).toBeInTheDocument()
+    // Both "exploring" and "locked" are unmapped statuses that fall back to "Planning"
+    const badges = screen.getAllByText("Planning")
+    expect(badges).toHaveLength(2)
   })
 
   it("clicking a design row navigates to detail page", async () => {
@@ -177,7 +178,7 @@ describe("DesignListPage", () => {
       expect(within(dialog).getByText("Create Design")).toBeInTheDocument()
     })
 
-    it("shows title and content inputs in modal", async () => {
+    it("shows title and prompt inputs in modal", async () => {
       const user = userEvent.setup()
       renderApp("/projects/p1/plan/designs")
 
@@ -185,7 +186,7 @@ describe("DesignListPage", () => {
 
       const dialog = screen.getByRole("dialog")
       expect(within(dialog).getByLabelText(/title/i)).toBeInTheDocument()
-      expect(within(dialog).getByLabelText(/content/i)).toBeInTheDocument()
+      expect(within(dialog).getByLabelText(/prompt/i)).toBeInTheDocument()
     })
 
     it("submit button disabled when title is empty", async () => {

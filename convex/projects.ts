@@ -46,8 +46,8 @@ async function deleteSupervisorStateByFeatureName(
 
 async function deleteEntitiesWithComments(
   ctx: MutationCtx,
-  table: "designs" | "tickets",
-  targetType: "design" | "ticket",
+  table: "specs" | "tickets",
+  targetType: "spec" | "ticket",
   projectId: Id<"projects">,
 ) {
   const entities = await ctx.db
@@ -174,7 +174,7 @@ export const deleteProject = mutation({
     }
 
     // Delete project-scoped PM entities
-    await deleteEntitiesWithComments(ctx, "designs", "design", args.projectId);
+    await deleteEntitiesWithComments(ctx, "specs", "spec", args.projectId);
     await deleteEntitiesWithComments(ctx, "tickets", "ticket", args.projectId);
 
     // Delete project counters

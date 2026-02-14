@@ -2,11 +2,13 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createNode, createProject } from "./test_helpers";
 
 describe("projects:deleteProject", () => {
   test("deletes project, orchestrations, and associated records", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const projectId = await createProject(t, {
       name: "delete-target",
@@ -18,7 +20,7 @@ describe("projects:deleteProject", () => {
       nodeId,
       projectId,
       featureName: "delete-me-feature",
-      designDocPath: "/docs/delete-me.md",
+      specDocPath: "/docs/delete-me.md",
       branch: "tina/delete-me-feature",
       worktreePath: "/repo/.worktrees/delete-me-feature",
       totalPhases: 2,
@@ -151,7 +153,7 @@ describe("projects:deleteProject", () => {
   });
 
   test("returns deleted false when project is missing", async () => {
-    const t = convexTest(schema);
+    const t = convexTest(schema, modules);
 
     const projectId = await createProject(t, {
       name: "missing-project",
@@ -168,18 +170,18 @@ describe("projects:deleteProject", () => {
     });
   });
 
-  test("deletes project and cascades to PM tables (designs, tickets, comments, counters)", async () => {
-    const t = convexTest(schema);
+  test("deletes project and cascades to PM tables (specs, tickets, comments, counters)", async () => {
+    const t = convexTest(schema, modules);
 
     const projectId = await createProject(t, {
       name: "pm-cascade-test",
       repoPath: "/Users/joshua/Projects/pm-cascade-test",
     });
 
-    // Create a design
-    const designId = await t.mutation(api.designs.createDesign, {
+    // Create a spec
+    const specId = await t.mutation(api.specs.createSpec, {
       projectId,
-      title: "Test Design",
+      title: "Test Spec",
       markdown: "# Test",
     });
 
@@ -191,14 +193,14 @@ describe("projects:deleteProject", () => {
       priority: "medium",
     });
 
-    // Create a design comment
+    // Create a spec comment
     await t.mutation(api.workComments.addComment, {
       projectId,
-      targetType: "design",
-      targetId: designId,
+      targetType: "spec",
+      targetId: specId,
       authorType: "human",
       authorName: "test-user",
-      body: "Design comment",
+      body: "Spec comment",
     });
 
     // Create a ticket comment
@@ -212,21 +214,21 @@ describe("projects:deleteProject", () => {
     });
 
     // Verify entities exist before deletion
-    const designsBefore = await t.query(api.designs.listDesigns, {
+    const specsBefore = await t.query(api.specs.listSpecs, {
       projectId,
     });
-    expect(designsBefore.length).toBe(1);
+    expect(specsBefore.length).toBe(1);
 
     const ticketsBefore = await t.query(api.tickets.listTickets, {
       projectId,
     });
     expect(ticketsBefore.length).toBe(1);
 
-    const designCommentsBefore = await t.query(api.workComments.listComments, {
-      targetType: "design",
-      targetId: designId,
+    const specCommentsBefore = await t.query(api.workComments.listComments, {
+      targetType: "spec",
+      targetId: specId,
     });
-    expect(designCommentsBefore.length).toBe(1);
+    expect(specCommentsBefore.length).toBe(1);
 
     const ticketCommentsBefore = await t.query(api.workComments.listComments, {
       targetType: "ticket",
@@ -242,21 +244,21 @@ describe("projects:deleteProject", () => {
     expect(deleteResult.deleted).toBe(true);
 
     // Verify all PM entities are deleted
-    const designsAfter = await t.query(api.designs.listDesigns, {
+    const specsAfter = await t.query(api.specs.listSpecs, {
       projectId,
     });
-    expect(designsAfter).toEqual([]);
+    expect(specsAfter).toEqual([]);
 
     const ticketsAfter = await t.query(api.tickets.listTickets, {
       projectId,
     });
     expect(ticketsAfter).toEqual([]);
 
-    const designCommentsAfter = await t.query(api.workComments.listComments, {
-      targetType: "design",
-      targetId: designId,
+    const specCommentsAfter = await t.query(api.workComments.listComments, {
+      targetType: "spec",
+      targetId: specId,
     });
-    expect(designCommentsAfter).toEqual([]);
+    expect(specCommentsAfter).toEqual([]);
 
     const ticketCommentsAfter = await t.query(api.workComments.listComments, {
       targetType: "ticket",

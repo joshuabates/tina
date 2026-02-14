@@ -8,11 +8,16 @@ import {
   TelemetrySpanListQuery,
   TelemetryEventListQuery,
   TelemetryRollupQuery,
-  DesignListQuery,
-  DesignDetailQuery,
+  SpecListQuery,
+  SpecDetailQuery,
   TicketListQuery,
   TicketDetailQuery,
   CommentListQuery,
+  DesignListQuery,
+  DesignDetailQuery,
+  DesignVariationListQuery,
+  LinkedDesignsQuery,
+  LinkedSpecsQuery,
 } from "../queryDefs"
 
 function decode<A, I>(schema: Schema.Schema<A, I>, input: unknown): A {
@@ -47,7 +52,7 @@ describe("queryDefs", () => {
           nodeId: "node1",
           projectId: "proj1",
           featureName: "test-feature",
-          designDocPath: "/path/to/doc.md",
+          specDocPath: "/path/to/doc.md",
           branch: "main",
           worktreePath: "/path/to/worktree",
           totalPhases: 3,
@@ -89,7 +94,7 @@ describe("queryDefs", () => {
         _creationTime: 1234567890,
         nodeId: "node1",
         featureName: "test-feature",
-        designDocPath: "/path/to/doc.md",
+        specDocPath: "/path/to/doc.md",
         branch: "main",
         worktreePath: "/path/to/worktree",
         totalPhases: 3,
@@ -375,18 +380,18 @@ describe("queryDefs", () => {
     })
   })
 
-  describe("DesignListQuery", () => {
+  describe("SpecListQuery", () => {
     it("has key, query reference, args schema, and result schema", () => {
-      expectQueryMeta(DesignListQuery, "designs.list")
+      expectQueryMeta(SpecListQuery, "specs.list")
     })
 
     it("args schema requires projectId", () => {
-      const decoded = decode(DesignListQuery.args, { projectId: "proj123" })
+      const decoded = decode(SpecListQuery.args, { projectId: "proj123" })
       expect(decoded.projectId).toBe("proj123")
     })
 
     it("args schema accepts optional status", () => {
-      const decoded = decode(DesignListQuery.args, {
+      const decoded = decode(SpecListQuery.args, {
         projectId: "proj123",
         status: "draft",
       })
@@ -394,18 +399,18 @@ describe("queryDefs", () => {
     })
 
     it("args schema rejects missing projectId", () => {
-      expectDecodeThrows(DesignListQuery.args, {})
+      expectDecodeThrows(SpecListQuery.args, {})
     })
 
-    it("schema decodes valid design list data", () => {
-      const decoded = decode(DesignListQuery.schema, [
+    it("schema decodes valid spec list data", () => {
+      const decoded = decode(SpecListQuery.schema, [
         {
-          _id: "design123",
+          _id: "spec123",
           _creationTime: 1234567890,
           projectId: "proj123",
-          designKey: "PROJ-D1",
-          title: "Test Design",
-          markdown: "# Design",
+          specKey: "PROJ-D1",
+          title: "Test Spec",
+          markdown: "# Spec",
           status: "draft",
           createdAt: "2024-01-01T00:00:00Z",
           updatedAt: "2024-01-01T00:00:00Z",
@@ -420,36 +425,36 @@ describe("queryDefs", () => {
       ])
 
       expect(decoded).toHaveLength(1)
-      expect(decoded[0].designKey).toBe("PROJ-D1")
+      expect(decoded[0].specKey).toBe("PROJ-D1")
     })
 
-    it("schema rejects invalid design data", () => {
-      expectDecodeThrows(DesignListQuery.schema, [{ title: 123 }])
+    it("schema rejects invalid spec data", () => {
+      expectDecodeThrows(SpecListQuery.schema, [{ title: 123 }])
     })
   })
 
-  describe("DesignDetailQuery", () => {
+  describe("SpecDetailQuery", () => {
     it("has key, query reference, args schema, and result schema", () => {
-      expectQueryMeta(DesignDetailQuery, "designs.get")
+      expectQueryMeta(SpecDetailQuery, "specs.get")
     })
 
-    it("args schema requires designId", () => {
-      const decoded = decode(DesignDetailQuery.args, { designId: "design123" })
-      expect(decoded.designId).toBe("design123")
+    it("args schema requires specId", () => {
+      const decoded = decode(SpecDetailQuery.args, { specId: "spec123" })
+      expect(decoded.specId).toBe("spec123")
     })
 
-    it("args schema rejects missing designId", () => {
-      expectDecodeThrows(DesignDetailQuery.args, {})
+    it("args schema rejects missing specId", () => {
+      expectDecodeThrows(SpecDetailQuery.args, {})
     })
 
-    it("schema decodes valid design detail data", () => {
-      const decoded = decode(DesignDetailQuery.schema, {
-        _id: "design123",
+    it("schema decodes valid spec detail data", () => {
+      const decoded = decode(SpecDetailQuery.schema, {
+        _id: "spec123",
         _creationTime: 1234567890,
         projectId: "proj123",
-        designKey: "PROJ-D1",
-        title: "Test Design",
-        markdown: "# Design",
+        specKey: "PROJ-D1",
+        title: "Test Spec",
+        markdown: "# Spec",
         status: "draft",
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-01T00:00:00Z",
@@ -463,11 +468,11 @@ describe("queryDefs", () => {
       })
 
       expect(decoded).not.toBeNull()
-      expect(decoded!.designKey).toBe("PROJ-D1")
+      expect(decoded!.specKey).toBe("PROJ-D1")
     })
 
     it("schema accepts null", () => {
-      const decoded = decode(DesignDetailQuery.schema, null)
+      const decoded = decode(SpecDetailQuery.schema, null)
       expect(decoded).toBeNull()
     })
   })
@@ -486,10 +491,10 @@ describe("queryDefs", () => {
       const decoded = decode(TicketListQuery.args, {
         projectId: "proj123",
         status: "todo",
-        designId: "design123",
+        specId: "design123",
       })
       expect(decoded.status).toBe("todo")
-      expect(decoded.designId).toBe("design123")
+      expect(decoded.specId).toBe("design123")
     })
 
     it("args schema rejects missing projectId", () => {
@@ -502,7 +507,7 @@ describe("queryDefs", () => {
           _id: "ticket123",
           _creationTime: 1234567890,
           projectId: "proj123",
-          designId: undefined,
+          specId: undefined,
           ticketKey: "PROJ-1",
           title: "Test Ticket",
           description: "A test ticket",
@@ -543,7 +548,7 @@ describe("queryDefs", () => {
         _id: "ticket123",
         _creationTime: 1234567890,
         projectId: "proj123",
-        designId: "design123",
+        specId: "design123",
         ticketKey: "PROJ-1",
         title: "Test Ticket",
         description: "A test ticket",
@@ -572,19 +577,19 @@ describe("queryDefs", () => {
 
     it("args schema requires targetType and targetId", () => {
       const decoded = decode(CommentListQuery.args, {
-        targetType: "design",
-        targetId: "design123",
+        targetType: "spec",
+        targetId: "spec123",
       })
-      expect(decoded.targetType).toBe("design")
-      expect(decoded.targetId).toBe("design123")
+      expect(decoded.targetType).toBe("spec")
+      expect(decoded.targetId).toBe("spec123")
     })
 
     it("args schema rejects missing targetType", () => {
-      expectDecodeThrows(CommentListQuery.args, { targetId: "design123" })
+      expectDecodeThrows(CommentListQuery.args, { targetId: "spec123" })
     })
 
     it("args schema rejects missing targetId", () => {
-      expectDecodeThrows(CommentListQuery.args, { targetType: "design" })
+      expectDecodeThrows(CommentListQuery.args, { targetType: "spec" })
     })
 
     it("schema decodes valid comment list data", () => {
@@ -593,8 +598,8 @@ describe("queryDefs", () => {
           _id: "comment123",
           _creationTime: 1234567890,
           projectId: "proj123",
-          targetType: "design",
-          targetId: "design123",
+          targetType: "spec",
+          targetId: "spec123",
           authorType: "human",
           authorName: "Alice",
           body: "Looks good!",
@@ -609,6 +614,164 @@ describe("queryDefs", () => {
 
     it("schema rejects invalid comment data", () => {
       expectDecodeThrows(CommentListQuery.schema, [{ body: 123 }])
+    })
+  })
+
+  describe("DesignListQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(DesignListQuery, "designs.list")
+    })
+
+    it("args schema requires projectId", () => {
+      const decoded = decode(DesignListQuery.args, { projectId: "proj123" })
+      expect(decoded.projectId).toBe("proj123")
+    })
+
+    it("args schema accepts optional status", () => {
+      const decoded = decode(DesignListQuery.args, {
+        projectId: "proj123",
+        status: "exploring",
+      })
+      expect(decoded.status).toBe("exploring")
+    })
+
+    it("args schema rejects missing projectId", () => {
+      expectDecodeThrows(DesignListQuery.args, {})
+    })
+
+    it("schema decodes valid design list data", () => {
+      const decoded = decode(DesignListQuery.schema, [
+        {
+          _id: "design123",
+          _creationTime: 1234567890,
+          projectId: "proj123",
+          designKey: "PROJ-DES1",
+          title: "Login Design",
+          prompt: "Design a login page",
+          status: "exploring",
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+        },
+      ])
+
+      expect(decoded).toHaveLength(1)
+      expect(decoded[0].designKey).toBe("PROJ-DES1")
+    })
+
+    it("schema rejects invalid design data", () => {
+      expectDecodeThrows(DesignListQuery.schema, [{ title: 123 }])
+    })
+  })
+
+  describe("DesignDetailQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(DesignDetailQuery, "designs.get")
+    })
+
+    it("args schema requires designId", () => {
+      const decoded = decode(DesignDetailQuery.args, { designId: "design123" })
+      expect(decoded.designId).toBe("design123")
+    })
+
+    it("args schema rejects missing designId", () => {
+      expectDecodeThrows(DesignDetailQuery.args, {})
+    })
+
+    it("schema decodes valid design detail data", () => {
+      const decoded = decode(DesignDetailQuery.schema, {
+        _id: "design123",
+        _creationTime: 1234567890,
+        projectId: "proj123",
+        designKey: "PROJ-DES1",
+        title: "Login Design",
+        prompt: "Design a login page",
+        status: "exploring",
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-01T00:00:00Z",
+      })
+
+      expect(decoded).not.toBeNull()
+      expect(decoded!.designKey).toBe("PROJ-DES1")
+    })
+
+    it("schema accepts null", () => {
+      const decoded = decode(DesignDetailQuery.schema, null)
+      expect(decoded).toBeNull()
+    })
+  })
+
+  describe("DesignVariationListQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(DesignVariationListQuery, "designVariations.list")
+    })
+
+    it("args schema requires designId", () => {
+      const decoded = decode(DesignVariationListQuery.args, { designId: "design123" })
+      expect(decoded.designId).toBe("design123")
+    })
+
+    it("args schema accepts optional status", () => {
+      const decoded = decode(DesignVariationListQuery.args, {
+        designId: "design123",
+        status: "exploring",
+      })
+      expect(decoded.status).toBe("exploring")
+    })
+
+    it("args schema rejects missing designId", () => {
+      expectDecodeThrows(DesignVariationListQuery.args, {})
+    })
+
+    it("schema decodes valid variation list data", () => {
+      const decoded = decode(DesignVariationListQuery.schema, [
+        {
+          _id: "var123",
+          _creationTime: 1234567890,
+          designId: "design123",
+          slug: "v1",
+          title: "Minimal Version",
+          status: "exploring",
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+        },
+      ])
+
+      expect(decoded).toHaveLength(1)
+      expect(decoded[0].slug).toBe("v1")
+    })
+
+    it("schema rejects invalid variation data", () => {
+      expectDecodeThrows(DesignVariationListQuery.schema, [{ slug: 123 }])
+    })
+  })
+
+  describe("LinkedDesignsQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(LinkedDesignsQuery, "specDesigns.designsForSpec")
+    })
+
+    it("args schema requires specId", () => {
+      const decoded = decode(LinkedDesignsQuery.args, { specId: "spec123" })
+      expect(decoded.specId).toBe("spec123")
+    })
+
+    it("args schema rejects missing specId", () => {
+      expectDecodeThrows(LinkedDesignsQuery.args, {})
+    })
+  })
+
+  describe("LinkedSpecsQuery", () => {
+    it("has key, query reference, args schema, and result schema", () => {
+      expectQueryMeta(LinkedSpecsQuery, "specDesigns.specsForDesign")
+    })
+
+    it("args schema requires designId", () => {
+      const decoded = decode(LinkedSpecsQuery.args, { designId: "design123" })
+      expect(decoded.designId).toBe("design123")
+    })
+
+    it("args schema rejects missing designId", () => {
+      expectDecodeThrows(LinkedSpecsQuery.args, {})
     })
   })
 

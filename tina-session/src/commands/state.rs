@@ -318,7 +318,7 @@ pub fn show(feature: &str, phase: Option<&str>, json: bool) -> anyhow::Result<u8
         }
     } else {
         println!("Orchestration: {}", state.feature);
-        println!("  Design: {}", state.design_doc.display());
+        println!("  Spec: {}", state.spec_doc.display());
         println!("  Worktree: {}", state.worktree_path.display());
         println!("  Branch: {}", state.branch);
         println!("  Status: {:?}", state.status);

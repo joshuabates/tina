@@ -240,9 +240,9 @@ mod tests {
         OrchestrationRecord {
             node_id: "node-1".to_string(),
             project_id: None,
-            design_id: None,
+            spec_id: None,
             feature_name: feature.to_string(),
-            design_doc_path: "design.md".to_string(),
+            spec_doc_path: "design.md".to_string(),
             branch: "tina/test".to_string(),
             worktree_path: None,
             total_phases: 1.0,
@@ -254,7 +254,7 @@ mod tests {
             policy_snapshot: None,
             policy_snapshot_hash: None,
             preset_origin: None,
-            design_only: None,
+            spec_only: None,
             policy_revision: None,
             updated_at: None,
         }

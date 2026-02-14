@@ -7,7 +7,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
-fn init_rejects_both_design_doc_and_design_id() {
+fn init_rejects_both_spec_doc_and_spec_id() {
     let temp_dir = TempDir::new().unwrap();
     let cwd = temp_dir.path();
 
@@ -18,9 +18,9 @@ fn init_rejects_both_design_doc_and_design_id() {
             "test-both-flags",
             "--cwd",
             &cwd.to_string_lossy(),
-            "--design-doc",
+            "--spec-doc",
             "/tmp/nonexistent.md",
-            "--design-id",
+            "--spec-id",
             "some-id",
             "--branch",
             "tina/test",
@@ -30,12 +30,12 @@ fn init_rejects_both_design_doc_and_design_id() {
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "Cannot specify both --design-doc and --design-id",
+            "Cannot specify both --spec-doc and --spec-id",
         ));
 }
 
 #[test]
-fn init_rejects_neither_design_doc_nor_design_id() {
+fn init_rejects_neither_spec_doc_nor_spec_id() {
     let temp_dir = TempDir::new().unwrap();
     let cwd = temp_dir.path();
 
@@ -54,6 +54,6 @@ fn init_rejects_neither_design_doc_nor_design_id() {
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "Must specify either --design-doc or --design-id",
+            "Must specify either --spec-doc or --spec-id",
         ));
 }

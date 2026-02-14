@@ -1,15 +1,12 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { allocateKey } from "./projectCounters";
-import { seedMarkersFromPreset, parsePhaseStructure } from "./designPresets";
-import type { ComplexityPreset } from "./designPresets";
 
 export const createDesign = mutation({
   args: {
     projectId: v.id("projects"),
     title: v.string(),
-    markdown: v.string(),
-    complexityPreset: v.optional(v.string()),
+    prompt: v.string(),
   },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -21,36 +18,15 @@ export const createDesign = mutation({
     const designKey = `${project.name.toUpperCase()}-D${keyNumber}`;
     const now = new Date().toISOString();
 
-    if (args.complexityPreset) {
-      const preset = args.complexityPreset as ComplexityPreset;
-      const requiredMarkers = seedMarkersFromPreset(preset);
-      const { phaseCount, phaseStructureValid } = parsePhaseStructure(args.markdown);
-      return await ctx.db.insert("designs", {
-        projectId: args.projectId,
-        designKey,
-        title: args.title,
-        markdown: args.markdown,
-        status: "draft",
-        createdAt: now,
-        updatedAt: now,
-        complexityPreset: preset,
-        requiredMarkers,
-        completedMarkers: [],
-        phaseCount,
-        phaseStructureValid,
-        validationUpdatedAt: now,
-      });
-    } else {
-      return await ctx.db.insert("designs", {
-        projectId: args.projectId,
-        designKey,
-        title: args.title,
-        markdown: args.markdown,
-        status: "draft",
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
+    return await ctx.db.insert("designs", {
+      projectId: args.projectId,
+      designKey,
+      title: args.title,
+      prompt: args.prompt,
+      status: "exploring",
+      createdAt: now,
+      updatedAt: now,
+    });
   },
 });
 
@@ -81,22 +57,23 @@ export const listDesigns = query({
     status: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let queryObj;
     const status = args.status;
 
     if (status !== undefined) {
-      queryObj = ctx.db
+      return await ctx.db
         .query("designs")
         .withIndex("by_project_status", (q) =>
           q.eq("projectId", args.projectId).eq("status", status),
-        );
-    } else {
-      queryObj = ctx.db
-        .query("designs")
-        .withIndex("by_project", (q) => q.eq("projectId", args.projectId));
+        )
+        .order("desc")
+        .collect();
     }
 
-    return await queryObj.order("desc").collect();
+    return await ctx.db
+      .query("designs")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .collect();
   },
 });
 
@@ -104,7 +81,7 @@ export const updateDesign = mutation({
   args: {
     designId: v.id("designs"),
     title: v.optional(v.string()),
-    markdown: v.optional(v.string()),
+    prompt: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const design = await ctx.db.get(args.designId);
@@ -120,12 +97,8 @@ export const updateDesign = mutation({
     if (args.title !== undefined) {
       updates.title = args.title;
     }
-    if (args.markdown !== undefined) {
-      updates.markdown = args.markdown;
-      const { phaseCount, phaseStructureValid } = parsePhaseStructure(args.markdown);
-      updates.phaseCount = phaseCount;
-      updates.phaseStructureValid = phaseStructureValid;
-      updates.validationUpdatedAt = now;
+    if (args.prompt !== undefined) {
+      updates.prompt = args.prompt;
     }
 
     await ctx.db.patch(args.designId, updates);
@@ -145,10 +118,9 @@ export const transitionDesign = mutation({
     }
 
     const validTransitions: Record<string, string[]> = {
-      draft: ["in_review"],
-      in_review: ["approved", "draft"],
-      approved: ["archived"],
-      archived: ["draft"],
+      exploring: ["locked"],
+      locked: ["archived", "exploring"],
+      archived: ["exploring"],
     };
 
     const allowed = validTransitions[design.status] || [];
@@ -159,39 +131,8 @@ export const transitionDesign = mutation({
     }
 
     const now = new Date().toISOString();
-    const update: Record<string, string | undefined> = {
-      status: args.newStatus,
-      updatedAt: now,
-    };
-
-    // Set archivedAt when moving to archived status
-    if (args.newStatus === "archived") {
-      update.archivedAt = now;
-    } else {
-      // Clear archivedAt when unarchiving
-      update.archivedAt = undefined;
-    }
-
-    await ctx.db.patch(args.designId, update);
-    return args.designId;
-  },
-});
-
-export const updateDesignMarkers = mutation({
-  args: {
-    designId: v.id("designs"),
-    completedMarkers: v.array(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const design = await ctx.db.get(args.designId);
-    if (!design) {
-      throw new Error(`Design not found: ${args.designId}`);
-    }
-
-    const now = new Date().toISOString();
     await ctx.db.patch(args.designId, {
-      completedMarkers: args.completedMarkers,
-      validationUpdatedAt: now,
+      status: args.newStatus,
       updatedAt: now,
     });
     return args.designId;

@@ -2,51 +2,53 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+
+const modules = import.meta.glob("./**/*.*s");
 import { createProject } from "./test_helpers";
 
 describe("workComments", () => {
   describe("addComment", () => {
-    test("adds a comment to a design and returns comment id", async () => {
-      const t = convexTest(schema);
+    test("adds a comment to a spec and returns comment id", async () => {
+      const t = convexTest(schema, modules);
 
       const projectId = await createProject(t, {
         name: "comments-test-project",
         repoPath: "/Users/joshua/Projects/comments-test",
       });
 
-      // Create a design
-      const designId = await t.mutation(api.designs.createDesign, {
+      // Create a spec
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Test Design",
+        title: "Test Spec",
         markdown: "# Test",
       });
 
       // Add a comment
       const commentId = await t.mutation(api.workComments.addComment, {
         projectId,
-        targetType: "design",
-        targetId: designId,
+        targetType: "spec",
+        targetId: specId,
         authorType: "human",
         authorName: "alice",
-        body: "This design looks good",
+        body: "This spec looks good",
       });
 
       expect(commentId).toBeDefined();
 
       // Verify the comment was saved
       const comments = await t.query(api.workComments.listComments, {
-        targetType: "design",
-        targetId: designId,
+        targetType: "spec",
+        targetId: specId,
       });
 
       expect(comments).toHaveLength(1);
       expect(comments[0].authorName).toBe("alice");
-      expect(comments[0].body).toBe("This design looks good");
+      expect(comments[0].body).toBe("This spec looks good");
       expect(comments[0].authorType).toBe("human");
     });
 
     test("adds a comment to a ticket and returns comment id", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
 
       const projectId = await createProject(t, {
         name: "comments-test-project-2",
@@ -85,20 +87,20 @@ describe("workComments", () => {
       expect(comments[0].authorType).toBe("agent");
     });
 
-    test("throws when design does not exist", async () => {
-      const t = convexTest(schema);
+    test("throws when spec does not exist", async () => {
+      const t = convexTest(schema, modules);
 
       const projectId = await createProject(t, {
         name: "comments-test-project-3",
         repoPath: "/Users/joshua/Projects/comments-test-3",
       });
 
-      // Try to add a comment to non-existent design
+      // Try to add a comment to non-existent spec
       await expect(
         t.mutation(api.workComments.addComment, {
           projectId,
-          targetType: "design",
-          targetId: "nonexistent-design-id",
+          targetType: "spec",
+          targetId: "nonexistent-spec-id",
           authorType: "human",
           authorName: "alice",
           body: "This should fail",
@@ -107,7 +109,7 @@ describe("workComments", () => {
     });
 
     test("throws when ticket does not exist", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
 
       const projectId = await createProject(t, {
         name: "comments-test-project-4",
@@ -127,8 +129,8 @@ describe("workComments", () => {
       ).rejects.toThrow();
     });
 
-    test("throws when projectId does not match design project", async () => {
-      const t = convexTest(schema);
+    test("throws when projectId does not match spec project", async () => {
+      const t = convexTest(schema, modules);
 
       const projectA = await createProject(t, {
         name: "comments-proj-a",
@@ -139,17 +141,17 @@ describe("workComments", () => {
         repoPath: "/Users/joshua/Projects/comments-proj-b",
       });
 
-      const designId = await t.mutation(api.designs.createDesign, {
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId: projectA,
-        title: "Design A",
+        title: "Spec A",
         markdown: "# A",
       });
 
       await expect(
         t.mutation(api.workComments.addComment, {
           projectId: projectB,
-          targetType: "design",
-          targetId: designId,
+          targetType: "spec",
+          targetId: specId,
           authorType: "human",
           authorName: "alice",
           body: "Wrong project",
@@ -158,7 +160,7 @@ describe("workComments", () => {
     });
 
     test("throws when projectId does not match ticket project", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
 
       const projectA = await createProject(t, {
         name: "comments-ticket-a",
@@ -191,25 +193,25 @@ describe("workComments", () => {
 
   describe("listComments", () => {
     test("lists comments in chronological order", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
 
       const projectId = await createProject(t, {
         name: "comments-test-project-5",
         repoPath: "/Users/joshua/Projects/comments-test-5",
       });
 
-      // Create a design
-      const designId = await t.mutation(api.designs.createDesign, {
+      // Create a spec
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Test Design 2",
+        title: "Test Spec 2",
         markdown: "# Test",
       });
 
       // Add multiple comments
       await t.mutation(api.workComments.addComment, {
         projectId,
-        targetType: "design",
-        targetId: designId,
+        targetType: "spec",
+        targetId: specId,
         authorType: "human",
         authorName: "alice",
         body: "First comment",
@@ -217,8 +219,8 @@ describe("workComments", () => {
 
       await t.mutation(api.workComments.addComment, {
         projectId,
-        targetType: "design",
-        targetId: designId,
+        targetType: "spec",
+        targetId: specId,
         authorType: "human",
         authorName: "bob",
         body: "Second comment",
@@ -226,8 +228,8 @@ describe("workComments", () => {
 
       await t.mutation(api.workComments.addComment, {
         projectId,
-        targetType: "design",
-        targetId: designId,
+        targetType: "spec",
+        targetId: specId,
         authorType: "agent",
         authorName: "claude",
         body: "Third comment",
@@ -235,8 +237,8 @@ describe("workComments", () => {
 
       // List comments
       const comments = await t.query(api.workComments.listComments, {
-        targetType: "design",
-        targetId: designId,
+        targetType: "spec",
+        targetId: specId,
       });
 
       expect(comments).toHaveLength(3);
@@ -246,82 +248,82 @@ describe("workComments", () => {
     });
 
     test("returns empty list when no comments exist", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
 
       const projectId = await createProject(t, {
         name: "comments-test-project-6",
         repoPath: "/Users/joshua/Projects/comments-test-6",
       });
 
-      // Create a design
-      const designId = await t.mutation(api.designs.createDesign, {
+      // Create a spec
+      const specId = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Test Design 3",
+        title: "Test Spec 3",
         markdown: "# Test",
       });
 
-      // List comments for empty design
+      // List comments for empty spec
       const comments = await t.query(api.workComments.listComments, {
-        targetType: "design",
-        targetId: designId,
+        targetType: "spec",
+        targetId: specId,
       });
 
       expect(comments).toHaveLength(0);
     });
 
     test("lists only comments for the specified target", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
 
       const projectId = await createProject(t, {
         name: "comments-test-project-7",
         repoPath: "/Users/joshua/Projects/comments-test-7",
       });
 
-      // Create two designs
-      const design1Id = await t.mutation(api.designs.createDesign, {
+      // Create two specs
+      const spec1Id = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design 1",
+        title: "Spec 1",
         markdown: "# Design 1",
       });
 
-      const design2Id = await t.mutation(api.designs.createDesign, {
+      const spec2Id = await t.mutation(api.specs.createSpec, {
         projectId,
-        title: "Design 2",
+        title: "Spec 2",
         markdown: "# Design 2",
       });
 
       // Add comments to both
       await t.mutation(api.workComments.addComment, {
         projectId,
-        targetType: "design",
-        targetId: design1Id,
+        targetType: "spec",
+        targetId: spec1Id,
         authorType: "human",
         authorName: "alice",
-        body: "Comment for design 1",
+        body: "Comment for spec 1",
       });
 
       await t.mutation(api.workComments.addComment, {
         projectId,
-        targetType: "design",
-        targetId: design2Id,
+        targetType: "spec",
+        targetId: spec2Id,
         authorType: "human",
         authorName: "bob",
-        body: "Comment for design 2",
+        body: "Comment for spec 2",
       });
 
-      // List comments for design1
+      // List comments for spec1
       const design1Comments = await t.query(api.workComments.listComments, {
-        targetType: "design",
-        targetId: design1Id,
+        targetType: "spec",
+        targetId: spec1Id,
       });
 
       expect(design1Comments).toHaveLength(1);
-      expect(design1Comments[0].body).toBe("Comment for design 1");
+      expect(design1Comments[0].body).toBe("Comment for spec 1");
       expect(design1Comments[0].authorName).toBe("alice");
     });
 
     test("lists comments for a ticket in chronological order", async () => {
-      const t = convexTest(schema);
+      const t = convexTest(schema, modules);
 
       const projectId = await createProject(t, {
         name: "comments-test-project-8",

@@ -1,30 +1,38 @@
 import { useState } from "react"
-import { useParams } from "react-router-dom"
+import { useParams, Link } from "react-router-dom"
 import { useMutation } from "convex/react"
-import { Option } from "effect"
 import { useTypedQuery } from "@/hooks/useTypedQuery"
-import { DesignDetailQuery } from "@/services/data/queryDefs"
+import {
+  DesignDetailQuery,
+  DesignVariationListQuery,
+  LinkedSpecsQuery,
+} from "@/services/data/queryDefs"
 import { api } from "@convex/_generated/api"
 import { isAnyQueryLoading, firstQueryError } from "@/lib/query-state"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { toStatusBadgeStatus } from "@/components/ui/status-styles"
 import { CommentTimeline } from "./CommentTimeline"
-import { EditDesignModal } from "./EditDesignModal"
 import type { Id } from "@convex/_generated/dataModel"
-import { useCreateSession } from "@/hooks/useCreateSession"
-import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import styles from "./DesignDetailPage.module.scss"
-import markdownStyles from "../PlanQuicklook.module.scss"
 
 const DESIGN_STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  in_review: "In Review",
-  approved: "Approved",
+  exploring: "Exploring",
+  locked: "Locked",
   archived: "Archived",
+}
+
+const VARIATION_STATUS_LABELS: Record<string, string> = {
+  exploring: "Exploring",
+  selected: "Selected",
+  rejected: "Rejected",
 }
 
 function designStatusLabel(status: string): string {
   return DESIGN_STATUS_LABELS[status] ?? status
+}
+
+function variationStatusLabel(status: string): string {
+  return VARIATION_STATUS_LABELS[status] ?? status
 }
 
 interface TransitionAction {
@@ -35,17 +43,15 @@ interface TransitionAction {
 
 function getTransitionActions(status: string): TransitionAction[] {
   switch (status) {
-    case "draft":
-      return [{ label: "Submit for Review", newStatus: "in_review", primary: true }]
-    case "in_review":
+    case "exploring":
+      return [{ label: "Lock", newStatus: "locked", primary: true }]
+    case "locked":
       return [
-        { label: "Approve", newStatus: "approved", primary: true },
-        { label: "Return to Draft", newStatus: "draft" },
+        { label: "Archive", newStatus: "archived" },
+        { label: "Unlock", newStatus: "exploring" },
       ]
-    case "approved":
-      return [{ label: "Archive", newStatus: "archived" }]
     case "archived":
-      return [{ label: "Unarchive", newStatus: "draft" }]
+      return [{ label: "Reopen", newStatus: "exploring" }]
     default:
       return []
   }
@@ -56,18 +62,23 @@ export function DesignDetailPage() {
     designId: string
     projectId: string
   }>()
-  const [editing, setEditing] = useState(false)
   const [transitioning, setTransitioning] = useState(false)
 
   const transitionDesign = useMutation(api.designs.transitionDesign)
-  const updateMarkers = useMutation(api.designs.updateDesignMarkers)
-  const { createAndConnect } = useCreateSession()
 
   const designResult = useTypedQuery(DesignDetailQuery, {
     designId: designId ?? "",
   })
 
-  if (isAnyQueryLoading(designResult)) {
+  const variationsResult = useTypedQuery(DesignVariationListQuery, {
+    designId: designId ?? "",
+  })
+
+  const linkedSpecsResult = useTypedQuery(LinkedSpecsQuery, {
+    designId: designId ?? "",
+  })
+
+  if (isAnyQueryLoading(designResult, variationsResult, linkedSpecsResult)) {
     return (
       <div data-testid="design-detail-page" className={styles.detailPage}>
         <div data-testid="design-detail-loading" className={styles.loading}>
@@ -79,7 +90,11 @@ export function DesignDetailPage() {
     )
   }
 
-  const queryError = firstQueryError(designResult)
+  const queryError = firstQueryError(
+    designResult,
+    variationsResult,
+    linkedSpecsResult,
+  )
   if (queryError) {
     throw queryError
   }
@@ -97,6 +112,11 @@ export function DesignDetailPage() {
     )
   }
 
+  const variations =
+    variationsResult.status === "success" ? variationsResult.data : []
+  const linkedSpecs =
+    linkedSpecsResult.status === "success" ? linkedSpecsResult.data : []
+
   const handleTransition = async (newStatus: string) => {
     setTransitioning(true)
     try {
@@ -109,33 +129,7 @@ export function DesignDetailPage() {
     }
   }
 
-  const handleSaved = () => {
-    setEditing(false)
-  }
-
-  const handleDiscussDesign = () => {
-    createAndConnect({
-      label: `Discuss: ${design.title}`,
-      contextType: "design",
-      contextId: designId!,
-      contextSummary: design.markdown.slice(0, 2000),
-    })
-  }
-
   const actions = getTransitionActions(design.status)
-  const complexityPreset = Option.getOrUndefined(design.complexityPreset)
-  const requiredMarkers = Option.getOrElse(() => [] as string[])(design.requiredMarkers)
-  const completedMarkers = Option.getOrElse(() => [] as string[])(design.completedMarkers)
-
-  const handleToggleMarker = async (marker: string) => {
-    const next = completedMarkers.includes(marker)
-      ? completedMarkers.filter((m: string) => m !== marker)
-      : [...completedMarkers, marker]
-    await updateMarkers({
-      designId: designId as Id<"designs">,
-      completedMarkers: next,
-    })
-  }
 
   return (
     <div data-testid="design-detail-page" className={styles.detailPage}>
@@ -159,74 +153,50 @@ export function DesignDetailPage() {
             {action.label}
           </button>
         ))}
-        <button
-          className={styles.actionButton}
-          onClick={handleDiscussDesign}
-        >
-          Discuss Design
-        </button>
-        {!editing && (
-          <button
-            className={styles.actionButton}
-            onClick={() => setEditing(true)}
-          >
-            Edit
-          </button>
-        )}
       </div>
 
-      <MarkdownRenderer className={`${styles.markdownBody} ${markdownStyles.content}`}>
-        {design.markdown}
-      </MarkdownRenderer>
+      <div className={styles.section}>
+        <h3 className={styles.sectionTitle}>Prompt</h3>
+        <p className={styles.promptText}>{design.prompt}</p>
+      </div>
 
-      {complexityPreset && (
-        <div className={styles.section} data-testid="validation-section">
-          <h3 className={styles.sectionTitle}>Validation</h3>
-          <div className={styles.metadata}>
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Complexity</span>
-              <span>{complexityPreset}</span>
-            </div>
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Phases</span>
-              <span>{Option.getOrElse(() => 0)(design.phaseCount)}</span>
-            </div>
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Phase Structure</span>
-              <span>{Option.getOrElse(() => false)(design.phaseStructureValid) ? "Valid" : "Invalid"}</span>
-            </div>
-          </div>
-          {requiredMarkers.length > 0 && (
-            <div data-testid="marker-checklist">
-              <h4>Markers</h4>
-              <ul className={styles.markerList}>
-                {requiredMarkers.map((marker: string) => (
-                  <li key={marker} className={styles.markerItem}>
-                    <label className={styles.markerLabel}>
-                      <input
-                        type="checkbox"
-                        checked={completedMarkers.includes(marker)}
-                        onChange={() => handleToggleMarker(marker)}
-                      />
-                      <span className={styles.markerText}>
-                        {marker.replace(/_/g, " ")}
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      {linkedSpecs.length > 0 && (
+        <div className={styles.section} data-testid="linked-specs-section">
+          <h3 className={styles.sectionTitle}>Linked Specs</h3>
+          <ul className={styles.linkedSpecList}>
+            {linkedSpecs.map((spec) => (
+              <li key={spec._id} className={styles.linkedSpecItem}>
+                <Link
+                  to={`/projects/${routeProjectId ?? design.projectId}/plan/specs/${spec._id}`}
+                >
+                  <span className={styles.linkedSpecKey}>
+                    {spec.specKey}
+                  </span>
+                  {spec.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
-      {editing && (
-        <EditDesignModal
-          design={design}
-          onClose={() => setEditing(false)}
-          onSaved={handleSaved}
-        />
-      )}
+      <div className={styles.variationsSection} data-testid="variations-section">
+        <h3 className={styles.sectionTitle}>Variations</h3>
+        {variations.length === 0 ? (
+          <p className={styles.empty}>No variations yet.</p>
+        ) : (
+          variations.map((variation) => (
+            <div key={variation._id} className={styles.variationCard}>
+              <span className={styles.variationSlug}>{variation.slug}</span>
+              <span className={styles.variationTitle}>{variation.title}</span>
+              <StatusBadge
+                status={toStatusBadgeStatus(variation.status)}
+                label={variationStatusLabel(variation.status)}
+              />
+            </div>
+          ))
+        )}
+      </div>
 
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Comments</h3>

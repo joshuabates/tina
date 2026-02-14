@@ -7,7 +7,7 @@ import { fetchDaemon } from "@/hooks/useDaemonQuery"
 interface CreateSessionOptions {
   label: string
   cli?: "claude" | "codex"
-  contextType?: "task" | "plan" | "commit" | "design" | "freeform"
+  contextType?: "task" | "plan" | "commit" | "spec" | "freeform"
   contextId?: string
   contextSummary?: string
 }

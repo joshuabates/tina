@@ -2,27 +2,27 @@ import { useState } from "react"
 import { useMutation } from "convex/react"
 import { api } from "@convex/_generated/api"
 import { FormDialog } from "@/components/FormDialog"
-import type { DesignSummary } from "@/schemas"
+import type { SpecSummary } from "@/schemas"
 import type { Id } from "@convex/_generated/dataModel"
 import styles from "@/components/FormDialog.module.scss"
 
 interface CreateTicketModalProps {
   projectId: string
-  designs: readonly DesignSummary[]
+  specs: readonly SpecSummary[]
   onClose: () => void
   onCreated: (ticketId: string) => void
 }
 
 export function CreateTicketModal({
   projectId,
-  designs,
+  specs,
   onClose,
   onCreated,
 }: CreateTicketModalProps) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState("medium")
-  const [designId, setDesignId] = useState("")
+  const [specId, setSpecId] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const createTicket = useMutation(api.tickets.createTicket)
@@ -39,7 +39,7 @@ export function CreateTicketModal({
         title: title.trim(),
         description: description.trim(),
         priority,
-        ...(designId ? { designId: designId as Id<"designs"> } : {}),
+        ...(specId ? { specId: specId as Id<"specs"> } : {}),
       })
       onCreated(ticketId as unknown as string)
     } catch (err) {
@@ -89,17 +89,17 @@ export function CreateTicketModal({
           </select>
         </div>
         <div className={styles.formField}>
-          <label className={styles.formLabel} htmlFor="ticket-design">Design Link</label>
+          <label className={styles.formLabel} htmlFor="ticket-spec">Spec Link</label>
           <select
-            id="ticket-design"
+            id="ticket-spec"
             className={styles.formInput}
-            value={designId}
-            onChange={(e) => setDesignId(e.target.value)}
+            value={specId}
+            onChange={(e) => setSpecId(e.target.value)}
           >
             <option value="">None</option>
-            {designs.map((d) => (
+            {specs.map((d) => (
               <option key={d._id} value={d._id}>
-                {d.designKey}: {d.title}
+                {d.specKey}: {d.title}
               </option>
             ))}
           </select>

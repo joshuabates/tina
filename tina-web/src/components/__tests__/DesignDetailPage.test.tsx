@@ -6,6 +6,8 @@ import {
   buildProjectSummary,
   buildOrchestrationSummary,
   buildDesignSummary,
+  buildDesignVariation,
+  buildSpecSummary,
   some,
 } from "@/test/builders/domain"
 import {
@@ -16,14 +18,6 @@ import {
 import { renderWithAppRuntime } from "@/test/harness/app-runtime"
 
 vi.mock("@/hooks/useTypedQuery")
-
-const mockCreateAndConnect = vi.fn()
-vi.mock("@/hooks/useCreateSession", () => ({
-  useCreateSession: () => ({
-    createAndConnect: mockCreateAndConnect,
-    connectToPane: vi.fn(),
-  }),
-}))
 
 const mockMutate = vi.fn()
 vi.mock("convex/react", async (importOriginal) => {
@@ -53,6 +47,8 @@ const defaultStates: Partial<QueryStateMap> = {
     }),
   ]),
   "designs.get": querySuccess(buildDesignSummary()),
+  "designVariations.list": querySuccess([]),
+  "specDesigns.specsForDesign": querySuccess([]),
   "workComments.list": querySuccess([]),
 }
 
@@ -66,12 +62,12 @@ function renderApp(route: string, states: Partial<QueryStateMap> = defaultStates
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockMutate.mockResolvedValue("d1")
+  mockMutate.mockResolvedValue("design1")
 })
 
 describe("DesignDetailPage", () => {
   it("renders loading state", () => {
-    renderApp("/projects/p1/plan/designs/d1", {
+    renderApp("/projects/p1/plan/designs/design1", {
       ...defaultStates,
       "designs.get": queryLoading(),
     })
@@ -80,7 +76,7 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders not found when design is null", () => {
-    renderApp("/projects/p1/plan/designs/d1", {
+    renderApp("/projects/p1/plan/designs/design1", {
       ...defaultStates,
       "designs.get": querySuccess(null),
     })
@@ -89,307 +85,117 @@ describe("DesignDetailPage", () => {
   })
 
   it("renders design key and title", () => {
-    renderApp("/projects/p1/plan/designs/d1")
+    renderApp("/projects/p1/plan/designs/design1")
 
-    expect(screen.getByText("ALPHA-D1")).toBeInTheDocument()
-    expect(screen.getByText("Authentication Flow")).toBeInTheDocument()
+    expect(screen.getByText("ALPHA-DES1")).toBeInTheDocument()
+    expect(screen.getByText("Login Page Design")).toBeInTheDocument()
   })
 
   it("renders status badge", () => {
-    renderApp("/projects/p1/plan/designs/d1")
+    renderApp("/projects/p1/plan/designs/design1")
 
-    expect(screen.getByText("Draft")).toBeInTheDocument()
+    expect(screen.getByText("Exploring")).toBeInTheDocument()
   })
 
-  it("renders markdown body", () => {
-    renderApp("/projects/p1/plan/designs/d1")
+  it("renders prompt text", () => {
+    renderApp("/projects/p1/plan/designs/design1")
 
-    expect(screen.getByRole("heading", { level: 1, name: "Auth" })).toBeInTheDocument()
-    expect(screen.getByText(/Design for auth flow/)).toBeInTheDocument()
+    expect(screen.getByText("Design a login page with OAuth support")).toBeInTheDocument()
   })
 
-  it("renders Submit for Review button when status is draft", () => {
-    renderApp("/projects/p1/plan/designs/d1")
+  it("renders Lock button when status is exploring", () => {
+    renderApp("/projects/p1/plan/designs/design1")
 
-    expect(screen.getByRole("button", { name: /submit for review/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /lock/i })).toBeInTheDocument()
   })
 
-  it("renders Approve and Return to Draft buttons when status is in_review", () => {
-    renderApp("/projects/p1/plan/designs/d1", {
+  it("renders Archive and Unlock buttons when status is locked", () => {
+    renderApp("/projects/p1/plan/designs/design1", {
       ...defaultStates,
-      "designs.get": querySuccess(buildDesignSummary({ status: "in_review" })),
-    })
-
-    expect(screen.getByRole("button", { name: /approve/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /return to draft/i })).toBeInTheDocument()
-  })
-
-  it("renders Archive button when status is approved", () => {
-    renderApp("/projects/p1/plan/designs/d1", {
-      ...defaultStates,
-      "designs.get": querySuccess(buildDesignSummary({ status: "approved" })),
+      "designs.get": querySuccess(buildDesignSummary({ status: "locked" })),
     })
 
     expect(screen.getByRole("button", { name: /archive/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /unlock/i })).toBeInTheDocument()
   })
 
-  it("renders Unarchive button when status is archived", () => {
-    renderApp("/projects/p1/plan/designs/d1", {
+  it("renders Reopen button when status is archived", () => {
+    renderApp("/projects/p1/plan/designs/design1", {
       ...defaultStates,
       "designs.get": querySuccess(buildDesignSummary({ status: "archived" })),
     })
 
-    expect(screen.getByRole("button", { name: /unarchive/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /reopen/i })).toBeInTheDocument()
   })
 
   it("calls transitionDesign when transition button is clicked", async () => {
     const user = userEvent.setup()
-    renderApp("/projects/p1/plan/designs/d1")
+    renderApp("/projects/p1/plan/designs/design1")
 
-    await user.click(screen.getByRole("button", { name: /submit for review/i }))
+    await user.click(screen.getByRole("button", { name: /lock/i }))
 
     expect(mockMutate).toHaveBeenCalledWith(
       expect.objectContaining({
-        designId: "d1",
-        newStatus: "in_review",
+        designId: "design1",
+        newStatus: "locked",
       }),
     )
   })
 
-  it("enters edit mode when Edit button is clicked", async () => {
-    const user = userEvent.setup()
-    renderApp("/projects/p1/plan/designs/d1")
+  it("renders linked specs when present", () => {
+    renderApp("/projects/p1/plan/designs/design1", {
+      ...defaultStates,
+      "specDesigns.specsForDesign": querySuccess([
+        buildSpecSummary({ _id: "spec1", specKey: "ALPHA-D1", title: "Auth Spec" }),
+      ]),
+    })
 
-    await user.click(screen.getByRole("button", { name: /^edit$/i }))
-
-    expect(screen.getByLabelText("Title")).toHaveValue("Authentication Flow")
-    expect(screen.getByLabelText("Content")).toHaveValue("# Auth\nDesign for auth flow")
+    expect(screen.getByTestId("linked-specs-section")).toBeInTheDocument()
+    expect(screen.getByText("ALPHA-D1")).toBeInTheDocument()
+    expect(screen.getByText("Auth Spec")).toBeInTheDocument()
   })
 
-  it("saves edits when Save button is clicked", async () => {
-    const user = userEvent.setup()
-    renderApp("/projects/p1/plan/designs/d1")
+  it("does not render linked specs section when empty", () => {
+    renderApp("/projects/p1/plan/designs/design1")
 
-    await user.click(screen.getByRole("button", { name: /^edit$/i }))
-
-    const titleInput = screen.getByLabelText(/title/i)
-    await user.clear(titleInput)
-    await user.type(titleInput, "Updated Title")
-    await user.click(screen.getByRole("button", { name: /save/i }))
-
-    expect(mockMutate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        designId: "d1",
-        title: "Updated Title",
-      }),
-    )
+    expect(screen.queryByTestId("linked-specs-section")).not.toBeInTheDocument()
   })
 
-  it("exits edit mode when Cancel button is clicked", async () => {
-    const user = userEvent.setup()
-    renderApp("/projects/p1/plan/designs/d1")
+  it("renders variations section", () => {
+    renderApp("/projects/p1/plan/designs/design1")
 
-    await user.click(screen.getByRole("button", { name: /^edit$/i }))
-    expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+    expect(screen.getByTestId("variations-section")).toBeInTheDocument()
+    expect(screen.getByText(/no variations/i)).toBeInTheDocument()
+  })
 
-    await user.click(screen.getByRole("button", { name: /cancel/i }))
-    expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument()
+  it("renders variations list when variations exist", () => {
+    renderApp("/projects/p1/plan/designs/design1", {
+      ...defaultStates,
+      "designVariations.list": querySuccess([
+        buildDesignVariation({
+          _id: "v1",
+          slug: "v1",
+          title: "Minimal Login",
+          status: "exploring",
+        }),
+        buildDesignVariation({
+          _id: "v2",
+          slug: "v2",
+          title: "Full Featured Login",
+          status: "selected",
+        }),
+      ]),
+    })
+
+    expect(screen.getByText("v1")).toBeInTheDocument()
+    expect(screen.getByText("Minimal Login")).toBeInTheDocument()
+    expect(screen.getByText("v2")).toBeInTheDocument()
+    expect(screen.getByText("Full Featured Login")).toBeInTheDocument()
   })
 
   it("renders comment timeline", () => {
-    renderApp("/projects/p1/plan/designs/d1")
+    renderApp("/projects/p1/plan/designs/design1")
 
     expect(screen.getByText(/no comments/i)).toBeInTheDocument()
-  })
-
-  it("renders Discuss Design button", () => {
-    renderApp("/projects/p1/plan/designs/d1")
-
-    expect(screen.getByRole("button", { name: /discuss design/i })).toBeInTheDocument()
-  })
-
-  it("calls createAndConnect with design context when Discuss Design is clicked", async () => {
-    const user = userEvent.setup()
-    renderApp("/projects/p1/plan/designs/d1")
-
-    await user.click(screen.getByRole("button", { name: /discuss design/i }))
-
-    expect(mockCreateAndConnect).toHaveBeenCalledWith({
-      label: "Discuss: Authentication Flow",
-      contextType: "design",
-      contextId: "d1",
-      contextSummary: "# Auth\nDesign for auth flow",
-    })
-  })
-
-  describe("validation section", () => {
-    it("does not render when complexityPreset is none", () => {
-      renderApp("/projects/p1/plan/designs/d1")
-
-      expect(screen.queryByTestId("validation-section")).not.toBeInTheDocument()
-    })
-
-    it("renders when complexityPreset is present", () => {
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({ complexityPreset: some("standard") }),
-        ),
-      })
-
-      expect(screen.getByTestId("validation-section")).toBeInTheDocument()
-    })
-
-    it("displays complexity preset value", () => {
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({ complexityPreset: some("standard") }),
-        ),
-      })
-
-      expect(screen.getByText("standard")).toBeInTheDocument()
-    })
-
-    it("displays phase count", () => {
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({
-            complexityPreset: some("standard"),
-            phaseCount: some(3),
-          }),
-        ),
-      })
-
-      expect(screen.getByText("3")).toBeInTheDocument()
-    })
-
-    it("displays phase structure validity as Valid", () => {
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({
-            complexityPreset: some("standard"),
-            phaseStructureValid: some(true),
-          }),
-        ),
-      })
-
-      expect(screen.getByText("Valid")).toBeInTheDocument()
-    })
-
-    it("displays phase structure validity as Invalid", () => {
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({
-            complexityPreset: some("standard"),
-            phaseStructureValid: some(false),
-          }),
-        ),
-      })
-
-      expect(screen.getByText("Invalid")).toBeInTheDocument()
-    })
-
-    it("renders marker checklist with required markers", () => {
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({
-            complexityPreset: some("standard"),
-            requiredMarkers: some(["success_criteria", "phase_structure"]),
-            completedMarkers: some([]),
-          }),
-        ),
-      })
-
-      const checklist = screen.getByTestId("marker-checklist")
-      expect(checklist).toBeInTheDocument()
-      expect(screen.getByText("success criteria")).toBeInTheDocument()
-      expect(screen.getByText("phase structure")).toBeInTheDocument()
-    })
-
-    it("shows completed markers as checked", () => {
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({
-            complexityPreset: some("standard"),
-            requiredMarkers: some(["success_criteria", "phase_structure"]),
-            completedMarkers: some(["success_criteria"]),
-          }),
-        ),
-      })
-
-      const checkboxes = screen.getAllByRole("checkbox")
-      expect(checkboxes[0]).toBeChecked()
-      expect(checkboxes[1]).not.toBeChecked()
-    })
-
-    it("does not render marker checklist when requiredMarkers is empty", () => {
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({
-            complexityPreset: some("standard"),
-            requiredMarkers: some([]),
-          }),
-        ),
-      })
-
-      expect(screen.queryByTestId("marker-checklist")).not.toBeInTheDocument()
-    })
-
-    it("calls updateDesignMarkers when marker is toggled", async () => {
-      const user = userEvent.setup()
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({
-            complexityPreset: some("standard"),
-            requiredMarkers: some(["success_criteria", "phase_structure"]),
-            completedMarkers: some(["success_criteria"]),
-          }),
-        ),
-      })
-
-      // Toggle unchecked marker on
-      const checkboxes = screen.getAllByRole("checkbox")
-      await user.click(checkboxes[1])
-
-      expect(mockMutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          designId: "d1",
-          completedMarkers: ["success_criteria", "phase_structure"],
-        }),
-      )
-    })
-
-    it("calls updateDesignMarkers to remove marker when toggled off", async () => {
-      const user = userEvent.setup()
-      renderApp("/projects/p1/plan/designs/d1", {
-        ...defaultStates,
-        "designs.get": querySuccess(
-          buildDesignSummary({
-            complexityPreset: some("standard"),
-            requiredMarkers: some(["success_criteria", "phase_structure"]),
-            completedMarkers: some(["success_criteria"]),
-          }),
-        ),
-      })
-
-      // Toggle checked marker off
-      const checkboxes = screen.getAllByRole("checkbox")
-      await user.click(checkboxes[0])
-
-      expect(mockMutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          designId: "d1",
-          completedMarkers: [],
-        }),
-      )
-    })
   })
 })

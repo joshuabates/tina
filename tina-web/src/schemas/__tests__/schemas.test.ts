@@ -3,7 +3,7 @@ import { Schema, Option } from "effect"
 import { OrchestrationSummary } from "../orchestration"
 import { ProjectSummary } from "../project"
 import { OrchestrationDetail } from "../detail"
-import { DesignSummary } from "../design"
+import { SpecSummary } from "../spec"
 import { TicketSummary } from "../ticket"
 import { WorkComment } from "../workComment"
 import { ReviewSummary } from "../review"
@@ -11,6 +11,8 @@ import { ReviewThread } from "../reviewThread"
 import { ReviewGate } from "../reviewGate"
 import { ReviewCheck } from "../reviewCheck"
 import { TeamMember } from "../team"
+import { DesignSummary } from "../design"
+import { DesignVariation } from "../designVariation"
 
 describe("OrchestrationSummary schema", () => {
   it("decodes a valid orchestration payload", () => {
@@ -19,7 +21,7 @@ describe("OrchestrationSummary schema", () => {
       _creationTime: 1700000000000,
       nodeId: "node1",
       featureName: "test-feature",
-      designDocPath: "/path/to/design.md",
+      specDocPath: "/path/to/design.md",
       branch: "tina/test-feature",
       totalPhases: 3,
       currentPhase: 1,
@@ -44,7 +46,7 @@ describe("OrchestrationSummary schema", () => {
       _creationTime: 1700000000000,
       nodeId: "node1",
       featureName: "test-feature",
-      designDocPath: "/path/to/design.md",
+      specDocPath: "/path/to/design.md",
       branch: "tina/test-feature",
       totalPhases: 3,
       currentPhase: 1,
@@ -102,7 +104,7 @@ describe("OrchestrationDetail schema", () => {
       _creationTime: 1700000000000,
       nodeId: "node1",
       featureName: "test-feature",
-      designDocPath: "/path/to/design.md",
+      specDocPath: "/path/to/design.md",
       branch: "tina/test-feature",
       totalPhases: 2,
       currentPhase: 1,
@@ -140,34 +142,34 @@ describe("OrchestrationDetail schema", () => {
   })
 })
 
-describe("DesignSummary schema", () => {
-  it("decodes a valid design payload", () => {
+describe("SpecSummary schema", () => {
+  it("decodes a valid spec payload", () => {
     const raw = {
-      _id: "design1",
+      _id: "spec1",
       _creationTime: 1700000000000,
       projectId: "proj1",
-      designKey: "DES-1",
-      title: "Auth System Design",
-      markdown: "# Auth\nDesign content here",
+      specKey: "SPEC-1",
+      title: "Auth System Spec",
+      markdown: "# Auth\nSpec content here",
       status: "draft",
       createdAt: "2026-02-09T00:00:00Z",
       updatedAt: "2026-02-09T00:00:00Z",
     }
 
-    const result = Schema.decodeUnknownSync(DesignSummary)(raw)
-    expect(result.designKey).toBe("DES-1")
-    expect(result.title).toBe("Auth System Design")
+    const result = Schema.decodeUnknownSync(SpecSummary)(raw)
+    expect(result.specKey).toBe("SPEC-1")
+    expect(result.title).toBe("Auth System Spec")
     expect(result.status).toBe("draft")
     expect(Option.isNone(result.archivedAt)).toBe(true)
   })
 
-  it("decodes a design with archivedAt present", () => {
+  it("decodes a spec with archivedAt present", () => {
     const raw = {
-      _id: "design2",
+      _id: "spec2",
       _creationTime: 1700000000000,
       projectId: "proj1",
-      designKey: "DES-2",
-      title: "Old Design",
+      specKey: "SPEC-2",
+      title: "Old Spec",
       markdown: "# Old",
       status: "archived",
       createdAt: "2026-02-09T00:00:00Z",
@@ -175,18 +177,18 @@ describe("DesignSummary schema", () => {
       archivedAt: "2026-02-10T00:00:00Z",
     }
 
-    const result = Schema.decodeUnknownSync(DesignSummary)(raw)
+    const result = Schema.decodeUnknownSync(SpecSummary)(raw)
     expect(Option.isSome(result.archivedAt)).toBe(true)
     expect(Option.getOrThrow(result.archivedAt)).toBe("2026-02-10T00:00:00Z")
   })
 
-  it("decodes a design with validation fields", () => {
+  it("decodes a spec with validation fields", () => {
     const raw = {
-      _id: "design3",
+      _id: "spec3",
       _creationTime: 1700000000000,
       projectId: "proj1",
-      designKey: "DES-3",
-      title: "Validated Design",
+      specKey: "SPEC-3",
+      title: "Validated Spec",
       markdown: "## Phase 1\n\nContent",
       status: "draft",
       createdAt: "2026-02-09T00:00:00Z",
@@ -199,15 +201,15 @@ describe("DesignSummary schema", () => {
       validationUpdatedAt: "2026-02-09T00:00:00Z",
     }
 
-    const result = Schema.decodeUnknownSync(DesignSummary)(raw)
+    const result = Schema.decodeUnknownSync(SpecSummary)(raw)
     expect(Option.getOrThrow(result.complexityPreset)).toBe("standard")
     expect(Option.getOrThrow(result.phaseCount)).toBe(1)
     expect(Option.getOrThrow(result.phaseStructureValid)).toBe(true)
   })
 
-  it("rejects a design missing required fields", () => {
-    const raw = { _id: "design1", _creationTime: 1700000000000 }
-    expect(() => Schema.decodeUnknownSync(DesignSummary)(raw)).toThrow()
+  it("rejects a spec missing required fields", () => {
+    const raw = { _id: "spec1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(SpecSummary)(raw)).toThrow()
   })
 })
 
@@ -229,7 +231,7 @@ describe("TicketSummary schema", () => {
     const result = Schema.decodeUnknownSync(TicketSummary)(raw)
     expect(result.ticketKey).toBe("TK-1")
     expect(result.priority).toBe("high")
-    expect(Option.isNone(result.designId)).toBe(true)
+    expect(Option.isNone(result.specId)).toBe(true)
     expect(Option.isNone(result.estimate)).toBe(true)
     expect(Option.isNone(result.closedAt)).toBe(true)
   })
@@ -239,7 +241,7 @@ describe("TicketSummary schema", () => {
       _id: "ticket2",
       _creationTime: 1700000000000,
       projectId: "proj1",
-      designId: "design1",
+      specId: "spec1",
       ticketKey: "TK-2",
       title: "Fix bug",
       description: "Fix the login bug",
@@ -252,7 +254,7 @@ describe("TicketSummary schema", () => {
     }
 
     const result = Schema.decodeUnknownSync(TicketSummary)(raw)
-    expect(Option.getOrThrow(result.designId)).toBe("design1")
+    expect(Option.getOrThrow(result.specId)).toBe("spec1")
     expect(Option.getOrThrow(result.estimate)).toBe("2h")
     expect(Option.getOrThrow(result.closedAt)).toBe("2026-02-10T00:00:00Z")
   })
@@ -269,8 +271,8 @@ describe("WorkComment schema", () => {
       _id: "comment1",
       _creationTime: 1700000000000,
       projectId: "proj1",
-      targetType: "design",
-      targetId: "design1",
+      targetType: "spec",
+      targetId: "spec1",
       authorType: "human",
       authorName: "Joshua",
       body: "Looks good!",
@@ -279,7 +281,7 @@ describe("WorkComment schema", () => {
 
     const result = Schema.decodeUnknownSync(WorkComment)(raw)
     expect(result.authorName).toBe("Joshua")
-    expect(result.targetType).toBe("design")
+    expect(result.targetType).toBe("spec")
     expect(Option.isNone(result.editedAt)).toBe(true)
   })
 
@@ -511,6 +513,77 @@ describe("ReviewCheck schema", () => {
   it("rejects a check missing required fields", () => {
     const raw = { _id: "check1", _creationTime: 1700000000000 }
     expect(() => Schema.decodeUnknownSync(ReviewCheck)(raw)).toThrow()
+  })
+})
+
+describe("DesignSummary schema", () => {
+  it("decodes a valid design payload", () => {
+    const raw = {
+      _id: "design1",
+      _creationTime: 1700000000000,
+      projectId: "proj1",
+      designKey: "PROJ-DES1",
+      title: "Login Page Design",
+      prompt: "Design a login page",
+      status: "exploring",
+      createdAt: "2026-02-09T00:00:00Z",
+      updatedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(DesignSummary)(raw)
+    expect(result.designKey).toBe("PROJ-DES1")
+    expect(result.title).toBe("Login Page Design")
+    expect(result.prompt).toBe("Design a login page")
+    expect(result.status).toBe("exploring")
+  })
+
+  it("rejects a design missing required fields", () => {
+    const raw = { _id: "design1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(DesignSummary)(raw)).toThrow()
+  })
+})
+
+describe("DesignVariation schema", () => {
+  it("decodes a valid variation payload", () => {
+    const raw = {
+      _id: "var1",
+      _creationTime: 1700000000000,
+      designId: "design1",
+      slug: "v1",
+      title: "Minimal Version",
+      status: "exploring",
+      createdAt: "2026-02-09T00:00:00Z",
+      updatedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(DesignVariation)(raw)
+    expect(result.slug).toBe("v1")
+    expect(result.title).toBe("Minimal Version")
+    expect(result.status).toBe("exploring")
+    expect(Option.isNone(result.screenshotStorageIds)).toBe(true)
+  })
+
+  it("decodes a variation with screenshotStorageIds present", () => {
+    const raw = {
+      _id: "var2",
+      _creationTime: 1700000000000,
+      designId: "design1",
+      slug: "v2",
+      title: "Full Version",
+      status: "selected",
+      screenshotStorageIds: ["storage1", "storage2"],
+      createdAt: "2026-02-09T00:00:00Z",
+      updatedAt: "2026-02-09T00:00:00Z",
+    }
+
+    const result = Schema.decodeUnknownSync(DesignVariation)(raw)
+    expect(Option.isSome(result.screenshotStorageIds)).toBe(true)
+    expect(Option.getOrThrow(result.screenshotStorageIds)).toEqual(["storage1", "storage2"])
+  })
+
+  it("rejects a variation missing required fields", () => {
+    const raw = { _id: "var1", _creationTime: 1700000000000 }
+    expect(() => Schema.decodeUnknownSync(DesignVariation)(raw)).toThrow()
   })
 })
 

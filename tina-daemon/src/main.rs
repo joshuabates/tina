@@ -115,6 +115,22 @@ async fn refresh_worktrees(
             }
         }
 
+        let designs_dir = worktree
+            .worktree_path
+            .join("ui")
+            .join("designs")
+            .join("sets");
+        if designs_dir.exists() {
+            if let Err(e) = watcher.watch_design_dir(&designs_dir) {
+                warn!(
+                    feature = %worktree.feature,
+                    path = %designs_dir.display(),
+                    error = %e,
+                    "failed to watch designs directory"
+                );
+            }
+        }
+
         if !cache
             .last_commit_sha
             .contains_key(&worktree.orchestration_id)
@@ -350,6 +366,33 @@ async fn main() -> Result<()> {
                             warn!(
                                 path = %plan_path.display(),
                                 "plan file changed but no worktree found in cache"
+                            );
+                        }
+                    }
+                    Some(WatchEvent::Design(design_path)) => {
+                        // Design file changed - sync metadata to Convex
+                        if let Some(worktree) = cache.find_worktree_by_design_path(&design_path).cloned() {
+                            info!(
+                                feature = %worktree.feature,
+                                path = %design_path.display(),
+                                "design file changed, syncing metadata"
+                            );
+                            if let Err(e) = sync::sync_design_metadata(
+                                &client,
+                                &worktree.orchestration_id,
+                                &worktree.worktree_path,
+                                Some(&telemetry),
+                            ).await {
+                                error!(
+                                    feature = %worktree.feature,
+                                    error = %e,
+                                    "failed to sync design metadata"
+                                );
+                            }
+                        } else {
+                            warn!(
+                                path = %design_path.display(),
+                                "design file changed but no worktree found in cache"
                             );
                         }
                     }
